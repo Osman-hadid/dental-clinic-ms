@@ -1,0 +1,57 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Modules\DentalManagement\Infrastructure\Http\Requests\Payment;
+
+use App\Modules\Common\Infrastructure\Http\Requests\BaseListRequest;
+
+final class ListPaymentsRequest extends BaseListRequest
+{
+    protected static function sortableColumns(): array
+    {
+        return [
+            'id',
+            'payment_date',
+            'amount',
+            'created_at',
+        ];
+    }
+
+    protected static function allowedRelations(): array
+    {
+        return [
+            'invoice',
+        ];
+    }
+
+    protected static function filters(): array
+    {
+        return [];
+    }
+
+    protected static function searchableColumns(): array
+    {
+        return [
+            'notes' => 'notes',
+        ];
+    }
+
+    protected static function fieldableColumns(): array
+    {
+        return [
+            'id' => 'id',
+            'invoiceId' => 'invoice_id',
+            'paymentDate' => 'payment_date',
+            'amount' => 'amount',
+            'method' => 'method',
+            'notes' => 'notes',
+            'createdBy' => 'created_by',
+            'updatedBy' => 'updated_by',
+            'deletedBy' => 'deleted_by',
+            'createdAt' => 'created_at',
+            'updatedAt' => 'updated_at',
+            'deletedAt' => 'deleted_at',
+        ];
+    }
+}

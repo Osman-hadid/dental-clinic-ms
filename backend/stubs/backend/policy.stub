@@ -13,41 +13,41 @@ final class {{ entity }}Policy
 
     public function viewAny(User $user): bool
     {
-        return $user->can('{{ moduleSnake }}.{{ entityKebabPlural }}.view');
+        return $user->can('{{ moduleKebab }}.{{ entityKebabPlural }}.view');
     }
 
     public function view(User $user): bool
     {
-        return $user->can('{{ moduleSnake }}.{{ entityKebabPlural }}.view');
+        return $user->can('{{ moduleKebab }}.{{ entityKebabPlural }}.view');
     }
 
     public function create(User $user): bool
     {
-        return $user->can('{{ moduleSnake }}.{{ entityKebabPlural }}.create');
+        return $user->can('{{ moduleKebab }}.{{ entityKebabPlural }}.create');
     }
 
     public function update(User $user): bool
     {
-        return $user->can('{{ moduleSnake }}.{{ entityKebabPlural }}.update');
+        return $user->can('{{ moduleKebab }}.{{ entityKebabPlural }}.update');
     }
 
     public function delete(User $user): bool
     {
-        return $user->can('{{ moduleSnake }}.{{ entityKebabPlural }}.delete');
+        return $user->can('{{ moduleKebab }}.{{ entityKebabPlural }}.delete');
     }
 
     public function restore(User $user): bool
     {
-        return $user->can('{{ moduleSnake }}.{{ entityKebabPlural }}.restore');
+        return $user->can('{{ moduleKebab }}.{{ entityKebabPlural }}.restore');
     }
 
     public function forceDelete(User $user): bool
     {
-        return $user->can('{{ moduleSnake }}.{{ entityKebabPlural }}.force-delete');
+        return $user->can('{{ moduleKebab }}.{{ entityKebabPlural }}.force-delete');
     }
 
     public function bulkDelete(User $user): bool
     {
-        return $user->can('{{ moduleSnake }}.{{ entityKebabPlural }}.bulk-delete');
+        return $user->can('{{ moduleKebab }}.{{ entityKebabPlural }}.bulk-delete');
     }
 }

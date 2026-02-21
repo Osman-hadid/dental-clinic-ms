@@ -9,4 +9,5 @@ return [
     App\Providers\ModuleTranslationServiceProvider::class,
     App\Modules\Common\Infrastructure\Providers\CommonServiceProvider::class,
     App\Modules\Settings\Infrastructure\Providers\SettingsServiceProvider::class,
+    App\Modules\DentalManagement\Infrastructure\Providers\DentalManagementServiceProvider::class,
 ];

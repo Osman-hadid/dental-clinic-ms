@@ -14,6 +14,7 @@ final class AssignPermissionsToModuleRolesSeeder extends Seeder
 {
     private const MODULES = [
         'user-management',
+        'dental-management',
         'incidents',
         'biographic',
         'structures',

@@ -14,6 +14,7 @@ class PermissionsSeeder extends Seeder
 
     private const MODULES = [
         '/user-management' => ['en' => 'User Management',          'ps' => 'د کاروونکو مدیریت',        'dr' => 'مدیریت کاربران'],
+        '/dental-management' => ['en' => 'Dental Management',        'ps' => 'د غاښونو مدیریت',          'dr' => 'مدیریت دندان'],
         '/incidents' => ['en' => 'Incidents',                'ps' => 'پېښې',                   'dr' => 'حوادث'],
         '/biographic' => ['en' => 'Biographic',               'ps' => 'بیوگرافي',               'dr' => 'بیوگرافی'],
         '/structures' => ['en' => 'Structures',               'ps' => 'تشکیلات',                'dr' => 'تشکیلات'],
@@ -32,6 +33,15 @@ class PermissionsSeeder extends Seeder
         'employee-activities' => ['en' => 'Employee Activities', 'ps' => 'د کارکوونکو فعالیتونه', 'dr' => 'فعالیت‌های کارمندان'],
         'online-employees' => ['en' => 'Online Employees', 'ps' => 'آنلاین کارکوونکي', 'dr' => 'کارمندان آنلاین'],
         'update-user-password' => ['en' => 'Update User Password', 'ps' => 'د کاروونکي پټنوم بدلول', 'dr' => 'تغییر رمز کاربر'],
+        'patients' => ['en' => 'Patients', 'ps' => 'ناروغان', 'dr' => 'بیماران'],
+        'staff' => ['en' => 'Staff', 'ps' => 'کارکوونکي', 'dr' => 'کارمندان'],
+        'appointments' => ['en' => 'Appointments', 'ps' => 'ملاقاتونه', 'dr' => 'ملاقات‌ها'],
+        'visits' => ['en' => 'Visits', 'ps' => 'ویزیتونه', 'dr' => 'ویزیت‌ها'],
+        'teeth' => ['en' => 'Teeth', 'ps' => 'غاښونه', 'dr' => 'دندان‌ها'],
+        'treatments' => ['en' => 'Treatments', 'ps' => 'درملنې', 'dr' => 'درمان‌ها'],
+        'visit-treatments' => ['en' => 'Visit Treatments', 'ps' => 'د ویزیت درملنې', 'dr' => 'درمان‌های ویزیت'],
+        'invoices' => ['en' => 'Invoices', 'ps' => 'بیلونه', 'dr' => 'فاکتورها'],
+        'payments' => ['en' => 'Payments', 'ps' => 'تادیات', 'dr' => 'پرداخت‌ها'],
         'incidents' => ['en' => 'Incidents', 'ps' => 'پېښې', 'dr' => 'حوادث'],
         'incident-reports' => ['en' => 'Incident Reports', 'ps' => 'د پېښو راپور', 'dr' => 'گزارش حوادث'],
         'employee-details' => ['en' => 'Employee Details', 'ps' => 'د کارکوونکي تفصیلات', 'dr' => 'جزئیات کارمند'],
@@ -68,6 +78,7 @@ class PermissionsSeeder extends Seeder
 
     private const RESOURCES = [
         '/user-management' => ['users', 'roles', 'permissions', 'employee-activities', 'online-employees', 'update-user-password'],
+        '/dental-management' => ['patients', 'staff', 'appointments', 'visits', 'teeth', 'treatments', 'visit-treatments', 'invoices', 'payments'],
         '/incidents' => ['incidents', 'incident-reports'],
         '/biographic' => ['employee-details', 'inactive-employees', 'suspended-employees', 'add-vacant-positions', 'check-position-statuses', 'unknown-persons', 'data-entry-reports', 'assignment-lists', 'assignment-filters', 'statistical-reports', 'vacant-positions', 'department-totals', 'assignment-report-by-departments'],
         '/structures' => ['organizational-structure', 'department-formations', 'formation-archives', 'submit-new-formations', 'edit-and-approve-new-formations', 'reduced-positions', 'archived-positions', 'formation-filters', 'comparison-tables', 'position-details', 'formation-statistics', 'organizational-charts', 'department-statuses', 'itemized-details', 'proposals', 'programs', 'ceilings'],

@@ -11,7 +11,7 @@ class ModulesSeeder extends Seeder
 {
     public function run(): void
     {
-        DB::table('modules')->insert([
+        $modules = [
             [
                 'name_en' => 'User Management',
                 'name_ps' => 'د کاروونکو مدیریت',
@@ -21,12 +21,20 @@ class ModulesSeeder extends Seeder
                 'sort_order' => 1,
             ],
             [
+                'name_en' => 'Dental Management',
+                'name_ps' => 'د غاښونو مدیریت',
+                'name_dr' => 'مدیریت دندان',
+                'url' => '/dental-management',
+                'description' => 'Manage patients, appointments, visits, treatments, and billing.',
+                'sort_order' => 2,
+            ],
+            [
                 'name_en' => 'Incidents',
                 'name_ps' => 'پېښې',
                 'name_dr' => 'حوادث',
                 'url' => '/incidents',
                 'description' => 'Manage incident records.',
-                'sort_order' => 2,
+                'sort_order' => 3,
             ],
             [
                 'name_en' => 'Biographic',
@@ -34,7 +42,7 @@ class ModulesSeeder extends Seeder
                 'name_dr' => 'بیوگرافی',
                 'url' => '/biographic',
                 'description' => 'Biographic information of employees.',
-                'sort_order' => 3,
+                'sort_order' => 4,
             ],
             [
                 'name_en' => 'Structures',
@@ -42,7 +50,7 @@ class ModulesSeeder extends Seeder
                 'name_dr' => 'تشکیلات',
                 'url' => '/structures',
                 'description' => 'Organizational structure and formation management.',
-                'sort_order' => 4,
+                'sort_order' => 5,
             ],
             [
                 'name_en' => 'Attendances',
@@ -50,7 +58,7 @@ class ModulesSeeder extends Seeder
                 'name_dr' => 'حضور و غیاب',
                 'url' => '/attendances',
                 'description' => 'Daily attendance and time tracking.',
-                'sort_order' => 5,
+                'sort_order' => 6,
             ],
             [
                 'name_en' => 'Biometric Verifications',
@@ -58,7 +66,7 @@ class ModulesSeeder extends Seeder
                 'name_dr' => 'تأیید بایومتریک',
                 'url' => '/biometric-verifications',
                 'description' => 'Fingerprint and facial recognition verification.',
-                'sort_order' => 6,
+                'sort_order' => 7,
             ],
             [
                 'name_en' => 'Settings',
@@ -66,7 +74,7 @@ class ModulesSeeder extends Seeder
                 'name_dr' => 'تنظیمات',
                 'url' => '/settings',
                 'description' => 'System settings and configurations.',
-                'sort_order' => 7,
+                'sort_order' => 8,
             ],
             [
                 'name_en' => 'Payrolls',
@@ -74,7 +82,7 @@ class ModulesSeeder extends Seeder
                 'name_dr' => 'حقوق و معاشات',
                 'url' => '/payrolls',
                 'description' => 'Salary processing and payroll management.',
-                'sort_order' => 8,
+                'sort_order' => 9,
             ],
             [
                 'name_en' => 'Job Descriptions',
@@ -82,7 +90,7 @@ class ModulesSeeder extends Seeder
                 'name_dr' => 'وظایف شغلی',
                 'url' => '/job-descriptions',
                 'description' => 'Official job duties and responsibilities.',
-                'sort_order' => 9,
+                'sort_order' => 10,
             ],
             [
                 'name_en' => 'Request Forms',
@@ -90,8 +98,18 @@ class ModulesSeeder extends Seeder
                 'name_dr' => 'فورم‌های درخواست',
                 'url' => '/request-forms',
                 'description' => 'Digital forms for leave, promotion, and other requests.',
-                'sort_order' => 10,
+                'sort_order' => 11,
             ],
-        ]);
+        ];
+
+        foreach ($modules as $module) {
+            DB::table('modules')->updateOrInsert(
+                ['url' => $module['url']],
+                [
+                    ...$module,
+                    'updated_at' => now(),
+                ]
+            );
+        }
     }
 }

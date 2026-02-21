@@ -1,0 +1,50 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Modules\DentalManagement\Infrastructure\Http\Requests\Patient;
+
+use App\Modules\Common\Infrastructure\Http\Requests\BaseFormRequest;
+use Illuminate\Validation\Rule;
+
+final class UpdatePatientRequest extends BaseFormRequest
+{
+    protected array $booleanFields = ['enabled'];
+
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    public function rules(): array
+    {
+        return [
+            'patientCode' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique(table: 'patients', column: 'patient_code')->ignore(id: $this->route(param: 'patient')),
+            ],
+            'firstName' => 'required|string|max:255',
+            'lastName' => 'nullable|string|max:255',
+            'gender' => 'nullable|nullable|string|in:male,female',
+            'dateOfBirth' => 'nullable|date',
+            'contactNumber' => 'nullable|string|max:255',
+            'email' => [
+                'nullable',
+                'string',
+                'max:255',
+                Rule::unique(table: 'patients', column: 'email')->ignore(id: $this->route(param: 'patient')),
+            ],
+            'address' => 'nullable|string|max:255',
+            'bloodGroup' => 'nullable|string|max:255',
+            'emergencyContact' => 'nullable|string|max:255',
+            'enabled' => 'nullable|boolean',
+            'status' => 'nullable|nullable|string|in:pending,approved,rejected',
+            'remarks' => 'nullable|string|max:255',
+            'createdBy' => 'nullable|integer',
+            'updatedBy' => 'nullable|integer',
+            'deletedBy' => 'nullable|integer',
+        ];
+    }
+}

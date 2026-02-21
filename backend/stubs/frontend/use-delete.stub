@@ -8,7 +8,7 @@ import { type ApiResponse, type PaginatedApiResponse } from '@/types/ApiResponse
 import { {entityCamel}Config } from '../../config/{entityKebab}-config';
 
 type Delete{entity}MutationContext = {
-  previous{entityPlural}: [string[], ApiResponse<PaginatedApiResponse<{entity}[]>> | undefined][];
+  previous{entity}List: [string[], ApiResponse<PaginatedApiResponse<{entity}[]>> | undefined][];
   previous{entity}?: ApiResponse<{entity}>;
 };
 
@@ -28,8 +28,8 @@ export const useDelete{entity} = (): UseMutationResult<
     },
     mutationKey: [{entityCamel}Config.queryKey, 'delete'],
     onError: (_, id, context) => {
-      if (context?.previous{entityPlural}) {
-        for (const [queryKey, data] of context.previous{entityPlural}) {
+      if (context?.previous{entity}List) {
+        for (const [queryKey, data] of context.previous{entity}List) {
           queryClient.setQueryData(queryKey, data);
         }
       }
@@ -43,7 +43,7 @@ export const useDelete{entity} = (): UseMutationResult<
       await queryClient.cancelQueries({ queryKey: listQueryKey });
       await queryClient.cancelQueries({ queryKey: singleQueryKey });
 
-      const previous{entityPlural} = queryClient.getQueriesData<ApiResponse<PaginatedApiResponse<{entity}[]>>>({
+      const previous{entity}List = queryClient.getQueriesData<ApiResponse<PaginatedApiResponse<{entity}[]>>>({
         queryKey: listQueryKey,
       }) as [string[], ApiResponse<PaginatedApiResponse<{entity}[]>> | undefined][];
 
@@ -70,7 +70,7 @@ export const useDelete{entity} = (): UseMutationResult<
 
       queryClient.removeQueries({ queryKey: singleQueryKey });
 
-      return { previous{entity}, previous{entityPlural} };
+      return { previous{entity}, previous{entity}List };
     },
     onSettled: (_, __, id) => {
       queryClient.invalidateQueries({

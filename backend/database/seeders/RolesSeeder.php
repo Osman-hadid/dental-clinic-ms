@@ -11,6 +11,7 @@ class RolesSeeder extends Seeder
 {
     private const MODULES = [
         'user-management',
+        'dental-management',
         'incidents',
         'biographic',
         'structures',
@@ -85,6 +86,7 @@ class RolesSeeder extends Seeder
     {
         return match (true) {
             str_contains($text, 'user-management') => 'د کاروونکو مدیریت '.substr($text, 16),
+            str_contains($text, 'dental-management') => 'د غاښونو مدیریت '.substr($text, 18),
             str_contains($text, 'incidents') => 'پېښې '.substr($text, 10),
             str_contains($text, 'biographic') => 'بیوگرافي '.substr($text, 11),
             str_contains($text, 'structures') => 'تشکیلات '.substr($text, 11),
@@ -102,6 +104,7 @@ class RolesSeeder extends Seeder
     {
         return match (true) {
             str_contains($text, 'user-management') => 'مدیریت کاربران '.substr($text, 16),
+            str_contains($text, 'dental-management') => 'مدیریت دندان '.substr($text, 18),
             str_contains($text, 'incidents') => 'حوادث '.substr($text, 10),
             str_contains($text, 'biographic') => 'بیوگرافی '.substr($text, 11),
             str_contains($text, 'structures') => 'تشکیلات '.substr($text, 11),

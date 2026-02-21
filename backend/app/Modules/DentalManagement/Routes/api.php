@@ -1,0 +1,53 @@
+<?php
+
+declare(strict_types=1);
+
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\AppointmentController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\InvoiceController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\PatientController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\PaymentController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\StaffController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\ToothController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\TreatmentController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\VisitController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\VisitTreatmentController;
+use Illuminate\Support\Facades\Route;
+
+Route::middleware(['api', 'auth:sanctum', 'set_locale'])->prefix('api/v1/dental-management')->group(function (): void {
+    Route::post('/patients/restore/{id}', [PatientController::class, 'restore']);
+    Route::delete('/patients/force/{id}', [PatientController::class, 'forceDelete']);
+    Route::delete('/patients/bulk', [PatientController::class, 'bulkDelete']);
+    Route::apiResource('patients', PatientController::class);
+    Route::post('/staff/restore/{id}', [StaffController::class, 'restore']);
+    Route::delete('/staff/force/{id}', [StaffController::class, 'forceDelete']);
+    Route::delete('/staff/bulk', [StaffController::class, 'bulkDelete']);
+    Route::apiResource('staff', StaffController::class);
+    Route::post('/appointments/restore/{id}', [AppointmentController::class, 'restore']);
+    Route::delete('/appointments/force/{id}', [AppointmentController::class, 'forceDelete']);
+    Route::delete('/appointments/bulk', [AppointmentController::class, 'bulkDelete']);
+    Route::apiResource('appointments', AppointmentController::class);
+    Route::post('/visits/restore/{id}', [VisitController::class, 'restore']);
+    Route::delete('/visits/force/{id}', [VisitController::class, 'forceDelete']);
+    Route::delete('/visits/bulk', [VisitController::class, 'bulkDelete']);
+    Route::apiResource('visits', VisitController::class);
+    Route::post('/teeth/restore/{id}', [ToothController::class, 'restore']);
+    Route::delete('/teeth/force/{id}', [ToothController::class, 'forceDelete']);
+    Route::delete('/teeth/bulk', [ToothController::class, 'bulkDelete']);
+    Route::apiResource('teeth', ToothController::class);
+    Route::post('/treatments/restore/{id}', [TreatmentController::class, 'restore']);
+    Route::delete('/treatments/force/{id}', [TreatmentController::class, 'forceDelete']);
+    Route::delete('/treatments/bulk', [TreatmentController::class, 'bulkDelete']);
+    Route::apiResource('treatments', TreatmentController::class);
+    Route::post('/visit-treatments/restore/{id}', [VisitTreatmentController::class, 'restore']);
+    Route::delete('/visit-treatments/force/{id}', [VisitTreatmentController::class, 'forceDelete']);
+    Route::delete('/visit-treatments/bulk', [VisitTreatmentController::class, 'bulkDelete']);
+    Route::apiResource('visit-treatments', VisitTreatmentController::class);
+    Route::post('/invoices/restore/{id}', [InvoiceController::class, 'restore']);
+    Route::delete('/invoices/force/{id}', [InvoiceController::class, 'forceDelete']);
+    Route::delete('/invoices/bulk', [InvoiceController::class, 'bulkDelete']);
+    Route::apiResource('invoices', InvoiceController::class);
+    Route::post('/payments/restore/{id}', [PaymentController::class, 'restore']);
+    Route::delete('/payments/force/{id}', [PaymentController::class, 'forceDelete']);
+    Route::delete('/payments/bulk', [PaymentController::class, 'bulkDelete']);
+    Route::apiResource('payments', PaymentController::class);
+});

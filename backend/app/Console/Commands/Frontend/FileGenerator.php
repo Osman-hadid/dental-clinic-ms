@@ -248,6 +248,7 @@ final readonly class FileGenerator
     private function updateSidebarNavigation(string $module, string $entity): void
     {
         $moduleKebab = Naming::moduleKebab($module);
+        $moduleSidebarKey = Naming::moduleCamel($module);
         $entityKebabPlural = Naming::entityKebabPlural($entity);
         $entityQueryKey = Naming::entityQueryKey($entity);
         $permissionPrefix = Naming::permissionPrefix($module, $entity);
@@ -261,19 +262,19 @@ final readonly class FileGenerator
     items: [
       {$newItem}
     ],
-    key: '{$moduleKebab}',
+    key: '{$moduleSidebarKey}',
     url: '/{$moduleKebab}',
   }";
 
         $content = File::get($sidebarPath);
 
         // Check if the module already exists
-        if (str_contains($content, "key: '{$moduleKebab}'")) {
+        if (str_contains($content, "key: '{$moduleSidebarKey}'")) {
             // Module exists — update its items array
             $pattern = '/
             (items:\s*\[\s*)          # opening of items array
             (.*?)                     # existing items
-            (\s*\]\s*,\s*key:\s*[\'"]'.preg_quote($moduleKebab, '/').'[\'"])
+            (\s*\]\s*,\s*key:\s*[\'"]'.preg_quote($moduleSidebarKey, '/').'[\'"])
         /sx';
 
             if (preg_match($pattern, $content, $m)) {
@@ -317,7 +318,7 @@ final readonly class FileGenerator
 
     private function addSidebarTranslations(string $module, string $entity): void
     {
-        $moduleKebab = Naming::moduleKebab($module);
+        $moduleSidebarKey = Naming::moduleCamel($module);
         $moduleHeadline = Naming::moduleHeadline($module);
         $entityHeadlinePlural = Naming::entityHeadlinePlural($entity);
         $entityQueryKey = Naming::entityQueryKey($entity);
@@ -332,12 +333,12 @@ final readonly class FileGenerator
             $content = File::get($path);
             $json = json_decode($content, true);
 
-            if (isset($json[$moduleKebab])) {
-                if (!isset($json[$moduleKebab][$entityQueryKey])) {
-                    $json[$moduleKebab][$entityQueryKey] = $entityHeadlinePlural;
+            if (isset($json[$moduleSidebarKey])) {
+                if (!isset($json[$moduleSidebarKey][$entityQueryKey])) {
+                    $json[$moduleSidebarKey][$entityQueryKey] = $entityHeadlinePlural;
                 }
             } else {
-                $json[$moduleKebab] = [
+                $json[$moduleSidebarKey] = [
                     'title' => $moduleHeadline,
                     $entityQueryKey => $entityHeadlinePlural,
                 ];
@@ -346,7 +347,7 @@ final readonly class FileGenerator
             $pretty = json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)."\n";
             File::put($path, $pretty);
 
-            $this->logger->info("Updated sidebar translations for {$moduleKebab}.{$entityQueryKey} in {$locale}", $this->command);
+            $this->logger->info("Updated sidebar translations for {$moduleSidebarKey}.{$entityQueryKey} in {$locale}", $this->command);
         }
     }
 }

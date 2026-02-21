@@ -124,7 +124,7 @@ final readonly class FileGenerator
 
     private function appendRoutes(string $module, string $entity, array $replacements): void
     {
-        $moduleSnake = Naming::moduleSnake($module);
+        $moduleKebab = Naming::moduleKebab($module);
         $entityKebabPlural = $replacements['entityKebabPlural'];
         $controllerClass = "App\\Modules\\{$module}\\Infrastructure\\Http\\Controllers\\{$entity}Controller";
 
@@ -132,7 +132,7 @@ final readonly class FileGenerator
 
         if (!File::exists($dest)) {
             File::ensureDirectoryExists(dirname($dest));
-            $content = "<?php\n\nuse {$controllerClass};\nuse Illuminate\Support\Facades\Route;\n\nRoute::middleware(['api', 'auth:sanctum', 'set_locale'])->prefix('api/v1/{$moduleSnake}')->group(function (): void {\n";
+            $content = "<?php\n\nuse {$controllerClass};\nuse Illuminate\Support\Facades\Route;\n\nRoute::middleware(['api', 'auth:sanctum', 'set_locale'])->prefix('api/v1/{$moduleKebab}')->group(function (): void {\n";
             $content .= "    Route::post('/{$entityKebabPlural}/restore/{id}', [{$entity}Controller::class, 'restore']);\n";
             $content .= "    Route::delete('/{$entityKebabPlural}/force/{id}', [{$entity}Controller::class, 'forceDelete']);\n";
             $content .= "    Route::delete('/{$entityKebabPlural}/bulk', [{$entity}Controller::class, 'bulkDelete']);\n";
@@ -160,7 +160,7 @@ final readonly class FileGenerator
         foreach ($lines as $line) {
             if (preg_match('/^use\s+[^;]+;/', $line)) {
                 $useStatements[] = trim($line);
-            } elseif (Str::contains($line, "Route::middleware(['api', 'auth:sanctum', 'set_locale'])->prefix('api/v1/{$moduleSnake}')->group(function (): void {")) {
+            } elseif (Str::contains($line, "Route::middleware(['api', 'auth:sanctum', 'set_locale'])->prefix('api/v1/{$moduleKebab}')->group(function (): void {")) {
                 $inGroup = true;
             } elseif ($inGroup && Str::contains($line, '});')) {
                 $inGroup = false;
@@ -185,7 +185,7 @@ final readonly class FileGenerator
         // Rebuild file
         $newContent = "<?php\n\n";
         $newContent .= implode("\n", $useStatements)."\n\n";
-        $newContent .= "Route::middleware(['api', 'auth:sanctum', 'set_locale'])->prefix('api/v1/{$moduleSnake}')->group(function (): void {\n";
+        $newContent .= "Route::middleware(['api', 'auth:sanctum', 'set_locale'])->prefix('api/v1/{$moduleKebab}')->group(function (): void {\n";
         $newContent .= '    '.implode("\n    ", $routeLines)."\n";
         $newContent .= '});';
 
