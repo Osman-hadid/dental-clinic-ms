@@ -26,5 +26,17 @@
   "employees": {
     "title": "کارکوونکي",
     "jobTypes": "د دندو ډولونه"
+  },
+  "dentalManagement": {
+    "title": "Dental Management",
+    "patients": "Patients",
+    "staff": "Staff",
+    "appointments": "Appointments",
+    "visits": "Visits",
+    "teeth": "Teeth",
+    "treatments": "Treatments",
+    "visitTreatments": "Visit Treatments",
+    "invoices": "Invoices",
+    "payments": "Payments"
   }
 }

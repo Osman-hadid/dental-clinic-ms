@@ -1,0 +1,54 @@
+{
+  "config": {
+    "title": "Teeth",
+    "entity": "Tooth",
+    "table": {
+      "add": "Add Tooth",
+      "create": "Create Tooth",
+      "edit": "Edit Tooth",
+      "update": "Update Tooth"
+    },
+    "form": {
+      "toothNumber": {
+        "label": "Tooth Number",
+        "validation": {
+          "required": "Tooth Number is required",
+          "maxLength": "Tooth Number must be 255 characters or less"
+        }
+      },
+      "description": {
+        "label": "Description",
+        "validation": { "maxLength": "Description must be 255 characters or less" }
+      },
+      "createdBy": {
+        "label": "Created By",
+        "validation": { "pattern": "Created By must be a number" }
+      },
+      "updatedBy": {
+        "label": "Updated By",
+        "validation": { "pattern": "Updated By must be a number" }
+      },
+      "deletedBy": {
+        "label": "Deleted By",
+        "validation": { "pattern": "Deleted By must be a number" }
+      },
+      "visitTreatments": {
+        "label": "Visit Treatments",
+        "validation": { "maxLength": "Visit Treatments must be 255 characters or less" }
+      }
+    },
+    "repository": {
+      "createFailed": "Failed to create Tooth",
+      "fetchFailed": "Failed to fetch Tooth",
+      "updateFailed": "Failed to update Tooth",
+      "deleteFailed": "Failed to delete Tooth",
+      "fetchManyFailed": "Failed to fetch Teeth",
+      "fetchManySuccess": "Teeth fetched successfully"
+    },
+    "presentation": {
+      "createSuccess": "Tooth created successfully",
+      "updateSuccess": "Tooth updated successfully",
+      "deleteSuccess": "Tooth deleted successfully"
+    }
+  }
+}

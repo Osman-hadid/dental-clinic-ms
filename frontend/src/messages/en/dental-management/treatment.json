@@ -1,0 +1,70 @@
+{
+  "config": {
+    "title": "Treatments",
+    "entity": "Treatment",
+    "table": {
+      "add": "Add Treatment",
+      "create": "Create Treatment",
+      "edit": "Edit Treatment",
+      "update": "Update Treatment"
+    },
+    "form": {
+      "name": {
+        "label": "Name",
+        "validation": {
+          "required": "Name is required",
+          "maxLength": "Name must be 255 characters or less"
+        }
+      },
+      "category": {
+        "label": "Category",
+        "validation": {
+          "required": "Category is required",
+          "maxLength": "Category must be 255 characters or less"
+        }
+      },
+      "defaultPrice": {
+        "label": "Default Price",
+        "validation": {
+          "required": "Default Price is required",
+          "maxLength": "Default Price must be 255 characters or less"
+        }
+      },
+      "durationMinutes": { "label": "Duration Minutes" },
+      "description": {
+        "label": "Description",
+        "validation": { "maxLength": "Description must be 255 characters or less" }
+      },
+      "createdBy": {
+        "label": "Created By",
+        "validation": { "pattern": "Created By must be a number" }
+      },
+      "updatedBy": {
+        "label": "Updated By",
+        "validation": { "pattern": "Updated By must be a number" }
+      },
+      "deletedBy": {
+        "label": "Deleted By",
+        "validation": { "pattern": "Deleted By must be a number" }
+      },
+      "enabled": { "label": "Enabled" },
+      "visitTreatments": {
+        "label": "Visit Treatments",
+        "validation": { "maxLength": "Visit Treatments must be 255 characters or less" }
+      }
+    },
+    "repository": {
+      "createFailed": "Failed to create Treatment",
+      "fetchFailed": "Failed to fetch Treatment",
+      "updateFailed": "Failed to update Treatment",
+      "deleteFailed": "Failed to delete Treatment",
+      "fetchManyFailed": "Failed to fetch Treatments",
+      "fetchManySuccess": "Treatments fetched successfully"
+    },
+    "presentation": {
+      "createSuccess": "Treatment created successfully",
+      "updateSuccess": "Treatment updated successfully",
+      "deleteSuccess": "Treatment deleted successfully"
+    }
+  }
+}

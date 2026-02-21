@@ -27,15 +27,15 @@ export const TeamSwitcher = ({
         <SidebarMenuButton
           size="lg"
           onClick={handleClick}
-          className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground flex items-center justify-center h-[50px] py-2 relative"
+          className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground flex items-center justify-center h-[56px] py-2 relative"
         >
           <Image
             src="/logo.png"
             alt="CPAMIS logo"
             fill
             priority
-            sizes="34"
-            className="absolute !h-[34px] !w-auto m-auto"
+            sizes="130px"
+            className="absolute !h-[130px] !w-auto m-auto"
           />
         </SidebarMenuButton>
       </SidebarMenuItem>

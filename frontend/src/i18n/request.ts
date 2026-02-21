@@ -12,6 +12,15 @@ type Messages = {
   role: Record<string, unknown>;
   permission: Record<string, unknown>;
   module: Record<string, unknown>;
+  patient: Record<string, unknown>;
+  staff: Record<string, unknown>;
+  appointment: Record<string, unknown>;
+  visit: Record<string, unknown>;
+  tooth: Record<string, unknown>;
+  treatment: Record<string, unknown>;
+  visitTreatment: Record<string, unknown>;
+  invoice: Record<string, unknown>;
+  payment: Record<string, unknown>;
 };
 
 export default getRequestConfig(async ({ requestLocale }) => {
@@ -36,6 +45,16 @@ export default getRequestConfig(async ({ requestLocale }) => {
     role: (await import(`@/messages/${locale}/user-management/role.json`)).default,
     sidebar: (await import(`@/messages/${locale}/sidebar.json`)).default,
     user: (await import(`@/messages/${locale}/user-management/user.json`)).default,
+    patient: (await import(`@/messages/${locale}/dental-management/patient.json`)).default,
+    staff: (await import(`@/messages/${locale}/dental-management/staff.json`)).default,
+    appointment: (await import(`@/messages/${locale}/dental-management/appointment.json`)).default,
+    visit: (await import(`@/messages/${locale}/dental-management/visit.json`)).default,
+    tooth: (await import(`@/messages/${locale}/dental-management/tooth.json`)).default,
+    treatment: (await import(`@/messages/${locale}/dental-management/treatment.json`)).default,
+    visitTreatment: (await import(`@/messages/${locale}/dental-management/visit-treatment.json`))
+      .default,
+    invoice: (await import(`@/messages/${locale}/dental-management/invoice.json`)).default,
+    payment: (await import(`@/messages/${locale}/dental-management/payment.json`)).default,
   };
 
   return { locale, messages };

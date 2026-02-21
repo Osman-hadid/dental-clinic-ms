@@ -1,0 +1,93 @@
+{
+  "config": {
+    "title": "Invoices",
+    "entity": "Invoice",
+    "table": {
+      "add": "Add Invoice",
+      "create": "Create Invoice",
+      "edit": "Edit Invoice",
+      "update": "Update Invoice"
+    },
+    "form": {
+      "patientId": {
+        "label": "Patient Id",
+        "validation": {
+          "required": "Patient Id is required",
+          "pattern": "Patient Id must be a number"
+        }
+      },
+      "visitId": {
+        "label": "Visit Id",
+        "validation": { "required": "Visit Id is required", "pattern": "Visit Id must be a number" }
+      },
+      "totalAmount": {
+        "label": "Total Amount",
+        "validation": {
+          "required": "Total Amount is required",
+          "maxLength": "Total Amount must be 255 characters or less"
+        }
+      },
+      "netAmount": {
+        "label": "Net Amount",
+        "validation": {
+          "required": "Net Amount is required",
+          "maxLength": "Net Amount must be 255 characters or less"
+        }
+      },
+      "invoiceDate": {
+        "label": "Invoice Date",
+        "validation": {
+          "required": "Invoice Date is required",
+          "maxLength": "Invoice Date must be 255 characters or less"
+        }
+      },
+      "notes": {
+        "label": "Notes",
+        "validation": { "maxLength": "Notes must be 255 characters or less" }
+      },
+      "createdBy": {
+        "label": "Created By",
+        "validation": { "pattern": "Created By must be a number" }
+      },
+      "updatedBy": {
+        "label": "Updated By",
+        "validation": { "pattern": "Updated By must be a number" }
+      },
+      "deletedBy": {
+        "label": "Deleted By",
+        "validation": { "pattern": "Deleted By must be a number" }
+      },
+      "discount": {
+        "label": "Discount",
+        "validation": { "maxLength": "Discount must be 255 characters or less" }
+      },
+      "status": {
+        "label": "Status",
+        "validation": { "in": "Status must be one of the allowed values" },
+        "options": {
+          "unpaid": "Unpaid",
+          "partially_paid": "Partially Paid",
+          "paid": "Paid",
+          "cancelled": "Cancelled"
+        }
+      },
+      "payments": {
+        "label": "Payments",
+        "validation": { "maxLength": "Payments must be 255 characters or less" }
+      }
+    },
+    "repository": {
+      "createFailed": "Failed to create Invoice",
+      "fetchFailed": "Failed to fetch Invoice",
+      "updateFailed": "Failed to update Invoice",
+      "deleteFailed": "Failed to delete Invoice",
+      "fetchManyFailed": "Failed to fetch Invoices",
+      "fetchManySuccess": "Invoices fetched successfully"
+    },
+    "presentation": {
+      "createSuccess": "Invoice created successfully",
+      "updateSuccess": "Invoice updated successfully",
+      "deleteSuccess": "Invoice deleted successfully"
+    }
+  }
+}

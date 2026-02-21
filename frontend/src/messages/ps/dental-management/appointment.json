@@ -1,0 +1,84 @@
+{
+  "config": {
+    "title": "Appointments",
+    "entity": "Appointment",
+    "table": {
+      "add": "Add Appointment",
+      "create": "Create Appointment",
+      "edit": "Edit Appointment",
+      "update": "Update Appointment"
+    },
+    "form": {
+      "patientId": {
+        "label": "Patient Id",
+        "validation": {
+          "required": "Patient Id is required",
+          "pattern": "Patient Id must be a number"
+        }
+      },
+      "dentistId": {
+        "label": "Dentist Id",
+        "validation": {
+          "required": "Dentist Id is required",
+          "pattern": "Dentist Id must be a number"
+        }
+      },
+      "appointmentDate": {
+        "label": "Appointment Date",
+        "validation": {
+          "required": "Appointment Date is required",
+          "maxLength": "Appointment Date must be 255 characters or less"
+        }
+      },
+      "startTime": {
+        "label": "Start Time",
+        "validation": {
+          "required": "Start Time is required",
+          "maxLength": "Start Time must be 255 characters or less"
+        }
+      },
+      "endTime": {
+        "label": "End Time",
+        "validation": { "maxLength": "End Time must be 255 characters or less" }
+      },
+      "notes": {
+        "label": "Notes",
+        "validation": { "maxLength": "Notes must be 255 characters or less" }
+      },
+      "createdBy": {
+        "label": "Created By",
+        "validation": { "pattern": "Created By must be a number" }
+      },
+      "updatedBy": {
+        "label": "Updated By",
+        "validation": { "pattern": "Updated By must be a number" }
+      },
+      "deletedBy": {
+        "label": "Deleted By",
+        "validation": { "pattern": "Deleted By must be a number" }
+      },
+      "status": {
+        "label": "Status",
+        "validation": { "in": "Status must be one of the allowed values" },
+        "options": { "scheduled": "Scheduled", "completed": "Completed", "cancelled": "Cancelled" }
+      },
+      "visits": {
+        "label": "Visits",
+        "validation": { "maxLength": "Visits must be 255 characters or less" }
+      }
+    },
+    "repository": {
+      "createFailed": "Failed to create Appointment",
+      "fetchFailed": "Failed to fetch Appointment",
+      "updateFailed": "Failed to update Appointment",
+      "deleteFailed": "Failed to delete Appointment",
+      "fetchManyFailed": "Failed to fetch Appointments",
+      "fetchManySuccess": "Appointments fetched successfully"
+    },
+    "presentation": {
+      "createSuccess": "Appointment created successfully",
+      "updateSuccess": "Appointment updated successfully",
+      "deleteSuccess": "Appointment deleted successfully"
+    }
+  }
+}

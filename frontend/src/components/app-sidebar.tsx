@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/sidebar';
 import { useCan } from '@/hooks/useCan';
 import { useAuthStore } from '@/modules/auth/application/stores/auth-store';
-import { BookOpen, GalleryVerticalEnd, LucideIcon, Users } from 'lucide-react';
+import { BookOpen, GalleryVerticalEnd, LucideIcon, Stethoscope, Users } from 'lucide-react';
 
 export type SidebarSubItem = {
   key: string;
@@ -46,6 +46,22 @@ const staticNavItems: SidebarItem[] = [
     url: '/user-management',
   },
   {
+    icon: Stethoscope,
+    items: [
+      { key: 'patients', url: '/dental-management/patients' },
+      { key: 'staff', url: '/dental-management/staff' },
+      { key: 'appointments', url: '/dental-management/appointments' },
+      { key: 'visits', url: '/dental-management/visits' },
+      { key: 'teeth', url: '/dental-management/teeth' },
+      { key: 'treatments', url: '/dental-management/treatments' },
+      { key: 'visitTreatments', url: '/dental-management/visit-treatments' },
+      { key: 'invoices', url: '/dental-management/invoices' },
+      { key: 'payments', url: '/dental-management/payments' },
+    ],
+    key: 'dentalManagement',
+    url: '/dental-management',
+  },
+  {
     icon: BookOpen,
     items: [
       { key: 'users', url: '#' },
@@ -70,7 +86,11 @@ export const AppSidebar = (props: React.ComponentProps<typeof Sidebar>): React.J
       });
   }, []);
 
-  const navItems: SidebarItem[] = [...staticNavItems, ...dynamicNavItems];
+  const navItems: SidebarItem[] = React.useMemo(() => {
+    const staticKeys = new Set(staticNavItems.map((item) => item.key));
+
+    return [...staticNavItems, ...dynamicNavItems.filter((item) => !staticKeys.has(item.key))];
+  }, [dynamicNavItems]);
 
   const user = useAuthStore((state) => state.user);
   const t = useTranslations('sidebar');

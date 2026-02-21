@@ -1,0 +1,69 @@
+{
+  "config": {
+    "title": "Visit Treatments",
+    "entity": "Visit Treatment",
+    "table": {
+      "add": "Add Visit Treatment",
+      "create": "Create Visit Treatment",
+      "edit": "Edit Visit Treatment",
+      "update": "Update Visit Treatment"
+    },
+    "form": {
+      "visitId": {
+        "label": "Visit Id",
+        "validation": { "required": "Visit Id is required", "pattern": "Visit Id must be a number" }
+      },
+      "treatmentId": {
+        "label": "Treatment Id",
+        "validation": {
+          "required": "Treatment Id is required",
+          "pattern": "Treatment Id must be a number"
+        }
+      },
+      "toothId": { "label": "Tooth Id", "validation": { "pattern": "Tooth Id must be a number" } },
+      "dentistId": {
+        "label": "Dentist Id",
+        "validation": {
+          "required": "Dentist Id is required",
+          "pattern": "Dentist Id must be a number"
+        }
+      },
+      "price": {
+        "label": "Price",
+        "validation": {
+          "required": "Price is required",
+          "maxLength": "Price must be 255 characters or less"
+        }
+      },
+      "notes": {
+        "label": "Notes",
+        "validation": { "maxLength": "Notes must be 255 characters or less" }
+      },
+      "createdBy": {
+        "label": "Created By",
+        "validation": { "pattern": "Created By must be a number" }
+      },
+      "updatedBy": {
+        "label": "Updated By",
+        "validation": { "pattern": "Updated By must be a number" }
+      },
+      "deletedBy": {
+        "label": "Deleted By",
+        "validation": { "pattern": "Deleted By must be a number" }
+      }
+    },
+    "repository": {
+      "createFailed": "Failed to create Visit Treatment",
+      "fetchFailed": "Failed to fetch Visit Treatment",
+      "updateFailed": "Failed to update Visit Treatment",
+      "deleteFailed": "Failed to delete Visit Treatment",
+      "fetchManyFailed": "Failed to fetch Visit Treatments",
+      "fetchManySuccess": "Visit Treatments fetched successfully"
+    },
+    "presentation": {
+      "createSuccess": "Visit Treatment created successfully",
+      "updateSuccess": "Visit Treatment updated successfully",
+      "deleteSuccess": "Visit Treatment deleted successfully"
+    }
+  }
+}

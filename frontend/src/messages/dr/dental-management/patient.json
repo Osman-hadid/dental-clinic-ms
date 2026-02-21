@@ -1,0 +1,111 @@
+{
+  "config": {
+    "title": "Patients",
+    "entity": "Patient",
+    "table": {
+      "add": "Add Patient",
+      "create": "Create Patient",
+      "edit": "Edit Patient",
+      "update": "Update Patient"
+    },
+    "form": {
+      "patientCode": {
+        "label": "Patient Code",
+        "validation": {
+          "required": "Patient Code is required",
+          "maxLength": "Patient Code must be 255 characters or less"
+        }
+      },
+      "firstName": {
+        "label": "First Name",
+        "validation": {
+          "required": "First Name is required",
+          "maxLength": "First Name must be 255 characters or less"
+        }
+      },
+      "lastName": {
+        "label": "Last Name",
+        "validation": { "maxLength": "Last Name must be 255 characters or less" }
+      },
+      "gender": {
+        "label": "Gender",
+        "validation": { "in": "Gender must be one of the allowed values" },
+        "options": { "male": "Male", "female": "Female" }
+      },
+      "dateOfBirth": {
+        "label": "Date Of Birth",
+        "validation": { "maxLength": "Date Of Birth must be 255 characters or less" }
+      },
+      "contactNumber": {
+        "label": "Contact Number",
+        "validation": { "maxLength": "Contact Number must be 255 characters or less" }
+      },
+      "email": {
+        "label": "Email",
+        "validation": {
+          "email": "Invalid email format",
+          "maxLength": "Email must be 255 characters or less"
+        }
+      },
+      "address": {
+        "label": "Address",
+        "validation": { "maxLength": "Address must be 255 characters or less" }
+      },
+      "bloodGroup": {
+        "label": "Blood Group",
+        "validation": { "maxLength": "Blood Group must be 255 characters or less" }
+      },
+      "emergencyContact": {
+        "label": "Emergency Contact",
+        "validation": { "maxLength": "Emergency Contact must be 255 characters or less" }
+      },
+      "remarks": {
+        "label": "Remarks",
+        "validation": { "maxLength": "Remarks must be 255 characters or less" }
+      },
+      "createdBy": {
+        "label": "Created By",
+        "validation": { "pattern": "Created By must be a number" }
+      },
+      "updatedBy": {
+        "label": "Updated By",
+        "validation": { "pattern": "Updated By must be a number" }
+      },
+      "deletedBy": {
+        "label": "Deleted By",
+        "validation": { "pattern": "Deleted By must be a number" }
+      },
+      "enabled": { "label": "Enabled" },
+      "status": {
+        "label": "Status",
+        "validation": { "in": "Status must be one of the allowed values" },
+        "options": { "pending": "Pending", "approved": "Approved", "rejected": "Rejected" }
+      },
+      "appointments": {
+        "label": "Appointments",
+        "validation": { "maxLength": "Appointments must be 255 characters or less" }
+      },
+      "visits": {
+        "label": "Visits",
+        "validation": { "maxLength": "Visits must be 255 characters or less" }
+      },
+      "invoices": {
+        "label": "Invoices",
+        "validation": { "maxLength": "Invoices must be 255 characters or less" }
+      }
+    },
+    "repository": {
+      "createFailed": "Failed to create Patient",
+      "fetchFailed": "Failed to fetch Patient",
+      "updateFailed": "Failed to update Patient",
+      "deleteFailed": "Failed to delete Patient",
+      "fetchManyFailed": "Failed to fetch Patients",
+      "fetchManySuccess": "Patients fetched successfully"
+    },
+    "presentation": {
+      "createSuccess": "Patient created successfully",
+      "updateSuccess": "Patient updated successfully",
+      "deleteSuccess": "Patient deleted successfully"
+    }
+  }
+}

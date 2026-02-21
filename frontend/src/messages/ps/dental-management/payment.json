@@ -1,0 +1,72 @@
+{
+  "config": {
+    "title": "Payments",
+    "entity": "Payment",
+    "table": {
+      "add": "Add Payment",
+      "create": "Create Payment",
+      "edit": "Edit Payment",
+      "update": "Update Payment"
+    },
+    "form": {
+      "invoiceId": {
+        "label": "Invoice Id",
+        "validation": {
+          "required": "Invoice Id is required",
+          "pattern": "Invoice Id must be a number"
+        }
+      },
+      "paymentDate": {
+        "label": "Payment Date",
+        "validation": {
+          "required": "Payment Date is required",
+          "maxLength": "Payment Date must be 255 characters or less"
+        }
+      },
+      "amount": {
+        "label": "Amount",
+        "validation": {
+          "required": "Amount is required",
+          "maxLength": "Amount must be 255 characters or less"
+        }
+      },
+      "method": {
+        "label": "Method",
+        "validation": {
+          "required": "Method is required",
+          "in": "Method must be one of the allowed values"
+        },
+        "options": { "cash": "Cash", "card": "Card", "insurance": "Insurance" }
+      },
+      "notes": {
+        "label": "Notes",
+        "validation": { "maxLength": "Notes must be 255 characters or less" }
+      },
+      "createdBy": {
+        "label": "Created By",
+        "validation": { "pattern": "Created By must be a number" }
+      },
+      "updatedBy": {
+        "label": "Updated By",
+        "validation": { "pattern": "Updated By must be a number" }
+      },
+      "deletedBy": {
+        "label": "Deleted By",
+        "validation": { "pattern": "Deleted By must be a number" }
+      }
+    },
+    "repository": {
+      "createFailed": "Failed to create Payment",
+      "fetchFailed": "Failed to fetch Payment",
+      "updateFailed": "Failed to update Payment",
+      "deleteFailed": "Failed to delete Payment",
+      "fetchManyFailed": "Failed to fetch Payments",
+      "fetchManySuccess": "Payments fetched successfully"
+    },
+    "presentation": {
+      "createSuccess": "Payment created successfully",
+      "updateSuccess": "Payment updated successfully",
+      "deleteSuccess": "Payment deleted successfully"
+    }
+  }
+}

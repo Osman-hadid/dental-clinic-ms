@@ -1,0 +1,83 @@
+{
+  "config": {
+    "title": "Visits",
+    "entity": "Visit",
+    "table": {
+      "add": "Add Visit",
+      "create": "Create Visit",
+      "edit": "Edit Visit",
+      "update": "Update Visit"
+    },
+    "form": {
+      "appointmentId": {
+        "label": "Appointment Id",
+        "validation": {
+          "required": "Appointment Id is required",
+          "pattern": "Appointment Id must be a number"
+        }
+      },
+      "patientId": {
+        "label": "Patient Id",
+        "validation": {
+          "required": "Patient Id is required",
+          "pattern": "Patient Id must be a number"
+        }
+      },
+      "dentistId": {
+        "label": "Dentist Id",
+        "validation": {
+          "required": "Dentist Id is required",
+          "pattern": "Dentist Id must be a number"
+        }
+      },
+      "visitDate": {
+        "label": "Visit Date",
+        "validation": {
+          "required": "Visit Date is required",
+          "maxLength": "Visit Date must be 255 characters or less"
+        }
+      },
+      "diagnosisNotes": {
+        "label": "Diagnosis Notes",
+        "validation": { "maxLength": "Diagnosis Notes must be 255 characters or less" }
+      },
+      "nextVisitDate": {
+        "label": "Next Visit Date",
+        "validation": { "maxLength": "Next Visit Date must be 255 characters or less" }
+      },
+      "createdBy": {
+        "label": "Created By",
+        "validation": { "pattern": "Created By must be a number" }
+      },
+      "updatedBy": {
+        "label": "Updated By",
+        "validation": { "pattern": "Updated By must be a number" }
+      },
+      "deletedBy": {
+        "label": "Deleted By",
+        "validation": { "pattern": "Deleted By must be a number" }
+      },
+      "visitTreatments": {
+        "label": "Visit Treatments",
+        "validation": { "maxLength": "Visit Treatments must be 255 characters or less" }
+      },
+      "invoices": {
+        "label": "Invoices",
+        "validation": { "maxLength": "Invoices must be 255 characters or less" }
+      }
+    },
+    "repository": {
+      "createFailed": "Failed to create Visit",
+      "fetchFailed": "Failed to fetch Visit",
+      "updateFailed": "Failed to update Visit",
+      "deleteFailed": "Failed to delete Visit",
+      "fetchManyFailed": "Failed to fetch Visits",
+      "fetchManySuccess": "Visits fetched successfully"
+    },
+    "presentation": {
+      "createSuccess": "Visit created successfully",
+      "updateSuccess": "Visit updated successfully",
+      "deleteSuccess": "Visit deleted successfully"
+    }
+  }
+}
