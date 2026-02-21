@@ -1,0 +1,66 @@
+{
+  "config": {
+    "title": "صلاحیتونه",
+    "entity": "صلاحیت",
+    "table": {
+      "add": "صلاحیت اضافه کړئ",
+      "create": "صلاحیت ثبت کړئ",
+      "edit": "صلاحیت سم کړئ",
+      "update": "تازه کول",
+      "displayName": "ښودنیز نوم"
+    },
+    "form": {
+      "module": {
+        "label": "ماډیول",
+        "validation": {
+          "required": "ماډیول اړین دی",
+          "maxLength": "اعظمي 255 کرکټرونه"
+        }
+      },
+      "name": {
+        "label": "د صلاحیت نوم",
+        "validation": {
+          "required": "نوم اړین دی",
+          "maxLength": "اعظمي 255 کرکټرونه"
+        }
+      },
+      "displayNameEn": {
+        "label": "ښودنیز نوم (EN)",
+        "validation": {
+          "maxLength": "اعظمي 255 کرکټرونه"
+        }
+      },
+      "displayNamePs": {
+        "label": "ښودنیز نوم (PS)",
+        "validation": {
+          "maxLength": "اعظمي 255 کرکټرونه"
+        }
+      },
+      "displayNameDr": {
+        "label": "ښودنیز نوم (DR)",
+        "validation": {
+          "maxLength": "اعظمي 255 کرکټرونه"
+        }
+      },
+      "guardName": {
+        "label": "د ګارډ نوم",
+        "validation": {
+          "maxLength": "اعظمي 255 کرکټرونه"
+        }
+      }
+    },
+    "repository": {
+      "createFailed": "صلاحیت ثبت نه شو",
+      "fetchFailed": "معلومات ترلاسه نه شول",
+      "updateFailed": "تازه کول ناکام شول",
+      "deleteFailed": "حذف ناکام شو",
+      "fetchManyFailed": "لیست ترلاسه نه شو",
+      "fetchManySuccess": "معلومات په بریالیتوب سره ترلاسه شول"
+    },
+    "presentation": {
+      "createSuccess": "صلاحیت ثبت شو",
+      "updateSuccess": "صلاحیت تازه شو",
+      "deleteSuccess": "صلاحیت حذف شو"
+    }
+  }
+}

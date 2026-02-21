@@ -1,0 +1,30 @@
+#!/usr/bin/env sh
+
+# ANSI Colors
+RED='\x1b[31m'
+GREEN='\x1b[32m'
+CYAN='\x1b[36m'
+RESET='\x1b[0m'
+
+printf "${CYAN}Running full build & analysis (pre-push)...${RESET}\n\n"
+
+printf "→ Building frontend (next build)...\n"
+cd frontend && npm run build || {
+  printf "${RED}❌ Frontend build failed${RESET}\n"
+  exit 1
+}
+
+printf "→ Analyzing backend (PHPStan)...\n"
+cd ../backend
+./vendor/bin/phpstan analyze app/ --memory-limit=512M || {
+  printf "${RED}❌ PHPStan failed${RESET}\n"
+  exit 1
+}
+
+printf "→ Checking backend refactoring safety (Rector dry-run)...\n"
+./vendor/bin/rector process app/ --dry-run || {
+  printf "${RED}❌ Rector found issues${RESET}\n"
+  exit 1
+}
+
+printf "\n${GREEN}✅ All checks passed! Pushing...${RESET}\n"

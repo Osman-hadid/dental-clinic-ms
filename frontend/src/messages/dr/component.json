@@ -1,0 +1,30 @@
+{
+  "selectLocale": "انتخاب زبان",
+  "searchForACommand": "برای اجرای فرمان جستجو کنید...",
+  "commandPalette": "فهرست فرمان‌ها",
+  "passwordIsRequired": "گذرواژه الزامی است",
+  "submitting": "در حال ارسال...",
+  "pagination": {
+    "showing": "نمایش",
+    "to": "تا",
+    "of": "از",
+    "results": "نتیجه",
+    "rowsPerPage": "ردیف در هر صفحه",
+    "page": "صفحه",
+    "goToFirstPage": "رفتن به صفحه اول",
+    "goToPreviousPage": "رفتن به صفحه قبلی",
+    "goToNextPage": "رفتن به صفحه بعدی",
+    "goToLastPage": "رفتن به صفحه آخر"
+  },
+  "table": {
+    "noResultsFound": "هیچ نتیجه‌ای یافت نشد.",
+    "clearFilters": "پاک‌سازی فیلترها",
+    "selected": "{count} انتخاب شده"
+  },
+  "form": {
+    "loading": "در حال بارگذاری...",
+    "loadingMore": "در حال بارگذاری بیشتر...",
+    "noResultsFound": "هیچ نتیجه‌ای یافت نشد.",
+    "search": "جستجو..."
+  }
+}

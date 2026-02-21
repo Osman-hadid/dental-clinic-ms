@@ -1,0 +1,66 @@
+{
+  "config": {
+    "title": "صلاحیت‌ها",
+    "entity": "صلاحیت",
+    "table": {
+      "add": "افزودن صلاحیت",
+      "create": "ثبت صلاحیت",
+      "edit": "ویرایش صلاحیت",
+      "update": "به‌روزرسانی",
+      "displayName": "نام نمایشی"
+    },
+    "form": {
+      "module": {
+        "label": "مادیول",
+        "validation": {
+          "required": "مادیول الزامی است",
+          "maxLength": "حداکثر 255 کاراکتر"
+        }
+      },
+      "name": {
+        "label": "نام صلاحیت",
+        "validation": {
+          "required": "نام الزامی است",
+          "maxLength": "حداکثر 255 کاراکتر"
+        }
+      },
+      "displayNameEn": {
+        "label": "نام نمایشی (EN)",
+        "validation": {
+          "maxLength": "حداکثر 255 کاراکتر"
+        }
+      },
+      "displayNamePs": {
+        "label": "نام نمایشی (PS)",
+        "validation": {
+          "maxLength": "حداکثر 255 کاراکتر"
+        }
+      },
+      "displayNameDr": {
+        "label": "نام نمایشی (DR)",
+        "validation": {
+          "maxLength": "حداکثر 255 کاراکتر"
+        }
+      },
+      "guardName": {
+        "label": "نام گارد",
+        "validation": {
+          "maxLength": "حداکثر 255 کاراکتر"
+        }
+      }
+    },
+    "repository": {
+      "createFailed": "ثبت صلاحیت انجام نشد",
+      "fetchFailed": "دریافت اطلاعات ناموفق بود",
+      "updateFailed": "به‌روزرسانی انجام نشد",
+      "deleteFailed": "حذف انجام نشد",
+      "fetchManyFailed": "دریافت لیست ناموفق بود",
+      "fetchManySuccess": "اطلاعات با موفقیت دریافت شد"
+    },
+    "presentation": {
+      "createSuccess": "صلاحیت ثبت شد",
+      "updateSuccess": "صلاحیت به‌روزرسانی شد",
+      "deleteSuccess": "صلاحیت حذف شد"
+    }
+  }
+}

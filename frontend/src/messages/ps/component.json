@@ -1,0 +1,30 @@
+{
+  "selectLocale": "ژبه وټاکئ",
+  "searchForACommand": "د قوماندې د اجرا لپاره لټون وکړئ...",
+  "commandPalette": "د قوماندو لېست",
+  "passwordIsRequired": "پټنوم اړین دی",
+  "submitting": "د لېږلو په حال کې...",
+  "pagination": {
+    "showing": "ښودل",
+    "to": "تر",
+    "of": "له",
+    "results": "پایلې",
+    "rowsPerPage": "قطارونه په هره پاڼه",
+    "page": "پاڼه",
+    "goToFirstPage": "لومړۍ پاڼې ته لاړ شئ",
+    "goToPreviousPage": "مخکنۍ پاڼې ته لاړ شئ",
+    "goToNextPage": "بلې پاڼې ته لاړ شئ",
+    "goToLastPage": "وروستۍ پاڼې ته لاړ شئ"
+  },
+  "table": {
+    "noResultsFound": "هیڅ پایله ونه موندل شوه.",
+    "clearFilters": "فلټرونه پاک کړئ",
+    "selected": "{count} ټاکل شوي"
+  },
+  "form": {
+    "loading": "د پورته کېدو په حال کې...",
+    "loadingMore": "نور پورته کېږي...",
+    "noResultsFound": "هیڅ پایله ونه موندل شوه.",
+    "search": "لټون..."
+  }
+}

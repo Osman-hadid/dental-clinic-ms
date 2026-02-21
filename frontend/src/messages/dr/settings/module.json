@@ -1,0 +1,62 @@
+{
+  "config": {
+    "title": "مادیول‌ها",
+    "entity": "مادیول",
+    "table": {
+      "add": "افزودن مادیول",
+      "create": "ثبت مادیول",
+      "edit": "ویرایش مادیول",
+      "update": "به‌روزرسانی"
+    },
+    "form": {
+      "nameEn": {
+        "label": "نام (EN)",
+        "validation": {
+          "required": "نام انگلیسی الزامی است",
+          "maxLength": "حداکثر 255 کاراکتر"
+        }
+      },
+      "namePs": {
+        "label": "نام (PS)",
+        "validation": {
+          "maxLength": "حداکثر 255 کاراکتر"
+        }
+      },
+      "nameDr": {
+        "label": "نام (DR)",
+        "validation": {
+          "maxLength": "حداکثر 255 کاراکتر"
+        }
+      },
+      "url": {
+        "label": "آدرس سیستم",
+        "validation": {
+          "required": "آدرس سیستم الزامی است",
+          "maxLength": "حداکثر 255 کاراکتر"
+        }
+      },
+      "description": {
+        "label": "توضیحات",
+        "validation": {
+          "maxLength": "حداکثر 255 کاراکتر"
+        }
+      },
+      "sortOrder": {
+        "label": "ترتیب نمایش"
+      }
+    },
+    "repository": {
+      "createFailed": "ثبت مادیول انجام نشد",
+      "fetchFailed": "دریافت اطلاعات ناموفق بود",
+      "updateFailed": "به‌روزرسانی انجام نشد",
+      "deleteFailed": "حذف انجام نشد",
+      "fetchManyFailed": "دریافت لیست ناموفق بود",
+      "fetchManySuccess": "اطلاعات با موفقیت دریافت شد"
+    },
+    "presentation": {
+      "createSuccess": "مادیول ثبت شد",
+      "updateSuccess": "مادیول به‌روزرسانی شد",
+      "deleteSuccess": "مادیول حذف شد"
+    }
+  }
+}

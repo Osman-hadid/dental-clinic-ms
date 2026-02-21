@@ -1,0 +1,11 @@
+<?php
+
+declare(strict_types=1);
+
+return [
+    'users.fetched' => 'کاربران با موفقیت دریافت شدند.',
+    'user.created' => 'کاربر با موفقیت ایجاد شد.',
+    'user.fetched' => 'کاربر با موفقیت دریافت شد.',
+    'user.updated' => 'کاربر با موفقیت به‌روزرسانی شد.',
+    'user.deleted' => 'کاربر با موفقیت حذف شد.',
+];

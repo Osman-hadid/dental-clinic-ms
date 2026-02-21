@@ -1,0 +1,54 @@
+{
+  "config": {
+    "title": "Modules",
+    "entity": "Module",
+    "table": {
+      "add": "Add Module",
+      "create": "Create Module",
+      "edit": "Edit Module",
+      "update": "Update Module"
+    },
+    "form": {
+      "nameEn": {
+        "label": "Name En",
+        "validation": {
+          "required": "Name En is required",
+          "maxLength": "Name En must be 255 characters or less"
+        }
+      },
+      "namePs": {
+        "label": "Name Ps",
+        "validation": { "maxLength": "Name Ps must be 255 characters or less" }
+      },
+      "nameDr": {
+        "label": "Name Dr",
+        "validation": { "maxLength": "Name Dr must be 255 characters or less" }
+      },
+      "url": {
+        "label": "Url",
+        "validation": {
+          "required": "Url is required",
+          "maxLength": "Url must be 255 characters or less"
+        }
+      },
+      "description": {
+        "label": "Description",
+        "validation": { "maxLength": "Description must be 255 characters or less" }
+      },
+      "sortOrder": { "label": "Sort Order" }
+    },
+    "repository": {
+      "createFailed": "Failed to create Module",
+      "fetchFailed": "Failed to fetch Module",
+      "updateFailed": "Failed to update Module",
+      "deleteFailed": "Failed to delete Module",
+      "fetchManyFailed": "Failed to fetch Modules",
+      "fetchManySuccess": "Modules fetched successfully"
+    },
+    "presentation": {
+      "createSuccess": "Module created successfully",
+      "updateSuccess": "Module updated successfully",
+      "deleteSuccess": "Module deleted successfully"
+    }
+  }
+}

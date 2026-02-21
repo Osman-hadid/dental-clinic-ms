@@ -1,0 +1,30 @@
+{
+  "platform": "پلاتفورم",
+  "name": "CPAMIS",
+  "userManagement": {
+    "title": "د کاروونکو مدیریت",
+    "users": "کاروونکي",
+    "roles": "نقشونه",
+    "permissions": "صلاحیتونه"
+  },
+  "documentation": {
+    "title": "مستندات",
+    "users": "کاروونکي",
+    "permissions": "صلاحیتونه",
+    "settings": "تنظیمات"
+  },
+  "settings": {
+    "title": "تنظیمات",
+    "dashboard": "ډشبورډ"
+  },
+  "navUser": {
+    "loggingOut": "د وتلو په حال کې...",
+    "logout": "وتل",
+    "account": "حساب",
+    "notifications": "خبرتیاوې"
+  },
+  "employees": {
+    "title": "کارکوونکي",
+    "jobTypes": "د دندو ډولونه"
+  }
+}

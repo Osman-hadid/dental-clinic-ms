@@ -1,0 +1,62 @@
+{
+  "config": {
+    "title": "ماډیولونه",
+    "entity": "ماډیول",
+    "table": {
+      "add": "ماډیول اضافه کړئ",
+      "create": "ماډیول ثبت کړئ",
+      "edit": "ماډیول سم کړئ",
+      "update": "تازه کول"
+    },
+    "form": {
+      "nameEn": {
+        "label": "نوم (EN)",
+        "validation": {
+          "required": "انګلیسي نوم اړین دی",
+          "maxLength": "اعظمي 255 کرکټرونه"
+        }
+      },
+      "namePs": {
+        "label": "نوم (PS)",
+        "validation": {
+          "maxLength": "اعظمي 255 کرکټرونه"
+        }
+      },
+      "nameDr": {
+        "label": "نوم (DR)",
+        "validation": {
+          "maxLength": "اعظمي 255 کرکټرونه"
+        }
+      },
+      "url": {
+        "label": "د سیستم پته",
+        "validation": {
+          "required": "د سیستم پته اړینه ده",
+          "maxLength": "اعظمي 255 کرکټرونه"
+        }
+      },
+      "description": {
+        "label": "تشریح",
+        "validation": {
+          "maxLength": "اعظمي 255 کرکټرونه"
+        }
+      },
+      "sortOrder": {
+        "label": "د ښودلو ترتیب"
+      }
+    },
+    "repository": {
+      "createFailed": "ماډیول ثبت نه شو",
+      "fetchFailed": "معلومات ترلاسه نه شول",
+      "updateFailed": "تازه کول ناکام شول",
+      "deleteFailed": "حذف ناکام شو",
+      "fetchManyFailed": "لیست ترلاسه نه شو",
+      "fetchManySuccess": "معلومات په بریالیتوب سره ترلاسه شول"
+    },
+    "presentation": {
+      "createSuccess": "ماډیول ثبت شو",
+      "updateSuccess": "ماډیول تازه شو",
+      "deleteSuccess": "ماډیول حذف شو"
+    }
+  }
+}

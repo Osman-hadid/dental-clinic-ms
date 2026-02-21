@@ -1,0 +1,67 @@
+{
+  "config": {
+    "title": "نقش‌ها",
+    "entity": "نقش",
+    "table": {
+      "add": "افزودن نقش",
+      "create": "ثبت نقش",
+      "edit": "ویرایش نقش",
+      "update": "به‌روزرسانی",
+      "displayName": "نام نمایشی",
+      "permissions": "صلاحیت‌ها"
+    },
+    "form": {
+      "module": {
+        "label": "مادیول",
+        "validation": {
+          "required": "مادیول الزامی است",
+          "maxLength": "حداکثر 255 کاراکتر"
+        }
+      },
+      "name": {
+        "label": "نام نقش",
+        "validation": {
+          "required": "نام الزامی است",
+          "maxLength": "حداکثر 255 کاراکتر"
+        }
+      },
+      "displayNameEn": {
+        "label": "نام نمایشی (EN)",
+        "validation": {
+          "maxLength": "حداکثر 255 کاراکتر"
+        }
+      },
+      "displayNamePs": {
+        "label": "نام نمایشی (PS)",
+        "validation": {
+          "maxLength": "حداکثر 255 کاراکتر"
+        }
+      },
+      "displayNameDr": {
+        "label": "نام نمایشی (DR)",
+        "validation": {
+          "maxLength": "حداکثر 255 کاراکتر"
+        }
+      },
+      "guardName": {
+        "label": "نام گارد",
+        "validation": {
+          "maxLength": "حداکثر 255 کاراکتر"
+        }
+      }
+    },
+    "repository": {
+      "createFailed": "ثبت نقش انجام نشد",
+      "fetchFailed": "دریافت اطلاعات ناموفق بود",
+      "updateFailed": "به‌روزرسانی انجام نشد",
+      "deleteFailed": "حذف انجام نشد",
+      "fetchManyFailed": "دریافت لیست ناموفق بود",
+      "fetchManySuccess": "اطلاعات با موفقیت دریافت شد"
+    },
+    "presentation": {
+      "createSuccess": "نقش ثبت شد",
+      "updateSuccess": "نقش به‌روزرسانی شد",
+      "deleteSuccess": "نقش حذف شد"
+    }
+  }
+}

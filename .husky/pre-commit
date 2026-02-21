@@ -1,0 +1,35 @@
+#!/usr/bin/env sh
+
+# ANSI Colors
+RED='\x1b[31m'
+GREEN='\x1b[32m'
+CYAN='\x1b[36m'
+RESET='\x1b[0m'
+
+printf "${CYAN}Running fast pre-commit checks...${RESET}\n\n"
+
+cd frontend || {
+  printf "${RED}❌ Failed to cd into frontend directory${RESET}\n"
+  exit 1
+}
+
+printf "→ Running lint-staged (ESLint + Prettier on staged files)...\n"
+npx lint-staged || {
+  printf "${RED}❌ lint-staged failed${RESET}\n"
+  exit 1
+}
+
+printf "→ Checking filename conventions...\n"
+npm run lint:filenames || {
+  printf "${RED}❌ Filename convention check failed${RESET}\n"
+  exit 1
+}
+
+printf "→ Validating translation files (locales)...\n"
+npm run validate:locales || {
+  printf "${RED}❌ Translation validation failed — missing or invalid keys detected${RESET}\n"
+  exit 1
+}
+
+printf "\n${GREEN}✅ All pre-commit checks passed!${RESET}\n"
+printf "You can now commit safely.\n"

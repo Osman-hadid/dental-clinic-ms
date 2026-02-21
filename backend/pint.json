@@ -1,0 +1,9 @@
+{
+    "preset": "laravel",
+    "rules": {
+        "not_operator_with_successor_space": false,
+        "simplified_null_return": true,
+        "declare_strict_types": true
+    },
+    "exclude": ["storage/", "bootstrap/cache/", "database/migrations/"]
+}
