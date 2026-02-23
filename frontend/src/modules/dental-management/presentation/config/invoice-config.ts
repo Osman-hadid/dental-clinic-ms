@@ -79,7 +79,8 @@ export const invoiceConfig: EntityModuleConfig = {
       label: 'config.form.patientId.label',
       name: 'patientId',
       required: true,
-      type: 'number',
+      relation: 'patients',
+      type: 'select',
       validation: {
         required: 'config.form.patientId.validation.required',
       },
@@ -88,7 +89,8 @@ export const invoiceConfig: EntityModuleConfig = {
       label: 'config.form.visitId.label',
       name: 'visitId',
       required: true,
-      type: 'number',
+      relation: 'visits',
+      type: 'select',
       validation: {
         required: 'config.form.visitId.validation.required',
       },
@@ -97,7 +99,7 @@ export const invoiceConfig: EntityModuleConfig = {
       label: 'config.form.totalAmount.label',
       name: 'totalAmount',
       required: true,
-      type: 'text',
+      type: 'number',
       validation: {
         required: 'config.form.totalAmount.validation.required',
         maxLength: { value: 255, message: 'config.form.totalAmount.validation.maxLength' },
@@ -107,7 +109,7 @@ export const invoiceConfig: EntityModuleConfig = {
       label: 'config.form.netAmount.label',
       name: 'netAmount',
       required: true,
-      type: 'text',
+      type: 'number',
       validation: {
         required: 'config.form.netAmount.validation.required',
         maxLength: { value: 255, message: 'config.form.netAmount.validation.maxLength' },
@@ -117,7 +119,7 @@ export const invoiceConfig: EntityModuleConfig = {
       label: 'config.form.invoiceDate.label',
       name: 'invoiceDate',
       required: true,
-      type: 'text',
+      type: 'date',
       validation: {
         required: 'config.form.invoiceDate.validation.required',
         maxLength: { value: 255, message: 'config.form.invoiceDate.validation.maxLength' },
@@ -148,7 +150,7 @@ export const invoiceConfig: EntityModuleConfig = {
       label: 'config.form.discount.label',
       name: 'discount',
       required: false,
-      type: 'text',
+      type: 'number',
       validation: {
         maxLength: { value: 255, message: 'config.form.discount.validation.maxLength' },
       },

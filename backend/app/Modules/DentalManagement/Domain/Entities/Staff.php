@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace App\Modules\DentalManagement\Domain\Entities;
 
-use App\Models\Appointment;
-use App\Models\Visit;
-use App\Models\VisitTreatment;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -36,7 +33,7 @@ final class Staff extends Model
     {
         return [
             'role' => 'string',
-            'hire_date' => 'datetime',
+            'hire_date' => 'date:Y-m-d',
             'enabled' => 'boolean',
             'created_by' => 'integer',
             'updated_by' => 'integer',
@@ -62,17 +59,17 @@ final class Staff extends Model
 
     public function appointments(): HasMany
     {
-        return $this->hasMany(Appointment::class);
+        return $this->hasMany(Appointment::class, 'dentist_id');
     }
 
     public function visits(): HasMany
     {
-        return $this->hasMany(Visit::class);
+        return $this->hasMany(Visit::class, 'dentist_id');
     }
 
     public function visitTreatments(): HasMany
     {
-        return $this->hasMany(VisitTreatment::class);
+        return $this->hasMany(VisitTreatment::class, 'dentist_id');
     }
 
     public function hasRelatedRecords(): bool

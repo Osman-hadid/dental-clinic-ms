@@ -102,13 +102,17 @@ PERMS;
                 default => $field['type'] ?? 'text',
             };
 
+            if (!empty($field['relation'])) {
+                $type = 'select';
+            }
+
             $validations = $this->getValidations($field);
             $validationBlock = $validations === []
                 ? ''
                 : ",\n    validation: {\n      ".implode(self::NESTED_INDENT_SEPARATOR, $validations)."\n    }";
 
             $optionsBlock = '';
-            if (!empty($field['options']) && is_array($field['options'])) {
+            if (empty($field['relation']) && !empty($field['options']) && is_array($field['options'])) {
                 $options = array_map(
                     fn ($opt): string => "{\n        label: \"config.form.{$field['name']}.options.{$opt}\",\n        value: \"{$opt}\"\n      }",
                     $field['options']
@@ -116,9 +120,13 @@ PERMS;
                 $optionsBlock = ",\n    options: [\n      ".implode(self::NESTED_INDENT_SEPARATOR, $options)."\n    ]";
             }
 
+            $relationBlock = !empty($field['relation'])
+                ? ",\n    relation: '{$field['relation']}'"
+                : '';
+
             $required = (!empty($field['required']) && $field['required'] !== 'false') ? 'true' : 'false';
 
-            $out[] = "{\n    label: 'config.form.{$field['name']}.label',\n    name: '{$field['name']}',\n    required: {$required},\n    type: '{$type}'{$validationBlock}{$optionsBlock}\n  }";
+            $out[] = "{\n    label: 'config.form.{$field['name']}.label',\n    name: '{$field['name']}',\n    required: {$required},\n    type: '{$type}'{$relationBlock}{$validationBlock}{$optionsBlock}\n  }";
         }
 
         return $out;
@@ -149,9 +157,13 @@ PERMS;
                 $out[] = "{\n    key: '{$camelKey}',\n    title: 'config.form.{$camelKey}.label',\n    optionsSource: {$source}\n  }";
             } else {
                 $options = [];
+                $isList = array_is_list((array) $config);
+
                 foreach ((array) $config as $value => $label) {
-                    $stringValue = is_numeric($value) ? $label : $value;
-                    $labelKey = \is_string($label) ? $label : $value;
+                    $stringValue = $isList ? (string) $label : (string) $value;
+                    $labelSource = \is_string($label) ? $label : (string) $value;
+                    $labelKey = $isList ? $labelSource : Str::camel($labelSource);
+
                     $options[] = "{ label: 'config.form.{$camelKey}.options.{$labelKey}', value: '{$stringValue}' }";
                 }
                 $out[] = "{\n    key: '{$camelKey}',\n    title: 'config.form.{$camelKey}.label',\n    options: [\n      ".implode(self::NESTED_INDENT_SEPARATOR, $options)."\n    ]\n  }";

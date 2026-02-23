@@ -299,6 +299,7 @@ final class MigrationParser // NOSONAR
                 'type' => 'BelongsTo',
                 'name' => Str::camel(Str::replaceLast('_id', '', $name)),
                 'model' => Str::studly(Str::singular($relatedTable)),
+                'foreign_key' => $name,
                 'function' => 'belongsTo',
             ];
         }

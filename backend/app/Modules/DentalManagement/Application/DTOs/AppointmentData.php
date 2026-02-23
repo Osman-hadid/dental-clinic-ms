@@ -13,6 +13,7 @@ final readonly class AppointmentData
     public function __construct(
         public int $patientId,
         public int $dentistId,
+        public ?string $tag,
         public string $appointmentDate,
         public string $startTime,
         public ?string $endTime,
@@ -31,6 +32,7 @@ final readonly class AppointmentData
         return new self(
             patientId: $ids['patientId'] ?? null,
             dentistId: $ids['dentistId'] ?? null,
+            tag: $data['tag'] ?? null,
             appointmentDate: $data['appointmentDate'] ?? null,
             startTime: $data['startTime'] ?? null,
             endTime: $data['endTime'] ?? null,
@@ -48,6 +50,7 @@ final readonly class AppointmentData
         return [
             'patient_id' => $this->patientId,
             'dentist_id' => $this->dentistId,
+            'tag' => $this->tag,
             'appointment_date' => $this->appointmentDate,
             'start_time' => $this->startTime,
             'end_time' => $this->endTime,

@@ -18,7 +18,7 @@ class PatientResource extends JsonResource
             'firstName' => $this->first_name,
             'lastName' => $this->last_name,
             'gender' => $this->gender,
-            'dateOfBirth' => $this->date_of_birth,
+            'dateOfBirth' => $this->formatDate($this->date_of_birth),
             'contactNumber' => $this->contact_number,
             'email' => $this->email,
             'address' => $this->address,
@@ -41,5 +41,14 @@ class PatientResource extends JsonResource
     private function filterEmpty(array $data): array
     {
         return array_filter($data, fn ($value): bool => !\in_array($value, [null, '', []], true) && !($value instanceof Collection && $value->isEmpty()));
+    }
+
+    private function formatDate(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return $value instanceof \DateTimeInterface ? $value->format('Y-m-d') : (string) $value;
     }
 }

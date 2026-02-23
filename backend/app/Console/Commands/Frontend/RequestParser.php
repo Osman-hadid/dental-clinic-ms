@@ -6,6 +6,7 @@ namespace App\Console\Commands\Frontend;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 
 final class RequestParser
 {
@@ -70,7 +71,12 @@ final class RequestParser
 
             $ruleArray = $this->normalizeRule($rule, $constants);
             $fields[$fieldName]['required'] = $this->isRequired($ruleArray);
-            $fields[$fieldName] = [...$fields[$fieldName], ...$this->extractEnum($ruleArray)];
+            $fields[$fieldName] = [
+                ...$fields[$fieldName],
+                ...$this->extractEnum($ruleArray),
+                ...$this->extractRelation($fieldName, $ruleArray),
+                ...$this->extractType($ruleArray),
+            ];
         }
 
         return $fields;
@@ -107,6 +113,57 @@ final class RequestParser
                         explode(',', substr((string) $r, 3))
                     ),
                 ];
+            }
+        }
+
+        return [];
+    }
+
+    private function extractRelation(string $fieldName, array $ruleArray): array
+    {
+        foreach ($ruleArray as $rule) {
+            if (!str_starts_with((string) $rule, 'exists:')) {
+                continue;
+            }
+
+            $relatedTable = explode(',', substr((string) $rule, 7))[0] ?? '';
+            $relationName = Str::endsWith($fieldName, 'Id')
+                ? Str::camel(substr($fieldName, 0, -2))
+                : Str::camel(Str::singular($relatedTable));
+
+            return [
+                'relation' => $relationName,
+                'relationTable' => $relatedTable,
+                'type' => 'select',
+            ];
+        }
+
+        return [];
+    }
+
+    private function extractType(array $ruleArray): array
+    {
+        if (\in_array('boolean', $ruleArray, true)) {
+            return ['type' => 'checkbox'];
+        }
+
+        if (\in_array('numeric', $ruleArray, true) || \in_array('integer', $ruleArray, true)) {
+            return ['type' => 'number'];
+        }
+
+        foreach ($ruleArray as $rule) {
+            if (str_starts_with((string) $rule, 'date_format:H:i')) {
+                return ['type' => 'time'];
+            }
+        }
+
+        if (\in_array('date', $ruleArray, true)) {
+            return ['type' => 'date'];
+        }
+
+        foreach ($ruleArray as $rule) {
+            if (str_starts_with((string) $rule, 'date_format:Y-m-d')) {
+                return ['type' => 'date'];
             }
         }
 

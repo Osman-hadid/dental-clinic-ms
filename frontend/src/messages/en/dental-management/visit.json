@@ -30,6 +30,13 @@
           "pattern": "Dentist Id must be a number"
         }
       },
+      "tag": {
+        "label": "Visit Tag",
+        "validation": {
+          "required": "Visit Tag is required",
+          "maxLength": "Visit Tag must be 100 characters or less"
+        }
+      },
       "visitDate": {
         "label": "Visit Date",
         "validation": {
@@ -39,31 +46,52 @@
       },
       "diagnosisNotes": {
         "label": "Diagnosis Notes",
-        "validation": { "maxLength": "Diagnosis Notes must be 255 characters or less" }
+        "validation": {
+          "maxLength": "Diagnosis Notes must be 255 characters or less"
+        }
       },
       "nextVisitDate": {
         "label": "Next Visit Date",
-        "validation": { "maxLength": "Next Visit Date must be 255 characters or less" }
+        "validation": {
+          "maxLength": "Next Visit Date must be 255 characters or less"
+        }
       },
       "createdBy": {
         "label": "Created By",
-        "validation": { "pattern": "Created By must be a number" }
+        "validation": {
+          "pattern": "Created By must be a number"
+        }
       },
       "updatedBy": {
         "label": "Updated By",
-        "validation": { "pattern": "Updated By must be a number" }
+        "validation": {
+          "pattern": "Updated By must be a number"
+        }
       },
       "deletedBy": {
         "label": "Deleted By",
-        "validation": { "pattern": "Deleted By must be a number" }
+        "validation": {
+          "pattern": "Deleted By must be a number"
+        }
       },
       "visitTreatments": {
         "label": "Visit Treatments",
-        "validation": { "maxLength": "Visit Treatments must be 255 characters or less" }
+        "validation": {
+          "maxLength": "Visit Treatments must be 255 characters or less"
+        }
       },
       "invoices": {
         "label": "Invoices",
-        "validation": { "maxLength": "Invoices must be 255 characters or less" }
+        "validation": {
+          "maxLength": "Invoices must be 255 characters or less"
+        }
+      },
+      "trashed": {
+        "label": "Trashed",
+        "options": {
+          "with": "With Trashed",
+          "only": "Only Trashed"
+        }
       }
     },
     "repository": {

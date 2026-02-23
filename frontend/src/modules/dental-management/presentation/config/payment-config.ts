@@ -62,7 +62,8 @@ export const paymentConfig: EntityModuleConfig = {
       label: 'config.form.invoiceId.label',
       name: 'invoiceId',
       required: true,
-      type: 'number',
+      relation: 'invoices',
+      type: 'select',
       validation: {
         required: 'config.form.invoiceId.validation.required',
       },
@@ -71,7 +72,7 @@ export const paymentConfig: EntityModuleConfig = {
       label: 'config.form.paymentDate.label',
       name: 'paymentDate',
       required: true,
-      type: 'text',
+      type: 'date',
       validation: {
         required: 'config.form.paymentDate.validation.required',
         maxLength: { value: 255, message: 'config.form.paymentDate.validation.maxLength' },
@@ -81,7 +82,7 @@ export const paymentConfig: EntityModuleConfig = {
       label: 'config.form.amount.label',
       name: 'amount',
       required: true,
-      type: 'text',
+      type: 'number',
       validation: {
         required: 'config.form.amount.validation.required',
         maxLength: { value: 255, message: 'config.form.amount.validation.maxLength' },

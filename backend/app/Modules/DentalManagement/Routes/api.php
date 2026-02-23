@@ -3,8 +3,10 @@
 declare(strict_types=1);
 
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\AppointmentController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\AiImagingController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\InvoiceController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\PatientController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\PatientSessionTaskController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\PaymentController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\StaffController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\ToothController;
@@ -14,9 +16,14 @@ use App\Modules\DentalManagement\Infrastructure\Http\Controllers\VisitTreatmentC
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['api', 'auth:sanctum', 'set_locale'])->prefix('api/v1/dental-management')->group(function (): void {
+    Route::post('/ai-imaging/analyze', [AiImagingController::class, 'analyze']);
     Route::post('/patients/restore/{id}', [PatientController::class, 'restore']);
     Route::delete('/patients/force/{id}', [PatientController::class, 'forceDelete']);
     Route::delete('/patients/bulk', [PatientController::class, 'bulkDelete']);
+    Route::get('/patients/{patientId}/session-tasks', [PatientSessionTaskController::class, 'index']);
+    Route::post('/patients/{patientId}/session-tasks', [PatientSessionTaskController::class, 'store']);
+    Route::put('/patients/{patientId}/session-tasks/{taskId}', [PatientSessionTaskController::class, 'update']);
+    Route::delete('/patients/{patientId}/session-tasks/{taskId}', [PatientSessionTaskController::class, 'destroy']);
     Route::apiResource('patients', PatientController::class);
     Route::post('/staff/restore/{id}', [StaffController::class, 'restore']);
     Route::delete('/staff/force/{id}', [StaffController::class, 'forceDelete']);

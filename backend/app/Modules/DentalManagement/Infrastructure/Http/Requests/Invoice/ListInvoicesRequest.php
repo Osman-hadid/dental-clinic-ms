@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\DentalManagement\Infrastructure\Http\Requests\Invoice;
 
 use App\Modules\Common\Infrastructure\Http\Requests\BaseListRequest;
+use Spatie\QueryBuilder\AllowedFilter;
 
 final class ListInvoicesRequest extends BaseListRequest
 {
@@ -29,7 +30,10 @@ final class ListInvoicesRequest extends BaseListRequest
 
     protected static function filters(): array
     {
-        return [];
+        return [
+            AllowedFilter::exact('status', 'status', true),
+            AllowedFilter::trashed(),
+        ];
     }
 
     protected static function searchableColumns(): array

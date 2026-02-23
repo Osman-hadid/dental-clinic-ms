@@ -14,7 +14,13 @@ class VisitTreatmentResource extends JsonResource
     {
         return $this->filterEmpty([
             'id' => $this->id,
+            'visitId' => $this->visit_id,
+            'treatmentId' => $this->treatment_id,
+            'toothId' => $this->tooth_id,
+            'toothNumber' => $this->tooth_number,
+            'dentistId' => $this->dentist_id,
             'price' => $this->price,
+            'material' => $this->material,
             'notes' => $this->notes,
             'createdBy' => $this->created_by,
             'updatedBy' => $this->updated_by,

@@ -32,16 +32,30 @@ export const SelectField = ({
 }: Props): JSX.Element => {
   const tGlobal = useTranslations('global');
   const t = useTranslations(config.singleQueryKey);
+  const resolveLabel = (label: string): string => (label.startsWith('config.') ? t(label) : label);
 
   return (
     <Controller
       name={name}
       control={control}
       rules={validation}
-      render={({ field }) => (
+      render={({ field }) => {
+        const rawValue = field.value;
+        const normalizedValue =
+          rawValue === null || rawValue === undefined
+            ? ''
+            : typeof rawValue === 'object'
+              ? String(
+                  (rawValue as { id?: string | number; value?: string | number }).id
+                  ?? (rawValue as { value?: string | number }).value
+                  ?? ''
+                )
+              : String(rawValue);
+
+        return (
         <Select
           onValueChange={field.onChange}
-          value={field.value ?? ''}
+          value={normalizedValue}
           autoComplete="off"
           name={name}
         >
@@ -57,13 +71,14 @@ export const SelectField = ({
                   disabled={opt.disabled}
                   title={opt.description}
                 >
-                  {t(opt.label)}
+                  {resolveLabel(opt.label)}
                 </SelectItem>
               ))}
             </SelectGroup>
           </SelectContent>
         </Select>
-      )}
+        );
+      }}
     />
   );
 };

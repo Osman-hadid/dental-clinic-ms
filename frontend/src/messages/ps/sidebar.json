@@ -1,6 +1,10 @@
 {
   "platform": "پلاتفورم",
   "name": "CPAMIS",
+  "dashboard": {
+    "title": "ډشبورډ",
+    "overview": "عمومي کتنه"
+  },
   "userManagement": {
     "title": "د کاروونکو مدیریت",
     "users": "کاروونکي",
@@ -37,6 +41,7 @@
     "treatments": "Treatments",
     "visitTreatments": "Visit Treatments",
     "invoices": "Invoices",
-    "payments": "Payments"
+    "payments": "Payments",
+    "aiImaging": "AI Imaging"
   }
 }

@@ -36,6 +36,17 @@ type EntityListClientProps<TData extends { id: string | number }> = {
   useDelete: () => { mutateAsync: (id: string | number) => Promise<any> };
 };
 
+const MAX_PER_PAGE = 100;
+const MIN_PER_PAGE = 10;
+const DEFAULT_PER_PAGE = 10;
+
+const clampPerPage = (value: number): number => {
+  if (!Number.isFinite(value)) {
+    return DEFAULT_PER_PAGE;
+  }
+  return Math.min(Math.max(value, MIN_PER_PAGE), MAX_PER_PAGE);
+};
+
 const EntityList = <TData extends { id: string | number }>({
   config,
   fetchHook,
@@ -69,7 +80,11 @@ const EntityList = <TData extends { id: string | number }>({
     return initialFilters;
   });
 
-  const [perPage, setPerPage] = useState(Number(searchParameters.get('perPage')) || 10);
+  const [perPage, setPerPage] = useState(() => {
+    const perPageFromQuery = searchParameters.get('perPage');
+    const parsedPerPage = perPageFromQuery ? Number(perPageFromQuery) : DEFAULT_PER_PAGE;
+    return clampPerPage(parsedPerPage);
+  });
   const [formErrors, setFormErrors] = useState<Record<string, string[]> | null>(null);
 
   const createMutation = useCreate();
@@ -86,10 +101,11 @@ const EntityList = <TData extends { id: string | number }>({
   const [debouncedFilters] = useDebounce(filters, 400);
   const [debouncedPageIndex] = useDebounce(pageIndex, 400);
   const [debouncedPerPage] = useDebounce(perPage, 400);
+  const safePerPage = useMemo(() => clampPerPage(debouncedPerPage), [debouncedPerPage]);
 
   const { entities, error, isFetching, links, pagination, refetch } = fetchHook(
     debouncedPageIndex + 1,
-    debouncedPerPage,
+    safePerPage,
     debouncedSearch,
     debouncedSearchFields,
     config.relations || [],
@@ -104,7 +120,7 @@ const EntityList = <TData extends { id: string | number }>({
   useEffect(() => {
     const parameters = new URLSearchParams();
     parameters.set('page', String(debouncedPageIndex + 1));
-    parameters.set('perPage', String(debouncedPerPage));
+    parameters.set('perPage', String(safePerPage));
     if (debouncedSearch) {
       parameters.set('search', debouncedSearch);
     }
@@ -128,16 +144,17 @@ const EntityList = <TData extends { id: string | number }>({
     debouncedSearchFields,
     debouncedFilters,
     debouncedPageIndex,
-    debouncedPerPage,
+    safePerPage,
     config.relations,
     router,
   ]);
 
   const onPageChange = useCallback(
     (newPageIndex: number) => {
+      const normalizedPerPage = clampPerPage(perPage);
       const parameters = new URLSearchParams();
       parameters.set('page', String(newPageIndex + 1));
-      parameters.set('perPage', String(perPage));
+      parameters.set('perPage', String(normalizedPerPage));
       if (search) {
         parameters.set('search', search);
       }
@@ -162,10 +179,11 @@ const EntityList = <TData extends { id: string | number }>({
 
   const onPageSizeChange = useCallback(
     (newPageSize: number) => {
-      setPerPage(newPageSize);
+      const normalizedPageSize = clampPerPage(newPageSize);
+      setPerPage(normalizedPageSize);
       const parameters = new URLSearchParams();
       parameters.set('page', '1');
-      parameters.set('perPage', String(newPageSize));
+      parameters.set('perPage', String(normalizedPageSize));
       if (search) {
         parameters.set('search', search);
       }
@@ -243,6 +261,28 @@ const EntityList = <TData extends { id: string | number }>({
     });
   }, []);
 
+  const resolveErrorMessage = useCallback(
+    (error: { code?: string; message?: string } | undefined, fallback: string): string => {
+      if (!error) {
+        return fallback;
+      }
+
+      switch (error.code) {
+        case 'APPOINTMENT_TIME_CONFLICT':
+          return 'This dentist already has an appointment in the selected time slot.';
+        case 'PAYMENT_AMOUNT_EXCEEDS_INVOICE':
+          return 'Payment amount exceeds the remaining invoice balance.';
+        case 'INVOICE_NET_MISMATCH':
+          return 'Net amount must equal total amount minus discount.';
+        case 'SCHEMA_MISMATCH':
+          return 'Database schema is out of sync. Run migrations and retry.';
+        default:
+          return error.message || fallback;
+      }
+    },
+    []
+  );
+
   const handleCreateSuccess = useCallback(
     (pageIndex: number, perPage: number) => {
       if (pageIndex !== 0) {
@@ -287,14 +327,20 @@ const EntityList = <TData extends { id: string | number }>({
         }
         return { success: true };
       }
-      if (response.error?.details) {
+      if (
+        response.error?.details &&
+        typeof response.error.details === 'object' &&
+        !Array.isArray(response.error.details)
+      ) {
         setFormErrorsCallback(response.error.details);
       }
       showToast(
-        response.error?.message ||
+        resolveErrorMessage(
+          response.error,
           t(id ? 'config.repository.updateFailed' : 'config.repository.createFailed', {
             entity,
-          }),
+          })
+        ),
         false
       );
       return { success: false };
@@ -311,6 +357,7 @@ const EntityList = <TData extends { id: string | number }>({
       showToast,
       handleCreateSuccess,
       t,
+      resolveErrorMessage,
     ]
   );
 
@@ -325,11 +372,11 @@ const EntityList = <TData extends { id: string | number }>({
           queryKey: [config.singleQueryKey, id],
         });
       } else {
-        showToast(t('config.repository.deleteFailed', { entity }), false);
+        showToast(resolveErrorMessage(response.error, t('config.repository.deleteFailed', { entity })), false);
       }
       return response;
     },
-    [config.singleQueryKey, config.entity, deleteMutation, queryClient, showToast, t]
+    [config.singleQueryKey, config.entity, deleteMutation, queryClient, resolveErrorMessage, showToast, t]
   );
 
   const canCreate = can(config.permissions.create);

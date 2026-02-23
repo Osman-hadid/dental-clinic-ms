@@ -19,8 +19,10 @@ final class VisitTreatment extends Model
         'visit_id',
         'treatment_id',
         'tooth_id',
+        'tooth_number',
         'dentist_id',
         'price',
+        'material',
         'notes',
         'created_by',
         'updated_by',
@@ -73,6 +75,6 @@ final class VisitTreatment extends Model
 
     public function dentist(): BelongsTo
     {
-        return $this->belongsTo(Staff::class);
+        return $this->belongsTo(Staff::class, 'dentist_id');
     }
 }

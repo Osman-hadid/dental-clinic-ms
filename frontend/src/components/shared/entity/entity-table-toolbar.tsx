@@ -109,20 +109,34 @@ export const EntityTableToolbar = <TData,>({
             </PopoverContent>
           </Popover>
         )}
-        {config.filters?.map((filter) => (
-          <EntityTableFacetedFilter
-            key={filter.key}
-            column={table.getColumn(filter.key)}
-            config={config}
-            title={t(filter.title)}
-            options={filter.options ?? []}
-            onFilterChange={(key, values) => {
-              if (setFilters) {
-                setFilters((previous) => ({ ...previous, [key]: values }));
-              }
-            }}
-          />
-        ))}
+        {config.filters?.map((filter) => {
+          const column = table.getAllColumns().find((candidate) => candidate.id === filter.key);
+
+          return (
+            <EntityTableFacetedFilter
+              key={filter.key}
+              column={column}
+              filterKey={filter.key}
+              selectedValues={filters?.[filter.key] ?? []}
+              config={config}
+              title={t(filter.title)}
+              options={filter.options ?? []}
+              onFilterChange={(key, values) => {
+                if (setFilters) {
+                  setFilters((previous) => {
+                    const next = { ...previous };
+                    if (values.length > 0) {
+                      next[key] = values;
+                    } else {
+                      delete next[key];
+                    }
+                    return next;
+                  });
+                }
+              }}
+            />
+          );
+        })}
         {isFiltered && (
           <Button
             variant="ghost"

@@ -25,6 +25,7 @@ export const NavMain = ({
     icon?: LucideIcon;
     items?: {
       title: string;
+      newTab?: boolean;
       url: string;
     }[];
   }[];
@@ -54,7 +55,7 @@ export const NavMain = ({
             >
               <SidebarMenuItem>
                 <CollapsibleTrigger asChild>
-                  <SidebarMenuButton tooltip={item.title}>
+                  <SidebarMenuButton tooltip={item.title} isActive={!!isParentActive}>
                     {item.icon && <item.icon />}
                     <span>{item.title}</span>
                     <ChevronRight
@@ -76,9 +77,11 @@ export const NavMain = ({
                           <SidebarMenuSubButton asChild>
                             <Link
                               href={subItem.url}
+                              rel={subItem.newTab ? 'noopener noreferrer' : undefined}
+                              target={subItem.newTab ? '_blank' : undefined}
                               className={cn(
-                                'block px-3 py-2 rounded-md text-sm transition-colors hover:bg-muted',
-                                isActive && 'bg-muted text-primary font-medium'
+                                'block px-3 py-2 rounded-md text-sm transition-colors hover:bg-accent hover:text-accent-foreground',
+                                isActive && 'bg-primary text-primary-foreground font-medium'
                               )}
                             >
                               {subItem.title}

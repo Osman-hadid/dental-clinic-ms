@@ -8,6 +8,8 @@ use App\Modules\Common\Application\DTOs\QuerySpecification;
 use App\Modules\Common\Infrastructure\Http\Controllers\BaseApiController;
 use App\Modules\Common\Infrastructure\Resources\PaginatedResource;
 use App\Modules\DentalManagement\Application\DTOs\VisitTreatmentData;
+use App\Modules\DentalManagement\Domain\Entities\Visit;
+use App\Modules\DentalManagement\Domain\Entities\Staff;
 use App\Modules\DentalManagement\Application\UseCases\VisitTreatment\BulkDeleteVisitTreatmentsUseCase;
 use App\Modules\DentalManagement\Application\UseCases\VisitTreatment\CreateVisitTreatmentUseCase;
 use App\Modules\DentalManagement\Application\UseCases\VisitTreatment\DeleteVisitTreatmentUseCase;
@@ -22,7 +24,9 @@ use App\Modules\DentalManagement\Infrastructure\Http\Requests\VisitTreatment\Lis
 use App\Modules\DentalManagement\Infrastructure\Http\Requests\VisitTreatment\StoreVisitTreatmentRequest;
 use App\Modules\DentalManagement\Infrastructure\Http\Requests\VisitTreatment\UpdateVisitTreatmentRequest;
 use App\Modules\DentalManagement\Infrastructure\Resources\VisitTreatmentResource;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Validation\ValidationException;
 
 final class VisitTreatmentController extends BaseApiController
 {
@@ -57,7 +61,10 @@ final class VisitTreatmentController extends BaseApiController
     {
         $this->authorize('create', VisitTreatment::class);
 
-        $visitTreatmentData = VisitTreatmentData::fromArray($storeVisitTreatmentRequest->validated());
+        $validated = $this->resolveDentistIdFromAuthenticatedUser($storeVisitTreatmentRequest->validated());
+        $validated['createdBy'] ??= $this->authenticatedUserId();
+
+        $visitTreatmentData = VisitTreatmentData::fromArray($validated);
         $visitTreatment = $this->createVisitTreatmentUseCase->execute(visitTreatmentData: $visitTreatmentData);
 
         return $this->successResponse(
@@ -93,7 +100,10 @@ final class VisitTreatmentController extends BaseApiController
 
     public function update(UpdateVisitTreatmentRequest $updateVisitTreatmentRequest, int $id): JsonResponse
     {
-        $visitTreatmentData = VisitTreatmentData::fromArray($updateVisitTreatmentRequest->validated());
+        $validated = $this->resolveDentistIdFromAuthenticatedUser($updateVisitTreatmentRequest->validated());
+        $validated['updatedBy'] = $this->authenticatedUserId();
+
+        $visitTreatmentData = VisitTreatmentData::fromArray($validated);
         $visitTreatment = $this->updateVisitTreatmentUseCase->execute(id: $id, visitTreatmentData: $visitTreatmentData);
 
         $this->authorize('update', $visitTreatment);
@@ -143,5 +153,74 @@ final class VisitTreatmentController extends BaseApiController
             data: $result,
             message: $message
         );
+    }
+
+    private function resolveDentistIdFromAuthenticatedUser(array $validated): array
+    {
+        $authenticatedUser = auth()->user();
+        $authenticatedDentistId = $this->authenticatedDentistId($authenticatedUser);
+
+        if ($authenticatedDentistId !== null) {
+            $validated['dentistId'] = $authenticatedDentistId;
+
+            return $validated;
+        }
+
+        if (isset($validated['dentistId']) && $validated['dentistId'] !== null && $validated['dentistId'] !== '') {
+            return $validated;
+        }
+
+        $visitDentistId = $this->dentistIdFromVisit($validated['visitId'] ?? null);
+        if ($visitDentistId !== null) {
+            $validated['dentistId'] = $visitDentistId;
+
+            return $validated;
+        }
+
+        if (!isset($validated['dentistId']) || $validated['dentistId'] === null || $validated['dentistId'] === '') {
+            throw ValidationException::withMessages([
+                'dentistId' => ['No staff profile is linked to the authenticated user email, and the selected visit has no dentist.'],
+            ]);
+        }
+
+        return $validated;
+    }
+
+    private function authenticatedDentistId(?Authenticatable $authenticatedUser): ?int
+    {
+        $email = is_object($authenticatedUser) && isset($authenticatedUser->email)
+            ? strtolower(trim((string) $authenticatedUser->email))
+            : '';
+
+        if ($email === '') {
+            return null;
+        }
+
+        $staffId = Staff::query()
+            ->whereRaw('LOWER(email) = ?', [$email])
+            ->orderByRaw("CASE WHEN role = 'dentist' THEN 0 ELSE 1 END")
+            ->value('id');
+
+        return $staffId !== null ? (int) $staffId : null;
+    }
+
+    private function authenticatedUserId(): ?int
+    {
+        $userId = auth()->id();
+
+        return $userId !== null ? (int) $userId : null;
+    }
+
+    private function dentistIdFromVisit(mixed $visitId): ?int
+    {
+        if ($visitId === null || $visitId === '') {
+            return null;
+        }
+
+        $dentistId = Visit::query()
+            ->whereKey((int) $visitId)
+            ->value('dentist_id');
+
+        return $dentistId !== null ? (int) $dentistId : null;
     }
 }

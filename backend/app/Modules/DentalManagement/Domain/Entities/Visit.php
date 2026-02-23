@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Modules\DentalManagement\Domain\Entities;
 
-use App\Models\Invoice;
-use App\Models\VisitTreatment;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -22,6 +20,7 @@ final class Visit extends Model
         'appointment_id',
         'patient_id',
         'dentist_id',
+        'tag',
         'visit_date',
         'diagnosis_notes',
         'next_visit_date',
@@ -36,8 +35,8 @@ final class Visit extends Model
             'appointment_id' => 'integer',
             'patient_id' => 'integer',
             'dentist_id' => 'integer',
-            'visit_date' => 'datetime',
-            'next_visit_date' => 'datetime',
+            'visit_date' => 'date:Y-m-d',
+            'next_visit_date' => 'date:Y-m-d',
             'created_by' => 'integer',
             'updated_by' => 'integer',
             'deleted_by' => 'integer',
@@ -72,7 +71,7 @@ final class Visit extends Model
 
     public function dentist(): BelongsTo
     {
-        return $this->belongsTo(Staff::class);
+        return $this->belongsTo(Staff::class, 'dentist_id');
     }
 
     public function visitTreatments(): HasMany

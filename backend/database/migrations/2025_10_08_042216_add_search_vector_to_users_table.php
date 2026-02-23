@@ -9,6 +9,9 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
 
         // 1. Add the tsvector column using raw SQL
         DB::statement('ALTER TABLE users ADD COLUMN search_vector tsvector');
@@ -44,6 +47,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
         DB::statement('DROP TRIGGER IF EXISTS users_search_vector_trigger ON users');
         DB::statement('DROP FUNCTION IF EXISTS users_search_vector_update');
         DB::statement('DROP INDEX IF EXISTS users_search_vector_idx');

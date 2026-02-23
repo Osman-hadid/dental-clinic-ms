@@ -67,6 +67,12 @@ final class GenerateFrontendStructureCommand extends Command
                     $field['options'] = $requestFields[$name]['enum'];
                     $field['type'] = 'select';
                 }
+                if (isset($requestFields[$name]['relation'])) {
+                    $field['relation'] = $requestFields[$name]['relation'];
+                    $field['type'] = 'select';
+                } elseif (isset($requestFields[$name]['type'])) {
+                    $field['type'] = $requestFields[$name]['type'];
+                }
                 $field['required'] = $requestFields[$name]['required'] ?? false;
             } else {
                 $field['required'] = false;

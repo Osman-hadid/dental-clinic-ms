@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\DentalManagement\Infrastructure\Http\Requests\Visit;
 
 use App\Modules\Common\Infrastructure\Http\Requests\BaseListRequest;
+use Spatie\QueryBuilder\AllowedFilter;
 
 final class ListVisitsRequest extends BaseListRequest
 {
@@ -12,6 +13,7 @@ final class ListVisitsRequest extends BaseListRequest
     {
         return [
             'id',
+            'tag',
             'visit_date',
             'created_at',
         ];
@@ -28,12 +30,17 @@ final class ListVisitsRequest extends BaseListRequest
 
     protected static function filters(): array
     {
-        return [];
+        return [
+            AllowedFilter::exact('patientId', 'patient_id', true),
+            AllowedFilter::exact('dentistId', 'dentist_id', true),
+            AllowedFilter::trashed(),
+        ];
     }
 
     protected static function searchableColumns(): array
     {
         return [
+            'tag' => 'tag',
             'diagnosisNotes' => 'diagnosis_notes',
         ];
     }
@@ -45,6 +52,7 @@ final class ListVisitsRequest extends BaseListRequest
             'appointmentId' => 'appointment_id',
             'patientId' => 'patient_id',
             'dentistId' => 'dentist_id',
+            'tag' => 'tag',
             'visitDate' => 'visit_date',
             'diagnosisNotes' => 'diagnosis_notes',
             'nextVisitDate' => 'next_visit_date',

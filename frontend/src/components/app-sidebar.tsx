@@ -14,10 +14,11 @@ import {
 } from '@/components/ui/sidebar';
 import { useCan } from '@/hooks/useCan';
 import { useAuthStore } from '@/modules/auth/application/stores/auth-store';
-import { BookOpen, GalleryVerticalEnd, LucideIcon, Stethoscope, Users } from 'lucide-react';
+import { BookOpen, GalleryVerticalEnd, LayoutDashboard, LucideIcon, Stethoscope, Users } from 'lucide-react';
 
 export type SidebarSubItem = {
   key: string;
+  newTab?: boolean;
   url: string;
   title?: string;
   permission?: string;
@@ -35,8 +36,14 @@ export type SidebarItem = {
 
 const staticNavItems: SidebarItem[] = [
   {
-    icon: Users,
+    icon: LayoutDashboard,
     isActive: true,
+    items: [{ key: 'overview', url: '/dashboard' }],
+    key: 'dashboard',
+    url: '/dashboard',
+  },
+  {
+    icon: Users,
     items: [
       { key: 'users', url: '/user-management/users' },
       { key: 'roles', url: '/user-management/roles' },
@@ -57,6 +64,7 @@ const staticNavItems: SidebarItem[] = [
       { key: 'visitTreatments', url: '/dental-management/visit-treatments' },
       { key: 'invoices', url: '/dental-management/invoices' },
       { key: 'payments', url: '/dental-management/payments' },
+      { key: 'aiImaging', newTab: true, url: '/dental-management/ai-imaging' },
     ],
     key: 'dentalManagement',
     url: '/dental-management',

@@ -35,6 +35,10 @@
       "visitTreatments": {
         "label": "Visit Treatments",
         "validation": { "maxLength": "Visit Treatments must be 255 characters or less" }
+      },
+      "trashed": {
+        "label": "Trashed",
+        "options": { "with": "With Trashed", "only": "Only Trashed" }
       }
     },
     "repository": {

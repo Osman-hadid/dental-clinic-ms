@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { buildEntityDisplayLabel } from '@/modules/common/utils/entity-display-label';
 import {
   Table as ShadcnTable,
   TableBody,
@@ -86,19 +87,50 @@ export const EntityTable = <TData extends User>({
     }
   };
 
-  const renderCellValue = (value: any): string => {
+  const relationFromAccessor = (accessor?: string): string | null => {
+    if (!accessor) {
+      return null;
+    }
+
+    const map: Record<string, string> = {
+      appointmentId: 'appointment',
+      dentistId: 'dentist',
+      invoiceId: 'invoice',
+      patientId: 'patient',
+      paymentId: 'payment',
+      toothId: 'tooth',
+      treatmentId: 'treatment',
+      visitId: 'visit',
+    };
+
+    return map[accessor] ?? null;
+  };
+
+  const renderCellValue = (value: any, row?: Record<string, any>, accessor?: string): string => {
     if (value === null || value === undefined) return '';
+
+    const relation = relationFromAccessor(accessor);
+    if ((typeof value === 'string' || typeof value === 'number') && relation && row) {
+      const relatedObject = row[relation];
+      if (relatedObject && typeof relatedObject === 'object') {
+        return buildEntityDisplayLabel(relatedObject, { relation });
+      }
+    }
+
     if (Array.isArray(value)) {
       return value
-        .map((item) =>
-          typeof item === 'object' && item !== null && 'name' in item
-            ? (item as { name: string }).name
-            : String(item)
-        )
+        .map((item) => {
+          if (typeof item === 'object' && item !== null) {
+            return buildEntityDisplayLabel(item as Record<string, any>, { relation });
+          }
+
+          return String(item);
+        })
+        .filter(Boolean)
         .join(', ');
     }
-    if (typeof value === 'object' && value !== null && 'name' in value) {
-      return (value as { name: string }).name;
+    if (typeof value === 'object' && value !== null) {
+      return buildEntityDisplayLabel(value as Record<string, any>, { relation });
     }
     return String(value);
   };
@@ -208,9 +240,10 @@ export const EntityTable = <TData extends User>({
                   {row.getVisibleCells().map((cell) => {
                     const column = config.columns.find((c) => c.accessorKey === cell.column.id);
                     if (column?.meta?.hidden) return null;
+                    const accessor = typeof column?.accessorKey === 'string' ? column.accessorKey : undefined;
                     const cellValue = column?.cell
                       ? column.cell(row.original)
-                      : renderCellValue(cell.getValue());
+                      : renderCellValue(cell.getValue(), row.original as Record<string, any>, accessor);
 
                     return <TableCell key={cell.id}>{cellValue}</TableCell>;
                   })}

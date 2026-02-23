@@ -30,27 +30,54 @@
           "maxLength": "Default Price must be 255 characters or less"
         }
       },
-      "durationMinutes": { "label": "Duration Minutes" },
+      "durationMinutes": {
+        "label": "Duration Minutes"
+      },
       "description": {
         "label": "Description",
-        "validation": { "maxLength": "Description must be 255 characters or less" }
+        "validation": {
+          "maxLength": "Description must be 255 characters or less"
+        }
       },
       "createdBy": {
         "label": "Created By",
-        "validation": { "pattern": "Created By must be a number" }
+        "validation": {
+          "pattern": "Created By must be a number"
+        }
       },
       "updatedBy": {
         "label": "Updated By",
-        "validation": { "pattern": "Updated By must be a number" }
+        "validation": {
+          "pattern": "Updated By must be a number"
+        }
       },
       "deletedBy": {
         "label": "Deleted By",
-        "validation": { "pattern": "Deleted By must be a number" }
+        "validation": {
+          "pattern": "Deleted By must be a number"
+        }
       },
-      "enabled": { "label": "Enabled" },
+      "enabled": {
+        "label": "Enabled",
+        "options": {
+          "Active": "Active",
+          "Inactive": "Inactive",
+          "active": "Active",
+          "inactive": "Inactive"
+        }
+      },
       "visitTreatments": {
         "label": "Visit Treatments",
-        "validation": { "maxLength": "Visit Treatments must be 255 characters or less" }
+        "validation": {
+          "maxLength": "Visit Treatments must be 255 characters or less"
+        }
+      },
+      "trashed": {
+        "label": "Trashed",
+        "options": {
+          "with": "With Trashed",
+          "only": "Only Trashed"
+        }
       }
     },
     "repository": {

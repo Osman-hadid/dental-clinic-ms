@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\DentalManagement\Domain\Services;
 
+use App\Modules\Common\Application\Exceptions\ApiException;
 use App\Modules\Common\Application\DTOs\QuerySpecification;
 use App\Modules\DentalManagement\Domain\Entities\Appointment;
 use App\Modules\DentalManagement\Domain\Repositories\AppointmentRepositoryInterface;
@@ -33,6 +34,8 @@ final readonly class AppointmentService
 
     public function createAppointment(array $data): Appointment
     {
+        $this->assertNoScheduleConflict($data);
+
         return tap(
             $this->appointmentRepository->create(data: $data),
             fn () => $this->appointmentRepository->invalidateCache()
@@ -41,6 +44,8 @@ final readonly class AppointmentService
 
     public function updateAppointment(int $id, array $data): Appointment
     {
+        $this->assertNoScheduleConflict($data, $id);
+
         return tap(
             $this->appointmentRepository->update(id: $id, data: $data),
             fn () => $this->appointmentRepository->invalidateCache()
@@ -81,5 +86,36 @@ final readonly class AppointmentService
         $this->appointmentRepository->invalidateCache();
 
         return ['deleted' => $deleted, 'skipped' => $skipped];
+    }
+
+    private function assertNoScheduleConflict(array $data, ?int $ignoreId = null): void
+    {
+        if (!isset($data['dentist_id'], $data['appointment_date'], $data['start_time'], $data['end_time'])) {
+            return;
+        }
+
+        $start = (string) $data['start_time'];
+        $end = (string) $data['end_time'];
+
+        $conflictExists = Appointment::query()
+            ->where('dentist_id', (int) $data['dentist_id'])
+            ->whereDate('appointment_date', (string) $data['appointment_date'])
+            ->when($ignoreId !== null, fn ($query) => $query->where('id', '!=', $ignoreId))
+            ->whereRaw('start_time < ? AND COALESCE(end_time, start_time) > ?', [$end, $start])
+            ->exists();
+
+        if ($conflictExists) {
+            throw new ApiException(
+                errorCode: 'APPOINTMENT_TIME_CONFLICT',
+                message: 'The selected dentist already has an appointment in this time slot.',
+                details: [
+                    'appointmentDate' => (string) $data['appointment_date'],
+                    'dentistId' => (int) $data['dentist_id'],
+                    'endTime' => $end,
+                    'startTime' => $start,
+                ],
+                httpCode: 409,
+            );
+        }
     }
 }

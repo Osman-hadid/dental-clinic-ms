@@ -37,4 +37,27 @@ return [
         ],
     ],
 
+    'openai' => [
+        'api_key' => env('OPENAI_API_KEY', ''),
+        'model' => env('OPENAI_MODEL', 'gpt-4.1-mini'),
+        'verify_ssl' => filter_var(env('OPENAI_VERIFY_SSL', true), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? true,
+        'ca_bundle' => env('OPENAI_CA_BUNDLE', ''),
+    ],
+
+    'ai_imaging' => [
+        'provider' => env('AI_IMAGING_PROVIDER', 'ollama'),
+        'timeout' => (int) env('AI_IMAGING_TIMEOUT', 120),
+        'ollama' => [
+            'base_url' => env('OLLAMA_BASE_URL', 'http://127.0.0.1:11434'),
+            'model' => env('OLLAMA_MODEL', 'llava:7b'),
+        ],
+        'dentalxrayai' => [
+            'enabled' => filter_var(env('AI_IMAGING_USE_DENTALXRAYAI', false), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? false,
+            'python_bin' => env('DENTALXRAYAI_PYTHON', 'python'),
+            'repo_path' => env('DENTALXRAYAI_REPO_PATH', base_path('../third_party/DentalXrayAI')),
+            'script_path' => env('DENTALXRAYAI_SCRIPT_PATH', base_path('scripts/dentalxrayai_detect.py')),
+            'model_path' => env('DENTALXRAYAI_MODEL_PATH', base_path('../third_party/DentalXrayAI/best.pt')),
+        ],
+    ],
+
 ];

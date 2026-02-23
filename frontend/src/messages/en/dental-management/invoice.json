@@ -18,7 +18,10 @@
       },
       "visitId": {
         "label": "Visit Id",
-        "validation": { "required": "Visit Id is required", "pattern": "Visit Id must be a number" }
+        "validation": {
+          "required": "Visit Id is required",
+          "pattern": "Visit Id must be a number"
+        }
       },
       "totalAmount": {
         "label": "Total Amount",
@@ -43,27 +46,39 @@
       },
       "notes": {
         "label": "Notes",
-        "validation": { "maxLength": "Notes must be 255 characters or less" }
+        "validation": {
+          "maxLength": "Notes must be 255 characters or less"
+        }
       },
       "createdBy": {
         "label": "Created By",
-        "validation": { "pattern": "Created By must be a number" }
+        "validation": {
+          "pattern": "Created By must be a number"
+        }
       },
       "updatedBy": {
         "label": "Updated By",
-        "validation": { "pattern": "Updated By must be a number" }
+        "validation": {
+          "pattern": "Updated By must be a number"
+        }
       },
       "deletedBy": {
         "label": "Deleted By",
-        "validation": { "pattern": "Deleted By must be a number" }
+        "validation": {
+          "pattern": "Deleted By must be a number"
+        }
       },
       "discount": {
         "label": "Discount",
-        "validation": { "maxLength": "Discount must be 255 characters or less" }
+        "validation": {
+          "maxLength": "Discount must be 255 characters or less"
+        }
       },
       "status": {
         "label": "Status",
-        "validation": { "in": "Status must be one of the allowed values" },
+        "validation": {
+          "in": "Status must be one of the allowed values"
+        },
         "options": {
           "unpaid": "Unpaid",
           "partially_paid": "Partially Paid",
@@ -73,7 +88,16 @@
       },
       "payments": {
         "label": "Payments",
-        "validation": { "maxLength": "Payments must be 255 characters or less" }
+        "validation": {
+          "maxLength": "Payments must be 255 characters or less"
+        }
+      },
+      "trashed": {
+        "label": "Trashed",
+        "options": {
+          "with": "With Trashed",
+          "only": "Only Trashed"
+        }
       }
     },
     "repository": {

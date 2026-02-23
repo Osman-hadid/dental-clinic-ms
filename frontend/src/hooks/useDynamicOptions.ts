@@ -1,5 +1,6 @@
 import React from 'react';
 import { resolveModule } from '@/modules/common/registry/resolve-module';
+import { buildEntityDisplayLabel } from '@/modules/common/utils/entity-display-label';
 import type { FilterOption, OptionsSource } from '@/types/EntityModuleConfig';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -90,7 +91,32 @@ export const useDynamicOptions = (source?: OptionsSource): Result => {
       };
 
       return items.map((item: any) => ({
-        label: String(getValue(item, labelKey) ?? ''),
+        label: (() => {
+          const rawLabel = String(getValue(item, labelKey) ?? '').trim();
+          const smartLabel = buildEntityDisplayLabel(item, { relation });
+          const rawValue = String(getValue(item, valueKey) ?? '').trim();
+
+          if (!rawLabel) {
+            return smartLabel;
+          }
+
+          if (rawLabel === rawValue || labelKey === 'id') {
+            return smartLabel;
+          }
+
+          const normalizedRelation = relation?.toLowerCase() ?? '';
+          if (
+            normalizedRelation === 'appointments'
+            || normalizedRelation === 'visits'
+            || normalizedRelation === 'visittreatments'
+            || normalizedRelation === 'patients'
+            || normalizedRelation === 'staff'
+          ) {
+            return smartLabel;
+          }
+
+          return rawLabel;
+        })(),
         value: String(getValue(item, valueKey) ?? ''),
       }));
     },

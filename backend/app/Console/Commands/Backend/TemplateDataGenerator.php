@@ -328,11 +328,15 @@ PHP;
                 $model = $field['relationship']['model'];
                 $type = $field['relationship']['type'];
                 $function = $field['relationship']['function'];
+                $foreignKey = $field['relationship']['foreign_key'] ?? null;
+                $arguments = $type === 'BelongsTo' && $foreignKey
+                    ? "{$model}::class, '{$foreignKey}'"
+                    : "{$model}::class";
 
                 return <<<PHP
     public function {$method}(): {$type}
     {
-        return \$this->{$function}({$model}::class);
+        return \$this->{$function}({$arguments});
     }
 
 PHP;
@@ -380,43 +384,31 @@ PHP;
     private function resolveModelUseStatement(string $model): string
     {
         $base = base_path();
-        $useStatement = null;
+        foreach (File::directories("{$base}/app/Modules") as $moduleDir) {
+            $moduleName = basename((string) $moduleDir);
+            $modulePath = "{$base}/app/Modules/{$moduleName}/Domain/Entities/{$model}.php";
 
-        $sameModulePath = "{$base}/app/Modules/{$this->module}/Domain/Entities/{$model}.php";
-        if (file_exists($sameModulePath)) {
-            $useStatement = "use App\\Modules\\{$this->module}\\Domain\\Entities\\{$model};";
-        }
-
-        if (!$useStatement) {
-            foreach (File::directories("{$base}/app/Modules") as $moduleDir) {
-                $moduleName = basename((string) $moduleDir);
-                $modulePath = "{$base}/app/Modules/{$moduleName}/Domain/Entities/{$model}.php";
-
-                if (file_exists($modulePath)) {
-                    $useStatement = "use App\\Modules\\{$moduleName}\\Domain\\Entities\\{$model};";
-                    break;
-                }
+            if (file_exists($modulePath)) {
+                return "use App\\Modules\\{$moduleName}\\Domain\\Entities\\{$model};";
             }
         }
 
-        if (!$useStatement) {
-            $globalModelPath = "{$base}/app/Models/{$model}.php";
-            if (file_exists($globalModelPath)) {
-                $useStatement = "use App\\Models\\{$model};";
-            }
-        }
-
-        return $useStatement ?? "use App\\Models\\{$model};";
+        return "use App\\Modules\\{$this->module}\\Domain\\Entities\\{$model};";
     }
 
     // new changes
     private function generateListRequestConstants(): array
     {
         $c = $this->constants;
+        $filters = $c['BACKEND_FILTERS'] ?? '[]';
+
+        if ($filters === [] || $filters === '[]') {
+            $filters = $this->buildFiltersFromFrontend($c['FRONTEND_FILTERS'] ?? []);
+        }
 
         return ['sortable' => $this->exportArray($c['SORTABLE_COLUMNS'] ?? []),
             'relations' => $this->exportArray($this->getBelongsToRelationNames() ?? []),
-            'filters' => $c['BACKEND_FILTERS'] ?? '[]',
+            'filters' => $filters,
             'searchable' => \is_array($c['SEARCHABLE_COLUMNS'] ?? null)
                 ? $this->exportArray($c['SEARCHABLE_COLUMNS'])
                 : ($c['SEARCHABLE_COLUMNS'] ?? '[]'),
@@ -487,6 +479,7 @@ PHP;
         $constants = [
             'SORTABLE_COLUMNS' => [],
             'BACKEND_FILTERS' => '[]',
+            'FRONTEND_FILTERS' => [],
             'SEARCHABLE_COLUMNS' => '[]',
             'FIELDABLE_COLUMNS' => '[]',
             'BOOLEAN_FIELDS' => [],
@@ -502,6 +495,14 @@ PHP;
                 } catch (\Throwable) {
                     $constants[$name] = [];
                 }
+            }
+        }
+
+        if (preg_match('/private\s+const\s+FRONTEND_FILTERS\s*=\s*(\[[\s\S]*?\]);/s', $content, $m)) {
+            try {
+                $constants['FRONTEND_FILTERS'] = eval("return {$m[1]};");
+            } catch (\Throwable) {
+                $constants['FRONTEND_FILTERS'] = [];
             }
         }
 
@@ -588,5 +589,27 @@ PHP;
         }
 
         return "[\n            ".implode(",\n            ", $items).",\n        ]";
+    }
+
+    private function buildFiltersFromFrontend(array $frontendFilters): string
+    {
+        if ($frontendFilters === []) {
+            return '[]';
+        }
+
+        $filters = [];
+
+        foreach ($frontendFilters as $key => $config) {
+            $filterName = \is_int($key) ? (string) $config : (string) $key;
+
+            if ($filterName === 'trashed') {
+                $filters[] = 'AllowedFilter::trashed(),';
+                continue;
+            }
+
+            $filters[] = "AllowedFilter::exact('{$filterName}', '".Str::snake($filterName)."', true),";
+        }
+
+        return "[\n            ".implode("\n            ", $filters)."\n        ]";
     }
 }

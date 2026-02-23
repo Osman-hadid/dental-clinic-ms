@@ -1,6 +1,10 @@
 {
   "platform": "Platform",
   "name": "CPAMIS",
+  "dashboard": {
+    "title": "Dashboard",
+    "overview": "Overview"
+  },
   "userManagement": {
     "title": "User Management",
     "users": "Users",
@@ -37,6 +41,7 @@
     "treatments": "Treatments",
     "visitTreatments": "Visit Treatments",
     "invoices": "Invoices",
-    "payments": "Payments"
+    "payments": "Payments",
+    "aiImaging": "AI Imaging"
   }
 }

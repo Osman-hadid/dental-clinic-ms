@@ -3,6 +3,10 @@ export type Visit = {
   appointmentId: string;
   patientId: string;
   dentistId: string;
+  appointmentTag?: string;
+  patientName?: string;
+  dentistName?: string;
+  tag: string;
   visitDate: string;
   diagnosisNotes: string;
   nextVisitDate: string;

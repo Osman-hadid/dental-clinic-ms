@@ -51,8 +51,8 @@ export const treatmentConfig: EntityModuleConfig = {
       key: 'enabled',
       title: 'config.form.enabled.label',
       options: [
-        { label: 'config.form.enabled.options.Active', value: 'Active' },
-        { label: 'config.form.enabled.options.Inactive', value: 'Inactive' },
+        { label: 'config.form.enabled.options.active', value: '1' },
+        { label: 'config.form.enabled.options.inactive', value: '0' },
       ],
     },
     {

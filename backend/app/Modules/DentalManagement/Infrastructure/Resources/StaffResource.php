@@ -19,7 +19,7 @@ class StaffResource extends JsonResource
             'specialization' => $this->specialization,
             'contactNumber' => $this->contact_number,
             'email' => $this->email,
-            'hireDate' => $this->hire_date,
+            'hireDate' => $this->formatDate($this->hire_date),
             'enabled' => $this->enabled,
             'remarks' => $this->remarks,
             'createdBy' => $this->created_by,
@@ -36,5 +36,14 @@ class StaffResource extends JsonResource
     private function filterEmpty(array $data): array
     {
         return array_filter($data, fn ($value): bool => !\in_array($value, [null, '', []], true) && !($value instanceof Collection && $value->isEmpty()));
+    }
+
+    private function formatDate(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return $value instanceof \DateTimeInterface ? $value->format('Y-m-d') : (string) $value;
     }
 }

@@ -24,6 +24,8 @@ import {
 
 type EntityTableFacetedFilterProps<TData, TValue> = {
   column?: Column<TData, TValue>;
+  filterKey: string;
+  selectedValues?: string[];
   config: EntityModuleConfig;
   title?: string;
   options: FilterOption[];
@@ -33,14 +35,16 @@ type EntityTableFacetedFilterProps<TData, TValue> = {
 export const EntityTableFacetedFilter = <TData, TValue>({
   column,
   config,
+  filterKey,
   onFilterChange,
   options: propOptions,
+  selectedValues: selectedValuesProp = [],
   title,
 }: Readonly<EntityTableFacetedFilterProps<TData, TValue>>): JSX.Element => {
   const t = useTranslations(config.singleQueryKey);
   const tComponent = useTranslations('component.table');
 
-  const filterMeta = config.filters?.find((f) => f.key === column?.id);
+  const filterMeta = config.filters?.find((f) => f.key === filterKey);
 
   const { data: dynamicOptions = [], isLoading: isLoadingOptions } = useDynamicOptions(
     filterMeta?.optionsSource
@@ -68,13 +72,12 @@ export const EntityTableFacetedFilter = <TData, TValue>({
   }
 
   const facets = column?.getFacetedUniqueValues();
-  const selectedValues = new Set<string>((column?.getFilterValue() as string[]) || []);
+  const columnValues = column?.getFilterValue() as string[] | undefined;
+  const selectedValues = new Set<string>(columnValues ?? selectedValuesProp);
 
   const handleFilterChange = (values: string[]): void => {
     column?.setFilterValue(values.length ? values : undefined);
-    if (column) {
-      onFilterChange?.(column?.id, values);
-    }
+    onFilterChange?.(filterKey, values);
   };
 
   return (

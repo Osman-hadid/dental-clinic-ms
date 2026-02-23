@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\DentalManagement\Infrastructure\Http\Requests\Staff;
 
 use App\Modules\Common\Infrastructure\Http\Requests\BaseListRequest;
+use Spatie\QueryBuilder\AllowedFilter;
 
 final class ListStaffRequest extends BaseListRequest
 {
@@ -25,7 +26,11 @@ final class ListStaffRequest extends BaseListRequest
 
     protected static function filters(): array
     {
-        return [];
+        return [
+            AllowedFilter::exact('role', 'role', true),
+            AllowedFilter::exact('enabled', 'enabled', true),
+            AllowedFilter::trashed(),
+        ];
     }
 
     protected static function searchableColumns(): array

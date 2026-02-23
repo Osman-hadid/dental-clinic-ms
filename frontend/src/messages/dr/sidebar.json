@@ -1,6 +1,10 @@
 {
   "platform": "پلاتفورم",
   "name": "CPAMIS",
+  "dashboard": {
+    "title": "داشبورد",
+    "overview": "نمای کلی"
+  },
   "userManagement": {
     "title": "مدیریت کاربران",
     "users": "کاربران",
@@ -37,6 +41,7 @@
     "treatments": "Treatments",
     "visitTreatments": "Visit Treatments",
     "invoices": "Invoices",
-    "payments": "Payments"
+    "payments": "Payments",
+    "aiImaging": "AI Imaging"
   }
 }

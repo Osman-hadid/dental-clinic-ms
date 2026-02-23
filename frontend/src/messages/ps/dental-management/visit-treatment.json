@@ -11,7 +11,10 @@
     "form": {
       "visitId": {
         "label": "Visit Id",
-        "validation": { "required": "Visit Id is required", "pattern": "Visit Id must be a number" }
+        "validation": {
+          "required": "Visit Id is required",
+          "pattern": "Visit Id must be a number"
+        }
       },
       "treatmentId": {
         "label": "Treatment Id",
@@ -20,7 +23,12 @@
           "pattern": "Treatment Id must be a number"
         }
       },
-      "toothId": { "label": "Tooth Id", "validation": { "pattern": "Tooth Id must be a number" } },
+      "toothId": {
+        "label": "Tooth Id",
+        "validation": {
+          "pattern": "Tooth Id must be a number"
+        }
+      },
       "dentistId": {
         "label": "Dentist Id",
         "validation": {
@@ -35,21 +43,42 @@
           "maxLength": "Price must be 255 characters or less"
         }
       },
+      "material": {
+        "label": "Material",
+        "validation": {
+          "maxLength": "Material must be 255 characters or less"
+        }
+      },
       "notes": {
         "label": "Notes",
-        "validation": { "maxLength": "Notes must be 255 characters or less" }
+        "validation": {
+          "maxLength": "Notes must be 255 characters or less"
+        }
       },
       "createdBy": {
         "label": "Created By",
-        "validation": { "pattern": "Created By must be a number" }
+        "validation": {
+          "pattern": "Created By must be a number"
+        }
       },
       "updatedBy": {
         "label": "Updated By",
-        "validation": { "pattern": "Updated By must be a number" }
+        "validation": {
+          "pattern": "Updated By must be a number"
+        }
       },
       "deletedBy": {
         "label": "Deleted By",
-        "validation": { "pattern": "Deleted By must be a number" }
+        "validation": {
+          "pattern": "Deleted By must be a number"
+        }
+      },
+      "trashed": {
+        "label": "Trashed",
+        "options": {
+          "with": "With Trashed",
+          "only": "Only Trashed"
+        }
       }
     },
     "repository": {

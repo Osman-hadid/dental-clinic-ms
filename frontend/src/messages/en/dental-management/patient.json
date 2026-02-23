@@ -75,11 +75,23 @@
         "label": "Deleted By",
         "validation": { "pattern": "Deleted By must be a number" }
       },
-      "enabled": { "label": "Enabled" },
+      "enabled": {
+        "label": "Enabled",
+        "options": {
+          "Active": "Active",
+          "Inactive": "Inactive",
+          "active": "Active",
+          "inactive": "Inactive"
+        }
+      },
       "status": {
         "label": "Status",
         "validation": { "in": "Status must be one of the allowed values" },
         "options": { "pending": "Pending", "approved": "Approved", "rejected": "Rejected" }
+      },
+      "trashed": {
+        "label": "Trashed",
+        "options": { "with": "With Trashed", "only": "Only Trashed" }
       },
       "appointments": {
         "label": "Appointments",

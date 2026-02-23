@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Modules\DentalManagement\Domain\Entities;
 
-use App\Models\Visit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -20,6 +19,7 @@ final class Appointment extends Model
     protected $fillable = [
         'patient_id',
         'dentist_id',
+        'tag',
         'appointment_date',
         'start_time',
         'end_time',
@@ -35,7 +35,7 @@ final class Appointment extends Model
         return [
             'patient_id' => 'integer',
             'dentist_id' => 'integer',
-            'appointment_date' => 'datetime',
+            'appointment_date' => 'date:Y-m-d',
             'status' => 'string',
             'created_by' => 'integer',
             'updated_by' => 'integer',
@@ -66,7 +66,7 @@ final class Appointment extends Model
 
     public function dentist(): BelongsTo
     {
-        return $this->belongsTo(Staff::class);
+        return $this->belongsTo(Staff::class, 'dentist_id');
     }
 
     public function visits(): HasMany

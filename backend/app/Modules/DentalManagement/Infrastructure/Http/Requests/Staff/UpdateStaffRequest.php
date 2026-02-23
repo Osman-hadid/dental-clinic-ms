@@ -34,7 +34,7 @@ final class UpdateStaffRequest extends BaseFormRequest
                 'max:255',
                 Rule::unique(table: 'staff', column: 'email')->ignore(id: $this->route(param: 'staff')),
             ],
-            'hireDate' => 'nullable|date',
+            'hireDate' => 'nullable|date_format:Y-m-d',
             'enabled' => 'nullable|boolean',
             'remarks' => 'nullable|string|max:255',
             'createdBy' => 'nullable|integer',

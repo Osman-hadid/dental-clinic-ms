@@ -23,6 +23,10 @@ export const visitTreatmentConfig: EntityModuleConfig = {
       header: 'config.form.price.label',
     },
     {
+      accessorKey: 'material',
+      header: 'config.form.material.label',
+    },
+    {
       accessorKey: 'notes',
       header: 'config.form.notes.label',
     },
@@ -57,7 +61,8 @@ export const visitTreatmentConfig: EntityModuleConfig = {
       label: 'config.form.visitId.label',
       name: 'visitId',
       required: true,
-      type: 'number',
+      relation: 'visits',
+      type: 'select',
       validation: {
         required: 'config.form.visitId.validation.required',
       },
@@ -66,7 +71,8 @@ export const visitTreatmentConfig: EntityModuleConfig = {
       label: 'config.form.treatmentId.label',
       name: 'treatmentId',
       required: true,
-      type: 'number',
+      relation: 'treatments',
+      type: 'select',
       validation: {
         required: 'config.form.treatmentId.validation.required',
       },
@@ -75,25 +81,33 @@ export const visitTreatmentConfig: EntityModuleConfig = {
       label: 'config.form.toothId.label',
       name: 'toothId',
       required: false,
-      type: 'number',
+      relation: 'teeth',
+      type: 'select',
     },
     {
       label: 'config.form.dentistId.label',
       name: 'dentistId',
-      required: true,
-      type: 'number',
-      validation: {
-        required: 'config.form.dentistId.validation.required',
-      },
+      required: false,
+      relation: 'staff',
+      type: 'select',
     },
     {
       label: 'config.form.price.label',
       name: 'price',
       required: true,
-      type: 'text',
+      type: 'number',
       validation: {
         required: 'config.form.price.validation.required',
         maxLength: { value: 255, message: 'config.form.price.validation.maxLength' },
+      },
+    },
+    {
+      label: 'config.form.material.label',
+      name: 'material',
+      required: false,
+      type: 'text',
+      validation: {
+        maxLength: { value: 255, message: 'config.form.material.validation.maxLength' },
       },
     },
     {
@@ -119,7 +133,10 @@ export const visitTreatmentConfig: EntityModuleConfig = {
     },
   ],
   queryKey: 'visitTreatments',
-  searchFields: [{ label: 'config.form.notes.label', value: 'notes' }],
+  searchFields: [
+    { label: 'config.form.material.label', value: 'material' },
+    { label: 'config.form.notes.label', value: 'notes' },
+  ],
   singleQueryKey: 'visitTreatment',
   title: 'config.title',
   sortableColumns: ['id', 'price', 'createdAt'],

@@ -14,6 +14,7 @@ export type FormFieldType =
   | 'select'
   | 'textarea'
   | 'datetime-local'
+  | 'time'
   | 'multiselect'
   | 'file'
   | 'switch'

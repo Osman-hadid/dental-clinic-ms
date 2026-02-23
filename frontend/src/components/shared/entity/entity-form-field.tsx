@@ -1,5 +1,6 @@
 import { JSX } from 'react';
 import { useTranslations } from 'next-intl';
+import { useDynamicOptions } from '@/hooks/useDynamicOptions';
 import { getErrorMessage } from '@/modules/common/utils/get-error-message';
 import { type EntityModuleConfig, type FormField } from '@/types/EntityModuleConfig';
 import { useFormContext } from 'react-hook-form';
@@ -26,6 +27,10 @@ export const EntityFormField = ({
 
   const errorMessage = getErrorMessage(formErrors[field.name], t);
   const fieldType = field.type ?? 'text';
+  const isRelationField = fieldType === 'select' && !!field.relation;
+  const { data: dynamicOptions = [], isLoading: isLoadingDynamicOptions } = useDynamicOptions(
+    isRelationField ? { relation: field.relation as string, type: 'relation' } : undefined
+  );
 
   if (field.type === 'custom' && field.render) {
     return <CustomFieldRenderer field={field} control={control} errorMessage={errorMessage} />;
@@ -34,18 +39,20 @@ export const EntityFormField = ({
   const fieldProps = {
     config,
     control,
-    disabled: field.disabled || false,
+    disabled: field.disabled || isLoadingDynamicOptions || false,
     error: !!formErrors[field.name],
     label: field.label,
     name: field.name,
-    options: field.options || [],
+    options: isRelationField
+      ? dynamicOptions.map((option) => ({ ...option, value: String(option.value) }))
+      : field.options || [],
     type: fieldType,
     validation: field.validation,
   };
 
   return (
     <div className="space-y-2">
-      {field.type !== 'switch' && (
+      {fieldType !== 'switch' && fieldType !== 'checkbox' && (
         <label htmlFor={field.name} className="text-sm font-medium">
           {t(field.label)}
           {!field.required && (
@@ -57,11 +64,14 @@ export const EntityFormField = ({
       {fieldType === 'select' && <SelectField {...fieldProps} />}
       {fieldType === 'textarea' && <TextAreaField {...fieldProps} />}
       {fieldType === 'phone' && <PhoneField {...fieldProps} />}
-      {fieldType === 'date' && <DateField {...fieldProps} />}
+      {(fieldType === 'date' || fieldType === 'datetime-local') && (
+        <DateField {...fieldProps} type={fieldType} />
+      )}
       {fieldType === 'file' && <FileField {...fieldProps} />}
-      {fieldType === 'switch' && <SwitchField {...fieldProps} />}
+      {(fieldType === 'switch' || fieldType === 'checkbox') && <SwitchField {...fieldProps} />}
       {(fieldType === 'text' ||
         fieldType === 'number' ||
+        fieldType === 'time' ||
         fieldType === 'email' ||
         fieldType === 'password') && <InputField {...fieldProps} />}
 

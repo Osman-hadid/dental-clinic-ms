@@ -18,6 +18,14 @@ export class AxiosClient {
       if (token) {
         config.headers['X-XSRF-TOKEN'] = decodeURIComponent(token);
       }
+
+      if (!config.headers['X-Request-Id']) {
+        config.headers['X-Request-Id'] =
+          typeof crypto !== 'undefined' && 'randomUUID' in crypto
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      }
+
       return config;
     });
   }

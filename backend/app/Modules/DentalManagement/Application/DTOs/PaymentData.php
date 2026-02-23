@@ -13,7 +13,7 @@ final readonly class PaymentData
     public function __construct(
         public int $invoiceId,
         public string $paymentDate,
-        public string $amount,
+        public float $amount,
         public string $method,
         public ?string $notes,
         public ?int $createdBy,
@@ -28,7 +28,7 @@ final readonly class PaymentData
         return new self(
             invoiceId: $ids['invoiceId'] ?? null,
             paymentDate: $data['paymentDate'] ?? null,
-            amount: $data['amount'] ?? null,
+            amount: round((float) ($data['amount'] ?? 0), 2),
             method: $data['method'] ?? null,
             notes: $data['notes'] ?? null,
             createdBy: $ids['createdBy'] ?? null,

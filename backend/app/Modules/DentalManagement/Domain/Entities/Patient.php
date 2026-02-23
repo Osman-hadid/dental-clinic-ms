@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace App\Modules\DentalManagement\Domain\Entities;
 
-use App\Models\Appointment;
-use App\Models\Invoice;
-use App\Models\Visit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -41,7 +38,7 @@ final class Patient extends Model
     {
         return [
             'gender' => 'string',
-            'date_of_birth' => 'datetime',
+            'date_of_birth' => 'date:Y-m-d',
             'enabled' => 'boolean',
             'status' => 'string',
             'created_by' => 'integer',
@@ -79,6 +76,11 @@ final class Patient extends Model
     public function invoices(): HasMany
     {
         return $this->hasMany(Invoice::class);
+    }
+
+    public function sessionTasks(): HasMany
+    {
+        return $this->hasMany(PatientSessionTask::class);
     }
 
     public function hasRelatedRecords(): bool

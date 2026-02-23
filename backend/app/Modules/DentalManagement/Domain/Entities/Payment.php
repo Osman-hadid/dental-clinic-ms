@@ -30,7 +30,7 @@ final class Payment extends Model
     {
         return [
             'invoice_id' => 'integer',
-            'payment_date' => 'datetime',
+            'payment_date' => 'date:Y-m-d',
             'method' => 'string',
             'created_by' => 'integer',
             'updated_by' => 'integer',

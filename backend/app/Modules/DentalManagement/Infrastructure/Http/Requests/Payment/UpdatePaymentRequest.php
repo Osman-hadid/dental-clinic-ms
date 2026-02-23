@@ -19,8 +19,8 @@ final class UpdatePaymentRequest extends BaseFormRequest
     {
         return [
             'invoiceId' => 'required|integer|exists:invoices,id',
-            'paymentDate' => 'required|date',
-            'amount' => 'required|string|max:255',
+            'paymentDate' => 'required|date_format:Y-m-d',
+            'amount' => 'required|numeric|gt:0',
             'method' => 'required|string|in:cash,card,insurance',
             'notes' => 'nullable|string|max:255',
             'createdBy' => 'nullable|integer',

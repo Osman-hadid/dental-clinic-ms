@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\DentalManagement\Infrastructure\Http\Requests\Appointment;
 
 use App\Modules\Common\Infrastructure\Http\Requests\BaseListRequest;
+use Spatie\QueryBuilder\AllowedFilter;
 
 final class ListAppointmentsRequest extends BaseListRequest
 {
@@ -12,6 +13,7 @@ final class ListAppointmentsRequest extends BaseListRequest
     {
         return [
             'id',
+            'tag',
             'appointment_date',
             'start_time',
             'status',
@@ -29,12 +31,16 @@ final class ListAppointmentsRequest extends BaseListRequest
 
     protected static function filters(): array
     {
-        return [];
+        return [
+            AllowedFilter::exact('status', 'status', true),
+            AllowedFilter::trashed(),
+        ];
     }
 
     protected static function searchableColumns(): array
     {
         return [
+            'tag' => 'tag',
             'notes' => 'notes',
         ];
     }
@@ -45,6 +51,7 @@ final class ListAppointmentsRequest extends BaseListRequest
             'id' => 'id',
             'patientId' => 'patient_id',
             'dentistId' => 'dentist_id',
+            'tag' => 'tag',
             'appointmentDate' => 'appointment_date',
             'startTime' => 'start_time',
             'endTime' => 'end_time',

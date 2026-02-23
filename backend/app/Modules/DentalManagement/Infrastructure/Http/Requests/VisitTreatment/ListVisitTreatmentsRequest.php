@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\DentalManagement\Infrastructure\Http\Requests\VisitTreatment;
 
 use App\Modules\Common\Infrastructure\Http\Requests\BaseListRequest;
+use Spatie\QueryBuilder\AllowedFilter;
 
 final class ListVisitTreatmentsRequest extends BaseListRequest
 {
@@ -29,13 +30,21 @@ final class ListVisitTreatmentsRequest extends BaseListRequest
 
     protected static function filters(): array
     {
-        return [];
+        return [
+            AllowedFilter::exact('visitId', 'visit_id', true),
+            AllowedFilter::exact('treatmentId', 'treatment_id', true),
+            AllowedFilter::exact('toothId', 'tooth_id', true),
+            AllowedFilter::exact('dentistId', 'dentist_id', true),
+            AllowedFilter::trashed(),
+        ];
     }
 
     protected static function searchableColumns(): array
     {
         return [
+            'material' => 'material',
             'notes' => 'notes',
+            'toothNumber' => 'tooth_number',
         ];
     }
 
@@ -46,8 +55,10 @@ final class ListVisitTreatmentsRequest extends BaseListRequest
             'visitId' => 'visit_id',
             'treatmentId' => 'treatment_id',
             'toothId' => 'tooth_id',
+            'toothNumber' => 'tooth_number',
             'dentistId' => 'dentist_id',
             'price' => 'price',
+            'material' => 'material',
             'notes' => 'notes',
             'createdBy' => 'created_by',
             'updatedBy' => 'updated_by',

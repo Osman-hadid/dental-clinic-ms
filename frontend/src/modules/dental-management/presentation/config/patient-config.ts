@@ -104,8 +104,8 @@ export const patientConfig: EntityModuleConfig = {
       key: 'enabled',
       title: 'config.form.enabled.label',
       options: [
-        { label: 'config.form.enabled.options.Active', value: 'Active' },
-        { label: 'config.form.enabled.options.Inactive', value: 'Inactive' },
+        { label: 'config.form.enabled.options.active', value: '1' },
+        { label: 'config.form.enabled.options.inactive', value: '0' },
       ],
     },
     {
@@ -170,7 +170,7 @@ export const patientConfig: EntityModuleConfig = {
       label: 'config.form.dateOfBirth.label',
       name: 'dateOfBirth',
       required: false,
-      type: 'text',
+      type: 'date',
       validation: {
         maxLength: { value: 255, message: 'config.form.dateOfBirth.validation.maxLength' },
       },

@@ -31,11 +31,15 @@
       },
       "specialization": {
         "label": "Specialization",
-        "validation": { "maxLength": "Specialization must be 255 characters or less" }
+        "validation": {
+          "maxLength": "Specialization must be 255 characters or less"
+        }
       },
       "contactNumber": {
         "label": "Contact Number",
-        "validation": { "maxLength": "Contact Number must be 255 characters or less" }
+        "validation": {
+          "maxLength": "Contact Number must be 255 characters or less"
+        }
       },
       "email": {
         "label": "Email",
@@ -46,36 +50,67 @@
       },
       "hireDate": {
         "label": "Hire Date",
-        "validation": { "maxLength": "Hire Date must be 255 characters or less" }
+        "validation": {
+          "maxLength": "Hire Date must be 255 characters or less"
+        }
       },
       "remarks": {
         "label": "Remarks",
-        "validation": { "maxLength": "Remarks must be 255 characters or less" }
+        "validation": {
+          "maxLength": "Remarks must be 255 characters or less"
+        }
       },
       "createdBy": {
         "label": "Created By",
-        "validation": { "pattern": "Created By must be a number" }
+        "validation": {
+          "pattern": "Created By must be a number"
+        }
       },
       "updatedBy": {
         "label": "Updated By",
-        "validation": { "pattern": "Updated By must be a number" }
+        "validation": {
+          "pattern": "Updated By must be a number"
+        }
       },
       "deletedBy": {
         "label": "Deleted By",
-        "validation": { "pattern": "Deleted By must be a number" }
+        "validation": {
+          "pattern": "Deleted By must be a number"
+        }
       },
-      "enabled": { "label": "Enabled" },
+      "enabled": {
+        "label": "Enabled",
+        "options": {
+          "Active": "Active",
+          "Inactive": "Inactive",
+          "active": "Active",
+          "inactive": "Inactive"
+        }
+      },
       "appointments": {
         "label": "Appointments",
-        "validation": { "maxLength": "Appointments must be 255 characters or less" }
+        "validation": {
+          "maxLength": "Appointments must be 255 characters or less"
+        }
       },
       "visits": {
         "label": "Visits",
-        "validation": { "maxLength": "Visits must be 255 characters or less" }
+        "validation": {
+          "maxLength": "Visits must be 255 characters or less"
+        }
       },
       "visitTreatments": {
         "label": "Visit Treatments",
-        "validation": { "maxLength": "Visit Treatments must be 255 characters or less" }
+        "validation": {
+          "maxLength": "Visit Treatments must be 255 characters or less"
+        }
+      },
+      "trashed": {
+        "label": "Trashed",
+        "options": {
+          "with": "With Trashed",
+          "only": "Only Trashed"
+        }
       }
     },
     "repository": {

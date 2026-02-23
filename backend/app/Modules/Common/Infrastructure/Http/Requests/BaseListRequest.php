@@ -55,16 +55,27 @@ abstract class BaseListRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         if ($this->filled('sortBy')) {
-            $snake = Str::snake($this->input('sortBy'));
-            if (array_key_exists($snake, static::sortableColumns())) {
-                $this->merge(['sortBy' => $snake]);
+            $sortBy = (string) $this->input('sortBy');
+            $sortableMap = static::sortableMap();
+
+            $candidates = [
+                $sortBy,
+                Str::camel($sortBy),
+                Str::snake($sortBy),
+            ];
+
+            foreach ($candidates as $candidate) {
+                if (array_key_exists($candidate, $sortableMap)) {
+                    $this->merge(['sortBy' => $candidate]);
+                    break;
+                }
             }
         }
     }
 
     public function rules(): array
     {
-        $sortables = array_keys(static::sortableColumns());
+        $sortables = array_keys(static::sortableMap());
         $relations = static::allowedRelations();
         $searchables = array_keys(static::searchableColumns());
 
@@ -93,7 +104,11 @@ abstract class BaseListRequest extends FormRequest
             return $data[$key] ?? $default;
         }
 
-        $sortColumn = static::sortableColumns()[$data['sortBy'] ?? 'created_at'] ?? 'created_at';
+        $sortableMap = static::sortableMap();
+        $requestedSortBy = $data['sortBy'] ?? 'createdAt';
+        $sortColumn = $sortableMap[$requestedSortBy]
+            ?? $sortableMap[Str::camel((string) $requestedSortBy)]
+            ?? 'created_at';
 
         $searchFields = $data['searchFields'] ?? array_keys(static::searchableColumns());
         $searchFields = array_unique(array_filter(Arr::wrap($searchFields)));
@@ -117,5 +132,31 @@ abstract class BaseListRequest extends FormRequest
             'fields' => $fieldsSnake,
             'fieldsCamel' => $fieldsCamel,
         ];
+    }
+
+    private static function sortableMap(): array
+    {
+        $sortableColumns = static::sortableColumns();
+        $map = [];
+
+        if (array_is_list($sortableColumns)) {
+            foreach ($sortableColumns as $column) {
+                $dbColumn = (string) $column;
+                $map[$dbColumn] = $dbColumn;
+                $map[Str::camel($dbColumn)] = $dbColumn;
+            }
+
+            return $map;
+        }
+
+        foreach ($sortableColumns as $alias => $column) {
+            $dbColumn = (string) $column;
+            $aliasString = (string) $alias;
+            $map[$aliasString] = $dbColumn;
+            $map[Str::camel($aliasString)] = $dbColumn;
+            $map[Str::snake($aliasString)] = $dbColumn;
+        }
+
+        return $map;
     }
 }

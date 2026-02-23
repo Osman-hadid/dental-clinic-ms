@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Modules\DentalManagement\Domain\Entities;
 
-use App\Models\Payment;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -36,7 +35,7 @@ final class Invoice extends Model
         return [
             'patient_id' => 'integer',
             'visit_id' => 'integer',
-            'invoice_date' => 'datetime',
+            'invoice_date' => 'date:Y-m-d',
             'status' => 'string',
             'created_by' => 'integer',
             'updated_by' => 'integer',

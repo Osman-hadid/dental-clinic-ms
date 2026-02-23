@@ -23,6 +23,13 @@
           "pattern": "Dentist Id must be a number"
         }
       },
+      "tag": {
+        "label": "Appointment Tag",
+        "validation": {
+          "required": "Appointment Tag is required",
+          "maxLength": "Appointment Tag must be 100 characters or less"
+        }
+      },
       "appointmentDate": {
         "label": "Appointment Date",
         "validation": {
@@ -39,32 +46,58 @@
       },
       "endTime": {
         "label": "End Time",
-        "validation": { "maxLength": "End Time must be 255 characters or less" }
+        "validation": {
+          "required": "End Time is required",
+          "maxLength": "End Time must be 255 characters or less"
+        }
       },
       "notes": {
         "label": "Notes",
-        "validation": { "maxLength": "Notes must be 255 characters or less" }
+        "validation": {
+          "maxLength": "Notes must be 255 characters or less"
+        }
       },
       "createdBy": {
         "label": "Created By",
-        "validation": { "pattern": "Created By must be a number" }
+        "validation": {
+          "pattern": "Created By must be a number"
+        }
       },
       "updatedBy": {
         "label": "Updated By",
-        "validation": { "pattern": "Updated By must be a number" }
+        "validation": {
+          "pattern": "Updated By must be a number"
+        }
       },
       "deletedBy": {
         "label": "Deleted By",
-        "validation": { "pattern": "Deleted By must be a number" }
+        "validation": {
+          "pattern": "Deleted By must be a number"
+        }
       },
       "status": {
         "label": "Status",
-        "validation": { "in": "Status must be one of the allowed values" },
-        "options": { "scheduled": "Scheduled", "completed": "Completed", "cancelled": "Cancelled" }
+        "validation": {
+          "in": "Status must be one of the allowed values"
+        },
+        "options": {
+          "scheduled": "Scheduled",
+          "completed": "Completed",
+          "cancelled": "Cancelled"
+        }
       },
       "visits": {
         "label": "Visits",
-        "validation": { "maxLength": "Visits must be 255 characters or less" }
+        "validation": {
+          "maxLength": "Visits must be 255 characters or less"
+        }
+      },
+      "trashed": {
+        "label": "Trashed",
+        "options": {
+          "with": "With Trashed",
+          "only": "Only Trashed"
+        }
       }
     },
     "repository": {

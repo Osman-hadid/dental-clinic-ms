@@ -14,7 +14,8 @@ class PaymentResource extends JsonResource
     {
         return $this->filterEmpty([
             'id' => $this->id,
-            'paymentDate' => $this->payment_date,
+            'invoiceId' => $this->invoice_id,
+            'paymentDate' => $this->formatDate($this->payment_date),
             'amount' => $this->amount,
             'method' => $this->method,
             'notes' => $this->notes,
@@ -30,5 +31,14 @@ class PaymentResource extends JsonResource
     private function filterEmpty(array $data): array
     {
         return array_filter($data, fn ($value): bool => !\in_array($value, [null, '', []], true) && !($value instanceof Collection && $value->isEmpty()));
+    }
+
+    private function formatDate(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return $value instanceof \DateTimeInterface ? $value->format('Y-m-d') : (string) $value;
     }
 }

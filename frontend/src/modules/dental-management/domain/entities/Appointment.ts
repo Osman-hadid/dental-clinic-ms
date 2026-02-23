@@ -2,6 +2,9 @@ export type Appointment = {
   id: number;
   patientId: string;
   dentistId: string;
+  patientName?: string;
+  dentistName?: string;
+  tag: string;
   appointmentDate: string;
   startTime: string;
   endTime: string;
