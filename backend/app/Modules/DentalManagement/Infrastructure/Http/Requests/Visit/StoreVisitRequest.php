@@ -18,7 +18,7 @@ final class StoreVisitRequest extends BaseFormRequest
     public function rules(): array
     {
         return [
-            'appointmentId' => 'required|integer|exists:appointments,id',
+            'appointmentId' => 'nullable|integer|exists:appointments,id',
             'patientId' => 'required|integer|exists:patients,id',
             'dentistId' => 'required|integer|exists:staff,id',
             'tag' => 'required|string|max:100',

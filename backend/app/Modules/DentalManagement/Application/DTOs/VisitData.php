@@ -11,7 +11,7 @@ final readonly class VisitData
     use IdCaster;
 
     public function __construct(
-        public int $appointmentId,
+        public ?int $appointmentId,
         public int $patientId,
         public int $dentistId,
         public ?string $tag,

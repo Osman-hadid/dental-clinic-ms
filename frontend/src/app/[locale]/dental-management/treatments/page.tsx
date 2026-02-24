@@ -4,7 +4,6 @@ import { JSX } from 'react';
 import { useTranslations } from 'next-intl';
 import { Header } from '@/components/header';
 import { EntityListClient as EntityList } from '@/components/shared/entity/entity-list';
-import { TreatmentChartWorkspace } from '@/modules/dental-management/presentation/components/treatment-chart-workspace';
 import { treatmentConfig } from '@/modules/dental-management/presentation/config/treatment-config';
 import {
   useCreateTreatment,
@@ -28,7 +27,12 @@ export default function TreatmentsPage(): JSX.Element {
       <div className="flex flex-1 flex-col">
         <div className="@container/main flex flex-1 flex-col gap-2">
           <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
-            <TreatmentChartWorkspace />
+            <div className="rounded-2xl border bg-gradient-to-r from-background to-muted/30 p-4">
+              <h2 className="text-base font-semibold">Treatment Catalog</h2>
+              <p className="text-xs text-muted-foreground">
+                Manage treatment definitions here. Visit chart workspaces are available from the Visits page.
+              </p>
+            </div>
             <EntityList
               config={treatmentConfig}
               fetchHook={useTreatmentList}

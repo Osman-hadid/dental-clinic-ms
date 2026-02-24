@@ -31,6 +31,7 @@ final class ListVisitsRequest extends BaseListRequest
     protected static function filters(): array
     {
         return [
+            AllowedFilter::exact('appointmentId', 'appointment_id', true),
             AllowedFilter::exact('patientId', 'patient_id', true),
             AllowedFilter::exact('dentistId', 'dentist_id', true),
             AllowedFilter::trashed(),

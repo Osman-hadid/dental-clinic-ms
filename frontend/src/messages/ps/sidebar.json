@@ -42,6 +42,7 @@
     "visitTreatments": "Visit Treatments",
     "invoices": "Invoices",
     "payments": "Payments",
-    "aiImaging": "AI Imaging"
+    "aiImaging": "AI Imaging",
+    "aiImagingN8n": "AI Imaging (n8n)"
   }
 }

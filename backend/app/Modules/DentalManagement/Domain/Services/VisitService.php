@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\DentalManagement\Domain\Services;
 
 use App\Modules\Common\Application\DTOs\QuerySpecification;
+use App\Modules\DentalManagement\Domain\Entities\Appointment;
 use App\Modules\DentalManagement\Domain\Entities\Visit;
 use App\Modules\DentalManagement\Domain\Repositories\VisitRepositoryInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -25,38 +26,57 @@ final readonly class VisitService
 
     public function restoreVisit(int $id): Visit
     {
-        return tap(
-            $this->visitRepository->restore($id),
-            fn () => $this->visitRepository->invalidateCache()
-        );
+        $visit = $this->visitRepository->restore($id);
+        $this->syncAppointmentStatus($visit->appointment_id);
+        $this->visitRepository->invalidateCache();
+
+        return $visit;
     }
 
     public function createVisit(array $data): Visit
     {
-        return tap(
-            $this->visitRepository->create(data: $data),
-            fn () => $this->visitRepository->invalidateCache()
-        );
+        $visit = $this->visitRepository->create(data: $data);
+        $this->syncAppointmentStatus($visit->appointment_id);
+        $this->visitRepository->invalidateCache();
+
+        return $visit;
     }
 
     public function updateVisit(int $id, array $data): Visit
     {
-        return tap(
-            $this->visitRepository->update(id: $id, data: $data),
-            fn () => $this->visitRepository->invalidateCache()
-        );
+        $existingVisit = $this->visitRepository->find($id);
+        $previousAppointmentId = $existingVisit->appointment_id;
+
+        $visit = $this->visitRepository->update(id: $id, data: $data);
+        $currentAppointmentId = $visit->appointment_id;
+
+        $this->syncAppointmentStatus($previousAppointmentId);
+        if ($currentAppointmentId !== $previousAppointmentId) {
+            $this->syncAppointmentStatus($currentAppointmentId);
+        }
+
+        $this->visitRepository->invalidateCache();
+
+        return $visit;
     }
 
     public function deleteVisit(int $id): void
     {
+        $visit = $this->visitRepository->find($id);
+        $appointmentId = $visit->appointment_id;
+
         $this->visitRepository->delete(id: $id);
+        $this->syncAppointmentStatus($appointmentId);
         $this->visitRepository->invalidateCache();
     }
 
     public function forceDeleteVisit(int $id): void
     {
-        $permission = $this->visitRepository->findTrashed($id) ?? $this->visitRepository->find($id);
-        $this->visitRepository->forceDelete($permission->id);
+        $visit = $this->visitRepository->findTrashed($id) ?? $this->visitRepository->find($id);
+        $appointmentId = $visit->appointment_id;
+
+        $this->visitRepository->forceDelete($visit->id);
+        $this->syncAppointmentStatus($appointmentId);
         $this->visitRepository->invalidateCache();
     }
 
@@ -64,6 +84,7 @@ final readonly class VisitService
     {
         $deleted = [];
         $skipped = [];
+        $appointmentsToSync = [];
 
         foreach ($ids as $id) {
             $visit = $this->visitRepository->find($id);
@@ -75,11 +96,46 @@ final readonly class VisitService
             }
 
             $this->visitRepository->delete(id: $id);
+            if ($visit->appointment_id !== null) {
+                $appointmentsToSync[] = (int) $visit->appointment_id;
+            }
             $deleted[] = $id;
+        }
+
+        foreach (array_unique($appointmentsToSync) as $appointmentId) {
+            $this->syncAppointmentStatus($appointmentId);
         }
 
         $this->visitRepository->invalidateCache();
 
         return ['deleted' => $deleted, 'skipped' => $skipped];
+    }
+
+    private function syncAppointmentStatus(?int $appointmentId): void
+    {
+        if ($appointmentId === null) {
+            return;
+        }
+
+        $appointment = Appointment::query()->find($appointmentId);
+        if (!$appointment) {
+            return;
+        }
+
+        $hasActiveVisits = Visit::query()
+            ->where('appointment_id', $appointmentId)
+            ->whereNull('deleted_at')
+            ->exists();
+
+        $nextStatus = null;
+        if ($hasActiveVisits) {
+            $nextStatus = 'completed';
+        } elseif ($appointment->status === 'completed') {
+            $nextStatus = 'scheduled';
+        }
+
+        if ($nextStatus !== null && $appointment->status !== $nextStatus) {
+            $appointment->forceFill(['status' => $nextStatus])->save();
+        }
     }
 }

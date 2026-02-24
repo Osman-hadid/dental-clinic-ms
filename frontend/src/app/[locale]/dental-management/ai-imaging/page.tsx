@@ -1,6 +1,6 @@
 'use client';
 
-import { JSX, useEffect, useMemo, useState } from 'react';
+import { JSX, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Header } from '@/components/header';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,14 @@ type DetectionBox = {
 
 type AiImagingResponse = {
   detectorModel?: string;
+  detectorMeta?: {
+    augment?: boolean;
+    confUsed?: number;
+    imgsz?: number;
+    iou?: number;
+    multiPass?: boolean;
+    variantUsed?: string;
+  };
   detectorWarning?: string;
   detections?: DetectionBox[];
   disclaimer: string;
@@ -75,11 +83,52 @@ export default function AiImagingPage(): JSX.Element {
   const [patientContext, setPatientContext] = useState('');
   const [reportData, setReportData] = useState<AiImagingResponse | null>(null);
   const [errorText, setErrorText] = useState('');
+  const previewImageRef = useRef<HTMLImageElement | null>(null);
+  const [imageMetrics, setImageMetrics] = useState({
+    naturalHeight: 0,
+    naturalWidth: 0,
+    renderedHeight: 0,
+    renderedWidth: 0,
+  });
+
+  const groupedDetections = useMemo(() => {
+    if (!reportData?.detections || reportData.detections.length === 0) {
+      return [];
+    }
+
+    const grouped = new Map<string, { count: number; confidenceSum: number }>();
+    reportData.detections.forEach((detection) => {
+      const current = grouped.get(detection.label) || { confidenceSum: 0, count: 0 };
+      current.count += 1;
+      current.confidenceSum += detection.confidence;
+      grouped.set(detection.label, current);
+    });
+
+    return Array.from(grouped.entries())
+      .map(([label, value]) => ({
+        avgConfidence: Math.round((value.confidenceSum / value.count) * 100),
+        count: value.count,
+        label,
+      }))
+      .sort((a, b) => b.count - a.count || b.avgConfidence - a.avgConfidence);
+  }, [reportData]);
 
   const previewUrl = useMemo(() => {
     if (!file) return '';
     return URL.createObjectURL(file);
   }, [file]);
+
+  const updateImageMetrics = (): void => {
+    const image = previewImageRef.current;
+    if (!image) return;
+
+    setImageMetrics({
+      naturalHeight: image.naturalHeight || 0,
+      naturalWidth: image.naturalWidth || 0,
+      renderedHeight: image.clientHeight || 0,
+      renderedWidth: image.clientWidth || 0,
+    });
+  };
 
   useEffect(() => {
     return () => {
@@ -88,6 +137,17 @@ export default function AiImagingPage(): JSX.Element {
       }
     };
   }, [previewUrl]);
+
+  useEffect(() => {
+    const onResize = (): void => {
+      updateImageMetrics();
+    };
+
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+    };
+  }, []);
 
   const analyzeMutation = useMutation({
     mutationFn: async (): Promise<AiImagingResponse> => {
@@ -178,9 +238,15 @@ export default function AiImagingPage(): JSX.Element {
                 <Input
                   id="image"
                   type="file"
-                  accept="image/png,image/jpeg,image/webp"
+                  accept="image/png,image/jpeg,image/webp,image/bmp,image/tiff"
                   onChange={(event) => {
                     setReportData(null);
+                    setImageMetrics({
+                      naturalHeight: 0,
+                      naturalWidth: 0,
+                      renderedHeight: 0,
+                      renderedWidth: 0,
+                    });
                     const selectedFile = event.target.files?.[0] ?? null;
                     setFile(selectedFile);
                   }}
@@ -244,12 +310,57 @@ export default function AiImagingPage(): JSX.Element {
             </CardHeader>
             <CardContent>
               {previewUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={previewUrl}
-                  alt="Uploaded dental image preview"
-                  className="max-h-[380px] w-full rounded-md border border-border object-contain bg-background"
-                />
+                <div className="relative inline-block w-full">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    ref={previewImageRef}
+                    src={previewUrl}
+                    alt="Uploaded dental image preview"
+                    onLoad={() => {
+                      updateImageMetrics();
+                    }}
+                    className="max-h-[380px] w-full rounded-md border border-border object-contain bg-background"
+                  />
+                  {reportData?.detections && reportData.detections.length > 0 && imageMetrics.naturalWidth > 0 && imageMetrics.renderedWidth > 0 ? (
+                    <div
+                      className="pointer-events-none absolute inset-0 overflow-hidden rounded-md"
+                      style={{
+                        height: `${imageMetrics.renderedHeight}px`,
+                        width: `${imageMetrics.renderedWidth}px`,
+                      }}
+                    >
+                      {reportData.detections.map((detection, index) => {
+                        const left = (detection.x1 / imageMetrics.naturalWidth) * imageMetrics.renderedWidth;
+                        const top = (detection.y1 / imageMetrics.naturalHeight) * imageMetrics.renderedHeight;
+                        const width = ((detection.x2 - detection.x1) / imageMetrics.naturalWidth) * imageMetrics.renderedWidth;
+                        const height = ((detection.y2 - detection.y1) / imageMetrics.naturalHeight) * imageMetrics.renderedHeight;
+
+                        const color = detection.label.toLowerCase() === 'healthy' ? '#16a34a' : '#ef4444';
+
+                        return (
+                          <div
+                            key={`${detection.label}-${detection.x1}-${detection.y1}-${index}`}
+                            className="absolute"
+                            style={{
+                              border: `2px solid ${color}`,
+                              height: `${Math.max(height, 2)}px`,
+                              left: `${left}px`,
+                              top: `${top}px`,
+                              width: `${Math.max(width, 2)}px`,
+                            }}
+                          >
+                            <span
+                              className="absolute left-0 top-0 -translate-y-full rounded px-1 py-0.5 text-[10px] font-semibold text-white"
+                              style={{ backgroundColor: color }}
+                            >
+                              {detection.label} {Math.round(detection.confidence * 100)}%
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </div>
               ) : (
                 <div className="flex min-h-[220px] items-center justify-center rounded-md border border-dashed border-border text-sm text-muted-foreground">
                   No image selected.
@@ -276,6 +387,15 @@ export default function AiImagingPage(): JSX.Element {
                 {reportData.detectorModel ? (
                   <p className="text-sm text-muted-foreground">
                     Detector: <span className="text-foreground">{reportData.detectorModel}</span>
+                  </p>
+                ) : null}
+                {reportData.detectorMeta ? (
+                  <p className="text-sm text-muted-foreground">
+                    Variant: <span className="text-foreground">{reportData.detectorMeta.variantUsed || 'original'}</span>
+                    {' '}| Conf Used:{' '}
+                    <span className="text-foreground">
+                      {reportData.detectorMeta.confUsed ? `${Math.round(reportData.detectorMeta.confUsed * 100)}%` : 'n/a'}
+                    </span>
                   </p>
                 ) : null}
                 {reportData.detectorWarning ? (
@@ -325,17 +445,31 @@ export default function AiImagingPage(): JSX.Element {
                     )}
                   </ul>
                 </div>
-                {reportData.detections && reportData.detections.length > 0 ? (
+                {groupedDetections.length > 0 ? (
                   <div className="rounded-md border border-border bg-background p-3">
-                    <p className="mb-1 text-sm font-semibold">Detections</p>
+                    <p className="mb-1 text-sm font-semibold">Condition Overview</p>
                     <ul className="list-disc ps-5 text-sm text-muted-foreground">
+                      {groupedDetections.map((group) => (
+                        <li key={group.label}>
+                          {group.label}: detected in {group.count} region(s), average confidence {group.avgConfidence}%
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {reportData.detections && reportData.detections.length > 0 ? (
+                  <details className="rounded-md border border-border bg-background p-3 text-sm text-muted-foreground">
+                    <summary className="cursor-pointer font-semibold text-foreground">
+                      Technical Detection Boxes
+                    </summary>
+                    <ul className="mt-2 list-disc ps-5">
                       {reportData.detections.map((detection, index) => (
                         <li key={`${detection.label}-${detection.x1}-${detection.y1}-${index}`}>
                           {detection.label} ({Math.round(detection.confidence * 100)}%) [{detection.x1},{detection.y1}] to [{detection.x2},{detection.y2}]
                         </li>
                       ))}
                     </ul>
-                  </div>
+                  </details>
                 ) : null}
                 <p className="text-sm text-muted-foreground">
                   Confidence: <span className="text-foreground">{reportData.report.confidence}%</span> | Urgency:{' '}

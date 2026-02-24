@@ -51,6 +51,14 @@ type VisitTreatmentWithRelations = VisitTreatment & {
   treatment?: Partial<Treatment>;
 };
 
+type TreatmentChartWorkspaceProps = {
+  hidePatientVisitSelectors?: boolean;
+  initialPatientId?: string | number;
+  initialVisitId?: string | number;
+  lockPatientSelection?: boolean;
+  lockVisitSelection?: boolean;
+};
+
 const CONDITIONS: Record<ConditionKey, ConditionMeta> = {
   caries: { color: '#4ade80', label: 'Caries' },
   gingivitis: { color: '#f87171', label: 'Gingivitis' },
@@ -213,14 +221,26 @@ const hexToRgba = (hex: string, alpha: number): string => {
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 };
 
-export const TreatmentChartWorkspace = (): JSX.Element => {
+export const TreatmentChartWorkspace = ({
+  hidePatientVisitSelectors = false,
+  initialPatientId,
+  initialVisitId,
+  lockPatientSelection = false,
+  lockVisitSelection = false,
+}: TreatmentChartWorkspaceProps = {}): JSX.Element => {
   const authenticatedUser = useAuthStore((state) => state.user);
   const authenticatedEmail = authenticatedUser?.email?.trim().toLowerCase() ?? '';
   const createVisitTreatment = useCreateVisitTreatment();
+  const defaultPatientId = initialPatientId !== undefined && initialPatientId !== null
+    ? String(initialPatientId)
+    : '';
+  const defaultVisitId = initialVisitId !== undefined && initialVisitId !== null
+    ? String(initialVisitId)
+    : '';
 
   const [activeCondition, setActiveCondition] = useState<ConditionKey>('implant');
-  const [selectedPatientId, setSelectedPatientId] = useState<string>('');
-  const [selectedVisitId, setSelectedVisitId] = useState<string>('');
+  const [selectedPatientId, setSelectedPatientId] = useState<string>(defaultPatientId);
+  const [selectedVisitId, setSelectedVisitId] = useState<string>(defaultVisitId);
   const [selectedTreatmentId, setSelectedTreatmentId] = useState<string>('');
   const [selectedToothNumber, setSelectedToothNumber] = useState<string>('25');
   const [price, setPrice] = useState<string>('');
@@ -284,6 +304,7 @@ export const TreatmentChartWorkspace = (): JSX.Element => {
   }, [authenticatedEmail, staff]);
 
   const selectedTreatment = selectedTreatmentId ? treatmentById.get(selectedTreatmentId) : undefined;
+  const selectedVisit = selectedVisitId ? visitById.get(selectedVisitId) : undefined;
   const resolveRowTeeth = useCallback((row: VisitTreatmentWithRelations): string[] => {
     const fromChartMetadata = Object.keys(parseToothConditionMapFromNotes(row.notes));
     if (fromChartMetadata.length > 0) {
@@ -388,15 +409,21 @@ export const TreatmentChartWorkspace = (): JSX.Element => {
   }, [authenticatedUser?.email, authenticatedUser?.firstName, authenticatedUser?.lastName]);
   const patientName = useMemo(() => {
     if (!selectedPatient) {
-      return 'N/A';
+      return selectedPatientId ? `Patient #${selectedPatientId}` : 'N/A';
     }
 
     return [selectedPatient.firstName, selectedPatient.lastName].filter(Boolean).join(' ') || `Patient #${selectedPatient.id}`;
-  }, [selectedPatient]);
+  }, [selectedPatient, selectedPatientId]);
 
   const handlePatientChange = (value: string): void => {
+    if (lockPatientSelection) {
+      return;
+    }
+
     setSelectedPatientId(value);
-    setSelectedVisitId('');
+    if (!lockVisitSelection) {
+      setSelectedVisitId('');
+    }
     setConditionOverrides({});
   };
 
@@ -781,40 +808,68 @@ export const TreatmentChartWorkspace = (): JSX.Element => {
         </CardHeader>
         <CardContent className="space-y-4 px-4">
           <div className="grid gap-4 rounded-lg border bg-background p-4 md:grid-cols-2 lg:grid-cols-3">
-            <div className="space-y-2">
-              <Label>Patient</Label>
-              <Select value={selectedPatientId} onValueChange={handlePatientChange}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select patient" />
-                </SelectTrigger>
-                <SelectContent>
-                  {patients.map((patient) => (
-                    <SelectItem key={patient.id} value={String(patient.id)}>
-                      {[patient.firstName, patient.lastName].filter(Boolean).join(' ') || `Patient #${patient.id}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {!hidePatientVisitSelectors ? (
+              <div className="space-y-2">
+                <Label>Patient</Label>
+                <Select value={selectedPatientId} onValueChange={handlePatientChange} disabled={lockPatientSelection}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select patient" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {patients.map((patient) => (
+                      <SelectItem key={patient.id} value={String(patient.id)}>
+                        {[patient.firstName, patient.lastName].filter(Boolean).join(' ') || `Patient #${patient.id}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
 
-            <div className="space-y-2">
-              <Label>Visit</Label>
-              <Select value={selectedVisitId} onValueChange={setSelectedVisitId} disabled={!selectedPatientId || isLoadingVisits}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={isLoadingVisits ? 'Loading visits...' : 'Select visit'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {visits.map((visit) => (
-                    <SelectItem key={visit.id} value={String(visit.id)}>
-                      {visit.tag ? `${visit.tag} - ${visit.visitDate}` : `Visit ${visit.id} - ${visit.visitDate}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedPatientId && !isLoadingVisits && visits.length === 0 ? (
-                <p className="text-xs text-destructive">No visits found for this patient. Create a visit first.</p>
-              ) : null}
-            </div>
+            {!hidePatientVisitSelectors ? (
+              <div className="space-y-2">
+                <Label>Visit</Label>
+                <Select
+                  value={selectedVisitId}
+                  onValueChange={(value) => {
+                    if (!lockVisitSelection) {
+                      setSelectedVisitId(value);
+                    }
+                  }}
+                  disabled={lockVisitSelection || !selectedPatientId || isLoadingVisits}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={isLoadingVisits ? 'Loading visits...' : 'Select visit'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {visits.map((visit) => (
+                      <SelectItem key={visit.id} value={String(visit.id)}>
+                        {visit.tag ? `${visit.tag} - ${visit.visitDate}` : `Visit ${visit.id} - ${visit.visitDate}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedPatientId && !isLoadingVisits && visits.length === 0 ? (
+                  <p className="text-xs text-destructive">No visits found for this patient. Create a visit first.</p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {hidePatientVisitSelectors ? (
+              <div className="rounded-md border border-primary/25 bg-primary/5 p-3 text-xs text-muted-foreground md:col-span-2 lg:col-span-3">
+                <p>
+                  Linked patient: <span className="font-semibold text-foreground">{patientName}</span>
+                </p>
+                <p className="mt-1">
+                  Linked visit:{' '}
+                  <span className="font-semibold text-foreground">
+                    {selectedVisit
+                      ? (selectedVisit.tag ? `${selectedVisit.tag} (${selectedVisit.visitDate})` : `Visit #${selectedVisit.id}`)
+                      : (selectedVisitId ? `Visit #${selectedVisitId}` : 'Not selected')}
+                  </span>
+                </p>
+              </div>
+            ) : null}
 
             <div className="space-y-2">
               <Label>Treatment</Label>
@@ -1043,6 +1098,11 @@ export const TreatmentChartWorkspace = (): JSX.Element => {
                 </p>
                 <p>{selectedPatient.patientCode}</p>
                 <p>{selectedPatient.contactNumber || '-'}</p>
+              </div>
+            ) : selectedPatientId ? (
+              <div className="space-y-1 text-xs text-muted-foreground">
+                <p className="font-semibold text-foreground">Patient #{selectedPatientId}</p>
+                <p>Patient details are outside the current fetch range.</p>
               </div>
             ) : (
               <p className="text-xs text-muted-foreground">Select a patient to link the chart.</p>

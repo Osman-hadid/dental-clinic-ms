@@ -14,7 +14,14 @@ import {
 } from '@/components/ui/sidebar';
 import { useCan } from '@/hooks/useCan';
 import { useAuthStore } from '@/modules/auth/application/stores/auth-store';
-import { BookOpen, GalleryVerticalEnd, LayoutDashboard, LucideIcon, Stethoscope, Users } from 'lucide-react';
+import {
+  GalleryVerticalEnd,
+  HeartPulse,
+  House,
+  LucideIcon,
+  ScrollText,
+  ShieldUser,
+} from 'lucide-react';
 
 export type SidebarSubItem = {
   key: string;
@@ -36,24 +43,14 @@ export type SidebarItem = {
 
 const staticNavItems: SidebarItem[] = [
   {
-    icon: LayoutDashboard,
+    icon: House,
     isActive: true,
     items: [{ key: 'overview', url: '/dashboard' }],
     key: 'dashboard',
     url: '/dashboard',
   },
   {
-    icon: Users,
-    items: [
-      { key: 'users', url: '/user-management/users' },
-      { key: 'roles', url: '/user-management/roles' },
-      { key: 'permissions', url: '/user-management/permissions' },
-    ],
-    key: 'userManagement',
-    url: '/user-management',
-  },
-  {
-    icon: Stethoscope,
+    icon: HeartPulse,
     items: [
       { key: 'patients', url: '/dental-management/patients' },
       { key: 'staff', url: '/dental-management/staff' },
@@ -70,15 +67,25 @@ const staticNavItems: SidebarItem[] = [
     url: '/dental-management',
   },
   {
-    icon: BookOpen,
-    items: [
-      { key: 'users', url: '#' },
-      { key: 'permissions', url: '#' },
-      { key: 'settings', url: '#' },
+  icon: ShieldUser,
+  items: [
+    { key: 'users', url: '/user-management/users' },
+    { key: 'roles', url: '/user-management/roles' },
+    { key: 'permissions', url: '/user-management/permissions' },
     ],
-    key: 'documentation',
-    url: '/docs',
+    key: 'userManagement',
+    url: '/user-management',
   },
+  // {
+  //   icon: ScrollText,
+  //   items: [
+  //     { key: 'users', url: '#' },
+  //     { key: 'permissions', url: '#' },
+  //     { key: 'settings', url: '#' },
+  //   ],
+  //   key: 'documentation',
+  //   url: '/docs',
+  // },
 ];
 
 export const AppSidebar = (props: React.ComponentProps<typeof Sidebar>): React.JSX.Element => {
@@ -135,22 +142,27 @@ export const AppSidebar = (props: React.ComponentProps<typeof Sidebar>): React.J
   }));
 
   return (
-    <Sidebar collapsible="icon" className="border-e-0 border-s border-s-border" {...props}>
-      <SidebarHeader>
+    <Sidebar
+      collapsible="icon"
+      variant="floating"
+      className="border-none [&_[data-slot=sidebar-inner]]:rounded-[1.9rem] [&_[data-slot=sidebar-inner]]:border [&_[data-slot=sidebar-inner]]:border-sidebar-border/70 [&_[data-slot=sidebar-inner]]:bg-sidebar/95 [&_[data-slot=sidebar-inner]]:shadow-md"
+      {...props}
+    >
+      <SidebarHeader className="px-2.5 pt-4">
         <TeamSwitcher
           teams={[
             {
               logo: GalleryVerticalEnd,
-              name: t('name', { defaultValue: 'CPAMIS' }),
+              name: t('name', { defaultValue: 'Sourire' }),
               plan: 'Enterprise',
             },
           ]}
         />
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="px-1.5">
         <NavMain items={localizedNavItems} />
       </SidebarContent>
-      <SidebarFooter>{user && <NavUser user={user} />}</SidebarFooter>
+      <SidebarFooter className="px-2.5 pb-4">{user && <NavUser user={user} />}</SidebarFooter>
       <SidebarRail />
     </Sidebar>
   );

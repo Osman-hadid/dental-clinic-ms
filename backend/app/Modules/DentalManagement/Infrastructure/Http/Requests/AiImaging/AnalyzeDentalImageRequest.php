@@ -18,7 +18,7 @@ final class AnalyzeDentalImageRequest extends BaseFormRequest
     public function rules(): array
     {
         return [
-            'image' => 'required|file|mimes:jpg,jpeg,png,webp|max:10240',
+            'image' => 'required|file|image|mimes:jpg,jpeg,png,webp,bmp,tif,tiff|max:20480',
             'modality' => 'nullable|string|in:xray,opg,cbct,intraoral_photo,other',
             'patientContext' => 'nullable|string|max:2000',
         ];

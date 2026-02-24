@@ -15,6 +15,7 @@ import { cn } from '@/lib/utilities';
 import { useAuth } from '@/modules/auth/presentation/hooks/useAuth';
 import { useUIStore } from '@/modules/common/store/ui-store';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { LockKeyhole, Mail } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -41,21 +42,34 @@ export const LoginForm = ({ className, ...props }: React.ComponentProps<'form'>)
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit(onSubmit)}
-        className={cn('flex flex-col gap-6 max-w-md w-full', className)}
+        className={cn('flex w-full max-w-[460px] flex-col gap-6', className)}
         {...props}
       >
-        <div className="text-center">
-          <h1 className="text-2xl font-bold">Login to your account</h1>
+        <div className="space-y-3">
+          <h1 className="text-balance text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
+            Welcome
+            <span className="text-primary">.</span>
+          </h1>
         </div>
-        <div className="grid gap-6">
+        <div className="grid gap-4">
           <FormField
             control={form.control}
             name="email"
             render={({ field }) => (
-              <FormItem>
-                <FormLabel>Email</FormLabel>
+              <FormItem className="space-y-1.5">
+                <FormLabel className="text-[11px] font-medium text-muted-foreground uppercase">
+                  Email
+                </FormLabel>
                 <FormControl>
-                  <Input type="email" placeholder="you@example.com" {...field} />
+                  <div className="relative">
+                    <Mail className="pointer-events-none absolute top-1/2 right-4 size-4 -translate-y-1/2 text-muted-foreground/80" />
+                    <Input
+                      type="email"
+                      placeholder="you@example.com"
+                      className="h-12 rounded-2xl border border-primary/20 bg-white/85 pr-11 shadow-none focus-visible:ring-primary/35"
+                      {...field}
+                    />
+                  </div>
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -65,19 +79,36 @@ export const LoginForm = ({ className, ...props }: React.ComponentProps<'form'>)
             control={form.control}
             name="password"
             render={({ field }) => (
-              <FormItem>
-                <FormLabel>Password</FormLabel>
+              <FormItem className="space-y-1.5">
+                <FormLabel className="text-[11px] font-medium text-muted-foreground uppercase">
+                  Password
+                </FormLabel>
                 <FormControl>
-                  <Input type="password" placeholder="Enter your password" {...field} />
+                  <div className="relative">
+                    <LockKeyhole className="pointer-events-none absolute top-1/2 right-4 size-4 -translate-y-1/2 text-muted-foreground/80" />
+                    <Input
+                      type="password"
+                      placeholder="Enter your password"
+                      className="h-12 rounded-2xl border border-primary/20 bg-white/85 pr-11 shadow-none focus-visible:ring-primary/35"
+                      {...field}
+                    />
+                  </div>
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
-          {loginError && <div className="text-red-500 text-sm">{loginError.message}</div>}
-          <Button type="submit" disabled={isLoggingIn || uiLoading} className="w-full">
-            {isLoggingIn || uiLoading ? 'Logging in...' : 'Login'}
-          </Button>
+          {loginError ? <div className="text-sm text-red-500">{loginError.message}</div> : null}
+
+          <div className="grid gap-3 pt-1">
+            <Button
+              type="submit"
+              disabled={isLoggingIn || uiLoading}
+              className="h-12 rounded-2xl bg-primary text-primary-foreground hover:bg-accent hover:text-accent-foreground"
+            >
+              {isLoggingIn || uiLoading ? 'Logging in...' : 'Login'}
+            </Button>
+          </div>
         </div>
       </form>
     </Form>

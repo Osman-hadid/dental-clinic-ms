@@ -23,11 +23,13 @@ import {
   CalendarDays,
   ClipboardCheck,
   HeartPulse,
+  Printer,
   Sparkles,
   Stethoscope,
   Trash2,
   UserRound,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 type ConditionKey =
   | 'caries'
@@ -144,6 +146,15 @@ const ageFromDate = (dateOfBirth?: string): number | null => {
     age -= 1;
   }
   return age;
+};
+
+const escapeHtml = (value: unknown): string => {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
 };
 
 // eslint-disable-next-line react/function-component-definition
@@ -375,6 +386,211 @@ export default function PatientProfilePage(): JSX.Element {
     }
   };
 
+  const handlePrintPatientRecord = (): void => {
+    if (!patient) {
+      toast.error('Patient data is not ready yet.');
+      return;
+    }
+
+    const now = new Date();
+    const conditionRows = conditionStats.entries
+      .map((entry) => {
+        const condition = CONDITIONS[entry.key];
+        return `
+          <tr>
+            <td><span class="dot" style="background:${condition.color};"></span>${escapeHtml(condition.label)}</td>
+            <td>${entry.count}</td>
+            <td>${entry.percent}%</td>
+          </tr>
+        `;
+      })
+      .join('');
+
+    const taskRows = manualTasks.length > 0
+      ? manualTasks
+        .map((task) => {
+          const mark = TASK_MARKS.find((item) => item.value === task.mark);
+          return `
+              <tr>
+                <td>${escapeHtml(task.title)}</td>
+                <td>${escapeHtml(mark?.label || task.mark)}</td>
+                <td>${escapeHtml(task.status.replaceAll('_', ' '))}</td>
+                <td>${escapeHtml(task.notes || '-')}</td>
+              </tr>
+            `;
+        })
+        .join('')
+      : '<tr><td colspan="4">No session tasks.</td></tr>';
+
+    const visitRows = orderedVisits.length > 0
+      ? orderedVisits
+        .map((visit) => `
+            <tr>
+              <td>${escapeHtml(visit.tag || visit.appointmentTag || `Visit #${visit.id}`)}</td>
+              <td>${escapeHtml(visit.visitDate || '-')}</td>
+              <td>${escapeHtml(visit.dentistName || visit.dentistId || '-')}</td>
+              <td>${escapeHtml(visit.diagnosisNotes || '-')}</td>
+            </tr>
+          `)
+        .join('')
+      : '<tr><td colspan="4">No visits recorded.</td></tr>';
+
+    const html = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Patient Record</title>
+  <style>
+    @page { size: auto; margin: 0; }
+    html, body {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    body { font-family: Arial, sans-serif; margin: 14mm; color: #111827; }
+    h1, h2 { margin: 0 0 8px 0; }
+    .section { margin-top: 16px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .box { border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+    th, td { border: 1px solid #d1d5db; padding: 8px; font-size: 12px; text-align: left; vertical-align: top; }
+    th { background: #f3f4f6; }
+    .dot { display: inline-block; width: 9px; height: 9px; border-radius: 999px; margin-right: 6px; vertical-align: middle; }
+    .muted { color: #6b7280; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Patient Record Summary</h1>
+  <p class="muted">Printed on ${escapeHtml(now.toLocaleString())}</p>
+
+  <div class="section grid">
+    <div class="box">
+      <h2 style="font-size:16px;">Patient</h2>
+      <p><strong>Name:</strong> ${escapeHtml(fullName)}</p>
+      <p><strong>Code:</strong> ${escapeHtml(patient.patientCode || '-')}</p>
+      <p><strong>Age:</strong> ${escapeHtml(patientAge ?? '-')}</p>
+      <p><strong>Sex:</strong> ${escapeHtml(patient.gender || '-')}</p>
+      <p><strong>Blood Group:</strong> ${escapeHtml(patient.bloodGroup || '-')}</p>
+      <p><strong>Phone:</strong> ${escapeHtml(patient.contactNumber || '-')}</p>
+      <p><strong>Email:</strong> ${escapeHtml(patient.email || '-')}</p>
+      <p><strong>Address:</strong> ${escapeHtml(patient.address || '-')}</p>
+    </div>
+    <div class="box">
+      <h2 style="font-size:16px;">Clinical Snapshot</h2>
+      <p><strong>Overall Dental Condition:</strong> ${escapeHtml(conditionStats.overall)}%</p>
+      <p><strong>Total Visits:</strong> ${escapeHtml(visits.length)}</p>
+      <p><strong>Recorded Treatments:</strong> ${escapeHtml(typedVisitTreatments.length)}</p>
+      <p><strong>Latest Visit:</strong> ${escapeHtml(latestVisit?.visitDate || '-')}</p>
+      <p><strong>Status:</strong> ${escapeHtml(patient.status || '-')}</p>
+      <p><strong>Remarks:</strong> ${escapeHtml(patient.remarks || '-')}</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2 style="font-size:16px;">Dental Condition Breakdown</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Condition</th>
+          <th>Teeth</th>
+          <th>Percent</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${conditionRows}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2 style="font-size:16px;">Session Tasks</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Task</th>
+          <th>Mark</th>
+          <th>Status</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${taskRows}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2 style="font-size:16px;">Visits</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Visit Tag</th>
+          <th>Date</th>
+          <th>Dentist</th>
+          <th>Diagnosis Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${visitRows}
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>`;
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.style.visibility = 'hidden';
+    document.body.appendChild(iframe);
+
+    const iframeDocument = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!iframeDocument) {
+      document.body.removeChild(iframe);
+      toast.error('Unable to prepare print document.');
+      return;
+    }
+
+    iframeDocument.open();
+    iframeDocument.write(html);
+    iframeDocument.close();
+
+    let didPrint = false;
+    const printAndCleanup = (): void => {
+      if (didPrint) return;
+      didPrint = true;
+
+      const frameWindow = iframe.contentWindow;
+      if (!frameWindow) {
+        document.body.removeChild(iframe);
+        toast.error('Unable to print right now.');
+        return;
+      }
+
+      frameWindow.focus();
+      frameWindow.print();
+
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+      }, 900);
+    };
+
+    iframe.onload = () => {
+      printAndCleanup();
+    };
+
+    setTimeout(() => {
+      if (document.body.contains(iframe)) {
+        printAndCleanup();
+      }
+    }, 150);
+  };
+
   const isTaskMutationLoading = createTaskMutation.isPending || updateTaskMutation.isPending || deleteTaskMutation.isPending;
 
   const breadcrumbs = useMemo(
@@ -410,6 +626,15 @@ export default function PatientProfilePage(): JSX.Element {
             >
               <ArrowLeft className="me-2 size-4" />
               Back To Patients
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="border-border bg-card text-foreground hover:bg-accent hover:text-accent-foreground"
+              onClick={handlePrintPatientRecord}
+            >
+              <Printer className="me-2 size-4" />
+              Print Patient Record
             </Button>
           </div>
 

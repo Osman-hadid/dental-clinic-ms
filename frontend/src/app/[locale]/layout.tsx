@@ -26,8 +26,13 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  description: 'Developed By AOP',
-  title: 'CPAMIS',
+  description: 'Developed By OsmanHadid',
+  title: 'Sourire',
+  icons: {
+    icon: '/logo.png',
+    shortcut: '/logo.png',
+    apple: '/logo.png',
+  },
 };
 
 // eslint-disable-next-line react/function-component-definition

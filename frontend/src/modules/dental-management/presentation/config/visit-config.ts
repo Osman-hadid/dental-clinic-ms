@@ -167,12 +167,10 @@ export const visitConfig: EntityModuleConfig = {
     {
       label: 'config.form.appointmentId.label',
       name: 'appointmentId',
-      required: true,
+      required: false,
       relation: 'appointments',
       type: 'select',
-      validation: {
-        required: 'config.form.appointmentId.validation.required',
-      },
+      validation: {},
     },
     {
       label: 'config.form.patientId.label',

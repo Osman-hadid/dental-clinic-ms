@@ -30,7 +30,8 @@ export const NavUser = React.memo(function NavUser({
     profilePhotoPath: string;
   };
 }>) {
-  const { isMobile } = useSidebar();
+  const { isMobile, state } = useSidebar();
+  const isCollapsed = state === 'collapsed';
   const { isLoggingOut, logout } = useAuth();
   const t = useTranslations('sidebar');
 
@@ -40,8 +41,9 @@ export const NavUser = React.memo(function NavUser({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
-              size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              size={isCollapsed ? 'default' : 'lg'}
+              tooltip={isCollapsed ? `${user.firstName} ${user.lastName}` : undefined}
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground rounded-2xl"
             >
               <Avatar className="h-8 w-8 rounded-lg">
                 <AvatarImage src={user.profilePhotoPath} alt={user.firstName} />
@@ -49,13 +51,17 @@ export const NavUser = React.memo(function NavUser({
                   <User className="h-6 w-6 text-muted-foreground" />
                 </AvatarFallback>
               </Avatar>
-              <div className="grid flex-1 text-start text-sm leading-tight">
-                <span className="truncate font-medium">
-                  {user.firstName} {user.lastName}
-                </span>
-                <span className="truncate text-xs">{user.email}</span>
-              </div>
-              <ChevronsUpDown className="ms-auto size-4" />
+              {!isCollapsed ? (
+                <>
+                  <div className="grid flex-1 text-start text-sm leading-tight">
+                    <span className="truncate font-medium">
+                      {user.firstName} {user.lastName}
+                    </span>
+                    <span className="truncate text-xs">{user.email}</span>
+                  </div>
+                  <ChevronsUpDown className="ms-auto size-4" />
+                </>
+              ) : null}
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent

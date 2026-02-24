@@ -45,18 +45,19 @@ return [
     ],
 
     'ai_imaging' => [
-        'provider' => env('AI_IMAGING_PROVIDER', 'ollama'),
+        'provider' => env('AI_IMAGING_PROVIDER', 'dental_disease_detection'),
         'timeout' => (int) env('AI_IMAGING_TIMEOUT', 120),
-        'ollama' => [
-            'base_url' => env('OLLAMA_BASE_URL', 'http://127.0.0.1:11434'),
-            'model' => env('OLLAMA_MODEL', 'llava:7b'),
-        ],
-        'dentalxrayai' => [
-            'enabled' => filter_var(env('AI_IMAGING_USE_DENTALXRAYAI', false), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? false,
-            'python_bin' => env('DENTALXRAYAI_PYTHON', 'python'),
-            'repo_path' => env('DENTALXRAYAI_REPO_PATH', base_path('../third_party/DentalXrayAI')),
-            'script_path' => env('DENTALXRAYAI_SCRIPT_PATH', base_path('scripts/dentalxrayai_detect.py')),
-            'model_path' => env('DENTALXRAYAI_MODEL_PATH', base_path('../third_party/DentalXrayAI/best.pt')),
+        'dental_disease_detection' => [
+            'python_bin' => env('DENTAL_DISEASE_DETECTION_PYTHON', 'python'),
+            'repo_path' => env('DENTAL_DISEASE_DETECTION_REPO_PATH', base_path('../third_party/Dental_Disease_Detection/project-main')),
+            'script_path' => env('DENTAL_DISEASE_DETECTION_SCRIPT_PATH', base_path('scripts/dental_disease_detection_detect.py')),
+            'model_path' => env('DENTAL_DISEASE_DETECTION_MODEL_PATH', base_path('../third_party/Dental_Disease_Detection/project-main/model/runs/detect/Yolo_10s_train/weights/best.pt')),
+            'conf' => (float) env('DENTAL_DISEASE_DETECTION_CONF', 0.25),
+            'fallback_conf' => (float) env('DENTAL_DISEASE_DETECTION_FALLBACK_CONF', 0.1),
+            'iou' => (float) env('DENTAL_DISEASE_DETECTION_IOU', 0.45),
+            'imgsz' => (int) env('DENTAL_DISEASE_DETECTION_IMGSZ', 1280),
+            'augment' => filter_var(env('DENTAL_DISEASE_DETECTION_AUGMENT', false), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? false,
+            'multi_pass' => filter_var(env('DENTAL_DISEASE_DETECTION_MULTI_PASS', true), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? true,
         ],
     ],
 
