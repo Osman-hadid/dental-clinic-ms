@@ -608,13 +608,18 @@ export const DentalChartDashboard = ({
   const openTreatmentChartFromSelection = (): void => {
     if (!selectedEvent) return;
 
-    if (selectedEvent.linkedVisitId !== null && selectedEvent.linkedVisitId !== undefined) {
-      router.push(`/${locale}/dental-management/visits/${selectedEvent.linkedVisitId}`);
+    if (isCompletedStatus(selectedEvent.status)) {
+      if (selectedEvent.patientId !== null && selectedEvent.patientId !== undefined) {
+        router.push(`/${locale}/dental-management/patients/${selectedEvent.patientId}`);
+        return;
+      }
+
+      router.push(`/${locale}/dental-management/patients`);
       return;
     }
 
-    if (selectedEvent.patientId !== null && selectedEvent.patientId !== undefined) {
-      router.push(`/${locale}/dental-management/patients/${selectedEvent.patientId}`);
+    if (selectedEvent.linkedVisitId !== null && selectedEvent.linkedVisitId !== undefined) {
+      router.push(`/${locale}/dental-management/visits/${selectedEvent.linkedVisitId}`);
       return;
     }
 
@@ -836,7 +841,7 @@ export const DentalChartDashboard = ({
                           onClick={openTreatmentChartFromSelection}
                           className="mt-1 bg-primary text-primary-foreground hover:bg-accent hover:text-accent-foreground"
                         >
-                          Open Treatment Chart
+                          {isCompletedStatus(selectedEvent.status) ? 'Open Patient Profile' : 'Open Treatment Chart'}
                         </Button>
                       </div>
                     </div>

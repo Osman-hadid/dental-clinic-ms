@@ -305,6 +305,74 @@ export const TreatmentChartWorkspace = ({
 
   const selectedTreatment = selectedTreatmentId ? treatmentById.get(selectedTreatmentId) : undefined;
   const selectedVisit = selectedVisitId ? visitById.get(selectedVisitId) : undefined;
+  const visitOrderIndexById = useMemo(() => {
+    const sortedVisits = visits.slice().sort((left, right) => {
+      const leftDate = new Date(left.visitDate || '').getTime();
+      const rightDate = new Date(right.visitDate || '').getTime();
+
+      if (!Number.isNaN(leftDate) && !Number.isNaN(rightDate) && leftDate !== rightDate) {
+        return leftDate - rightDate;
+      }
+
+      return String(left.id).localeCompare(String(right.id), undefined, { numeric: true, sensitivity: 'base' });
+    });
+
+    const map = new Map<string, number>();
+    sortedVisits.forEach((visit, index) => {
+      map.set(String(visit.id), index);
+    });
+    return map;
+  }, [visits]);
+  const selectedVisitOrderIndex = useMemo(() => {
+    if (!selectedVisitId) return Number.POSITIVE_INFINITY;
+    return visitOrderIndexById.get(String(selectedVisitId)) ?? Number.POSITIVE_INFINITY;
+  }, [selectedVisitId, visitOrderIndexById]);
+
+  const chartSourceTreatments = useMemo(() => {
+    if (!selectedVisitId) return typedVisitTreatments;
+
+    return typedVisitTreatments.filter((row) => {
+      const rowVisitIndex = visitOrderIndexById.get(String(row.visitId));
+      if (rowVisitIndex === undefined) return false;
+      return rowVisitIndex <= selectedVisitOrderIndex;
+    });
+  }, [selectedVisitId, selectedVisitOrderIndex, typedVisitTreatments, visitOrderIndexById]);
+
+  const orderedChartTreatments = useMemo(() => {
+    const rows = [...chartSourceTreatments];
+    rows.sort((left, right) => {
+      const leftVisitIndex = visitOrderIndexById.get(String(left.visitId)) ?? Number.MAX_SAFE_INTEGER;
+      const rightVisitIndex = visitOrderIndexById.get(String(right.visitId)) ?? Number.MAX_SAFE_INTEGER;
+      if (leftVisitIndex !== rightVisitIndex) {
+        return leftVisitIndex - rightVisitIndex;
+      }
+
+      const leftCreated = new Date(left.createdAt || '').getTime();
+      const rightCreated = new Date(right.createdAt || '').getTime();
+      if (!Number.isNaN(leftCreated) && !Number.isNaN(rightCreated) && leftCreated !== rightCreated) {
+        return leftCreated - rightCreated;
+      }
+
+      return String(left.id).localeCompare(String(right.id), undefined, { numeric: true, sensitivity: 'base' });
+    });
+    return rows;
+  }, [chartSourceTreatments, visitOrderIndexById]);
+
+  const displayedVisitTreatments = useMemo(() => {
+    const rows = selectedVisitId
+      ? typedVisitTreatments.filter((row) => String(row.visitId) === String(selectedVisitId))
+      : typedVisitTreatments;
+
+    return rows.slice().sort((left, right) => {
+      const leftCreated = new Date(left.createdAt || '').getTime();
+      const rightCreated = new Date(right.createdAt || '').getTime();
+      if (!Number.isNaN(leftCreated) && !Number.isNaN(rightCreated) && leftCreated !== rightCreated) {
+        return rightCreated - leftCreated;
+      }
+      return String(right.id).localeCompare(String(left.id), undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }, [selectedVisitId, typedVisitTreatments]);
+
   const resolveRowTeeth = useCallback((row: VisitTreatmentWithRelations): string[] => {
     const fromChartMetadata = Object.keys(parseToothConditionMapFromNotes(row.notes));
     if (fromChartMetadata.length > 0) {
@@ -354,17 +422,15 @@ export const TreatmentChartWorkspace = ({
       result[toothNumber] = null;
     }
 
-    for (const row of typedVisitTreatments) {
+    for (const row of orderedChartTreatments) {
       const rowConditionMap = resolveRowConditionMap(row);
       for (const [toothNumber, condition] of Object.entries(rowConditionMap)) {
-        if (!result[toothNumber]) {
-          result[toothNumber] = condition;
-        }
+        result[toothNumber] = condition;
       }
     }
 
     return result;
-  }, [resolveRowConditionMap, typedVisitTreatments]);
+  }, [orderedChartTreatments, resolveRowConditionMap]);
 
   const toothConditions = useMemo(() => {
     return { ...baseConditions, ...conditionOverrides };
@@ -516,7 +582,7 @@ export const TreatmentChartWorkspace = ({
       return;
     }
 
-    if (typedVisitTreatments.length === 0) {
+    if (displayedVisitTreatments.length === 0) {
       toast.error('No recorded treatments to print.');
       return;
     }
@@ -557,7 +623,7 @@ export const TreatmentChartWorkspace = ({
         .join('');
     };
 
-    const recordRows = typedVisitTreatments
+    const recordRows = displayedVisitTreatments
       .map((row) => {
         const teeth = resolveRowTeeth(row);
         const teethLabel = teeth.length > 0 ? teeth.join(', ') : '-';
@@ -603,10 +669,7 @@ export const TreatmentChartWorkspace = ({
       })
       .join('');
 
-    const selectedConditionLabel = selectedCondition ? CONDITIONS[selectedCondition].label : 'Healthy';
-    const selectedConditionColor = selectedCondition ? CONDITIONS[selectedCondition].color : '#d1d5db';
-    const selectedConditionChipBackground = selectedCondition ? hexToRgba(selectedConditionColor, 0.2) : '#ffffff';
-    const noteRows = typedVisitTreatments
+    const noteRows = displayedVisitTreatments
       .map((row) => {
         const cleanedNotes = stripMetadataPrefixes(row.notes);
         if (!cleanedNotes) {
@@ -676,7 +739,6 @@ export const TreatmentChartWorkspace = ({
       <h3>Clinical Context</h3>
       <p><strong>Doctor:</strong> ${escapeHtml(doctorName)}</p>
       <p><strong>Selected Tooth:</strong> ${escapeHtml(selectedToothNumber)} (${escapeHtml(getToothRegion(selectedToothNumber))})</p>
-      <p><strong>Selected Condition:</strong> <span class="condition-chip" style="background:${selectedConditionChipBackground};border-color:${selectedConditionColor};">${escapeHtml(selectedConditionLabel)}</span></p>
     </div>
   </div>
 
@@ -834,6 +896,7 @@ export const TreatmentChartWorkspace = ({
                   onValueChange={(value) => {
                     if (!lockVisitSelection) {
                       setSelectedVisitId(value);
+                      setConditionOverrides({});
                     }
                   }}
                   disabled={lockVisitSelection || !selectedPatientId || isLoadingVisits}
@@ -1148,7 +1211,7 @@ export const TreatmentChartWorkspace = ({
                   size="sm"
                   variant="outline"
                   onClick={handlePrintRecord}
-                  disabled={!selectedPatient || typedVisitTreatments.length === 0}
+                  disabled={!selectedPatient || displayedVisitTreatments.length === 0}
                   className="gap-2"
                 >
                   <Printer className="size-4" />
@@ -1156,11 +1219,13 @@ export const TreatmentChartWorkspace = ({
                 </Button>
               </div>
             </div>
-            {typedVisitTreatments.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No treatment records yet for this patient.</p>
+            {displayedVisitTreatments.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                {selectedVisitId ? 'No treatment records yet for this visit.' : 'No treatment records yet for this patient.'}
+              </p>
             ) : (
               <div className="space-y-2">
-                {typedVisitTreatments.map((row) => {
+                {displayedVisitTreatments.map((row) => {
                   const teeth = resolveRowTeeth(row);
                   const teethLabel = teeth.length > 0 ? teeth.join(', ') : '-';
                   const treatmentName =

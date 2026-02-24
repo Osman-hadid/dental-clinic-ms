@@ -63,13 +63,13 @@ type SessionTask = {
 };
 
 const CONDITIONS: Record<ConditionKey, ConditionMeta> = {
-  caries: { color: '#56d0ff', label: 'Caries' },
-  gingivitis: { color: '#ff6ca8', label: 'Gingivitis' },
-  implant: { color: '#7e7bff', label: 'Implant' },
-  periodontitis: { color: '#62dfb9', label: 'Periodontitis' },
-  periostitis: { color: '#f59e0b', label: 'Periostitis' },
-  removal: { color: '#9ca3af', label: 'Removal' },
-  surgery: { color: '#ba68ff', label: 'Surgery' },
+  caries: { color: '#4ade80', label: 'Caries' },
+  gingivitis: { color: '#f87171', label: 'Gingivitis' },
+  implant: { color: '#c084fc', label: 'Implant' },
+  periodontitis: { color: '#67e8f9', label: 'Periodontitis' },
+  periostitis: { color: '#8b5e3c', label: 'Periostitis' },
+  removal: { color: '#cbd5e1', label: 'Removal' },
+  surgery: { color: '#f9a8d4', label: 'Surgery' },
 };
 
 const CONDITION_CODES: Record<string, ConditionKey> = {
@@ -82,9 +82,12 @@ const CONDITION_CODES: Record<string, ConditionKey> = {
   s: 'surgery',
 };
 
-const UPPER_ARCH = ['18', '17', '16', '15', '14', '13', '12', '11', '21', '22', '23', '24', '25', '26'];
-const LOWER_ARCH = ['44', '43', '42', '41', '31', '32', '33', '34', '35', '36', '37', '38', '47', '48'];
+const UPPER_ARCH = ['18', '17', '16', '15', '14', '13', '12', '11', '21', '22', '23', '24', '25', '26', '27', '28'];
+const LOWER_ARCH = ['48', '47', '46', '45', '44', '43', '42', '41', '31', '32', '33', '34', '35', '36', '37', '38'];
 const RING_TEETH = [...UPPER_ARCH, ...LOWER_ARCH];
+const PRINT_UPPER_ARCH = ['18', '17', '16', '15', '14', '13', '12', '11', '21', '22', '23', '24', '25', '26', '27', '28'];
+const PRINT_LOWER_ARCH = ['48', '47', '46', '45', '44', '43', '42', '41', '31', '32', '33', '34', '35', '36', '37', '38'];
+const PRINT_ALL_TEETH = [...PRINT_UPPER_ARCH, ...PRINT_LOWER_ARCH];
 const MAX_PER_PAGE = 100;
 const TASK_MARKS = [
   { color: '#22c55e', label: 'Routine', value: 'green' },
@@ -100,6 +103,17 @@ const parseConditionToken = (value?: string): ConditionKey | null => {
   const token = value.trim().toLowerCase();
   if (token in CONDITIONS) return token as ConditionKey;
   return CONDITION_CODES[token] ?? null;
+};
+
+const isToothNumber = (value: string): boolean => /^\d{2}$/.test(value);
+
+const parseToothNumbersFromValue = (value?: string): string[] => {
+  if (!value) return [];
+  const numbers = value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(isToothNumber);
+  return Array.from(new Set(numbers));
 };
 
 const parseChartConditionMap = (notes?: string): Record<string, ConditionKey> => {
@@ -131,6 +145,45 @@ const parseLegacyTooth = (notes?: string): string | null => {
   if (!notes) return null;
   const match = notes.match(/\[tooth:([0-9]{2})\]/i);
   return match?.[1] ?? null;
+};
+
+const stripMetadataPrefixes = (value?: string): string => {
+  if (!value) return '';
+  return value
+    .replace(/^\[chart:[^\]]+\]\s*/i, '')
+    .replace(/^\[condition:[a-z]+\]\s*/i, '')
+    .replace(/^\[tooth:[0-9]{2}\]\s*/i, '')
+    .replace(/^\[condition:[a-z]+\]\[tooth:[0-9]{2}\]\s*/i, '')
+    .trim();
+};
+
+const inferConditionFromText = (value?: string): ConditionKey | null => {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase();
+
+  if (normalized.includes('caries')) return 'caries';
+  if (normalized.includes('surgery')) return 'surgery';
+  if (normalized.includes('implant')) return 'implant';
+  if (normalized.includes('gingivitis')) return 'gingivitis';
+  if (normalized.includes('periodontitis')) return 'periodontitis';
+  if (normalized.includes('removal') || normalized.includes('extract')) return 'removal';
+  if (normalized.includes('periostitis')) return 'periostitis';
+
+  return null;
+};
+
+const hexToRgba = (hex: string, alpha: number): string => {
+  const normalized = hex.replace('#', '');
+  const bigint = Number.parseInt(normalized, 16);
+  const red = (bigint >> 16) & 255;
+  const green = (bigint >> 8) & 255;
+  const blue = bigint & 255;
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+};
+
+const getToothRegion = (toothNumber: string): 'Maxilla' | 'Mandible' => {
+  const firstDigit = Number(toothNumber[0]);
+  return firstDigit <= 2 ? 'Maxilla' : 'Mandible';
 };
 
 const ageFromDate = (dateOfBirth?: string): number | null => {
@@ -206,6 +259,30 @@ export default function PatientProfilePage(): JSX.Element {
     visitTreatmentFilters
   );
   const typedVisitTreatments = visitTreatments as VisitTreatmentWithRelations[];
+  const visitOrderIndexById = useMemo(() => {
+    const sortedVisits = visits.slice().sort((left, right) => {
+      const leftDate = new Date(left.visitDate || '').getTime();
+      const rightDate = new Date(right.visitDate || '').getTime();
+
+      if (!Number.isNaN(leftDate) && !Number.isNaN(rightDate) && leftDate !== rightDate) {
+        return leftDate - rightDate;
+      }
+
+      const leftCreatedAt = new Date(left.createdAt || '').getTime();
+      const rightCreatedAt = new Date(right.createdAt || '').getTime();
+      if (!Number.isNaN(leftCreatedAt) && !Number.isNaN(rightCreatedAt) && leftCreatedAt !== rightCreatedAt) {
+        return leftCreatedAt - rightCreatedAt;
+      }
+
+      return String(left.id).localeCompare(String(right.id), undefined, { numeric: true, sensitivity: 'base' });
+    });
+
+    const map = new Map<string, number>();
+    sortedVisits.forEach((visit, index) => {
+      map.set(String(visit.id), index);
+    });
+    return map;
+  }, [visits]);
 
   const tasksQueryKey = useMemo(() => ['patient-session-tasks', patientId], [patientId]);
   const { data: manualTasks = [], isFetching: isLoadingManualTasks } = useQuery<SessionTask[]>({
@@ -243,7 +320,21 @@ export default function PatientProfilePage(): JSX.Element {
 
     const orderedTreatments = typedVisitTreatments
       .slice()
-      .sort((a, b) => new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime());
+      .sort((a, b) => {
+        const visitIndexA = visitOrderIndexById.get(String(a.visitId)) ?? Number.MAX_SAFE_INTEGER;
+        const visitIndexB = visitOrderIndexById.get(String(b.visitId)) ?? Number.MAX_SAFE_INTEGER;
+        if (visitIndexA !== visitIndexB) {
+          return visitIndexA - visitIndexB;
+        }
+
+        const createdAtA = new Date(a.createdAt || '').getTime();
+        const createdAtB = new Date(b.createdAt || '').getTime();
+        if (!Number.isNaN(createdAtA) && !Number.isNaN(createdAtB) && createdAtA !== createdAtB) {
+          return createdAtA - createdAtB;
+        }
+
+        return String(a.id).localeCompare(String(b.id), undefined, { numeric: true, sensitivity: 'base' });
+      });
 
     for (const row of orderedTreatments) {
       const fromChart = parseChartConditionMap(row.notes);
@@ -265,7 +356,7 @@ export default function PatientProfilePage(): JSX.Element {
     }
 
     return result;
-  }, [typedVisitTreatments, toothById]);
+  }, [typedVisitTreatments, toothById, visitOrderIndexById]);
 
   const conditionStats = useMemo(() => {
     const totalTeeth = RING_TEETH.length;
@@ -392,101 +483,272 @@ export default function PatientProfilePage(): JSX.Element {
       return;
     }
 
-    const now = new Date();
-    const conditionRows = conditionStats.entries
-      .map((entry) => {
-        const condition = CONDITIONS[entry.key];
+    if (typedVisitTreatments.length === 0) {
+      toast.error('No recorded treatments to print.');
+      return;
+    }
+
+    const printConditionColors: Record<ConditionKey, string> = {
+      caries: '#4ade80',
+      gingivitis: '#f87171',
+      implant: '#c084fc',
+      periodontitis: '#67e8f9',
+      periostitis: '#8b5e3c',
+      removal: '#cbd5e1',
+      surgery: '#f9a8d4',
+    };
+
+    const treatmentById = new Map(
+      typedVisitTreatments
+        .filter((row) => row.treatment)
+        .map((row) => [String(row.treatmentId), row.treatment as Partial<Treatment>])
+    );
+
+    const resolveRowTeeth = (row: VisitTreatmentWithRelations): string[] => {
+      const fromChartMetadata = Object.keys(parseChartConditionMap(row.notes));
+      if (fromChartMetadata.length > 0) return fromChartMetadata;
+
+      const fromToothNumber = parseToothNumbersFromValue(row.toothNumber);
+      if (fromToothNumber.length > 0) return fromToothNumber;
+
+      const toothNumber =
+        row.tooth?.toothNumber
+        ?? toothById.get(String(row.toothId))
+        ?? parseLegacyTooth(row.notes);
+
+      return toothNumber ? [toothNumber] : [];
+    };
+
+    const resolveRowConditionMap = (row: VisitTreatmentWithRelations): Record<string, ConditionKey> => {
+      const fromChartMetadata = parseChartConditionMap(row.notes);
+      if (Object.keys(fromChartMetadata).length > 0) return fromChartMetadata;
+
+      const condition =
+        parseLegacyCondition(row.notes)
+        ?? inferConditionFromText(row.treatment?.category)
+        ?? inferConditionFromText(row.treatment?.name);
+
+      if (!condition) return {};
+
+      const mapped: Record<string, ConditionKey> = {};
+      for (const toothNumber of resolveRowTeeth(row)) {
+        mapped[toothNumber] = condition;
+      }
+      return mapped;
+    };
+
+    const latestVisitForPrint = visits
+      .slice()
+      .sort((a, b) => {
+        const dateA = new Date(a.visitDate || '').getTime();
+        const dateB = new Date(b.visitDate || '').getTime();
+        if (!Number.isNaN(dateA) && !Number.isNaN(dateB) && dateA !== dateB) {
+          return dateB - dateA;
+        }
+
+        const createdA = new Date(a.createdAt || '').getTime();
+        const createdB = new Date(b.createdAt || '').getTime();
+        if (!Number.isNaN(createdA) && !Number.isNaN(createdB) && createdA !== createdB) {
+          return createdB - createdA;
+        }
+
+        return String(b.id).localeCompare(String(a.id), undefined, { numeric: true, sensitivity: 'base' });
+      })[0] ?? null;
+
+    const latestVisitTreatments = latestVisitForPrint
+      ? typedVisitTreatments.filter((row) => String(row.visitId) === String(latestVisitForPrint.id))
+      : [];
+    const printSourceTreatments = latestVisitTreatments.length > 0 ? latestVisitTreatments : typedVisitTreatments;
+
+    const orderedTreatmentsForScheme = typedVisitTreatments
+      .slice()
+      .sort((a, b) => {
+        const visitIndexA = visitOrderIndexById.get(String(a.visitId)) ?? Number.MAX_SAFE_INTEGER;
+        const visitIndexB = visitOrderIndexById.get(String(b.visitId)) ?? Number.MAX_SAFE_INTEGER;
+        if (visitIndexA !== visitIndexB) {
+          return visitIndexA - visitIndexB;
+        }
+
+        const createdAtA = new Date(a.createdAt || '').getTime();
+        const createdAtB = new Date(b.createdAt || '').getTime();
+        if (!Number.isNaN(createdAtA) && !Number.isNaN(createdAtB) && createdAtA !== createdAtB) {
+          return createdAtA - createdAtB;
+        }
+
+        return String(a.id).localeCompare(String(b.id), undefined, { numeric: true, sensitivity: 'base' });
+      });
+
+    const orderedPrintSourceTreatments = printSourceTreatments
+      .slice()
+      .sort((a, b) => new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime());
+
+    const printToothConditions: Record<string, ConditionKey | null> = {};
+    for (const toothNumber of PRINT_ALL_TEETH) {
+      printToothConditions[toothNumber] = null;
+    }
+    for (const row of orderedTreatmentsForScheme) {
+      const rowConditionMap = resolveRowConditionMap(row);
+      for (const [toothNumber, condition] of Object.entries(rowConditionMap)) {
+        if (toothNumber in printToothConditions) {
+          printToothConditions[toothNumber] = condition;
+        }
+      }
+    }
+
+    const conditionStatsRows = (Object.keys(CONDITIONS) as ConditionKey[])
+      .map((key) => {
+        const count = PRINT_ALL_TEETH.filter((toothNumber) => printToothConditions[toothNumber] === key).length;
+        const percent = Math.round((count / PRINT_ALL_TEETH.length) * 100);
+        const color = printConditionColors[key];
         return `
           <tr>
-            <td><span class="dot" style="background:${condition.color};"></span>${escapeHtml(condition.label)}</td>
-            <td>${entry.count}</td>
-            <td>${entry.percent}%</td>
+            <td>
+              <span class="color-dot" style="background:${color};"></span>
+              ${escapeHtml(CONDITIONS[key].label)}
+            </td>
+            <td>${count}</td>
+            <td>${percent}%</td>
           </tr>
         `;
       })
       .join('');
 
-    const taskRows = manualTasks.length > 0
-      ? manualTasks
-        .map((task) => {
-          const mark = TASK_MARKS.find((item) => item.value === task.mark);
+    const renderArchCells = (arch: string[]): string => {
+      return arch
+        .map((toothNumber) => {
+          const condition = printToothConditions[toothNumber];
+          const conditionLabel = condition ? CONDITIONS[condition].label : 'Healthy';
+          const color = condition ? printConditionColors[condition] : '#ffffff';
+          const backgroundColor = condition ? hexToRgba(color, 0.28) : '#ffffff';
+
           return `
-              <tr>
-                <td>${escapeHtml(task.title)}</td>
-                <td>${escapeHtml(mark?.label || task.mark)}</td>
-                <td>${escapeHtml(task.status.replaceAll('_', ' '))}</td>
-                <td>${escapeHtml(task.notes || '-')}</td>
-              </tr>
-            `;
+            <td class="tooth-cell" style="background:${backgroundColor};border-color:${condition ? color : '#d1d5db'};">
+              <div style="font-weight:700;font-size:12px;">${toothNumber}</div>
+              <div style="font-size:10px;color:#374151;">${escapeHtml(conditionLabel)}</div>
+            </td>
+          `;
+        })
+        .join('');
+    };
+
+    const latestVisitTreatmentRows = latestVisitTreatments.length > 0
+      ? latestVisitTreatments
+        .map((row) => {
+          const teeth = resolveRowTeeth(row);
+          const teethLabel = teeth.length > 0 ? teeth.join(', ') : '-';
+          const treatmentName =
+            row.treatment?.name || treatmentById.get(String(row.treatmentId))?.name || `Treatment ${row.treatmentId}`;
+          const rowConditionMap = resolveRowConditionMap(row);
+          const uniqueConditions = Array.from(new Set(Object.values(rowConditionMap)));
+          const conditionLabel =
+            uniqueConditions.length === 0
+              ? 'Unspecified'
+              : uniqueConditions.length === 1
+                ? CONDITIONS[uniqueConditions[0]].label
+                : `Multiple (${uniqueConditions.map((key) => CONDITIONS[key].label).join(', ')})`;
+          const cleanedNotes = stripMetadataPrefixes(row.notes);
+
+          return `
+            <tr>
+              <td>${escapeHtml(teethLabel)}</td>
+              <td>${escapeHtml(treatmentName)}</td>
+              <td>${escapeHtml(conditionLabel)}</td>
+              <td>${escapeHtml(row.material || '-')}</td>
+              <td>${escapeHtml(row.price || '-')}</td>
+              <td>${escapeHtml(cleanedNotes || '-')}</td>
+            </tr>
+          `;
         })
         .join('')
-      : '<tr><td colspan="4">No session tasks.</td></tr>';
+      : '<tr><td colspan="6">No treatments recorded for the latest visit.</td></tr>';
 
-    const visitRows = orderedVisits.length > 0
-      ? orderedVisits
-        .map((visit) => `
-            <tr>
-              <td>${escapeHtml(visit.tag || visit.appointmentTag || `Visit #${visit.id}`)}</td>
-              <td>${escapeHtml(visit.visitDate || '-')}</td>
-              <td>${escapeHtml(visit.dentistName || visit.dentistId || '-')}</td>
-              <td>${escapeHtml(visit.diagnosisNotes || '-')}</td>
-            </tr>
-          `)
-        .join('')
-      : '<tr><td colspan="4">No visits recorded.</td></tr>';
+    const latestTreatment = orderedPrintSourceTreatments[orderedPrintSourceTreatments.length - 1] ?? null;
+    const latestTeeth = latestTreatment ? resolveRowTeeth(latestTreatment) : [];
+    const selectedToothNumber = latestTeeth[0] ?? '-';
+    const selectedToothRegion = selectedToothNumber === '-' ? 'N/A' : getToothRegion(selectedToothNumber);
+    const noteRows = printSourceTreatments
+      .map((row) => {
+        const cleanedNotes = stripMetadataPrefixes(row.notes);
+        if (!cleanedNotes) return '';
 
+        const teeth = resolveRowTeeth(row);
+        const teethLabel = teeth.length > 0 ? teeth.join(', ') : '-';
+        const treatmentName =
+          row.treatment?.name || treatmentById.get(String(row.treatmentId))?.name || `Treatment ${row.treatmentId}`;
+
+        return `
+          <tr>
+            <td>${escapeHtml(teethLabel)}</td>
+            <td>${escapeHtml(treatmentName)}</td>
+            <td>${escapeHtml(cleanedNotes)}</td>
+          </tr>
+        `;
+      })
+      .filter(Boolean)
+      .join('');
+
+    const now = new Date();
     const html = `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Patient Record</title>
+  <title>Patient Treatment Record</title>
   <style>
     @page { size: auto; margin: 0; }
     html, body {
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
     }
-    body { font-family: Arial, sans-serif; margin: 14mm; color: #111827; }
-    h1, h2 { margin: 0 0 8px 0; }
-    .section { margin-top: 16px; }
+    body { font-family: Arial, sans-serif; padding: 24px; margin: 14mm; color: #111827; }
+    h1,h2,h3 { margin: 0 0 8px 0; }
+    .section { margin-top: 18px; }
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .box { border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
     th, td { border: 1px solid #d1d5db; padding: 8px; font-size: 12px; text-align: left; vertical-align: top; }
     th { background: #f3f4f6; }
-    .dot { display: inline-block; width: 9px; height: 9px; border-radius: 999px; margin-right: 6px; vertical-align: middle; }
+    .tooth-cell {
+      border: 1px solid #d1d5db;
+      padding: 6px;
+      text-align: center;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .condition-chip { display:inline-block; padding:2px 8px; border:1px solid; border-radius:999px; font-size:11px; font-weight:600; }
+    .color-dot { display:inline-block; width:10px; height:10px; border-radius:999px; margin-right:6px; vertical-align:middle; }
     .muted { color: #6b7280; font-size: 12px; }
   </style>
 </head>
 <body>
-  <h1>Patient Record Summary</h1>
+  <h1>Dental Treatment Record</h1>
   <p class="muted">Printed on ${escapeHtml(now.toLocaleString())}</p>
 
   <div class="section grid">
     <div class="box">
-      <h2 style="font-size:16px;">Patient</h2>
+      <h3>Patient</h3>
       <p><strong>Name:</strong> ${escapeHtml(fullName)}</p>
       <p><strong>Code:</strong> ${escapeHtml(patient.patientCode || '-')}</p>
-      <p><strong>Age:</strong> ${escapeHtml(patientAge ?? '-')}</p>
-      <p><strong>Sex:</strong> ${escapeHtml(patient.gender || '-')}</p>
-      <p><strong>Blood Group:</strong> ${escapeHtml(patient.bloodGroup || '-')}</p>
-      <p><strong>Phone:</strong> ${escapeHtml(patient.contactNumber || '-')}</p>
-      <p><strong>Email:</strong> ${escapeHtml(patient.email || '-')}</p>
-      <p><strong>Address:</strong> ${escapeHtml(patient.address || '-')}</p>
+      <p><strong>Contact:</strong> ${escapeHtml(patient.contactNumber || '-')}</p>
     </div>
     <div class="box">
-      <h2 style="font-size:16px;">Clinical Snapshot</h2>
-      <p><strong>Overall Dental Condition:</strong> ${escapeHtml(conditionStats.overall)}%</p>
-      <p><strong>Total Visits:</strong> ${escapeHtml(visits.length)}</p>
-      <p><strong>Recorded Treatments:</strong> ${escapeHtml(typedVisitTreatments.length)}</p>
-      <p><strong>Latest Visit:</strong> ${escapeHtml(latestVisit?.visitDate || '-')}</p>
-      <p><strong>Status:</strong> ${escapeHtml(patient.status || '-')}</p>
-      <p><strong>Remarks:</strong> ${escapeHtml(patient.remarks || '-')}</p>
+      <h3>Clinical Context</h3>
+      <p><strong>Doctor:</strong> ${escapeHtml(latestVisitForPrint?.dentistName || '-')}</p>
+      <p><strong>Selected Tooth:</strong> ${escapeHtml(selectedToothNumber)} (${escapeHtml(selectedToothRegion)})</p>
     </div>
   </div>
 
   <div class="section">
-    <h2 style="font-size:16px;">Dental Condition Breakdown</h2>
+    <h2>Teeth Chart</h2>
+    <table>
+      <tbody>
+        <tr>${renderArchCells(PRINT_UPPER_ARCH)}</tr>
+        <tr>${renderArchCells(PRINT_LOWER_ARCH)}</tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>Condition Summary</h2>
     <table>
       <thead>
         <tr>
@@ -495,44 +757,50 @@ export default function PatientProfilePage(): JSX.Element {
           <th>Percent</th>
         </tr>
       </thead>
-      <tbody>
-        ${conditionRows}
-      </tbody>
+      <tbody>${conditionStatsRows}</tbody>
     </table>
   </div>
 
   <div class="section">
-    <h2 style="font-size:16px;">Session Tasks</h2>
+    <h2>Latest Visit Data</h2>
+    ${latestVisitForPrint
+    ? `<div class="box">
+      <p><strong>Visit:</strong> ${escapeHtml(latestVisitForPrint.tag || latestVisitForPrint.appointmentTag || `Visit #${latestVisitForPrint.id}`)}</p>
+      <p><strong>Date:</strong> ${escapeHtml(latestVisitForPrint.visitDate || '-')}</p>
+      <p><strong>Dentist:</strong> ${escapeHtml(latestVisitForPrint.dentistName || latestVisitForPrint.dentistId || '-')}</p>
+      <p><strong>Diagnosis:</strong> ${escapeHtml(latestVisitForPrint.diagnosisNotes || '-')}</p>
+      <p><strong>Next Visit:</strong> ${escapeHtml(latestVisitForPrint.nextVisitDate || '-')}</p>
+    </div>
     <table>
       <thead>
         <tr>
-          <th>Task</th>
-          <th>Mark</th>
-          <th>Status</th>
-          <th>Notes</th>
+          <th>Teeth</th>
+          <th>Treatment</th>
+          <th>Condition</th>
+          <th>Material</th>
+          <th>Price</th>
+          <th>Note</th>
         </tr>
       </thead>
-      <tbody>
-        ${taskRows}
-      </tbody>
-    </table>
+      <tbody>${latestVisitTreatmentRows}</tbody>
+    </table>`
+    : '<p class="muted">No visits are recorded for this patient.</p>'}
   </div>
 
   <div class="section">
-    <h2 style="font-size:16px;">Visits</h2>
-    <table>
+    <h2>Notes</h2>
+    ${noteRows
+    ? `<table>
       <thead>
         <tr>
-          <th>Visit Tag</th>
-          <th>Date</th>
-          <th>Dentist</th>
-          <th>Diagnosis Notes</th>
+          <th>Teeth</th>
+          <th>Treatment</th>
+          <th>Note</th>
         </tr>
       </thead>
-      <tbody>
-        ${visitRows}
-      </tbody>
-    </table>
+      <tbody>${noteRows}</tbody>
+    </table>`
+    : '<p class="muted">No notes were recorded for this patient.</p>'}
   </div>
 </body>
 </html>`;
@@ -577,7 +845,7 @@ export default function PatientProfilePage(): JSX.Element {
         if (document.body.contains(iframe)) {
           document.body.removeChild(iframe);
         }
-      }, 900);
+      }, 1000);
     };
 
     iframe.onload = () => {
@@ -843,7 +1111,14 @@ export default function PatientProfilePage(): JSX.Element {
                     <p className="text-sm text-muted-foreground">No visits recorded yet.</p>
                   ) : (
                     orderedVisits.map((visit) => (
-                      <div key={visit.id} className="rounded-lg border border-border bg-background p-3">
+                      <button
+                        key={visit.id}
+                        type="button"
+                        onClick={() => {
+                          router.push(`/${locale}/dental-management/visits/${visit.id}`);
+                        }}
+                        className="w-full rounded-lg border border-border bg-background p-3 text-left transition hover:border-primary/40 hover:bg-accent/20"
+                      >
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <p className="text-sm font-semibold text-foreground">
                             {visit.tag || visit.appointmentTag || `Visit #${visit.id}`}
@@ -859,7 +1134,7 @@ export default function PatientProfilePage(): JSX.Element {
                         {visit.diagnosisNotes ? (
                           <p className="mt-1 text-xs text-muted-foreground">{visit.diagnosisNotes}</p>
                         ) : null}
-                      </div>
+                      </button>
                     ))
                   )}
                 </CardContent>
