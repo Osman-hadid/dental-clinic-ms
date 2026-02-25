@@ -25,6 +25,7 @@ final class ListVisitsRequest extends BaseListRequest
             'appointment',
             'patient',
             'dentist',
+            'invoices',
         ];
     }
 

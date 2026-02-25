@@ -13,6 +13,7 @@ import { type Treatment } from '@/modules/dental-management/domain/entities/Trea
 import { type VisitTreatment } from '@/modules/dental-management/domain/entities/VisitTreatment';
 import {
   useGetPatient,
+  useInvoiceList,
   useToothList,
   useVisitList,
   useVisitTreatmentList,
@@ -28,8 +29,18 @@ import {
   Stethoscope,
   Trash2,
   UserRound,
+  Wallet,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip as RechartsTooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 
 type ConditionKey =
   | 'caries'
@@ -60,6 +71,37 @@ type SessionTask = {
   status: SessionTaskStatus;
   notes?: string;
   createdAt: string;
+};
+
+type PaymentItem = {
+  id: number | string;
+  paymentDate?: string;
+  amount?: string | number;
+  method?: string;
+  notes?: string;
+};
+
+type InvoicePaymentSummary = {
+  id: string;
+  invoiceDate: string;
+  isEstimatedPaid: boolean;
+  notes: string;
+  paymentType: string;
+  payments: PaymentItem[];
+  remainingAmount: number;
+  status: string;
+  totalAmount: number;
+  totalDiscount: number;
+  totalNet: number;
+  totalPaid: number;
+  visitId: string;
+  visitLabel: string;
+};
+
+type IncomeTrendPoint = {
+  income: number;
+  label: string;
+  monthKey: string;
 };
 
 const CONDITIONS: Record<ConditionKey, ConditionMeta> = {
@@ -201,6 +243,62 @@ const ageFromDate = (dateOfBirth?: string): number | null => {
   return age;
 };
 
+const parseAmount = (value: unknown): number => {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'string') {
+    const normalized = value.replace(/[^0-9.-]/g, '');
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+};
+
+const asText = (value: unknown): string => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'string') return value.trim();
+  return '';
+};
+
+const formatCurrency = (value: number): string => {
+  return new Intl.NumberFormat('en-US', {
+    currency: 'USD',
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+    style: 'currency',
+  }).format(value);
+};
+
+const formatDisplayDate = (value?: string): string => {
+  if (!value) return '-';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(parsed);
+};
+
+const toMonthKey = (value?: string): string | null => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+};
+
+const toMonthLabel = (monthKey: string): string => {
+  const [yearText, monthText] = monthKey.split('-');
+  const year = Number(yearText);
+  const month = Number(monthText);
+  if (!Number.isFinite(year) || !Number.isFinite(month)) return monthKey;
+
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(year, month - 1, 1));
+};
+
 const escapeHtml = (value: unknown): string => {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -243,6 +341,15 @@ export default function PatientProfilePage(): JSX.Element {
     [],
     ['appointment', 'dentist'],
     visitFilters
+  );
+  const invoiceFilters = useMemo(() => ({ patientId: patientId ? [patientId] : ['-1'] }), [patientId]);
+  const { entities: invoices, isFetching: isLoadingInvoices } = useInvoiceList(
+    1,
+    MAX_PER_PAGE,
+    '',
+    [],
+    ['visit', 'payments'],
+    invoiceFilters
   );
   const visitIds = useMemo(() => visits.map((visit) => String(visit.id)), [visits]);
 
@@ -385,6 +492,111 @@ export default function PatientProfilePage(): JSX.Element {
         .sort((a, b) => new Date(b.visitDate || '').getTime() - new Date(a.visitDate || '').getTime()),
     [visits]
   );
+  const paymentSummaries = useMemo<InvoicePaymentSummary[]>(() => {
+    const summaries: InvoicePaymentSummary[] = [];
+
+    for (const invoice of invoices as Array<Record<string, unknown>>) {
+      const rawPayments = Array.isArray(invoice.payments) ? invoice.payments : [];
+      const payments: PaymentItem[] = rawPayments
+        .map((payment, index) => {
+          if (!payment || typeof payment !== 'object') return null;
+          const paymentRow = payment as Record<string, unknown>;
+          const id = asText(paymentRow.id) || `${asText(invoice.id)}-${index}`;
+          return {
+            amount: asText(paymentRow.amount),
+            id,
+            method: asText(paymentRow.method),
+            notes: asText(paymentRow.notes),
+            paymentDate: asText(paymentRow.paymentDate ?? paymentRow.payment_date),
+          };
+        })
+        .filter((payment): payment is PaymentItem => payment !== null);
+
+      const totalAmount = parseAmount(invoice.totalAmount ?? invoice.total_amount);
+      const totalDiscount = parseAmount(invoice.discount);
+      const totalNet = parseAmount(invoice.netAmount ?? invoice.net_amount);
+      const rawPaid = payments.reduce((sum, payment) => sum + parseAmount(payment.amount), 0);
+      const status = asText(invoice.status).toLowerCase();
+      const isEstimatedPaid = status === 'paid' && rawPaid <= 0 && totalNet > 0;
+      const totalPaid = isEstimatedPaid ? totalNet : rawPaid;
+      const remainingAmount = Math.max(0, Number((totalNet - totalPaid).toFixed(2)));
+
+      const visit = invoice.visit && typeof invoice.visit === 'object'
+        ? (invoice.visit as Record<string, unknown>)
+        : null;
+      const visitId = asText(invoice.visitId ?? invoice.visit_id);
+      const visitLabel = asText(visit?.tag ?? visit?.name) || (visitId ? `Visit #${visitId}` : '-');
+
+      summaries.push({
+        id: asText(invoice.id),
+        invoiceDate: asText(invoice.invoiceDate ?? invoice.invoice_date),
+        isEstimatedPaid,
+        notes: asText(invoice.notes),
+        payments,
+        paymentType: asText(invoice.paymentType ?? invoice.payment_type) || '-',
+        remainingAmount,
+        status: status || '-',
+        totalAmount,
+        totalDiscount,
+        totalNet,
+        totalPaid,
+        visitId,
+        visitLabel,
+      });
+    }
+
+    return summaries.sort((left, right) => {
+      const rightDate = new Date(right.invoiceDate || '').getTime();
+      const leftDate = new Date(left.invoiceDate || '').getTime();
+      if (!Number.isNaN(rightDate) && !Number.isNaN(leftDate) && rightDate !== leftDate) {
+        return rightDate - leftDate;
+      }
+      return left.id.localeCompare(right.id, undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }, [invoices]);
+
+  const incomeTrend = useMemo<IncomeTrendPoint[]>(() => {
+    const buckets = new Map<string, number>();
+
+    for (const invoice of paymentSummaries) {
+      if (invoice.payments.length > 0) {
+        for (const payment of invoice.payments) {
+          const monthKey = toMonthKey(payment.paymentDate || invoice.invoiceDate);
+          if (!monthKey) {
+            continue;
+          }
+          const nextAmount = (buckets.get(monthKey) ?? 0) + parseAmount(payment.amount);
+          buckets.set(monthKey, Number(nextAmount.toFixed(2)));
+        }
+        continue;
+      }
+
+      if (invoice.totalPaid > 0) {
+        const monthKey = toMonthKey(invoice.invoiceDate);
+        if (!monthKey) {
+          continue;
+        }
+        const nextAmount = (buckets.get(monthKey) ?? 0) + invoice.totalPaid;
+        buckets.set(monthKey, Number(nextAmount.toFixed(2)));
+      }
+    }
+
+    return [...buckets.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([monthKey, income]) => ({
+        income,
+        label: toMonthLabel(monthKey),
+        monthKey,
+      }));
+  }, [paymentSummaries]);
+
+  const totalIncome = useMemo(
+    () => incomeTrend.reduce((sum, point) => Number((sum + point.income).toFixed(2)), 0),
+    [incomeTrend]
+  );
+  const latestIncome = incomeTrend.length > 0 ? incomeTrend[incomeTrend.length - 1].income : 0;
+  const averageIncome = incomeTrend.length > 0 ? Number((totalIncome / incomeTrend.length).toFixed(2)) : 0;
+
   const fetchCsrfClient = async (): Promise<AxiosClient> => {
     const client = new AxiosClient();
     await client.get('/sanctum/csrf-cookie');
@@ -925,6 +1137,165 @@ export default function PatientProfilePage(): JSX.Element {
                       <p>Tel: <span className="font-semibold text-foreground">{patient?.contactNumber || '-'}</span></p>
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-border bg-card text-card-foreground">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center justify-between text-base">
+                    <span>Income Diagram</span>
+                    <Wallet className="size-4 text-primary" />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {incomeTrend.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No income data available yet.</p>
+                  ) : (
+                    <>
+                      <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/15 p-3 text-xs sm:grid-cols-3">
+                        <p className="text-muted-foreground">
+                          Total Income
+                          <span className="mt-1 block text-sm font-semibold text-foreground">{formatCurrency(totalIncome)}</span>
+                        </p>
+                        <p className="text-muted-foreground">
+                          Latest Month
+                          <span className="mt-1 block text-sm font-semibold text-foreground">{formatCurrency(latestIncome)}</span>
+                        </p>
+                        <p className="text-muted-foreground">
+                          Avg / Month
+                          <span className="mt-1 block text-sm font-semibold text-foreground">{formatCurrency(averageIncome)}</span>
+                        </p>
+                      </div>
+
+                      <div className="h-64 rounded-lg border border-border/70 bg-background p-2">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={incomeTrend} margin={{ bottom: 8, left: 0, right: 10, top: 8 }}>
+                            <defs>
+                              <linearGradient id="patientIncomeGradient" x1="0" x2="0" y1="0" y2="1">
+                                <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.45} />
+                                <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0.04} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
+                            <XAxis
+                              axisLine={false}
+                              dataKey="label"
+                              tick={{ fill: '#64748b', fontSize: 11 }}
+                              tickLine={false}
+                              tickMargin={8}
+                            />
+                            <YAxis
+                              axisLine={false}
+                              tick={{ fill: '#64748b', fontSize: 11 }}
+                              tickFormatter={(value) => `$${Number(value).toFixed(0)}`}
+                              tickLine={false}
+                              width={64}
+                            />
+                            <RechartsTooltip
+                              contentStyle={{
+                                backgroundColor: '#ffffff',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '8px',
+                                boxShadow: '0 8px 22px rgba(15, 23, 42, 0.12)',
+                                color: '#0f172a',
+                              }}
+                              formatter={(value: number) => [formatCurrency(Number(value)), 'Income']}
+                              labelFormatter={(label) => `Month: ${label}`}
+                            />
+                            <Area
+                              dataKey="income"
+                              fill="url(#patientIncomeGradient)"
+                              stroke="#0ea5e9"
+                              strokeWidth={2.2}
+                              type="monotone"
+                            />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-border bg-card text-card-foreground">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center justify-between text-base">
+                    <span>Payments</span>
+                    <Wallet className="size-4 text-primary" />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {isLoadingInvoices ? (
+                    <p className="text-sm text-muted-foreground">Loading payments...</p>
+                  ) : paymentSummaries.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No payments recorded yet.</p>
+                  ) : (
+                    paymentSummaries.map((invoice) => {
+                      const normalizedStatus = invoice.status.toLowerCase();
+                      const statusTone = normalizedStatus === 'paid'
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : normalizedStatus === 'partially_paid'
+                          ? 'bg-amber-100 text-amber-700'
+                          : normalizedStatus === 'cancelled'
+                            ? 'bg-slate-200 text-slate-700'
+                            : 'bg-rose-100 text-rose-700';
+
+                      return (
+                        <div key={`patient-payment-${invoice.id}`} className="rounded-lg border border-border bg-background p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-sm font-semibold text-foreground">
+                              Invoice #{invoice.id}
+                            </p>
+                            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase ${statusTone}`}>
+                              {invoice.status.replaceAll('_', ' ')}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Date: {formatDisplayDate(invoice.invoiceDate)} | Visit: {invoice.visitLabel}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Payment Type: {invoice.paymentType}
+                          </p>
+
+                          <div className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
+                            <p>Total: <span className="font-semibold text-foreground">{formatCurrency(invoice.totalAmount)}</span></p>
+                            <p>Discount: <span className="font-semibold text-foreground">{formatCurrency(invoice.totalDiscount)}</span></p>
+                            <p>Net: <span className="font-semibold text-foreground">{formatCurrency(invoice.totalNet)}</span></p>
+                            <p>Paid: <span className="font-semibold text-foreground">{formatCurrency(invoice.totalPaid)}</span></p>
+                            <p className="sm:col-span-2">Remaining: <span className="font-semibold text-foreground">{formatCurrency(invoice.remainingAmount)}</span></p>
+                          </div>
+                          {invoice.isEstimatedPaid ? (
+                            <p className="mt-1 text-[11px] text-muted-foreground">
+                              Paid amount is estimated from invoice status because no payment entries are recorded yet.
+                            </p>
+                          ) : null}
+
+                          {invoice.payments.length === 0 ? (
+                            <p className="mt-2 text-xs text-muted-foreground">No payment entries yet for this invoice.</p>
+                          ) : (
+                            <div className="mt-2 space-y-1">
+                              {invoice.payments.map((payment) => (
+                                <div key={`patient-payment-entry-${invoice.id}-${payment.id}`} className="rounded-md border border-border/70 bg-muted/20 px-2 py-1.5">
+                                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                                    <p className="text-muted-foreground">{formatDisplayDate(payment.paymentDate)}</p>
+                                    <p className="font-semibold text-foreground">{formatCurrency(parseAmount(payment.amount))}</p>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">Method: {payment.method || '-'}</p>
+                                  {payment.notes ? (
+                                    <p className="text-xs text-muted-foreground">Notes: {payment.notes}</p>
+                                  ) : null}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {invoice.notes ? (
+                            <p className="mt-2 text-xs text-muted-foreground">Invoice Notes: {invoice.notes}</p>
+                          ) : null}
+                        </div>
+                      );
+                    })
+                  )}
                 </CardContent>
               </Card>
 

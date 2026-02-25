@@ -22,6 +22,8 @@ final readonly class InvoiceData
         public ?int $deletedBy,
         public float $discount = 0,
         public string $status = 'unpaid',
+        public string $paymentType = 'cash',
+        public array $sourceVisitIds = [],
         public array $payments = [],
     ) {}
 
@@ -41,6 +43,13 @@ final readonly class InvoiceData
             deletedBy: $ids['deletedBy'] ?? null,
             discount: round((float) ($data['discount'] ?? 0), 2),
             status: $data['status'] ?? 'unpaid',
+            paymentType: $data['paymentType'] ?? 'cash',
+            sourceVisitIds: array_values(array_unique(
+                array_map(
+                    static fn (mixed $value): int => (int) $value,
+                    is_array($data['sourceVisitIds'] ?? null) ? $data['sourceVisitIds'] : []
+                )
+            )),
             payments: $data['payments'] ?? [],
         );
     }
@@ -55,6 +64,8 @@ final readonly class InvoiceData
             'net_amount' => $this->netAmount,
             'invoice_date' => $this->invoiceDate,
             'status' => $this->status,
+            'payment_type' => $this->paymentType,
+            'source_visit_ids' => $this->sourceVisitIds,
             'notes' => $this->notes,
             'created_by' => $this->createdBy,
             'updated_by' => $this->updatedBy,

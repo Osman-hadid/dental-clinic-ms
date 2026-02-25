@@ -43,6 +43,10 @@ export const invoiceConfig: EntityModuleConfig = {
       header: 'config.form.status.label',
     },
     {
+      accessorKey: 'paymentType',
+      header: 'config.form.paymentType.label',
+    },
+    {
       accessorKey: 'payments',
       header: 'config.form.payments.label',
     },
@@ -57,29 +61,40 @@ export const invoiceConfig: EntityModuleConfig = {
   filters: [
     {
       key: 'status',
-      title: 'config.form.status.label',
       options: [
         { label: 'config.form.status.options.unpaid', value: 'unpaid' },
         { label: 'config.form.status.options.partially_paid', value: 'partially_paid' },
         { label: 'config.form.status.options.paid', value: 'paid' },
         { label: 'config.form.status.options.cancelled', value: 'cancelled' },
       ],
+      title: 'config.form.status.label',
+    },
+    {
+      key: 'paymentType',
+      options: [
+        { label: 'config.form.paymentType.options.cash', value: 'cash' },
+        { label: 'config.form.paymentType.options.card', value: 'card' },
+        { label: 'config.form.paymentType.options.bank_transfer', value: 'bank_transfer' },
+        { label: 'config.form.paymentType.options.insurance', value: 'insurance' },
+        { label: 'config.form.paymentType.options.other', value: 'other' },
+      ],
+      title: 'config.form.paymentType.label',
     },
     {
       key: 'trashed',
-      title: 'config.form.trashed.label',
       options: [
         { label: 'config.form.trashed.options.with', value: 'with' },
         { label: 'config.form.trashed.options.only', value: 'only' },
       ],
+      title: 'config.form.trashed.label',
     },
   ],
   formFields: [
     {
       label: 'config.form.patientId.label',
       name: 'patientId',
-      required: true,
       relation: 'patients',
+      required: true,
       type: 'select',
       validation: {
         required: 'config.form.patientId.validation.required',
@@ -88,8 +103,8 @@ export const invoiceConfig: EntityModuleConfig = {
     {
       label: 'config.form.visitId.label',
       name: 'visitId',
-      required: true,
       relation: 'visits',
+      required: true,
       type: 'select',
       validation: {
         required: 'config.form.visitId.validation.required',
@@ -101,8 +116,8 @@ export const invoiceConfig: EntityModuleConfig = {
       required: true,
       type: 'number',
       validation: {
+        maxLength: { message: 'config.form.totalAmount.validation.maxLength', value: 255 },
         required: 'config.form.totalAmount.validation.required',
-        maxLength: { value: 255, message: 'config.form.totalAmount.validation.maxLength' },
       },
     },
     {
@@ -111,8 +126,8 @@ export const invoiceConfig: EntityModuleConfig = {
       required: true,
       type: 'number',
       validation: {
+        maxLength: { message: 'config.form.netAmount.validation.maxLength', value: 255 },
         required: 'config.form.netAmount.validation.required',
-        maxLength: { value: 255, message: 'config.form.netAmount.validation.maxLength' },
       },
     },
     {
@@ -121,8 +136,8 @@ export const invoiceConfig: EntityModuleConfig = {
       required: true,
       type: 'date',
       validation: {
+        maxLength: { message: 'config.form.invoiceDate.validation.maxLength', value: 255 },
         required: 'config.form.invoiceDate.validation.required',
-        maxLength: { value: 255, message: 'config.form.invoiceDate.validation.maxLength' },
       },
     },
     {
@@ -131,7 +146,7 @@ export const invoiceConfig: EntityModuleConfig = {
       required: false,
       type: 'text',
       validation: {
-        maxLength: { value: 255, message: 'config.form.notes.validation.maxLength' },
+        maxLength: { message: 'config.form.notes.validation.maxLength', value: 255 },
       },
     },
     {
@@ -152,20 +167,12 @@ export const invoiceConfig: EntityModuleConfig = {
       required: false,
       type: 'number',
       validation: {
-        maxLength: { value: 255, message: 'config.form.discount.validation.maxLength' },
+        maxLength: { message: 'config.form.discount.validation.maxLength', value: 255 },
       },
     },
     {
       label: 'config.form.status.label',
       name: 'status',
-      required: false,
-      type: 'select',
-      validation: {
-        in: {
-          value: ['unpaid', 'partially_paid', 'paid', 'cancelled'],
-          message: 'config.form.status.validation.in',
-        },
-      },
       options: [
         {
           label: 'config.form.status.options.unpaid',
@@ -184,6 +191,48 @@ export const invoiceConfig: EntityModuleConfig = {
           value: 'cancelled',
         },
       ],
+      required: false,
+      type: 'select',
+      validation: {
+        in: {
+          message: 'config.form.status.validation.in',
+          value: ['unpaid', 'partially_paid', 'paid', 'cancelled'],
+        },
+      },
+    },
+    {
+      label: 'config.form.paymentType.label',
+      name: 'paymentType',
+      options: [
+        {
+          label: 'config.form.paymentType.options.cash',
+          value: 'cash',
+        },
+        {
+          label: 'config.form.paymentType.options.card',
+          value: 'card',
+        },
+        {
+          label: 'config.form.paymentType.options.bank_transfer',
+          value: 'bank_transfer',
+        },
+        {
+          label: 'config.form.paymentType.options.insurance',
+          value: 'insurance',
+        },
+        {
+          label: 'config.form.paymentType.options.other',
+          value: 'other',
+        },
+      ],
+      required: false,
+      type: 'select',
+      validation: {
+        in: {
+          message: 'config.form.paymentType.validation.in',
+          value: ['cash', 'card', 'bank_transfer', 'insurance', 'other'],
+        },
+      },
     },
     {
       label: 'config.form.payments.label',
@@ -192,17 +241,17 @@ export const invoiceConfig: EntityModuleConfig = {
       type: 'multiselect',
     },
   ],
+  permissions: {
+    bulkDelete: 'dental-management.invoices.bulk-delete',
+    create: 'dental-management.invoices.create',
+    delete: 'dental-management.invoices.delete',
+    update: 'dental-management.invoices.update',
+    view: 'dental-management.invoices.view',
+  },
   queryKey: 'invoices',
+  relations: ['patient', 'visit'],
   searchFields: [{ label: 'config.form.notes.label', value: 'notes' }],
   singleQueryKey: 'invoice',
+  sortableColumns: ['id', 'invoiceDate', 'netAmount', 'status', 'paymentType', 'createdAt'],
   title: 'config.title',
-  sortableColumns: ['id', 'invoiceDate', 'netAmount', 'status', 'createdAt'],
-  relations: ['patient', 'visit'],
-  permissions: {
-    view: 'dental-management.invoices.view',
-    create: 'dental-management.invoices.create',
-    update: 'dental-management.invoices.update',
-    delete: 'dental-management.invoices.delete',
-    bulkDelete: 'dental-management.invoices.bulk-delete',
-  },
 };

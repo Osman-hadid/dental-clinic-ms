@@ -16,6 +16,7 @@ final class ListInvoicesRequest extends BaseListRequest
             'invoice_date',
             'net_amount',
             'status',
+            'payment_type',
             'created_at',
         ];
     }
@@ -25,13 +26,17 @@ final class ListInvoicesRequest extends BaseListRequest
         return [
             'patient',
             'visit',
+            'payments',
         ];
     }
 
     protected static function filters(): array
     {
         return [
+            AllowedFilter::exact('patientId', 'patient_id', true),
+            AllowedFilter::exact('visitId', 'visit_id', true),
             AllowedFilter::exact('status', 'status', true),
+            AllowedFilter::exact('paymentType', 'payment_type', true),
             AllowedFilter::trashed(),
         ];
     }
@@ -49,11 +54,13 @@ final class ListInvoicesRequest extends BaseListRequest
             'id' => 'id',
             'patientId' => 'patient_id',
             'visitId' => 'visit_id',
+            'sourceVisitIds' => 'source_visit_ids',
             'totalAmount' => 'total_amount',
             'discount' => 'discount',
             'netAmount' => 'net_amount',
             'invoiceDate' => 'invoice_date',
             'status' => 'status',
+            'paymentType' => 'payment_type',
             'notes' => 'notes',
             'createdBy' => 'created_by',
             'updatedBy' => 'updated_by',

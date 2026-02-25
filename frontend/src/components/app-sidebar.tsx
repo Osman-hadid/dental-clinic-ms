@@ -19,7 +19,6 @@ import {
   HeartPulse,
   House,
   LucideIcon,
-  ScrollText,
   ShieldUser,
 } from 'lucide-react';
 
@@ -58,6 +57,7 @@ const staticNavItems: SidebarItem[] = [
       { key: 'visits', url: '/dental-management/visits' },
       { key: 'teeth', url: '/dental-management/teeth' },
       { key: 'treatments', url: '/dental-management/treatments' },
+      { key: 'implants', url: '/dental-management/implants' },
       { key: 'visitTreatments', url: '/dental-management/visit-treatments' },
       { key: 'invoices', url: '/dental-management/invoices' },
       { key: 'payments', url: '/dental-management/payments' },
@@ -136,9 +136,9 @@ export const AppSidebar = (props: React.ComponentProps<typeof Sidebar>): React.J
     ...item,
     items: item.items?.map((subItem) => ({
       ...subItem,
-      title: t(`${item.key}.${subItem.key}`, { defaultValue: subItem.key }),
+      title: t.has(`${item.key}.${subItem.key}`) ? t(`${item.key}.${subItem.key}`) : subItem.key,
     })),
-    title: t(`${item.key}.title`, { defaultValue: item.key }),
+    title: t.has(`${item.key}.title`) ? t(`${item.key}.title`) : item.key,
   }));
 
   return (

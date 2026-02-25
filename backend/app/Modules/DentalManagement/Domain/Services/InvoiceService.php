@@ -41,7 +41,6 @@ final readonly class InvoiceService
             $this->assertInvoiceAmounts($normalized);
 
             $invoice = $this->invoiceRepository->create(data: $normalized);
-            $this->syncInvoicePaymentStatus($invoice);
             $this->invoiceRepository->invalidateCache();
 
             return $invoice;
@@ -55,7 +54,6 @@ final readonly class InvoiceService
             $this->assertInvoiceAmounts($normalized, $id);
 
             $invoice = $this->invoiceRepository->update(id: $id, data: $normalized);
-            $this->syncInvoicePaymentStatus($invoice);
             $this->invoiceRepository->invalidateCache();
 
             return $invoice;
@@ -125,13 +123,13 @@ final readonly class InvoiceService
             );
         }
 
-        if (abs($net - $expectedNet) > 0.01) {
+        if ($net - $expectedNet > 0.01) {
             throw new ApiException(
-                errorCode: 'INVOICE_NET_MISMATCH',
-                message: 'Net amount must be equal to total amount minus discount.',
+                errorCode: 'INVOICE_NET_EXCEEDS_PAYABLE',
+                message: 'Net amount cannot be greater than total amount minus discount.',
                 details: [
                     'discount' => $discount,
-                    'expectedNetAmount' => $expectedNet,
+                    'maxNetAmount' => $expectedNet,
                     'netAmount' => $net,
                     'totalAmount' => $total,
                 ],
@@ -169,27 +167,4 @@ final readonly class InvoiceService
         return $data;
     }
 
-    private function syncInvoicePaymentStatus(Invoice $invoice): void
-    {
-        if ($invoice->status === 'cancelled') {
-            return;
-        }
-
-        $totalPaid = (float) Payment::query()
-            ->where('invoice_id', $invoice->id)
-            ->sum('amount');
-
-        $netAmount = round((float) $invoice->net_amount, 2);
-
-        $status = 'unpaid';
-        if ($netAmount <= 0 || $totalPaid >= $netAmount) {
-            $status = 'paid';
-        } elseif ($totalPaid > 0) {
-            $status = 'partially_paid';
-        }
-
-        if ($invoice->status !== $status) {
-            $invoice->forceFill(['status' => $status])->save();
-        }
-    }
 }

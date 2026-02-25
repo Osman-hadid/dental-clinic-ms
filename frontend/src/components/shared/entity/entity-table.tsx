@@ -26,7 +26,7 @@ import {
 import { type ApiResponse, type PaginationLinks, type PaginationMeta } from '@/types/ApiResponse';
 import { type EntityModuleConfig, type TableColumn } from '@/types/EntityModuleConfig';
 import { flexRender, type Table } from '@tanstack/react-table';
-import { AlertTriangle, Edit, PlusCircle, Trash2 } from 'lucide-react';
+import { AlertTriangle, Edit, PlusCircle, Printer, Trash2 } from 'lucide-react';
 import { EntityTablePagination } from './entity-table-pagination';
 
 type User = {
@@ -133,6 +133,304 @@ export const EntityTable = <TData extends User>({
       return buildEntityDisplayLabel(value as Record<string, any>, { relation });
     }
     return String(value);
+  };
+
+  const asText = (value: unknown): string => {
+    if (value === null || value === undefined) {
+      return '';
+    }
+    if (typeof value === 'number') {
+      return String(value);
+    }
+    if (typeof value === 'string') {
+      return value.trim();
+    }
+    return '';
+  };
+
+  const asNumber = (value: unknown): number => {
+    const text = asText(value).replace(/[^0-9.-]/g, '');
+    const parsed = Number(text);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const formatAmount = (value: unknown): string => asNumber(value).toFixed(2);
+
+  const escapeHtml = (value: string): string =>
+    value
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+
+  const handlePrint = (entity: Record<string, any>): void => {
+    const patient = (entity.patient as Record<string, unknown> | undefined) ?? {};
+    const visit = (entity.visit as Record<string, unknown> | undefined) ?? {};
+
+    const patientName = [
+      asText(patient.firstName ?? patient.first_name),
+      asText(patient.lastName ?? patient.last_name),
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .trim() || asText(patient.fullName ?? patient.full_name ?? patient.name) || '-';
+    const patientCode = asText(patient.patientCode ?? patient.patient_code) || '-';
+    const patientPhone = asText(patient.contactNumber ?? patient.contact_number) || '-';
+    const patientEmail = asText(patient.email) || '-';
+    const patientAddress = asText(patient.address) || '-';
+    const patientGender = asText(patient.gender) || '-';
+
+    const invoiceId = asText(entity.id) || '-';
+    const invoiceDate = asText(entity.invoiceDate ?? entity.invoice_date) || '-';
+    const paymentType = asText(entity.paymentType ?? entity.payment_type) || '-';
+    const status = asText(entity.status) || '-';
+    const visitReference =
+      asText(visit.tag ?? visit.name) || `#${asText(entity.visitId ?? entity.visit_id) || '-'}`;
+    const notes = asText(entity.notes) || '-';
+
+    const totalAmount = formatAmount(entity.totalAmount ?? entity.total_amount);
+    const discountAmount = formatAmount(entity.discount);
+    const netAmount = formatAmount(entity.netAmount ?? entity.net_amount);
+
+    const html = `
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtml(`${t(config.entity)} #${invoiceId}`)}</title>
+          <style>
+            :root {
+              --text: #0f172a;
+              --muted: #475569;
+              --line: #dbeafe;
+              --surface: #f8fafc;
+              --brand: #0369a1;
+            }
+            * { box-sizing: border-box; }
+            body {
+              margin: 0;
+              padding: 24px;
+              font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+              color: var(--text);
+              background: #e2e8f0;
+            }
+            .sheet {
+              max-width: 860px;
+              margin: 0 auto;
+              background: #ffffff;
+              border: 1px solid var(--line);
+              border-radius: 14px;
+              overflow: hidden;
+              box-shadow: 0 18px 42px rgba(15, 23, 42, 0.15);
+            }
+            .hero {
+              padding: 24px;
+              background: linear-gradient(120deg, #f0f9ff 0%, #e0f2fe 45%, #f8fafc 100%);
+              border-bottom: 1px solid var(--line);
+              display: grid;
+              grid-template-columns: 1fr auto;
+              gap: 16px;
+            }
+            .clinic h1 { margin: 0; font-size: 24px; letter-spacing: 0.4px; }
+            .clinic p { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
+            .invoice-meta { text-align: right; }
+            .badge {
+              display: inline-block;
+              padding: 6px 10px;
+              border-radius: 999px;
+              background: #dbeafe;
+              color: #1e3a8a;
+              font-size: 11px;
+              font-weight: 700;
+              text-transform: uppercase;
+              letter-spacing: 0.6px;
+            }
+            .meta-row { margin-top: 8px; font-size: 12px; color: var(--muted); }
+            .content { padding: 20px 24px 24px; }
+            .cards {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 14px;
+              margin-bottom: 16px;
+            }
+            .card {
+              border: 1px solid var(--line);
+              border-radius: 10px;
+              background: var(--surface);
+              padding: 14px;
+            }
+            .card h3 { margin: 0 0 10px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; }
+            .card p { margin: 4px 0; font-size: 13px; }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 8px;
+              border: 1px solid var(--line);
+            }
+            thead th {
+              background: #f0f9ff;
+              color: #0c4a6e;
+              font-size: 12px;
+              text-transform: uppercase;
+              letter-spacing: 0.6px;
+              padding: 10px 12px;
+              text-align: left;
+            }
+            tbody td {
+              padding: 12px;
+              border-top: 1px solid var(--line);
+              font-size: 13px;
+            }
+            .amount { text-align: right; white-space: nowrap; }
+            .summary {
+              margin-top: 14px;
+              margin-left: auto;
+              width: 280px;
+              border: 1px solid var(--line);
+              border-radius: 10px;
+              overflow: hidden;
+            }
+            .summary-row {
+              display: flex;
+              justify-content: space-between;
+              padding: 10px 12px;
+              border-top: 1px solid var(--line);
+              font-size: 13px;
+            }
+            .summary-row:first-child { border-top: none; }
+            .summary-row.total {
+              font-weight: 700;
+              font-size: 15px;
+              background: #f0f9ff;
+            }
+            .notes {
+              margin-top: 14px;
+              border: 1px dashed #bfdbfe;
+              border-radius: 10px;
+              padding: 12px;
+              font-size: 13px;
+            }
+            .foot {
+              margin-top: 16px;
+              font-size: 11px;
+              color: var(--muted);
+              text-align: center;
+            }
+            @media print {
+              body { background: #fff; padding: 0; }
+              .sheet { max-width: 100%; box-shadow: none; border-radius: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          <main class="sheet">
+            <header class="hero">
+              <div class="clinic">
+                <h1>Dental Invoice</h1>
+                <p>Professional dental billing statement</p>
+              </div>
+              <div class="invoice-meta">
+                <span class="badge">${escapeHtml(status)}</span>
+                <div class="meta-row"><strong>Invoice #:</strong> ${escapeHtml(invoiceId)}</div>
+                <div class="meta-row"><strong>Date:</strong> ${escapeHtml(invoiceDate)}</div>
+                <div class="meta-row"><strong>Payment Type:</strong> ${escapeHtml(paymentType)}</div>
+              </div>
+            </header>
+            <section class="content">
+              <div class="cards">
+                <article class="card">
+                  <h3>Patient Details</h3>
+                  <p><strong>Name:</strong> ${escapeHtml(patientName)}</p>
+                  <p><strong>Patient Code:</strong> ${escapeHtml(patientCode)}</p>
+                  <p><strong>Phone:</strong> ${escapeHtml(patientPhone)}</p>
+                  <p><strong>Email:</strong> ${escapeHtml(patientEmail)}</p>
+                  <p><strong>Gender:</strong> ${escapeHtml(patientGender)}</p>
+                  <p><strong>Address:</strong> ${escapeHtml(patientAddress)}</p>
+                </article>
+                <article class="card">
+                  <h3>Invoice Details</h3>
+                  <p><strong>Visit:</strong> ${escapeHtml(visitReference)}</p>
+                  <p><strong>Visit ID:</strong> ${escapeHtml(asText(entity.visitId ?? entity.visit_id) || '-')}</p>
+                  <p><strong>Patient ID:</strong> ${escapeHtml(asText(entity.patientId ?? entity.patient_id) || '-')}</p>
+                </article>
+              </div>
+
+              <table>
+                <thead>
+                  <tr>
+                    <th>Description</th>
+                    <th class="amount">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Dental visit charge (${escapeHtml(visitReference)})</td>
+                    <td class="amount">$${escapeHtml(totalAmount)}</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <aside class="summary">
+                <div class="summary-row">
+                  <span>Total Amount</span>
+                  <span>$${escapeHtml(totalAmount)}</span>
+                </div>
+                <div class="summary-row">
+                  <span>Discount</span>
+                  <span>$${escapeHtml(discountAmount)}</span>
+                </div>
+                <div class="summary-row total">
+                  <span>Net Amount</span>
+                  <span>$${escapeHtml(netAmount)}</span>
+                </div>
+              </aside>
+
+              <section class="notes">
+                <strong>Notes:</strong> ${escapeHtml(notes)}
+              </section>
+
+              <footer class="foot">
+                Thank you for trusting our dental services.
+              </footer>
+            </section>
+          </main>
+        </body>
+      </html>
+    `;
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.style.visibility = 'hidden';
+    document.body.append(iframe);
+
+    const printDocument = iframe.contentWindow?.document;
+    const printWindow = iframe.contentWindow;
+    if (!printDocument || !printWindow) {
+      iframe.remove();
+      return;
+    }
+
+    printDocument.open();
+    printDocument.write(html);
+    printDocument.close();
+
+    const cleanup = (): void => {
+      setTimeout(() => {
+        iframe.remove();
+      }, 0);
+    };
+
+    printWindow.onafterprint = cleanup;
+    setTimeout(() => {
+      printWindow.focus();
+      printWindow.print();
+    }, 120);
   };
 
   if (isFetching) {
@@ -248,6 +546,19 @@ export const EntityTable = <TData extends User>({
                     return <TableCell key={cell.id}>{cellValue}</TableCell>;
                   })}
                   <TableCell className="flex space-x-2">
+                    {config.queryKey === 'invoices' ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          handlePrint(row.original as Record<string, any>);
+                        }}
+                        aria-label={`Print ${t(config.entity)}`}
+                        className="text-slate-600 hover:text-slate-800 hover:bg-slate-50"
+                      >
+                        <Printer className="h-4 w-4" />
+                      </Button>
+                    ) : null}
                     <Button
                       variant="ghost"
                       size="icon"
