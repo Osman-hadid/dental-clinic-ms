@@ -72,6 +72,16 @@ final class Staff extends Model
         return $this->hasMany(VisitTreatment::class, 'dentist_id');
     }
 
+    public function salaryPayments(): HasMany
+    {
+        return $this->hasMany(SalaryPayment::class);
+    }
+
+    public function pickedSafeTransactions(): HasMany
+    {
+        return $this->hasMany(SafeTransaction::class, 'picked_by_staff_id');
+    }
+
     public function hasRelatedRecords(): bool
     {
         return $this->appointments()->exists() || $this->visits()->exists() || $this->visitTreatments()->exists();

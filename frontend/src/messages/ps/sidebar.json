@@ -1,40 +1,41 @@
 {
-  "platform": "پلاتفورم",
-  "name": "CPAMIS",
+  "platform": "Ù¾Ù„Ø§ØªÙÙˆØ±Ù…",
+  "name": "SOURIRE",
   "dashboard": {
-    "title": "ډشبورډ",
-    "overview": "عمومي کتنه"
+    "title": "Ú‰Ø´Ø¨ÙˆØ±Ú‰",
+    "overview": "Ø¹Ù…ÙˆÙ…ÙŠ Ú©ØªÙ†Ù‡"
   },
   "userManagement": {
-    "title": "د کاروونکو مدیریت",
-    "users": "کاروونکي",
-    "roles": "نقشونه",
-    "permissions": "صلاحیتونه"
+    "title": "Ø¯ Ú©Ø§Ø±ÙˆÙˆÙ†Ú©Ùˆ Ù…Ø¯ÛŒØ±ÛŒØª",
+    "users": "Ú©Ø§Ø±ÙˆÙˆÙ†Ú©ÙŠ",
+    "roles": "Ù†Ù‚Ø´ÙˆÙ†Ù‡",
+    "permissions": "ØµÙ„Ø§Ø­ÛŒØªÙˆÙ†Ù‡"
   },
   "documentation": {
-    "title": "مستندات",
-    "users": "کاروونکي",
-    "permissions": "صلاحیتونه",
-    "settings": "تنظیمات"
+    "title": "Ù…Ø³ØªÙ†Ø¯Ø§Øª",
+    "users": "Ú©Ø§Ø±ÙˆÙˆÙ†Ú©ÙŠ",
+    "permissions": "ØµÙ„Ø§Ø­ÛŒØªÙˆÙ†Ù‡",
+    "settings": "ØªÙ†Ø¸ÛŒÙ…Ø§Øª"
   },
   "settings": {
-    "title": "تنظیمات",
-    "dashboard": "ډشبورډ"
+    "title": "ØªÙ†Ø¸ÛŒÙ…Ø§Øª",
+    "dashboard": "Ú‰Ø´Ø¨ÙˆØ±Ú‰"
   },
   "navUser": {
-    "loggingOut": "د وتلو په حال کې...",
-    "logout": "وتل",
-    "account": "حساب",
-    "notifications": "خبرتیاوې"
+    "loggingOut": "Ø¯ ÙˆØªÙ„Ùˆ Ù¾Ù‡ Ø­Ø§Ù„ Ú©Û...",
+    "logout": "ÙˆØªÙ„",
+    "account": "Ø­Ø³Ø§Ø¨",
+    "notifications": "Ø®Ø¨Ø±ØªÛŒØ§ÙˆÛ"
   },
   "employees": {
-    "title": "کارکوونکي",
-    "jobTypes": "د دندو ډولونه"
+    "title": "Ú©Ø§Ø±Ú©ÙˆÙˆÙ†Ú©ÙŠ",
+    "jobTypes": "Ø¯ Ø¯Ù†Ø¯Ùˆ Ú‰ÙˆÙ„ÙˆÙ†Ù‡"
   },
   "dentalManagement": {
     "title": "Dental Management",
     "patients": "Patients",
     "staff": "Staff",
+    "staffProfiles": "Staff Profiles",
     "appointments": "Appointments",
     "visits": "Visits",
     "teeth": "Teeth",
@@ -45,5 +46,13 @@
     "payments": "Payments",
     "aiImaging": "AI Imaging",
     "aiImagingN8n": "AI Imaging (n8n)"
+  },
+  "reports": {
+    "title": "Reports",
+    "overview": "Report Center",
+    "dailyExpenses": "Daily Expenses",
+    "clinicalExpenses": "Clinical Buys",
+    "safe": "Safe Ledger",
+    "salaries": "Salaries"
   }
 }

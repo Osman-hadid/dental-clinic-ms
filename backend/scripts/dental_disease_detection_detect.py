@@ -58,7 +58,7 @@ def bootstrap_runtime_env() -> None:
     os.environ.setdefault("APPDATA", roaming)
     os.environ.setdefault("LOCALAPPDATA", local)
 
-    cache_base = os.path.join(local, "cpamis-ai-cache")
+    cache_base = os.path.join(local, "sourire-ai-cache")
     tmp_dir = os.path.join(cache_base, "tmp")
     ultralytics_dir = os.path.join(cache_base, "ultralytics")
     torch_dir = os.path.join(cache_base, "torchinductor")

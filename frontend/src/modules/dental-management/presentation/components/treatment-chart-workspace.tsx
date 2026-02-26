@@ -1,7 +1,10 @@
 'use client';
 
-import { JSX, useCallback, useMemo, useState } from 'react';
+import { JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import { useAuthStore } from '@/modules/auth/application/stores/auth-store';
+import { DEFAULT_AFN_PER_USD, getExchangeRate } from '@/lib/currency-utils';
 import { type Staff } from '@/modules/dental-management/domain/entities/Staff';
 import { type Tooth } from '@/modules/dental-management/domain/entities/Tooth';
 import { type Treatment } from '@/modules/dental-management/domain/entities/Treatment';
@@ -84,6 +87,7 @@ const CONDITION_CODES: Record<ConditionKey, string> = {
 const CODE_TO_CONDITION: Record<string, ConditionKey> = Object.fromEntries(
   (Object.keys(CONDITION_CODES) as ConditionKey[]).map((key) => [CONDITION_CODES[key], key])
 ) as Record<string, ConditionKey>;
+const exchangeRateClient = new AxiosClient();
 
 const isConditionKey = (value: string): value is ConditionKey => {
   return value in CONDITIONS;
@@ -169,12 +173,10 @@ const stripMetadataPrefixes = (value?: string): string => {
     return '';
   }
 
-  return value
-    .replace(/^\[chart:[^\]]+\]\s*/i, '')
-    .replace(/^\[condition:[a-z]+\]\s*/i, '')
-    .replace(/^\[tooth:[0-9]{2}\]\s*/i, '')
-    .replace(/^\[condition:[a-z]+\]\[tooth:[0-9]{2}\]\s*/i, '')
-    .trim();
+  const metadataPrefix =
+    /^(?:\[(?:chart:[^\]]+|image:[01]|imagePrice:[0-9.]+|imagePriceInput:[0-9.]+|currency:(?:USD|AFN)|exchangeRate:[0-9.]+|priceInput:[0-9.]+|condition:[a-z]+|tooth:[0-9]{2})\])+\s*/i;
+
+  return value.replace(metadataPrefix, '').trim();
 };
 
 const inferConditionFromText = (value?: string): ConditionKey | null => {
@@ -212,6 +214,22 @@ const escapeHtml = (value: string): string => {
     .replace(/'/g, '&#039;');
 };
 
+const resolveLocale = (value: string | string[] | undefined): string => {
+  if (Array.isArray(value)) {
+    return value[0]?.trim() || 'en';
+  }
+
+  return value?.trim() || 'en';
+};
+
+const parseCurrency = (value: string): number => {
+  const normalized = value.replace(/[^0-9.-]/g, '');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const roundCurrency = (value: number): number => Math.round(value * 100) / 100;
+
 const hexToRgba = (hex: string, alpha: number): string => {
   const normalized = hex.replace('#', '');
   const bigint = Number.parseInt(normalized, 16);
@@ -228,6 +246,9 @@ export const TreatmentChartWorkspace = ({
   lockPatientSelection = false,
   lockVisitSelection = false,
 }: TreatmentChartWorkspaceProps = {}): JSX.Element => {
+  const router = useRouter();
+  const params = useParams<{ locale?: string | string[] }>();
+  const locale = resolveLocale(params?.locale);
   const authenticatedUser = useAuthStore((state) => state.user);
   const authenticatedEmail = authenticatedUser?.email?.trim().toLowerCase() ?? '';
   const createVisitTreatment = useCreateVisitTreatment();
@@ -243,7 +264,11 @@ export const TreatmentChartWorkspace = ({
   const [selectedVisitId, setSelectedVisitId] = useState<string>(defaultVisitId);
   const [selectedTreatmentId, setSelectedTreatmentId] = useState<string>('');
   const [selectedToothNumber, setSelectedToothNumber] = useState<string>('25');
+  const [currency, setCurrency] = useState<'AFN' | 'USD'>('USD');
+  const [exchangeRate, setExchangeRate] = useState<string>(String(DEFAULT_AFN_PER_USD));
   const [price, setPrice] = useState<string>('');
+  const [requiresImage, setRequiresImage] = useState<boolean>(false);
+  const [imagePrice, setImagePrice] = useState<string>('');
   const [material, setMaterial] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
   const [conditionOverrides, setConditionOverrides] = useState<Record<string, ConditionKey | null>>({});
@@ -465,6 +490,12 @@ export const TreatmentChartWorkspace = ({
     price.trim().length > 0 &&
     !createVisitTreatment.isPending;
 
+  useEffect(() => {
+    void getExchangeRate(exchangeRateClient).then((rate) => {
+      setExchangeRate(String(rate));
+    });
+  }, []);
+
   const doctorName = useMemo(() => {
     const fullName = [authenticatedUser?.firstName, authenticatedUser?.lastName]
       .map((item) => item?.trim())
@@ -496,7 +527,17 @@ export const TreatmentChartWorkspace = ({
   const handleTreatmentChange = (value: string): void => {
     setSelectedTreatmentId(value);
     const treatment = treatmentById.get(value);
-    setPrice(treatment?.defaultPrice ?? '');
+    const defaultPriceUsd = roundCurrency(parseCurrency(treatment?.defaultPrice ?? ''));
+    if (defaultPriceUsd <= 0) {
+      setPrice('');
+      return;
+    }
+
+    const rate = Math.max(0.000001, parseCurrency(exchangeRate) || DEFAULT_AFN_PER_USD);
+    const amountInSelectedCurrency = currency === 'AFN'
+      ? roundCurrency(defaultPriceUsd * rate)
+      : defaultPriceUsd;
+    setPrice(amountInSelectedCurrency.toFixed(2));
   };
 
   const paintTooth = (toothNumber: string): void => {
@@ -527,6 +568,25 @@ export const TreatmentChartWorkspace = ({
       return;
     }
 
+    const normalizedRate = Math.max(0.000001, parseCurrency(exchangeRate) || DEFAULT_AFN_PER_USD);
+    const rawPriceAmount = roundCurrency(parseCurrency(price));
+    const normalizedPrice = currency === 'AFN'
+      ? roundCurrency(rawPriceAmount / normalizedRate)
+      : rawPriceAmount;
+    if (normalizedPrice <= 0) {
+      toast.error('Price must be greater than zero.');
+      return;
+    }
+
+    const rawImageCharge = requiresImage ? roundCurrency(parseCurrency(imagePrice)) : 0;
+    const imageCharge = requiresImage
+      ? (currency === 'AFN' ? roundCurrency(rawImageCharge / normalizedRate) : rawImageCharge)
+      : 0;
+    if (requiresImage && imageCharge <= 0) {
+      toast.error('Provide an image price when image is required.');
+      return;
+    }
+
     const targets = paintedTeeth.length > 0
       ? paintedTeeth
       : [{ condition: (toothConditions[selectedToothNumber] ?? activeCondition), toothNumber: selectedToothNumber }];
@@ -534,8 +594,13 @@ export const TreatmentChartWorkspace = ({
       new Map(targets.map((target) => [target.toothNumber, target])).values()
     );
     const chartMetadata = `[chart:${uniqueTargets.map((target) => `${target.toothNumber}=${CONDITION_CODES[target.condition]}`).join(',')}]`;
+    const currencyMetadata = `[currency:${currency}][exchangeRate:${normalizedRate.toFixed(6)}][priceInput:${rawPriceAmount.toFixed(2)}]`;
+    const imageMetadata = requiresImage
+      ? `[image:1][imagePrice:${imageCharge.toFixed(2)}][imagePriceInput:${rawImageCharge.toFixed(2)}]`
+      : '';
     const plainNote = notes.trim();
-    const combinedNote = plainNote ? `${chartMetadata} ${plainNote}` : chartMetadata;
+    const metadataSegments = [chartMetadata, currencyMetadata, imageMetadata].filter(Boolean).join('');
+    const combinedNote = plainNote ? `${metadataSegments} ${plainNote}` : metadataSegments;
     if (combinedNote.length > 255) {
       toast.error('Notes are too long. Please shorten the note and try again.');
       return;
@@ -546,7 +611,7 @@ export const TreatmentChartWorkspace = ({
     const payload: Omit<VisitTreatment, 'id' | 'createdAt' | 'updatedAt'> = {
       material: material.trim(),
       notes: combinedNote,
-      price: price.trim(),
+      price: normalizedPrice.toFixed(2),
       toothNumber: uniqueTargets.map((target) => target.toothNumber).join(','),
       treatmentId: selectedTreatmentId,
       visitId: visitIdForSave,
@@ -571,9 +636,25 @@ export const TreatmentChartWorkspace = ({
     }
 
     setConditionOverrides({});
-    toast.success('Treatment added to patient chart.');
     setNotes('');
     setMaterial('');
+    setRequiresImage(false);
+    setImagePrice('');
+
+    const shouldStartBillingFlow =
+      hidePatientVisitSelectors && lockPatientSelection && lockVisitSelection;
+
+    if (shouldStartBillingFlow) {
+      const searchParameters = new URLSearchParams({
+        flow: 'chart',
+        visitId: String(visitIdForSave),
+      });
+      toast.success('Treatment saved. Redirecting to payment and invoice flow.');
+      router.push(`/${locale}/dental-management/invoices?${searchParameters.toString()}`);
+      return;
+    }
+
+    toast.success('Treatment added to patient chart.');
   };
 
   const handlePrintRecord = (): void => {
@@ -958,6 +1039,60 @@ export const TreatmentChartWorkspace = ({
                   setPrice(event.target.value);
                 }}
                 placeholder="e.g. 100.00"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Currency</Label>
+              <Select
+                value={currency}
+                onValueChange={(value) => {
+                  setCurrency(value as 'AFN' | 'USD');
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select currency" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="USD">USD ($)</SelectItem>
+                  <SelectItem value="AFN">AFN (Afghani)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Exchange Rate (AFN per 1 USD)</Label>
+              <Input
+                value={exchangeRate}
+                onChange={(event) => {
+                  setExchangeRate(event.target.value);
+                }}
+                placeholder="e.g. 70"
+                disabled={currency === 'USD'}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={requiresImage}
+                  onChange={(event) => {
+                    setRequiresImage(event.target.checked);
+                    if (!event.target.checked) {
+                      setImagePrice('');
+                    }
+                  }}
+                />
+                Need Image
+              </Label>
+              <Input
+                value={imagePrice}
+                onChange={(event) => {
+                  setImagePrice(event.target.value);
+                }}
+                placeholder="Image price (e.g. 25.00)"
+                disabled={!requiresImage}
               />
             </div>
 

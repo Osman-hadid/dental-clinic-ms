@@ -8,16 +8,36 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utilities';
 import {
+  DEFAULT_AFN_PER_USD,
+  formatCurrency as formatMoneyByCurrency,
+  formatDualFromUsd,
+} from '@/lib/currency-utils';
+import {
   Activity,
+  ArrowDownLeft,
+  ArrowUpRight,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
   Clock3,
+  DollarSign,
   Search,
   Stethoscope,
   UsersRound,
+  Vault,
 } from 'lucide-react';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 
 type EventType = 'appointment' | 'visit';
 
@@ -96,11 +116,47 @@ export type DashboardVisit = {
   visitDate?: string;
 };
 
+export type DashboardInvoice = {
+  id: number | string;
+  invoiceDate?: string;
+  netAmount?: string | number;
+  status?: string;
+};
+
+export type DashboardPayment = {
+  amount?: string | number;
+  id: number | string;
+  invoiceId?: string | number;
+  paymentDate?: string;
+};
+
+export type DashboardSafeTransaction = {
+  amount: number;
+  direction: string;
+  entryType: string;
+  id: string;
+  notes: string;
+  pickedByStaffId: string;
+  pickedByStaffName: string;
+  transactionDate: string;
+};
+
+export type DashboardSafeSummary = {
+  afnPerUsd?: number;
+  balance: number;
+  totalIn: number;
+  totalOut: number;
+  transactions: DashboardSafeTransaction[];
+};
+
 type DentalChartDashboardProps = {
   appointments: DashboardAppointment[];
+  invoices: DashboardInvoice[];
   isLoading?: boolean;
   locale: string;
   patients: DashboardPatient[];
+  payments: DashboardPayment[];
+  safeSummary?: DashboardSafeSummary;
   visits: DashboardVisit[];
 };
 
@@ -108,9 +164,25 @@ const CALENDAR_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MS_IN_DAY = 24 * 60 * 60 * 1000;
 
 const asText = (value: unknown): string => {
+  if (typeof value === 'number') return String(value).trim();
   if (typeof value !== 'string') return '';
   return value.trim();
 };
+
+const parseMoney = (value: unknown): number => {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  const raw = asText(value);
+  if (!raw) return 0;
+  const parsed = Number(raw.replace(/[^0-9.-]/g, ''));
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const roundCurrency = (value: number): number => Math.round(value * 100) / 100;
+
+const formatCurrency = (value: number): string => formatMoneyByCurrency(roundCurrency(value), 'USD');
 
 const toDateKey = (date: Date): string => {
   const year = date.getFullYear();
@@ -372,9 +444,12 @@ const ToothIllustration = (): JSX.Element => {
 
 export const DentalChartDashboard = ({
   appointments,
+  invoices,
   isLoading = false,
   locale,
   patients,
+  payments,
+  safeSummary,
   visits,
 }: DentalChartDashboardProps): JSX.Element => {
   const router = useRouter();
@@ -562,6 +637,135 @@ export const DentalChartDashboard = ({
 
   const returningPatients = Math.max(patients.length - newPatients, 0);
 
+  const incomeMetrics = useMemo(() => {
+    const activeInvoices = invoices.filter((invoice) => normalizeStatus(asText(invoice.status || '')) !== 'cancelled');
+    const invoiceIdSet = new Set(activeInvoices.map((invoice) => String(invoice.id)));
+    const paidByInvoiceId = new Map<string, number>();
+
+    payments.forEach((payment) => {
+      const invoiceId = asText(payment.invoiceId);
+      if (!invoiceId) return;
+      const current = paidByInvoiceId.get(invoiceId) ?? 0;
+      paidByInvoiceId.set(invoiceId, roundCurrency(current + parseMoney(payment.amount)));
+    });
+
+    const totalBilled = roundCurrency(
+      activeInvoices.reduce((sum, invoice) => sum + parseMoney(invoice.netAmount), 0)
+    );
+
+    const collectedFromInvoices = activeInvoices.reduce((sum, invoice) => {
+      const invoiceId = String(invoice.id);
+      const paidFromRecords = paidByInvoiceId.get(invoiceId) ?? 0;
+      if (paidFromRecords > 0) {
+        return sum + paidFromRecords;
+      }
+
+      if (normalizeStatus(asText(invoice.status || '')) === 'paid') {
+        return sum + parseMoney(invoice.netAmount);
+      }
+
+      return sum;
+    }, 0);
+
+    const orphanPayments = payments.reduce((sum, payment) => {
+      const invoiceId = asText(payment.invoiceId);
+      if (invoiceId && invoiceIdSet.has(invoiceId)) return sum;
+      return sum + parseMoney(payment.amount);
+    }, 0);
+
+    const totalCollected = roundCurrency(collectedFromInvoices + orphanPayments);
+    const totalOutstanding = Math.max(0, roundCurrency(totalBilled - totalCollected));
+
+    const currentMonthIncome = roundCurrency(
+      payments.reduce((sum, payment) => {
+        const paymentDate = parseDateOnly(payment.paymentDate);
+        if (!paymentDate) return sum;
+        if (
+          paymentDate.getFullYear() !== today.getFullYear()
+          || paymentDate.getMonth() !== today.getMonth()
+        ) {
+          return sum;
+        }
+        return sum + parseMoney(payment.amount);
+      }, 0)
+    );
+
+    const collectionRate = totalBilled > 0
+      ? Math.min(100, Math.round((totalCollected / totalBilled) * 100))
+      : 0;
+
+    return {
+      collectionRate,
+      currentMonthIncome,
+      totalBilled,
+      totalCollected,
+      totalOutstanding,
+    };
+  }, [invoices, payments, today]);
+  const financeTrend = useMemo(() => {
+    const grouped = new Map<string, { billed: number; paid: number }>();
+
+    invoices.forEach((invoice) => {
+      const date = parseDateOnly(invoice.invoiceDate);
+      if (!date) return;
+      const key = toDateKey(date);
+      const current = grouped.get(key) ?? { billed: 0, paid: 0 };
+      current.billed = roundCurrency(current.billed + parseMoney(invoice.netAmount));
+      grouped.set(key, current);
+    });
+
+    payments.forEach((payment) => {
+      const date = parseDateOnly(payment.paymentDate);
+      if (!date) return;
+      const key = toDateKey(date);
+      const current = grouped.get(key) ?? { billed: 0, paid: 0 };
+      current.paid = roundCurrency(current.paid + parseMoney(payment.amount));
+      grouped.set(key, current);
+    });
+
+    return [...grouped.entries()]
+      .sort((left, right) => left[0].localeCompare(right[0]))
+      .slice(-10)
+      .map(([date, value]) => ({
+        billed: value.billed,
+        date: formatDayHeading(new Date(date)),
+        paid: value.paid,
+      }));
+  }, [invoices, payments]);
+  const appointmentMixData = useMemo(() => ([
+    { name: 'Scheduled', value: scheduledAppointmentCount },
+    { name: 'Completed', value: completedAppointmentCount },
+    { name: 'Cancelled', value: cancelledAppointmentCount },
+  ]), [scheduledAppointmentCount, completedAppointmentCount, cancelledAppointmentCount]);
+  const safeTransactions = useMemo(
+    () => safeSummary?.transactions ?? [],
+    [safeSummary?.transactions]
+  );
+  const safeBalance = safeSummary?.balance ?? 0;
+  const safeTotalIn = safeSummary?.totalIn ?? 0;
+  const safeTotalOut = safeSummary?.totalOut ?? 0;
+  const afnPerUsd = safeSummary?.afnPerUsd ?? DEFAULT_AFN_PER_USD;
+  const formatDualCurrency = (usdValue: number): string => formatDualFromUsd(usdValue, afnPerUsd);
+  const topSafePickups = useMemo(() => {
+    const grouped = new Map<string, number>();
+    safeTransactions.forEach((entry) => {
+      if (normalizeStatus(asText(entry.direction)) !== 'out') return;
+      const person = asText(entry.pickedByStaffName) || `Staff #${asText(entry.pickedByStaffId) || '-'}`;
+      grouped.set(person, roundCurrency((grouped.get(person) ?? 0) + parseMoney(entry.amount)));
+    });
+
+    return [...grouped.entries()]
+      .map(([name, amount]) => ({ amount, name }))
+      .sort((left, right) => right.amount - left.amount)
+      .slice(0, 4);
+  }, [safeTransactions]);
+  const recentSafeTransactions = useMemo(() => {
+    return safeTransactions
+      .slice()
+      .sort((left, right) => asText(right.transactionDate).localeCompare(asText(left.transactionDate)))
+      .slice(0, 6);
+  }, [safeTransactions]);
+
   const upcomingEvents = useMemo(() => {
     const startTime = today.getTime();
     const events = appointmentEvents.filter((event) => {
@@ -605,6 +809,29 @@ export const DentalChartDashboard = ({
   };
 
   const selectedEventStatus = statusTheme(selectedEvent?.status ?? 'scheduled');
+  const incomeRingStyle = useMemo<CSSProperties>(() => {
+    if (incomeMetrics.totalBilled <= 0) {
+      return {
+        backgroundImage: 'conic-gradient(from -90deg, #e2e8f0 0% 100%)',
+      };
+    }
+
+    const paidPercent = Math.min(
+      100,
+      Math.max(0, (incomeMetrics.totalCollected / incomeMetrics.totalBilled) * 100)
+    );
+    const debtPercent = Math.min(
+      100 - paidPercent,
+      Math.max(0, (incomeMetrics.totalOutstanding / incomeMetrics.totalBilled) * 100)
+    );
+    const paidEnd = paidPercent;
+    const debtEnd = paidPercent + debtPercent;
+
+    return {
+      backgroundImage: `conic-gradient(from -90deg, #16a34a 0% ${paidEnd}%, #f97316 ${paidEnd}% ${debtEnd}%, #e2e8f0 ${debtEnd}% 100%)`,
+    };
+  }, [incomeMetrics.totalBilled, incomeMetrics.totalCollected, incomeMetrics.totalOutstanding]);
+
   const openTreatmentChartFromSelection = (): void => {
     if (!selectedEvent) return;
 
@@ -627,7 +854,7 @@ export const DentalChartDashboard = ({
   };
 
   return (
-    <div>
+    <div className="space-y-5">
       <Card className="overflow-hidden rounded-3xl border border-border/80 bg-card pt-0 shadow-sm">
         <CardContent>
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -851,6 +1078,57 @@ export const DentalChartDashboard = ({
             </div>
 
             <aside className="space-y-4">
+              <section className="relative overflow-hidden rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-background to-cyan-50 p-4">
+                <div className="pointer-events-none absolute -right-8 -top-8 size-24 rounded-full bg-emerald-200/60 blur-2xl" />
+                <div className="pointer-events-none absolute -bottom-10 -left-8 size-24 rounded-full bg-cyan-200/50 blur-2xl" />
+
+                <div className="relative z-10">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold">Total Income</p>
+                      <p className="text-xs text-muted-foreground">Circular bar: paid vs debts</p>
+                    </div>
+                    <span className="rounded-full border border-emerald-300 bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">
+                      {incomeMetrics.collectionRate}%
+                    </span>
+                  </div>
+
+                  <div className="mx-auto mb-4 grid h-44 w-44 place-items-center rounded-full p-3 shadow-[0_10px_35px_-18px_rgba(22,163,74,0.85)]" style={incomeRingStyle}>
+                    <div className="grid h-full w-full place-items-center rounded-full border border-border/70 bg-background/95 text-center">
+                      <p className="text-xs text-muted-foreground">Paid</p>
+                      <p className="text-lg font-bold leading-tight">{formatCurrency(incomeMetrics.totalCollected)}</p>
+                      <p className="text-[11px] text-muted-foreground">Debt {formatCurrency(incomeMetrics.totalOutstanding)}</p>
+                    </div>
+                  </div>
+
+                  <div className="mb-3 flex items-center justify-center gap-4 text-[11px]">
+                    <span className="inline-flex items-center gap-1.5 text-emerald-700">
+                      <span className="size-2.5 rounded-full bg-emerald-600" />
+                      Paid
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 text-orange-700">
+                      <span className="size-2.5 rounded-full bg-orange-500" />
+                      Debts
+                    </span>
+                  </div>
+
+                  <div className="grid gap-2 text-xs">
+                    <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-100/70 px-3 py-2 text-emerald-900">
+                      <span className="inline-flex items-center gap-1"><DollarSign className="size-3.5" /> Billed</span>
+                      <span className="font-semibold">{formatCurrency(incomeMetrics.totalBilled)}</span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white/90 px-3 py-2">
+                      <span className="text-muted-foreground">Outstanding</span>
+                      <span className="font-semibold text-foreground">{formatCurrency(incomeMetrics.totalOutstanding)}</span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-lg border border-cyan-200 bg-cyan-100/70 px-3 py-2 text-cyan-900">
+                      <span>This month</span>
+                      <span className="font-semibold">{formatCurrency(incomeMetrics.currentMonthIncome)}</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
               <section className="rounded-2xl border bg-background p-4">
                 <div className="mb-3 flex items-center justify-between">
                   <div>
@@ -961,7 +1239,152 @@ export const DentalChartDashboard = ({
         </CardContent>
       </Card>
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="rounded-2xl border border-border/80 bg-gradient-to-br from-blue-50 via-background to-cyan-50">
+          <CardContent className="p-4">
+            <div className="mb-3">
+              <p className="text-sm font-semibold">Revenue Pulse</p>
+              <p className="text-xs text-muted-foreground">Last 10 recorded days (billed vs paid)</p>
+            </div>
+            <div className="h-52">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={financeTrend}>
+                  <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
+                  <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} />
+                  <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} width={70} />
+                  <Tooltip formatter={(value: number) => formatCurrency(Number(value))} />
+                  <Line type="monotone" dataKey="billed" stroke="#2563eb" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="paid" stroke="#16a34a" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl border border-border/80 bg-gradient-to-br from-orange-50 via-background to-emerald-50">
+          <CardContent className="p-4">
+            <div className="mb-3">
+              <p className="text-sm font-semibold">Appointment Mix</p>
+              <p className="text-xs text-muted-foreground">Current appointment distribution</p>
+            </div>
+            <div className="h-52">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={appointmentMixData}>
+                  <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
+                  <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} />
+                  <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} width={60} />
+                  <Tooltip />
+                  <Bar dataKey="value" fill="#0ea5e9" radius={[10, 10, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <section className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+        <Card className="rounded-2xl border border-border/80 bg-gradient-to-br from-emerald-50 via-background to-cyan-50">
+          <CardContent className="p-4">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold">Safe Overview</p>
+                <p className="text-xs text-muted-foreground">All income and outflow summary</p>
+              </div>
+              <Vault className="size-5 text-emerald-700" />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border bg-white/90 p-3">
+                <p className="text-xs text-muted-foreground">Current Balance</p>
+                <p className="text-lg font-semibold">{formatDualCurrency(safeBalance)}</p>
+              </div>
+              <div className="rounded-xl border border-emerald-200 bg-emerald-100/70 p-3">
+                <p className="text-xs text-emerald-900">Total In</p>
+                <p className="text-lg font-semibold text-emerald-900">{formatDualCurrency(safeTotalIn)}</p>
+              </div>
+              <div className="rounded-xl border border-orange-200 bg-orange-100/70 p-3">
+                <p className="text-xs text-orange-900">Total Out</p>
+                <p className="text-lg font-semibold text-orange-900">{formatDualCurrency(safeTotalOut)}</p>
+              </div>
+            </div>
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div className="rounded-lg border bg-white/90 p-3">
+                <p className="mb-1 text-xs font-medium text-muted-foreground">Top Safe Pickups</p>
+                {topSafePickups.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No outflow by staff yet.</p>
+                ) : (
+                  topSafePickups.map((row) => (
+                    <div key={`safe-pickup-${row.name}`} className="flex items-center justify-between text-xs">
+                      <span className="truncate text-muted-foreground">{row.name}</span>
+                      <span className="font-semibold">{formatDualCurrency(row.amount)}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="rounded-lg border bg-white/90 p-3">
+                <p className="mb-1 text-xs font-medium text-muted-foreground">Net Position</p>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="inline-flex items-center gap-1 text-emerald-700">
+                    <ArrowDownLeft className="size-3.5" />
+                    Inflow
+                  </span>
+                  <span className="font-semibold">{formatDualCurrency(safeTotalIn)}</span>
+                </div>
+                <div className="mt-1 flex items-center justify-between text-xs">
+                  <span className="inline-flex items-center gap-1 text-orange-700">
+                    <ArrowUpRight className="size-3.5" />
+                    Outflow
+                  </span>
+                  <span className="font-semibold">{formatDualCurrency(safeTotalOut)}</span>
+                </div>
+              </div>
+            </div>
+            <p className="mt-2 text-[11px] text-muted-foreground">Rate: 1 USD = {afnPerUsd} AFN</p>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl border border-border/80 bg-gradient-to-br from-slate-50 via-background to-slate-100">
+          <CardContent className="p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-sm font-semibold">Recent Safe Activity</p>
+              <span className="text-xs text-muted-foreground">{recentSafeTransactions.length} entries</span>
+            </div>
+            <div className="space-y-2">
+              {recentSafeTransactions.length === 0 ? (
+                <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                  No safe transactions yet.
+                </p>
+              ) : (
+                recentSafeTransactions.map((entry) => (
+                  <div key={entry.id} className="rounded-xl border bg-white/90 p-3 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold capitalize">{entry.entryType.replaceAll('_', ' ')}</span>
+                      <span className={cn(
+                        'rounded-full px-2 py-0.5 font-semibold',
+                        normalizeStatus(entry.direction) === 'in'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-orange-100 text-orange-800'
+                      )}
+                      >
+                        {entry.direction.toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between text-muted-foreground">
+                      <span>{entry.transactionDate || '-'}</span>
+                      <span className="font-semibold text-foreground">{formatDualCurrency(entry.amount)}</span>
+                    </div>
+                    <p className="mt-1 text-muted-foreground">
+                      {entry.pickedByStaffName ? `By: ${entry.pickedByStaffName}` : entry.notes || '-'}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
+      <div className="grid gap-4 md:grid-cols-3">
         <Card className="rounded-2xl border">
           <CardContent className="p-4">
             <div className="mb-2 flex items-center gap-2">
@@ -997,7 +1420,7 @@ export const DentalChartDashboard = ({
       </div>
 
       <Card className="rounded-2xl border">
-        <CardContent className="grid gap-3 p-4 md:grid-cols-4">
+        <CardContent className="grid gap-4 p-4 md:grid-cols-4">
           <div className="rounded-xl border bg-background p-3">
             <div className="mb-1 flex items-center gap-1 text-xs text-muted-foreground">
               <ClipboardList className="size-3.5" />
@@ -1031,3 +1454,4 @@ export const DentalChartDashboard = ({
     </div>
   );
 };
+

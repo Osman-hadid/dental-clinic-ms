@@ -15,6 +15,7 @@ import {
 import { useCan } from '@/hooks/useCan';
 import { useAuthStore } from '@/modules/auth/application/stores/auth-store';
 import {
+  BarChart3,
   GalleryVerticalEnd,
   HeartPulse,
   House,
@@ -53,6 +54,7 @@ const staticNavItems: SidebarItem[] = [
     items: [
       { key: 'patients', url: '/dental-management/patients' },
       { key: 'staff', url: '/dental-management/staff' },
+      { key: 'staffProfiles', url: '/dental-management/staff-profiles' },
       { key: 'appointments', url: '/dental-management/appointments' },
       { key: 'visits', url: '/dental-management/visits' },
       { key: 'teeth', url: '/dental-management/teeth' },
@@ -75,6 +77,18 @@ const staticNavItems: SidebarItem[] = [
     ],
     key: 'userManagement',
     url: '/user-management',
+  },
+  {
+    icon: BarChart3,
+    items: [
+      { key: 'overview', url: '/reports' },
+      { key: 'dailyExpenses', url: '/reports/daily-expenses' },
+      { key: 'clinicalExpenses', url: '/reports/clinical-expenses' },
+      { key: 'safe', url: '/reports/safe' },
+      { key: 'salaries', url: '/reports/salaries' },
+    ],
+    key: 'reports',
+    url: '/reports',
   },
   // {
   //   icon: ScrollText,

@@ -147,16 +147,6 @@ export const appointmentConfig: EntityModuleConfig = {
   ],
   formFields: [
     {
-      label: 'config.form.tag.label',
-      name: 'tag',
-      required: true,
-      type: 'text',
-      validation: {
-        required: 'config.form.tag.validation.required',
-        maxLength: { value: 100, message: 'config.form.tag.validation.maxLength' },
-      },
-    },
-    {
       label: 'config.form.patientId.label',
       name: 'patientId',
       required: true,

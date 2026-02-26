@@ -37,6 +37,22 @@
           "maxLength": "Net Amount must be 255 characters or less"
         }
       },
+      "currency": {
+        "label": "Currency",
+        "validation": {
+          "in": "Currency must be one of the allowed values"
+        },
+        "options": {
+          "usd": "USD ($)",
+          "afn": "AFN (Afghani)"
+        }
+      },
+      "exchangeRate": {
+        "label": "Exchange Rate",
+        "validation": {
+          "maxLength": "Exchange Rate must be 255 characters or less"
+        }
+      },
       "invoiceDate": {
         "label": "Invoice Date",
         "validation": {

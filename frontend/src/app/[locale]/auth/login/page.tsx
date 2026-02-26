@@ -16,13 +16,12 @@ export default function Page(): JSX.Element {
               <div className="overflow-hidden h-16 w-16 md:h-60 md:w-60">
                 <Image
                   src="/logo2.png"
-                  alt="logo"
-                  width={480}
-                  height={480}
-                  sizes="(max-width: 768px) 64px, 120px"
+                  alt="Clinic logo"
+                  width={160}
+                  height={160}
+                  sizes="160px"
                   quality={100}
-                  className="h-full w-full object-contain"
-                  priority
+                  className="h-70 w-70 object-contain"
                 />
               </div>
             </div>

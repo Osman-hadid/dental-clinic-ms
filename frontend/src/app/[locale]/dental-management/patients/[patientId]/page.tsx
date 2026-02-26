@@ -498,7 +498,7 @@ export default function PatientProfilePage(): JSX.Element {
     for (const invoice of invoices as Array<Record<string, unknown>>) {
       const rawPayments = Array.isArray(invoice.payments) ? invoice.payments : [];
       const payments: PaymentItem[] = rawPayments
-        .map((payment, index) => {
+        .map<PaymentItem | null>((payment, index) => {
           if (!payment || typeof payment !== 'object') return null;
           const paymentRow = payment as Record<string, unknown>;
           const id = asText(paymentRow.id) || `${asText(invoice.id)}-${index}`;

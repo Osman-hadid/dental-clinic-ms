@@ -9,6 +9,7 @@ use App\Modules\DentalManagement\Domain\Entities\Appointment;
 use App\Modules\DentalManagement\Domain\Entities\Invoice;
 use App\Modules\DentalManagement\Domain\Entities\Patient;
 use App\Modules\DentalManagement\Domain\Entities\Payment;
+use App\Modules\DentalManagement\Domain\Entities\SafeTransaction;
 use App\Modules\DentalManagement\Domain\Entities\Staff;
 use App\Modules\DentalManagement\Domain\Entities\Visit;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -49,6 +50,46 @@ final class DentalManagementBusinessRulesTest extends TestCase
         $response->assertStatus(409);
         $response->assertJsonPath('success', false);
         $response->assertJsonPath('error.code', 'APPOINTMENT_TIME_CONFLICT');
+    }
+
+    public function test_appointment_tag_is_auto_generated_with_daily_sequence(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $patient = $this->createPatient();
+        $dentist = $this->createDentist();
+
+        $firstResponse = $this->postJson('/api/v1/dental-management/appointments', [
+            'appointmentDate' => '2026-02-22',
+            'dentistId' => $dentist->id,
+            'endTime' => '09:30',
+            'patientId' => $patient->id,
+            'startTime' => '09:00',
+            'tag' => 'MANUAL-TAG-SHOULD-BE-IGNORED',
+        ]);
+
+        $secondResponse = $this->postJson('/api/v1/dental-management/appointments', [
+            'appointmentDate' => '2026-02-22',
+            'dentistId' => $dentist->id,
+            'endTime' => '10:30',
+            'patientId' => $patient->id,
+            'startTime' => '10:00',
+        ]);
+
+        $thirdResponse = $this->postJson('/api/v1/dental-management/appointments', [
+            'appointmentDate' => '2026-02-23',
+            'dentistId' => $dentist->id,
+            'endTime' => '11:30',
+            'patientId' => $patient->id,
+            'startTime' => '11:00',
+        ]);
+
+        $firstResponse->assertCreated();
+        $firstResponse->assertJsonPath('data.tag', 'DCA#1#20260222');
+        $secondResponse->assertCreated();
+        $secondResponse->assertJsonPath('data.tag', 'DCA#2#20260222');
+        $thirdResponse->assertCreated();
+        $thirdResponse->assertJsonPath('data.tag', 'DCA#1#20260223');
     }
 
     public function test_payment_cannot_exceed_invoice_balance(): void
@@ -103,6 +144,101 @@ final class DentalManagementBusinessRulesTest extends TestCase
 
         $invoice->refresh();
         $this->assertSame('unpaid', $invoice->status);
+    }
+
+    public function test_paid_invoice_without_payment_creates_safe_income_entry(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        ['patient' => $patient, 'visit' => $visit] = $this->createInvoiceContext();
+
+        $createResponse = $this->postJson('/api/v1/dental-management/invoices', [
+            'discount' => 0,
+            'invoiceDate' => '2026-02-22',
+            'netAmount' => 300,
+            'patientId' => $patient->id,
+            'status' => 'paid',
+            'totalAmount' => 300,
+            'visitId' => $visit->id,
+        ]);
+
+        $createResponse->assertCreated();
+        $invoiceId = (int) $createResponse->json('data.id');
+
+        $this->assertDatabaseHas('safe_transactions', [
+            'source_id' => $invoiceId,
+            'source_type' => 'invoice',
+            'direction' => 'in',
+            'entry_type' => 'income',
+            'amount' => 300,
+        ]);
+
+        $paymentResponse = $this->postJson('/api/v1/dental-management/payments', [
+            'amount' => 100,
+            'invoiceId' => $invoiceId,
+            'method' => 'cash',
+            'paymentDate' => '2026-02-22',
+        ]);
+        $paymentResponse->assertCreated();
+
+        $this->assertSame(
+            0,
+            SafeTransaction::query()
+                ->where('source_type', 'invoice')
+                ->where('source_id', $invoiceId)
+                ->count()
+        );
+    }
+
+    public function test_payment_with_afn_currency_is_converted_and_persisted_with_rate_metadata(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        ['invoice' => $invoice] = $this->createInvoiceContext();
+
+        $response = $this->postJson('/api/v1/dental-management/payments', [
+            'amount' => 7000,
+            'currency' => 'AFN',
+            'exchangeRate' => 70,
+            'invoiceId' => $invoice->id,
+            'method' => 'cash',
+            'paymentDate' => '2026-02-22',
+        ]);
+
+        $response->assertCreated();
+        $paymentId = (int) $response->json('data.id');
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $paymentId,
+            'amount' => 100.00,
+            'amount_input' => 7000.00,
+            'currency' => 'AFN',
+            'exchange_rate' => 70.000000,
+        ]);
+
+        $this->assertDatabaseHas('safe_transactions', [
+            'source_type' => 'payment',
+            'source_id' => $paymentId,
+            'amount' => 100.00,
+            'amount_input' => 7000.00,
+            'currency' => 'AFN',
+            'exchange_rate' => 70.000000,
+        ]);
+    }
+
+    public function test_exchange_rate_can_be_updated_and_read_from_financial_settings_endpoint(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $updateResponse = $this->putJson('/api/v1/dental-management/financial-settings/exchange-rate', [
+            'afnPerUsd' => 82.5,
+        ]);
+        $updateResponse->assertOk();
+        $updateResponse->assertJsonPath('data.afnPerUsd', 82.5);
+
+        $showResponse = $this->getJson('/api/v1/dental-management/financial-settings/exchange-rate');
+        $showResponse->assertOk();
+        $showResponse->assertJsonPath('data.afnPerUsd', 82.5);
     }
 
     private function actingAsSuperAdmin(): User

@@ -5,7 +5,7 @@ const withNextIntl = createNextIntlPlugin();
 
 const nextConfig: NextConfig = {
   images: {
-    domains: ['api.cpamis.local'],
+    domains: ['api.sourire.local'],
   },
 };
 

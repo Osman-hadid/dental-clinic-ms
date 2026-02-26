@@ -15,6 +15,7 @@ final class ListPaymentsRequest extends BaseListRequest
             'id',
             'payment_date',
             'amount',
+            'currency',
             'created_at',
         ];
     }
@@ -30,6 +31,7 @@ final class ListPaymentsRequest extends BaseListRequest
     {
         return [
             AllowedFilter::exact('method', 'method', true),
+            AllowedFilter::exact('currency', 'currency', true),
             AllowedFilter::trashed(),
         ];
     }
@@ -48,6 +50,9 @@ final class ListPaymentsRequest extends BaseListRequest
             'invoiceId' => 'invoice_id',
             'paymentDate' => 'payment_date',
             'amount' => 'amount',
+            'amountInput' => 'amount_input',
+            'currency' => 'currency',
+            'exchangeRate' => 'exchange_rate',
             'method' => 'method',
             'notes' => 'notes',
             'createdBy' => 'created_by',

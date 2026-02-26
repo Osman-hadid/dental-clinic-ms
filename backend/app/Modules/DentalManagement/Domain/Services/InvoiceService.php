@@ -8,13 +8,17 @@ use App\Modules\Common\Application\Exceptions\ApiException;
 use App\Modules\Common\Application\DTOs\QuerySpecification;
 use App\Modules\DentalManagement\Domain\Entities\Invoice;
 use App\Modules\DentalManagement\Domain\Entities\Payment;
+use App\Modules\DentalManagement\Domain\Entities\SafeTransaction;
 use App\Modules\DentalManagement\Domain\Repositories\InvoiceRepositoryInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
 final readonly class InvoiceService
 {
-    public function __construct(private InvoiceRepositoryInterface $invoiceRepository) {}
+    public function __construct(
+        private InvoiceRepositoryInterface $invoiceRepository,
+        private CurrencyService $currencyService,
+    ) {}
 
     public function listInvoices(QuerySpecification $querySpecification): LengthAwarePaginator
     {
@@ -28,10 +32,13 @@ final readonly class InvoiceService
 
     public function restoreInvoice(int $id): Invoice
     {
-        return tap(
-            $this->invoiceRepository->restore($id),
-            fn () => $this->invoiceRepository->invalidateCache()
-        );
+        return DB::transaction(function () use ($id): Invoice {
+            $invoice = $this->invoiceRepository->restore($id);
+            $this->syncSafeTransactionForInvoice($invoice);
+            $this->invoiceRepository->invalidateCache();
+
+            return $invoice;
+        });
     }
 
     public function createInvoice(array $data): Invoice
@@ -41,6 +48,7 @@ final readonly class InvoiceService
             $this->assertInvoiceAmounts($normalized);
 
             $invoice = $this->invoiceRepository->create(data: $normalized);
+            $this->syncSafeTransactionForInvoice($invoice);
             $this->invoiceRepository->invalidateCache();
 
             return $invoice;
@@ -54,6 +62,7 @@ final readonly class InvoiceService
             $this->assertInvoiceAmounts($normalized, $id);
 
             $invoice = $this->invoiceRepository->update(id: $id, data: $normalized);
+            $this->syncSafeTransactionForInvoice($invoice);
             $this->invoiceRepository->invalidateCache();
 
             return $invoice;
@@ -62,15 +71,27 @@ final readonly class InvoiceService
 
     public function deleteInvoice(int $id): void
     {
-        $this->invoiceRepository->delete(id: $id);
-        $this->invoiceRepository->invalidateCache();
+        DB::transaction(function () use ($id): void {
+            $this->invoiceRepository->delete(id: $id);
+            SafeTransaction::query()
+                ->where('source_type', 'invoice')
+                ->where('source_id', $id)
+                ->delete();
+            $this->invoiceRepository->invalidateCache();
+        });
     }
 
     public function forceDeleteInvoice(int $id): void
     {
-        $permission = $this->invoiceRepository->findTrashed($id) ?? $this->invoiceRepository->find($id);
-        $this->invoiceRepository->forceDelete($permission->id);
-        $this->invoiceRepository->invalidateCache();
+        DB::transaction(function () use ($id): void {
+            $permission = $this->invoiceRepository->findTrashed($id) ?? $this->invoiceRepository->find($id);
+            $this->invoiceRepository->forceDelete($permission->id);
+            SafeTransaction::withTrashed()
+                ->where('source_type', 'invoice')
+                ->where('source_id', $permission->id)
+                ->forceDelete();
+            $this->invoiceRepository->invalidateCache();
+        });
     }
 
     public function bulkDeleteInvoices(array $ids): array
@@ -88,6 +109,10 @@ final readonly class InvoiceService
             }
 
             $this->invoiceRepository->delete(id: $id);
+            SafeTransaction::query()
+                ->where('source_type', 'invoice')
+                ->where('source_id', $id)
+                ->delete();
             $deleted[] = $id;
         }
 
@@ -160,11 +185,59 @@ final readonly class InvoiceService
 
     private function normalizeAmounts(array $data): array
     {
-        $data['total_amount'] = round((float) ($data['total_amount'] ?? 0), 2);
-        $data['discount'] = round((float) ($data['discount'] ?? 0), 2);
-        $data['net_amount'] = round((float) ($data['net_amount'] ?? 0), 2);
+        $resolvedCurrency = $this->currencyService->normalizeCurrency(
+            currency: (string) ($data['currency'] ?? 'USD'),
+            exchangeRate: isset($data['exchange_rate']) ? (float) $data['exchange_rate'] : null,
+        );
+
+        $totalInput = round((float) ($data['total_amount'] ?? 0), 2);
+        $discountInput = round((float) ($data['discount'] ?? 0), 2);
+        $netInput = round((float) ($data['net_amount'] ?? 0), 2);
+
+        $data['currency'] = $resolvedCurrency['currency'];
+        $data['exchange_rate'] = $resolvedCurrency['exchangeRate'];
+        $data['total_amount_input'] = $totalInput;
+        $data['discount_input'] = $discountInput;
+        $data['net_amount_input'] = $netInput;
+        $data['total_amount'] = $this->currencyService->toUsd($totalInput, $data['currency'], (float) $data['exchange_rate']);
+        $data['discount'] = $this->currencyService->toUsd($discountInput, $data['currency'], (float) $data['exchange_rate']);
+        $data['net_amount'] = $this->currencyService->toUsd($netInput, $data['currency'], (float) $data['exchange_rate']);
 
         return $data;
+    }
+
+    private function syncSafeTransactionForInvoice(Invoice $invoice): void
+    {
+        $entry = SafeTransaction::withTrashed()
+            ->firstOrNew([
+                'source_type' => 'invoice',
+                'source_id' => $invoice->id,
+            ]);
+
+        $hasPayments = Payment::query()
+            ->where('invoice_id', $invoice->id)
+            ->exists();
+
+        if ((string) $invoice->status !== 'paid' || $hasPayments) {
+            if ($entry->exists) {
+                $entry->delete();
+            }
+            return;
+        }
+
+        $entry->fill([
+            'transaction_date' => $invoice->invoice_date,
+            'entry_type' => 'income',
+            'direction' => 'in',
+            'amount' => round((float) $invoice->net_amount, 2),
+            'amount_input' => round((float) ($invoice->net_amount_input ?? $invoice->net_amount), 2),
+            'currency' => strtoupper((string) ($invoice->currency ?? 'USD')),
+            'exchange_rate' => round((float) ($invoice->exchange_rate ?? 1), 6),
+            'notes' => "Paid invoice #{$invoice->id}",
+            'picked_by_staff_id' => null,
+        ]);
+        $entry->deleted_at = null;
+        $entry->save();
     }
 
 }

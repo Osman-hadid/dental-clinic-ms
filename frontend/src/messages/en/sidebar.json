@@ -1,6 +1,6 @@
 {
   "platform": "Platform",
-  "name": "CPAMIS",
+  "name": "SOURIRE",
   "dashboard": {
     "title": "Dashboard",
     "overview": "Overview"
@@ -31,10 +31,19 @@
     "title": "Employees",
     "jobTypes": "Job Types"
   },
+  "reports": {
+    "title": "Reports",
+    "overview": "Report Center",
+    "dailyExpenses": "Daily Expenses",
+    "clinicalExpenses": "Clinical Buys",
+    "safe": "Safe Ledger",
+    "salaries": "Salaries"
+  },
   "dentalManagement": {
     "title": "Dental Management",
     "patients": "Patients",
     "staff": "Staff",
+    "staffProfiles": "Staff Profiles",
     "appointments": "Appointments",
     "visits": "Visits",
     "teeth": "Teeth",

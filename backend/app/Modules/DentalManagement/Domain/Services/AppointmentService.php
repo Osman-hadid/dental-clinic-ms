@@ -34,6 +34,9 @@ final readonly class AppointmentService
 
     public function createAppointment(array $data): Appointment
     {
+        $appointmentDate = (string) ($data['appointment_date'] ?? '');
+        $data['tag'] = $this->generateDailyTag($appointmentDate);
+
         $this->assertNoScheduleConflict($data);
 
         return tap(
@@ -44,6 +47,16 @@ final readonly class AppointmentService
 
     public function updateAppointment(int $id, array $data): Appointment
     {
+        $existingAppointment = $this->appointmentRepository->find(id: $id);
+        $appointmentDate = (string) ($data['appointment_date'] ?? '');
+        $existingAppointmentDate = (string) $existingAppointment->appointment_date;
+        $currentTag = trim((string) $existingAppointment->tag);
+        $currentTagMatchesDate = $this->isAutoTagForDate($currentTag, $existingAppointmentDate);
+
+        $data['tag'] = $appointmentDate !== $existingAppointmentDate || !$currentTagMatchesDate
+            ? $this->generateDailyTag($appointmentDate, $id)
+            : $currentTag;
+
         $this->assertNoScheduleConflict($data, $id);
 
         return tap(
@@ -117,5 +130,45 @@ final readonly class AppointmentService
                 httpCode: 409,
             );
         }
+    }
+
+    private function generateDailyTag(string $appointmentDate, ?int $ignoreId = null): string
+    {
+        $normalizedDate = trim($appointmentDate);
+        $targetDate = preg_match('/^\d{4}-\d{2}-\d{2}$/', $normalizedDate)
+            ? $normalizedDate
+            : now()->format('Y-m-d');
+        $dateToken = str_replace('-', '', $targetDate);
+
+        $query = Appointment::withTrashed()
+            ->whereDate('appointment_date', $targetDate)
+            ->select('tag');
+
+        if ($ignoreId !== null) {
+            $query->where('id', '!=', $ignoreId);
+        }
+
+        $maxSequence = 0;
+        foreach ($query->pluck('tag') as $tag) {
+            $tagText = trim((string) $tag);
+            if (preg_match('/^DCA#(\d+)#'.$dateToken.'$/', $tagText, $matches) !== 1) {
+                continue;
+            }
+            $maxSequence = max($maxSequence, (int) $matches[1]);
+        }
+
+        return sprintf('DCA#%d#%s', $maxSequence + 1, $dateToken);
+    }
+
+    private function isAutoTagForDate(string $tag, string $appointmentDate): bool
+    {
+        $normalizedDate = trim($appointmentDate);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $normalizedDate)) {
+            return false;
+        }
+
+        $dateToken = str_replace('-', '', $normalizedDate);
+
+        return preg_match('/^DCA#\d+#'.$dateToken.'$/', $tag) === 1;
     }
 }

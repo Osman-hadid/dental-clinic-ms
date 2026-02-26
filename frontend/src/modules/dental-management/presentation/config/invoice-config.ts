@@ -19,6 +19,14 @@ export const invoiceConfig: EntityModuleConfig = {
       header: 'config.form.netAmount.label',
     },
     {
+      accessorKey: 'currency',
+      header: 'config.form.currency.label',
+    },
+    {
+      accessorKey: 'exchangeRate',
+      header: 'config.form.exchangeRate.label',
+    },
+    {
       accessorKey: 'invoiceDate',
       header: 'config.form.invoiceDate.label',
     },
@@ -68,6 +76,14 @@ export const invoiceConfig: EntityModuleConfig = {
         { label: 'config.form.status.options.cancelled', value: 'cancelled' },
       ],
       title: 'config.form.status.label',
+    },
+    {
+      key: 'currency',
+      options: [
+        { label: 'config.form.currency.options.usd', value: 'USD' },
+        { label: 'config.form.currency.options.afn', value: 'AFN' },
+      ],
+      title: 'config.form.currency.label',
     },
     {
       key: 'paymentType',
@@ -201,6 +217,34 @@ export const invoiceConfig: EntityModuleConfig = {
       },
     },
     {
+      label: 'config.form.currency.label',
+      name: 'currency',
+      options: [
+        {
+          label: 'config.form.currency.options.usd',
+          value: 'USD',
+        },
+        {
+          label: 'config.form.currency.options.afn',
+          value: 'AFN',
+        },
+      ],
+      required: false,
+      type: 'select',
+      validation: {
+        in: {
+          message: 'config.form.currency.validation.in',
+          value: ['USD', 'AFN'],
+        },
+      },
+    },
+    {
+      label: 'config.form.exchangeRate.label',
+      name: 'exchangeRate',
+      required: false,
+      type: 'number',
+    },
+    {
       label: 'config.form.paymentType.label',
       name: 'paymentType',
       options: [
@@ -252,6 +296,6 @@ export const invoiceConfig: EntityModuleConfig = {
   relations: ['patient', 'visit'],
   searchFields: [{ label: 'config.form.notes.label', value: 'notes' }],
   singleQueryKey: 'invoice',
-  sortableColumns: ['id', 'invoiceDate', 'netAmount', 'status', 'paymentType', 'createdAt'],
+  sortableColumns: ['id', 'invoiceDate', 'netAmount', 'currency', 'status', 'paymentType', 'createdAt'],
   title: 'config.title',
 };
