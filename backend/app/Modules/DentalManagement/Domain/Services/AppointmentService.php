@@ -138,7 +138,6 @@ final readonly class AppointmentService
         $targetDate = preg_match('/^\d{4}-\d{2}-\d{2}$/', $normalizedDate)
             ? $normalizedDate
             : now()->format('Y-m-d');
-        $dateToken = str_replace('-', '', $targetDate);
 
         $query = Appointment::withTrashed()
             ->whereDate('appointment_date', $targetDate)
@@ -151,13 +150,13 @@ final readonly class AppointmentService
         $maxSequence = 0;
         foreach ($query->pluck('tag') as $tag) {
             $tagText = trim((string) $tag);
-            if (preg_match('/^DCA#(\d+)#'.$dateToken.'$/', $tagText, $matches) !== 1) {
+            if (preg_match('/^A#(\d+)-'.preg_quote($targetDate, '/').'$/', $tagText, $matches) !== 1) {
                 continue;
             }
             $maxSequence = max($maxSequence, (int) $matches[1]);
         }
 
-        return sprintf('DCA#%d#%s', $maxSequence + 1, $dateToken);
+        return sprintf('A#%d-%s', $maxSequence + 1, $targetDate);
     }
 
     private function isAutoTagForDate(string $tag, string $appointmentDate): bool
@@ -167,8 +166,6 @@ final readonly class AppointmentService
             return false;
         }
 
-        $dateToken = str_replace('-', '', $normalizedDate);
-
-        return preg_match('/^DCA#\d+#'.$dateToken.'$/', $tag) === 1;
+        return preg_match('/^A#\d+-'.preg_quote($normalizedDate, '/').'$/', $tag) === 1;
     }
 }

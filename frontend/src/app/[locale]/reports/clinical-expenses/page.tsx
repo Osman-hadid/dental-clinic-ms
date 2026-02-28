@@ -9,10 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import {
-  DEFAULT_AFN_PER_USD,
   formatCurrency,
-  formatDualFromUsd,
-  getExchangeRate,
   parseMoney,
 } from '@/lib/currency-utils';
 import { ShoppingBag, Trash2 } from 'lucide-react';
@@ -23,9 +20,8 @@ type ClinicalExpenseRecord = {
   amountInput: number;
   category: string;
   createdAt?: string;
-  currency: 'AFN' | 'USD';
+  currency: 'AFN';
   date: string;
-  exchangeRate: number;
   expenseType?: string;
   id: string;
   itemName: string;
@@ -46,9 +42,7 @@ type PaginatedRowsResponse = {
 
 type ClinicalExpenseForm = {
   category: string;
-  currency: 'AFN' | 'USD';
   date: string;
-  exchangeRate: string;
   itemName: string;
   notes: string;
   quantity: string;
@@ -84,17 +78,15 @@ const extractApiErrorMessage = (error: unknown, fallback: string): string => {
   if (code === 'SAFE_BALANCE_INSUFFICIENT') {
     const currentBalance = Number(payload?.details?.currentBalance ?? 0);
     const requestedAmount = Number(payload?.details?.requestedAmount ?? 0);
-    return `Safe balance is not enough. Current: ${formatCurrency(currentBalance, 'USD')}. Requested: ${formatCurrency(requestedAmount, 'USD')}.`;
+    return `Safe balance is not enough. Current: ${formatCurrency(currentBalance, 'AFN')}. Requested: ${formatCurrency(requestedAmount, 'AFN')}.`;
   }
 
   return payload?.message || fallback;
 };
 
-const createDefaultForm = (afnPerUsd: number): ClinicalExpenseForm => ({
+const createDefaultForm = (): ClinicalExpenseForm => ({
   category: 'Dental Accessories',
-  currency: 'USD',
   date: toInputDate(new Date()),
-  exchangeRate: String(afnPerUsd),
   itemName: '',
   notes: '',
   quantity: '1',
@@ -112,24 +104,22 @@ const normalizeExpenseRow = (row: Record<string, unknown>): ClinicalExpenseRecor
   amountInput: parseNumber(row.amountInput ?? row.amount_input ?? row.amount),
   category: String(row.category ?? 'Other'),
   createdAt: typeof row.createdAt === 'string' ? row.createdAt : undefined,
-  currency: (String(row.currency ?? 'USD').toUpperCase() as 'AFN' | 'USD'),
+  currency: 'AFN',
   date: String(row.expenseDate ?? row.date ?? ''),
-  exchangeRate: parseNumber(row.exchangeRate ?? row.exchange_rate ?? 1),
   expenseType: typeof row.expenseType === 'string' ? row.expenseType : undefined,
   id: String(row.id ?? ''),
   itemName: String(row.title ?? row.itemName ?? ''),
   notes: String(row.notes ?? ''),
   quantity: parseNumber(row.quantity) || 1,
-  totalCost: parseNumber(row.amount),
-  unitCost: parseNumber(row.unitCost) || parseNumber(row.amount),
+  totalCost: parseNumber(row.amountInput ?? row.amount_input ?? row.amount),
+  unitCost: parseNumber(row.unitCostInput ?? row.unit_cost_input ?? row.unitCost) || parseNumber(row.amountInput ?? row.amount_input ?? row.amount),
   vendor: String(row.vendor ?? ''),
 });
 
 const ClinicalExpensesPage = (): JSX.Element => {
   const tReports = useTranslations('sidebar.reports');
   const tSidebar = useTranslations('sidebar');
-  const [afnPerUsd, setAfnPerUsd] = useState(DEFAULT_AFN_PER_USD);
-  const [form, setForm] = useState<ClinicalExpenseForm>(() => createDefaultForm(DEFAULT_AFN_PER_USD));
+  const [form, setForm] = useState<ClinicalExpenseForm>(() => createDefaultForm());
   const [records, setRecords] = useState<ClinicalExpenseRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -183,13 +173,6 @@ const ClinicalExpensesPage = (): JSX.Element => {
     void fetchExpenses();
   }, [fetchExpenses]);
 
-  useEffect(() => {
-    void getExchangeRate(client).then((rate) => {
-      setAfnPerUsd(rate);
-      setForm((prev) => ({ ...prev, exchangeRate: String(rate) }));
-    });
-  }, []);
-
   const summary = useMemo(() => {
     const grouped = new Map<string, number>();
     let total = 0;
@@ -219,7 +202,6 @@ const ClinicalExpensesPage = (): JSX.Element => {
     const quantity = Math.max(0, parseAmount(form.quantity));
     const unitCost = Math.max(0, parseAmount(form.unitCost));
     const totalCost = quantity * unitCost;
-    const exchangeRate = Math.max(0.000001, parseAmount(form.exchangeRate) || afnPerUsd);
 
     if (!form.itemName.trim() || !form.date || quantity <= 0 || unitCost <= 0) {
       return;
@@ -230,8 +212,8 @@ const ClinicalExpensesPage = (): JSX.Element => {
       .post('/api/v1/dental-management/expenses', {
         amount: totalCost,
         category: form.category,
-        currency: form.currency,
-        exchangeRate,
+        currency: 'AFN',
+        exchangeRate: 1,
         expenseDate: form.date,
         expenseType: 'clinical',
         notes: form.notes.trim() || undefined,
@@ -242,7 +224,7 @@ const ClinicalExpensesPage = (): JSX.Element => {
         vendor: form.vendor.trim() || undefined,
       })
       .then(async () => {
-        setForm(createDefaultForm(afnPerUsd));
+        setForm(createDefaultForm());
         await fetchExpenses();
         toast.success('Clinical expense saved.');
       })
@@ -323,32 +305,6 @@ const ClinicalExpensesPage = (): JSX.Element => {
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-1.5">
-                      <Label htmlFor="buy-currency">Currency</Label>
-                      <select
-                        id="buy-currency"
-                        className="h-9 rounded-md border bg-background px-3 text-sm"
-                        value={form.currency}
-                        onChange={(event) => setForm((prev) => ({ ...prev, currency: event.target.value as 'AFN' | 'USD' }))}
-                      >
-                        <option value="USD">USD ($)</option>
-                        <option value="AFN">AFN (Afghani)</option>
-                      </select>
-                    </div>
-                    <div className="grid gap-1.5">
-                      <Label htmlFor="buy-exchange-rate">Exchange Rate (AFN per 1 USD)</Label>
-                      <Input
-                        id="buy-exchange-rate"
-                        type="number"
-                        min="0.0001"
-                        step="0.0001"
-                        value={form.exchangeRate}
-                        onChange={(event) => setForm((prev) => ({ ...prev, exchangeRate: event.target.value }))}
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="grid gap-1.5">
                       <Label htmlFor="quantity">Quantity</Label>
                       <Input
                         id="quantity"
@@ -399,10 +355,10 @@ const ClinicalExpensesPage = (): JSX.Element => {
                 </form>
 
                 <div className="grid gap-3">
-                  <div className="rounded-xl border bg-white/90 p-4">
-                    <p className="text-xs text-muted-foreground">Total Clinical Buying Cost</p>
-                    <p className="text-2xl font-semibold">{formatDualFromUsd(summary.total, afnPerUsd)}</p>
-                  </div>
+                    <div className="rounded-xl border bg-white/90 p-4">
+                      <p className="text-xs text-muted-foreground">Total Clinical Buying Cost</p>
+                      <p className="text-2xl font-semibold">{formatCurrency(summary.total, 'AFN')}</p>
+                    </div>
                   <div className="h-64 rounded-2xl border bg-white/90 p-3">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
@@ -420,7 +376,7 @@ const ClinicalExpensesPage = (): JSX.Element => {
                             <Cell key={entry.name} fill={categoryColors[index % categoryColors.length]} />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(value) => formatCurrency(Number(value), 'USD')} />
+                        <Tooltip formatter={(value) => formatCurrency(Number(value), 'AFN')} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
@@ -431,7 +387,7 @@ const ClinicalExpensesPage = (): JSX.Element => {
                           <span className="size-2.5 rounded-full" style={{ backgroundColor: categoryColors[index % categoryColors.length] }} />
                           {item.name}
                         </span>
-                        <span className="font-semibold">{formatDualFromUsd(item.value, afnPerUsd)}</span>
+                        <span className="font-semibold">{formatCurrency(item.value, 'AFN')}</span>
                       </div>
                     ))}
                   </div>
@@ -463,7 +419,6 @@ const ClinicalExpensesPage = (): JSX.Element => {
                           <th className="px-3 py-2">Qty</th>
                           <th className="px-3 py-2">Unit Cost</th>
                           <th className="px-3 py-2">Total</th>
-                          <th className="px-3 py-2">Currency</th>
                           <th className="px-3 py-2">Action</th>
                         </tr>
                       </thead>
@@ -474,11 +429,8 @@ const ClinicalExpensesPage = (): JSX.Element => {
                             <td className="px-3 py-2">{record.itemName}</td>
                             <td className="px-3 py-2">{record.category}</td>
                             <td className="px-3 py-2">{record.quantity}</td>
-                            <td className="px-3 py-2">{formatDualFromUsd(record.unitCost, afnPerUsd)}</td>
-                            <td className="px-3 py-2 font-semibold">{formatDualFromUsd(record.totalCost, afnPerUsd)}</td>
-                            <td className="px-3 py-2">
-                              {formatCurrency(record.amountInput, record.currency)} ({record.currency})
-                            </td>
+                            <td className="px-3 py-2">{formatCurrency(record.unitCost, 'AFN')}</td>
+                            <td className="px-3 py-2 font-semibold">{formatCurrency(record.totalCost, 'AFN')}</td>
                             <td className="px-3 py-2">
                               <Button type="button" variant="ghost" size="sm" onClick={() => removeRecord(record.id)}>
                                 <Trash2 className="size-4" />

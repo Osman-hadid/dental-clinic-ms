@@ -1,6 +1,96 @@
 {
   "layout": {
     "SOURIRE": "SOURIRE",
-    "developedByAop": "توسعه داده شده محمد عثمان حدید"
+    "developedByAop": "ساخته شده توسط محمد عثمان حدید"
+  },
+  "debtsPage": {
+    "title": "مرکز تسویه بدهی",
+    "paymentDate": "تاریخ پرداخت",
+    "paymentMethod": "روش پرداخت",
+    "notes": "یادداشت ها (اختیاری)",
+    "notesPlaceholder": "نام گردآورنده، مرجع ...",
+    "saving": "در حال ذخیره...",
+    "settleSelected": "تسویه {count} بدهی(های) انتخابی",
+    "outstandingDebt": "بدهی معوق",
+    "openInvoices": "{count} فاکتور(های) باز",
+    "selectedDebt": "بدهی انتخاب شده",
+    "selectedCount": "{count} انتخاب شد",
+    "helpText": "بدهی تسویه‌شده سوابق پرداخت را ایجاد می‌کند، تاریخچه مالی بیمار را به‌روزرسانی می‌کند و به‌طور خودکار درآمد را امن می‌کند.",
+    "outstandingDebtsTable": "بدهی های معوقه",
+    "refresh": "تازه کردن",
+    "refreshing": "تازه کردن...",
+    "loading": "در حال بارگیری بدهی ها...",
+    "noDebts": "بدون سابقه بدهی پرداخت نشده",
+    "columns": {
+      "invoice": "فاکتور",
+      "patient": "بیمار",
+      "date": "تاریخ",
+      "status": "وضعیت",
+      "net": "خالص",
+      "paid": "پرداخت شده است",
+      "debt": "بدهی"
+    },
+    "methods": {
+      "cash": "پول نقد",
+      "card": "کارت",
+      "insurance": "بیمه"
+    },
+    "ariaSelectAll": "تمام ردیف های بدهی را انتخاب کنید",
+    "ariaSelectInvoice": "انتخاب فاکتور {invoiceId}",
+    "patientIdLabel": "شناسه: {id}",
+    "openStatus": "باز کردن",
+    "selectAtLeastOne": "حداقل یک ردیف بدهی را انتخاب کنید.",
+    "savedSuccess": "{count} پرداخت بدهی در سوابق بیمار و گاوصندوق ذخیره شد.",
+    "partialFailure": "برخی از بدهی ها قابل تسویه نبود.",
+    "patientFallback": "بیمار #{id}",
+    "remainingError": "پرداخت بیش از بدهی معوق است. باقی مانده: {remaining}."
+  },
+  "reportsPage": {
+    "controls": {
+      "title": "گزارش کنترل ها",
+      "description": "کنترل های استاندارد گزارش دهی برای بینش های مالی، بالینی و عملیاتی."
+    },
+    "granularity": {
+      "day": "روند روزانه",
+      "month": "روند ماهانه",
+      "year": "روند سالانه"
+    },
+    "status": {
+      "all": "تمام وضعیت های فاکتور",
+      "unpaid": "پرداخت نشده",
+      "partiallyPaid": "تا حدی پرداخت شده است",
+      "paid": "پرداخت شده است",
+      "cancelled": "لغو شد"
+    },
+    "summary": {
+      "incomePaid": "درآمد (پرداخت شده)",
+      "outcome": "نتیجه (هزینه + حقوق)",
+      "profitLoss": "سود / زیان"
+    },
+    "actions": {
+      "print": "گزارش چاپ/PDF",
+      "exportProfitLoss": "صادرات سود/زیان CSV",
+      "showAdvanced": "نمایش کنترل های پیشرفته",
+      "hideAdvanced": "مخفی کردن کنترل های پیشرفته"
+    },
+    "tabs": {
+      "overview": "نمای کلی",
+      "financial": "مالی"
+    },
+    "profitLossChart": {
+      "title": "سود / زیان توسط {granularity}",
+      "description": "میله های سبز سود هستند، میله های قرمز ضرر هستند. نتیجه شامل هزینه ها و حقوق می شود.",
+      "empty": "هیچ داده سود/زیان در محدوده انتخاب شده وجود ندارد."
+    }
+  },
+  "patientProfile": {
+    "badges": {
+      "originalDebtInvoice": "اصل فاکتور بدهی",
+      "debtPaidInvoice": "فاکتور پرداخت بدهی"
+    },
+    "messages": {
+      "settledByInvoice": "بعداً با فاکتور پرداخت بدهی #{invoiceId} تسویه شد.",
+      "generatedFromInvoice": "این فاکتور پرداخت از فاکتور قبلی #{invoiceId} ایجاد شده است."
+    }
   }
 }

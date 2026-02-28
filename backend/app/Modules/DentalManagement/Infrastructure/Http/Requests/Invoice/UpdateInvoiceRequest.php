@@ -23,7 +23,7 @@ final class UpdateInvoiceRequest extends BaseFormRequest
             'totalAmount' => 'required|numeric|min:0',
             'discount' => 'nullable|numeric|min:0',
             'netAmount' => 'required|numeric|min:0',
-            'currency' => 'nullable|string|in:USD,AFN',
+            'currency' => 'nullable|string|in:AFN',
             'exchangeRate' => 'nullable|numeric|gt:0',
             'invoiceDate' => 'required|date_format:Y-m-d',
             'status' => 'nullable|string|in:unpaid,partially_paid,paid,cancelled',

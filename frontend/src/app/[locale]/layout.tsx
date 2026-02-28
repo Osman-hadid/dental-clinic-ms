@@ -27,12 +27,12 @@ const geistMono = localFont({
 
 export const metadata: Metadata = {
   description: 'Developed By OsmanHadid',
-  title: 'Sourire',
   icons: {
+    apple: '/logo.png',
     icon: '/logo.png',
     shortcut: '/logo.png',
-    apple: '/logo.png',
   },
+  title: 'Sourire',
 };
 
 // eslint-disable-next-line react/function-component-definition
@@ -49,7 +49,7 @@ export default async function RootLayout({
   const direction = getDirection(locale);
 
   return (
-    <html lang={locale} className="light">
+    <html lang={locale} dir={direction} className="light">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`} dir={direction}>
         <NextIntlClientProvider locale={locale}>
           <ReactQueryProvider>

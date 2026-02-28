@@ -10,18 +10,14 @@ import { Label } from '@/components/ui/label';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import { useStaffList } from '@/modules/dental-management/presentation/hooks';
 import {
-  DEFAULT_AFN_PER_USD,
   formatCurrency,
-  formatDualFromUsd,
-  getExchangeRate,
   parseMoney,
 } from '@/lib/currency-utils';
 import { ReceiptText, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 type SalaryRow = {
-  currency: 'AFN' | 'USD';
-  exchangeRate: number;
+  currency: 'AFN';
   id: string;
   netAmount: number;
   netAmountInput: number;
@@ -34,9 +30,7 @@ type SalaryRow = {
 
 type SalaryForm = {
   bonusAmount: string;
-  currency: 'AFN' | 'USD';
   deductionAmount: string;
-  exchangeRate: string;
   grossAmount: string;
   notes: string;
   paidFromSafe: boolean;
@@ -96,7 +90,7 @@ const extractApiErrorMessage = (error: unknown, fallback: string): string => {
   if (code === 'SAFE_BALANCE_INSUFFICIENT') {
     const currentBalance = Number(payload?.details?.currentBalance ?? 0);
     const requestedAmount = Number(payload?.details?.requestedAmount ?? 0);
-    return `Safe balance is not enough. Current: ${formatCurrency(currentBalance, 'USD')}. Requested: ${formatCurrency(requestedAmount, 'USD')}. Add money to safe or reduce the salary amount.`;
+    return `Safe balance is not enough. Current: ${formatCurrency(currentBalance, 'AFN')}. Requested: ${formatCurrency(requestedAmount, 'AFN')}. Add money to safe or reduce the salary amount.`;
   }
 
   if (payload?.message) {
@@ -106,11 +100,9 @@ const extractApiErrorMessage = (error: unknown, fallback: string): string => {
   return fallback;
 };
 
-const defaultForm = (afnPerUsd: number): SalaryForm => ({
+const defaultForm = (): SalaryForm => ({
   bonusAmount: '0',
-  currency: 'USD',
   deductionAmount: '0',
-  exchangeRate: String(afnPerUsd),
   grossAmount: '',
   notes: '',
   paidFromSafe: true,
@@ -125,8 +117,7 @@ export default function SalariesPage(): JSX.Element {
   const tSidebar = useTranslations('sidebar');
   const tReports = useTranslations('sidebar.reports');
   const { entities: staff } = useStaffList(1, 100);
-  const [afnPerUsd, setAfnPerUsd] = useState(DEFAULT_AFN_PER_USD);
-  const [form, setForm] = useState<SalaryForm>(() => defaultForm(DEFAULT_AFN_PER_USD));
+  const [form, setForm] = useState<SalaryForm>(() => defaultForm());
   const [rows, setRows] = useState<SalaryRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -173,8 +164,7 @@ export default function SalariesPage(): JSX.Element {
           ? [String(staffRow.firstName ?? ''), String(staffRow.lastName ?? '')].filter(Boolean).join(' ')
           : '';
         return {
-          currency: (String(row.currency ?? 'USD').toUpperCase() as 'AFN' | 'USD'),
-          exchangeRate: Number(row.exchangeRate ?? row.exchange_rate ?? 1),
+          currency: 'AFN',
           id: String(row.id ?? ''),
           netAmount: Number(row.netAmount ?? row.net_amount ?? 0),
           netAmountInput: Number(row.netAmountInput ?? row.net_amount_input ?? row.netAmount ?? row.net_amount ?? 0),
@@ -193,13 +183,6 @@ export default function SalariesPage(): JSX.Element {
   useEffect(() => {
     void fetchData();
   }, [fetchData]);
-
-  useEffect(() => {
-    void getExchangeRate(client).then((rate) => {
-      setAfnPerUsd(rate);
-      setForm((prev) => ({ ...prev, exchangeRate: String(rate) }));
-    });
-  }, []);
 
   const totals = useMemo(() => {
     const paid = rows
@@ -224,15 +207,14 @@ export default function SalariesPage(): JSX.Element {
     }
 
     const netAmount = Math.max(0, grossAmount + bonusAmount - deductionAmount);
-    const exchangeRate = Math.max(0.000001, parseAmount(form.exchangeRate) || afnPerUsd);
 
     setIsSubmitting(true);
     void client
       .post('/api/v1/dental-management/salary-payments', {
         bonusAmount,
-        currency: form.currency,
+        currency: 'AFN',
         deductionAmount,
-        exchangeRate,
+        exchangeRate: 1,
         grossAmount,
         netAmount,
         notes: form.notes.trim() || undefined,
@@ -243,7 +225,7 @@ export default function SalariesPage(): JSX.Element {
         status: form.status,
       })
       .then(async () => {
-        setForm(defaultForm(afnPerUsd));
+        setForm(defaultForm());
         await fetchData();
         toast.success('Salary payment saved.');
       })
@@ -364,30 +346,6 @@ export default function SalariesPage(): JSX.Element {
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-1.5">
-                      <Label>Currency</Label>
-                      <select
-                        className="h-9 rounded-md border bg-background px-3 text-sm"
-                        value={form.currency}
-                        onChange={(event) => setForm((prev) => ({ ...prev, currency: event.target.value as 'AFN' | 'USD' }))}
-                      >
-                        <option value="USD">USD ($)</option>
-                        <option value="AFN">AFN (Afghani)</option>
-                      </select>
-                    </div>
-                    <div className="grid gap-1.5">
-                      <Label>Exchange Rate (AFN per 1 USD)</Label>
-                      <Input
-                        type="number"
-                        min="0.0001"
-                        step="0.0001"
-                        value={form.exchangeRate}
-                        onChange={(event) => setForm((prev) => ({ ...prev, exchangeRate: event.target.value }))}
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="grid gap-1.5">
                       <Label>Status</Label>
                       <select
                         className="h-9 rounded-md border bg-background px-3 text-sm"
@@ -426,7 +384,7 @@ export default function SalariesPage(): JSX.Element {
                 <div className="grid gap-3">
                   <div className="rounded-2xl border bg-white/90 p-4">
                     <p className="text-xs text-muted-foreground">Paid Salaries</p>
-                    <p className="text-2xl font-semibold">{formatDualFromUsd(totals.paid, afnPerUsd)}</p>
+                    <p className="text-2xl font-semibold">{formatCurrency(totals.paid, 'AFN')}</p>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="rounded-xl border bg-violet-100/70 p-3 text-violet-900">
@@ -461,7 +419,6 @@ export default function SalariesPage(): JSX.Element {
                           <th className="px-3 py-2">Staff</th>
                           <th className="px-3 py-2">Status</th>
                           <th className="px-3 py-2">Net</th>
-                          <th className="px-3 py-2">Currency</th>
                           <th className="px-3 py-2">Action</th>
                         </tr>
                       </thead>
@@ -472,10 +429,7 @@ export default function SalariesPage(): JSX.Element {
                             <td className="px-3 py-2">{row.paymentDate}</td>
                             <td className="px-3 py-2">{row.staffName || `Staff #${row.staffId}`}</td>
                             <td className="px-3 py-2 capitalize">{row.status}</td>
-                            <td className="px-3 py-2 font-semibold">{formatDualFromUsd(row.netAmount, afnPerUsd)}</td>
-                            <td className="px-3 py-2">
-                              {formatCurrency(row.netAmountInput, row.currency)} ({row.currency})
-                            </td>
+                            <td className="px-3 py-2 font-semibold">{formatCurrency(row.netAmountInput, 'AFN')}</td>
                             <td className="px-3 py-2">
                               <Button type="button" variant="ghost" size="sm" onClick={() => removeRow(row.id)}>
                                 <Trash2 className="size-4" />

@@ -22,7 +22,7 @@ final class StoreSafeTransactionRequest extends BaseFormRequest
             'entryType' => 'required|string|in:income,expense,salary,withdrawal,deposit,adjustment',
             'direction' => 'required|string|in:in,out',
             'amount' => 'required|numeric|gt:0',
-            'currency' => 'nullable|string|in:USD,AFN',
+            'currency' => 'nullable|string|in:AFN',
             'exchangeRate' => 'nullable|numeric|gt:0',
             'sourceId' => 'nullable|integer',
             'sourceType' => 'nullable|string|max:60',

@@ -1,98 +1,98 @@
 {
   "config": {
-    "title": "Visit Treatments",
-    "entity": "Visit Treatment",
+    "title": "از درمان ها دیدن کنید",
+    "entity": "به درمان مراجعه کنید",
     "table": {
-      "add": "Add Visit Treatment",
-      "create": "Create Visit Treatment",
-      "edit": "Edit Visit Treatment",
-      "update": "Update Visit Treatment"
+      "add": "اضافه کردن درمان بازدید",
+      "create": "ایجاد درمان ویزیت",
+      "edit": "ویرایش درمان ویزیت",
+      "update": "به روز رسانی درمان ویزیت"
     },
     "form": {
       "visitId": {
-        "label": "Visit Id",
+        "label": "به شناسه مراجعه کنید",
         "validation": {
-          "required": "Visit Id is required",
-          "pattern": "Visit Id must be a number"
+          "required": "شناسه بازدید الزامی است",
+          "pattern": "شناسه بازدید باید یک عدد باشد"
         }
       },
       "treatmentId": {
-        "label": "Treatment Id",
+        "label": "شناسه درمان",
         "validation": {
-          "required": "Treatment Id is required",
-          "pattern": "Treatment Id must be a number"
+          "required": "شناسه درمان مورد نیاز است",
+          "pattern": "شناسه درمان باید یک عدد باشد"
         }
       },
       "toothId": {
-        "label": "Tooth Id",
+        "label": "شناسه دندان",
         "validation": {
-          "pattern": "Tooth Id must be a number"
+          "pattern": "شناسه دندان باید یک عدد باشد"
         }
       },
       "dentistId": {
-        "label": "Dentist Id",
+        "label": "شناسه دندانپزشک",
         "validation": {
-          "required": "Dentist Id is required",
-          "pattern": "Dentist Id must be a number"
+          "required": "شناسه دندانپزشک الزامی است",
+          "pattern": "شناسه دندانپزشک باید یک عدد باشد"
         }
       },
       "price": {
-        "label": "Price",
+        "label": "قیمت",
         "validation": {
-          "required": "Price is required",
-          "maxLength": "Price must be 255 characters or less"
+          "required": "قیمت الزامی است",
+          "maxLength": "قیمت باید 255 کاراکتر یا کمتر باشد"
         }
       },
       "material": {
-        "label": "Material",
+        "label": "مواد",
         "validation": {
-          "maxLength": "Material must be 255 characters or less"
+          "maxLength": "متریال باید 255 نویسه یا کمتر باشد"
         }
       },
       "notes": {
-        "label": "Notes",
+        "label": "یادداشت ها",
         "validation": {
-          "maxLength": "Notes must be 255 characters or less"
+          "maxLength": "یادداشت ها باید 255 کاراکتر یا کمتر باشند"
         }
       },
       "createdBy": {
-        "label": "Created By",
+        "label": "ایجاد شده توسط",
         "validation": {
-          "pattern": "Created By must be a number"
+          "pattern": "ایجاد شده توسط باید یک عدد باشد"
         }
       },
       "updatedBy": {
-        "label": "Updated By",
+        "label": "به روز شده توسط",
         "validation": {
-          "pattern": "Updated By must be a number"
+          "pattern": "Updated By باید یک عدد باشد"
         }
       },
       "deletedBy": {
-        "label": "Deleted By",
+        "label": "حذف شده توسط",
         "validation": {
-          "pattern": "Deleted By must be a number"
+          "pattern": "حذف شده توسط باید یک عدد باشد"
         }
       },
       "trashed": {
-        "label": "Trashed",
+        "label": "سطل زباله",
         "options": {
-          "with": "With Trashed",
-          "only": "Only Trashed"
+          "with": "با سطل زباله",
+          "only": "فقط سطل زباله"
         }
       }
     },
     "repository": {
-      "createFailed": "Failed to create Visit Treatment",
-      "fetchFailed": "Failed to fetch Visit Treatment",
-      "updateFailed": "Failed to update Visit Treatment",
-      "deleteFailed": "Failed to delete Visit Treatment",
-      "fetchManyFailed": "Failed to fetch Visit Treatments",
-      "fetchManySuccess": "Visit Treatments fetched successfully"
+      "createFailed": "درمان بازدید ایجاد نشد",
+      "fetchFailed": "واکشی درمان بازدید انجام نشد",
+      "updateFailed": "درمان بازدید به‌روزرسانی نشد",
+      "deleteFailed": "بازدید از درمان حذف نشد",
+      "fetchManyFailed": "واکشی درمان‌های بازدید انجام نشد",
+      "fetchManySuccess": "بازدید از درمان با موفقیت واکشی شد"
     },
     "presentation": {
-      "createSuccess": "Visit Treatment created successfully",
-      "updateSuccess": "Visit Treatment updated successfully",
-      "deleteSuccess": "Visit Treatment deleted successfully"
+      "createSuccess": "بازدید از درمان با موفقیت ایجاد شد",
+      "updateSuccess": "بازدید از درمان با موفقیت به روز شد",
+      "deleteSuccess": "بازدید از درمان با موفقیت حذف شد"
     }
   }
 }

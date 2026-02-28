@@ -10,12 +10,8 @@ import { Label } from '@/components/ui/label';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import { useStaffList } from '@/modules/dental-management/presentation/hooks';
 import {
-  DEFAULT_AFN_PER_USD,
   formatCurrency,
-  formatDualFromUsd,
-  getExchangeRate,
   parseMoney,
-  updateExchangeRate,
 } from '@/lib/currency-utils';
 import { HandCoins, Trash2, Vault } from 'lucide-react';
 import { toast } from 'sonner';
@@ -23,9 +19,8 @@ import { toast } from 'sonner';
 type SafeRow = {
   amount: number;
   amountInput: number;
-  currency: 'AFN' | 'USD';
+  currency: 'AFN';
   direction: string;
-  exchangeRate: number;
   entryType: string;
   id: string;
   notes: string;
@@ -36,9 +31,7 @@ type SafeRow = {
 
 type SafeForm = {
   amount: string;
-  currency: 'AFN' | 'USD';
   direction: 'in' | 'out';
-  exchangeRate: string;
   entryType: string;
   notes: string;
   pickedByStaffId: string;
@@ -73,17 +66,15 @@ const extractApiErrorMessage = (error: unknown, fallback: string): string => {
   if (code === 'SAFE_BALANCE_INSUFFICIENT') {
     const currentBalance = Number(payload?.details?.currentBalance ?? 0);
     const requestedAmount = Number(payload?.details?.requestedAmount ?? 0);
-    return `Safe balance is not enough. Current: ${formatCurrency(currentBalance, 'USD')}. Requested: ${formatCurrency(requestedAmount, 'USD')}.`;
+    return `Safe balance is not enough. Current: ${formatCurrency(currentBalance, 'AFN')}. Requested: ${formatCurrency(requestedAmount, 'AFN')}.`;
   }
 
   return payload?.message || fallback;
 };
 
-const defaultForm = (afnPerUsd: number): SafeForm => ({
+const defaultForm = (): SafeForm => ({
   amount: '',
-  currency: 'USD',
   direction: 'in',
-  exchangeRate: String(afnPerUsd),
   entryType: 'deposit',
   notes: '',
   pickedByStaffId: '',
@@ -95,15 +86,13 @@ export default function SafePage(): JSX.Element {
   const tSidebar = useTranslations('sidebar');
   const tReports = useTranslations('sidebar.reports');
   const { entities: staff } = useStaffList(1, 100);
-  const [afnPerUsd, setAfnPerUsd] = useState(DEFAULT_AFN_PER_USD);
-  const [form, setForm] = useState<SafeForm>(() => defaultForm(DEFAULT_AFN_PER_USD));
+  const [form, setForm] = useState<SafeForm>(() => defaultForm());
   const [rows, setRows] = useState<SafeRow[]>([]);
   const [balance, setBalance] = useState(0);
   const [totalIn, setTotalIn] = useState(0);
   const [totalOut, setTotalOut] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSavingRate, setIsSavingRate] = useState(false);
 
   const fetchAllSafeRows = useCallback(async (): Promise<Array<Record<string, unknown>>> => {
     const rows: Array<Record<string, unknown>> = [];
@@ -146,11 +135,10 @@ export default function SafePage(): JSX.Element {
 
       const list = Array.isArray(allRows) ? allRows : [];
       setRows(list.map((row) => ({
-        amount: Number(row.amount ?? 0),
+        amount: Number(row.amountInput ?? row.amount_input ?? row.amount ?? 0),
         amountInput: Number(row.amountInput ?? row.amount_input ?? row.amount ?? 0),
-        currency: (String(row.currency ?? 'USD').toUpperCase() as 'AFN' | 'USD'),
+        currency: 'AFN',
         direction: String(row.direction ?? ''),
-        exchangeRate: Number(row.exchangeRate ?? row.exchange_rate ?? 1),
         entryType: String(row.entryType ?? row.entry_type ?? ''),
         id: String(row.id ?? ''),
         notes: String(row.notes ?? ''),
@@ -169,26 +157,14 @@ export default function SafePage(): JSX.Element {
       setBalance(Number(balanceResponse.data?.balance ?? 0));
       setTotalIn(Number(balanceResponse.data?.totalIn ?? 0));
       setTotalOut(Number(balanceResponse.data?.totalOut ?? 0));
-      const rate = Number(balanceResponse.data?.afnPerUsd ?? afnPerUsd);
-      if (Number.isFinite(rate) && rate > 0) {
-        setAfnPerUsd(rate);
-        setForm((prev) => ({ ...prev, exchangeRate: String(rate) }));
-      }
     } finally {
       setIsLoading(false);
     }
-  }, [afnPerUsd, fetchAllSafeRows]);
+  }, [fetchAllSafeRows]);
 
   useEffect(() => {
     void fetchData();
   }, [fetchData]);
-
-  useEffect(() => {
-    void getExchangeRate(client).then((rate) => {
-      setAfnPerUsd(rate);
-      setForm((prev) => ({ ...prev, exchangeRate: String(rate) }));
-    });
-  }, []);
 
   const sortedRows = useMemo(() => {
     return [...rows].sort((a, b) => b.transactionDate.localeCompare(a.transactionDate));
@@ -201,23 +177,22 @@ export default function SafePage(): JSX.Element {
     if (!form.transactionDate || rawAmount <= 0) {
       return;
     }
-    const exchangeRate = Math.max(0.000001, parseAmount(form.exchangeRate) || afnPerUsd);
 
     setIsSubmitting(true);
     void client
       .post('/api/v1/dental-management/safe-transactions', {
         amount: rawAmount,
-        currency: form.currency,
+        currency: 'AFN',
         direction: form.direction,
-        exchangeRate,
         entryType: form.entryType,
+        exchangeRate: 1,
         notes: form.notes.trim() || undefined,
         pickedByStaffId: form.pickedByStaffId || undefined,
         sourceType: null,
         transactionDate: form.transactionDate,
       })
       .then(async () => {
-        setForm(defaultForm(afnPerUsd));
+        setForm(defaultForm());
         await fetchData();
         toast.success('Safe transaction saved.');
       })
@@ -226,28 +201,6 @@ export default function SafePage(): JSX.Element {
       })
       .finally(() => {
         setIsSubmitting(false);
-      });
-  };
-
-  const handleSaveExchangeRate = (): void => {
-    const rate = parseAmount(form.exchangeRate);
-    if (!Number.isFinite(rate) || rate <= 0) {
-      toast.error('Please enter a valid exchange rate.');
-      return;
-    }
-
-    setIsSavingRate(true);
-    void updateExchangeRate(client, rate)
-      .then((savedRate) => {
-        setAfnPerUsd(savedRate);
-        setForm((prev) => ({ ...prev, exchangeRate: String(savedRate) }));
-        toast.success('Exchange rate updated.');
-      })
-      .catch(() => {
-        toast.error('Failed to update exchange rate.');
-      })
-      .finally(() => {
-        setIsSavingRate(false);
       });
   };
 
@@ -305,45 +258,6 @@ export default function SafePage(): JSX.Element {
                         required
                       />
                     </div>
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label>Currency</Label>
-                    <select
-                      className="h-9 rounded-md border bg-background px-3 text-sm"
-                      value={form.currency}
-                      onChange={(event) => setForm((prev) => ({ ...prev, currency: event.target.value as 'AFN' | 'USD' }))}
-                    >
-                      <option value="USD">USD ($)</option>
-                      <option value="AFN">AFN (Afghani)</option>
-                    </select>
-                    {form.amount ? (
-                      <p className="text-xs text-muted-foreground">
-                        {form.currency === 'USD'
-                          ? `Equivalent: ${formatCurrency((parseAmount(form.amount) || 0) * (parseAmount(form.exchangeRate) || afnPerUsd), 'AFN')}`
-                          : `Equivalent: ${formatCurrency((parseAmount(form.amount) || 0) / Math.max(parseAmount(form.exchangeRate) || afnPerUsd, 0.000001), 'USD')}`}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="grid gap-1.5 sm:grid-cols-[1fr_auto] sm:items-end sm:gap-2">
-                    <div className="grid gap-1.5">
-                      <Label>Exchange Rate (AFN per 1 USD)</Label>
-                      <Input
-                        type="number"
-                        min="0.0001"
-                        step="0.0001"
-                        value={form.exchangeRate}
-                        onChange={(event) => setForm((prev) => ({ ...prev, exchangeRate: event.target.value }))}
-                        required
-                      />
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleSaveExchangeRate}
-                      disabled={isSavingRate}
-                    >
-                      {isSavingRate ? 'Saving...' : 'Save Rate'}
-                    </Button>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-1.5">
@@ -404,20 +318,20 @@ export default function SafePage(): JSX.Element {
                 <div className="grid gap-3">
                   <div className="rounded-2xl border bg-white/90 p-4">
                     <p className="text-xs text-muted-foreground">Current Safe Balance</p>
-                    <p className="text-3xl font-semibold">{formatDualFromUsd(balance, afnPerUsd)}</p>
+                    <p className="text-3xl font-semibold">{formatCurrency(balance, 'AFN')}</p>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="rounded-xl border bg-emerald-100/70 p-3 text-emerald-900">
                       <p className="text-xs">Total In</p>
-                      <p className="text-lg font-semibold">{formatDualFromUsd(totalIn, afnPerUsd)}</p>
+                      <p className="text-lg font-semibold">{formatCurrency(totalIn, 'AFN')}</p>
                     </div>
                     <div className="rounded-xl border bg-orange-100/70 p-3 text-orange-900">
                       <p className="text-xs">Total Out</p>
-                      <p className="text-lg font-semibold">{formatDualFromUsd(totalOut, afnPerUsd)}</p>
+                      <p className="text-lg font-semibold">{formatCurrency(totalOut, 'AFN')}</p>
                     </div>
                   </div>
                   <div className="rounded-xl border bg-white/90 p-3 text-sm text-muted-foreground">
-                    Safe outflow tracks who picked money (when selected) and appears in reports. Conversion rate: 1 USD = {afnPerUsd} AFN.
+                    Safe outflow tracks who picked money (when selected) and appears in reports.
                   </div>
                 </div>
               </CardContent>
@@ -445,7 +359,6 @@ export default function SafePage(): JSX.Element {
                           <th className="px-3 py-2">Direction</th>
                           <th className="px-3 py-2">Picked By</th>
                           <th className="px-3 py-2">Amount</th>
-                          <th className="px-3 py-2">Currency</th>
                           <th className="px-3 py-2">Notes</th>
                           <th className="px-3 py-2">Action</th>
                         </tr>
@@ -457,10 +370,7 @@ export default function SafePage(): JSX.Element {
                             <td className="px-3 py-2 capitalize">{row.entryType.replace('_', ' ')}</td>
                             <td className="px-3 py-2 uppercase">{row.direction}</td>
                             <td className="px-3 py-2">{row.pickedByStaffName || '-'}</td>
-                            <td className="px-3 py-2 font-semibold">{formatDualFromUsd(row.amount, afnPerUsd)}</td>
-                            <td className="px-3 py-2">
-                              {formatCurrency(row.amountInput, row.currency)} ({row.currency})
-                            </td>
+                            <td className="px-3 py-2 font-semibold">{formatCurrency(row.amountInput, 'AFN')}</td>
                             <td className="px-3 py-2">{row.notes || '-'}</td>
                             <td className="px-3 py-2">
                               <Button type="button" variant="ghost" size="sm" onClick={() => removeRow(row.id)}>

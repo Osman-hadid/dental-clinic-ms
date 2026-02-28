@@ -1,58 +1,60 @@
 {
-  "platform": "Ù¾Ù„Ø§ØªÙÙˆØ±Ù…",
+  "platform": "پلیټ فارم",
   "name": "SOURIRE",
   "dashboard": {
-    "title": "Ú‰Ø´Ø¨ÙˆØ±Ú‰",
-    "overview": "Ø¹Ù…ÙˆÙ…ÙŠ Ú©ØªÙ†Ù‡"
+    "title": "ډشبورډ",
+    "overview": "کتنه"
   },
   "userManagement": {
-    "title": "Ø¯ Ú©Ø§Ø±ÙˆÙˆÙ†Ú©Ùˆ Ù…Ø¯ÛŒØ±ÛŒØª",
-    "users": "Ú©Ø§Ø±ÙˆÙˆÙ†Ú©ÙŠ",
-    "roles": "Ù†Ù‚Ø´ÙˆÙ†Ù‡",
-    "permissions": "ØµÙ„Ø§Ø­ÛŒØªÙˆÙ†Ù‡"
+    "title": "د کارن مدیریت",
+    "users": "کاروونکي",
+    "roles": "رولونه",
+    "permissions": "اجازې"
   },
   "documentation": {
-    "title": "Ù…Ø³ØªÙ†Ø¯Ø§Øª",
-    "users": "Ú©Ø§Ø±ÙˆÙˆÙ†Ú©ÙŠ",
-    "permissions": "ØµÙ„Ø§Ø­ÛŒØªÙˆÙ†Ù‡",
-    "settings": "ØªÙ†Ø¸ÛŒÙ…Ø§Øª"
+    "title": "اسناد",
+    "users": "کاروونکي",
+    "permissions": "اجازې",
+    "settings": "ترتیبات"
   },
   "settings": {
-    "title": "ØªÙ†Ø¸ÛŒÙ…Ø§Øª",
-    "dashboard": "Ú‰Ø´Ø¨ÙˆØ±Ú‰"
+    "title": "ترتیبات",
+    "dashboard": "ډشبورډ"
   },
   "navUser": {
-    "loggingOut": "Ø¯ ÙˆØªÙ„Ùˆ Ù¾Ù‡ Ø­Ø§Ù„ Ú©Û...",
-    "logout": "ÙˆØªÙ„",
-    "account": "Ø­Ø³Ø§Ø¨",
-    "notifications": "Ø®Ø¨Ø±ØªÛŒØ§ÙˆÛ"
+    "loggingOut": "ننوتل ...",
+    "logout": "وتل",
+    "account": "حساب",
+    "notifications": "خبرتیاوې"
   },
   "employees": {
-    "title": "Ú©Ø§Ø±Ú©ÙˆÙˆÙ†Ú©ÙŠ",
-    "jobTypes": "Ø¯ Ø¯Ù†Ø¯Ùˆ Ú‰ÙˆÙ„ÙˆÙ†Ù‡"
-  },
-  "dentalManagement": {
-    "title": "Dental Management",
-    "patients": "Patients",
-    "staff": "Staff",
-    "staffProfiles": "Staff Profiles",
-    "appointments": "Appointments",
-    "visits": "Visits",
-    "teeth": "Teeth",
-    "treatments": "Treatments",
-    "implants": "Implants",
-    "visitTreatments": "Visit Treatments",
-    "invoices": "Invoices",
-    "payments": "Payments",
-    "aiImaging": "AI Imaging",
-    "aiImagingN8n": "AI Imaging (n8n)"
+    "title": "کارمندان",
+    "jobTypes": "د کار ډولونه"
   },
   "reports": {
-    "title": "Reports",
-    "overview": "Report Center",
-    "dailyExpenses": "Daily Expenses",
-    "clinicalExpenses": "Clinical Buys",
-    "safe": "Safe Ledger",
-    "salaries": "Salaries"
+    "title": "راپورونه",
+    "overview": "د راپور مرکز",
+    "debts": "د پور مرکز",
+    "dailyExpenses": "ورځني لګښتونه",
+    "clinicalExpenses": "کلینیکي پیرود",
+    "safe": "خوندي لیجر",
+    "salaries": "معاشونه"
+  },
+  "dentalManagement": {
+    "title": "د غاښونو مدیریت",
+    "patients": "ناروغان",
+    "staff": "کارکوونکي",
+    "staffProfiles": "د کارمندانو پروفایلونه",
+    "appointments": "ګمارنې",
+    "visits": "لیدنه",
+    "teeth": "غاښونه",
+    "treatments": "درملنه",
+    "implants": "امپلانټونه",
+    "implantsInProcess": "? ??????? ?????",
+    "visitTreatments": "د درملنې څخه لیدنه وکړئ",
+    "invoices": "رسیدونه",
+    "payments": "تادیات",
+    "aiImaging": "د AI امیجنگ",
+    "aiImagingN8n": "د AI عکس اخیستل (n8n)"
   }
 }

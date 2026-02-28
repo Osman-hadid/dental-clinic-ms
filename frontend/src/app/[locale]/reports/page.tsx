@@ -1,7 +1,7 @@
 'use client';
 
 import { JSX, useCallback, useEffect, useMemo, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Header } from '@/components/header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,7 @@ import {
   AreaChart,
   Bar,
   BarChart,
+  Cell,
   CartesianGrid,
   Legend,
   Line,
@@ -35,7 +36,7 @@ import {
   YAxis,
 } from 'recharts';
 
-type ReportGranularity = 'day' | 'month' | 'week';
+type ReportGranularity = 'day' | 'month' | 'year';
 type InvoiceStatusFilter = 'all' | 'cancelled' | 'paid' | 'partially_paid' | 'unpaid';
 
 type ParsedPayment = {
@@ -81,6 +82,14 @@ type CashFlowPoint = {
   label: string;
   net: number;
   paid: number;
+};
+
+type ProfitLossPoint = {
+  income: number;
+  key: string;
+  label: string;
+  outcome: number;
+  profit: number;
 };
 
 type DebtAgingPoint = {
@@ -231,9 +240,9 @@ const parseDate = (value?: string): Date | null => {
 
 const formatCurrency = (value: number): string => {
   return new Intl.NumberFormat('en-US', {
-    currency: 'USD',
-    maximumFractionDigits: 2,
-    minimumFractionDigits: 2,
+    currency: 'AFN',
+    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
     style: 'currency',
   }).format(value);
 };
@@ -259,15 +268,6 @@ const escapeHtml = (value: unknown): string => {
     .replaceAll("'", '&#039;');
 };
 
-const startOfWeek = (date: Date): Date => {
-  const copy = new Date(date);
-  const day = copy.getDay();
-  const offset = day === 0 ? -6 : 1 - day;
-  copy.setDate(copy.getDate() + offset);
-  copy.setHours(0, 0, 0, 0);
-  return copy;
-};
-
 const toBucket = (date: Date, granularity: ReportGranularity): { key: string; label: string; sort: number } => {
   if (granularity === 'month') {
     const year = date.getFullYear();
@@ -279,12 +279,12 @@ const toBucket = (date: Date, granularity: ReportGranularity): { key: string; la
     };
   }
 
-  if (granularity === 'week') {
-    const weekStart = startOfWeek(date);
+  if (granularity === 'year') {
+    const year = date.getFullYear();
     return {
-      key: toInputDate(weekStart),
-      label: `Week of ${formatShortDate(toInputDate(weekStart))}`,
-      sort: weekStart.getTime(),
+      key: String(year),
+      label: String(year),
+      sort: new Date(year, 0, 1).getTime(),
     };
   }
 
@@ -365,7 +365,10 @@ const fetchAllRows = async (
 
 // eslint-disable-next-line react/function-component-definition
 export default function ReportsPage(): JSX.Element {
+  const locale = useLocale();
+  const isRtl = locale === 'ps' || locale === 'dr';
   const tSidebar = useTranslations('sidebar');
+  const tReportsPage = useTranslations('app.reportsPage');
   const ninetyDaysAgo = useMemo(() => {
     const date = new Date();
     date.setDate(date.getDate() - 90);
@@ -377,6 +380,7 @@ export default function ReportsPage(): JSX.Element {
   const [endDate, setEndDate] = useState(today);
   const [granularity, setGranularity] = useState<ReportGranularity>('day');
   const [statusFilter, setStatusFilter] = useState<InvoiceStatusFilter>('all');
+  const [showAdvancedControls, setShowAdvancedControls] = useState(false);
   const [activeTab, setActiveTab] = useState<'clinical' | 'financial' | 'operations' | 'overview'>('overview');
   const [selectedPatientLedgerId, setSelectedPatientLedgerId] = useState<string>('all');
   const [snapshotCadence, setSnapshotCadence] = useState<SnapshotCadence>(() => {
@@ -403,6 +407,11 @@ export default function ReportsPage(): JSX.Element {
   const [safeRows, setSafeRows] = useState<SafeTransactionRow[]>([]);
   const [salaryRows, setSalaryRows] = useState<SalaryPaymentRow[]>([]);
   const [isLoadingFinanceData, setIsLoadingFinanceData] = useState(false);
+  const granularityLabel = useMemo(() => {
+    if (granularity === 'year') return tReportsPage('granularity.year');
+    if (granularity === 'month') return tReportsPage('granularity.month');
+    return tReportsPage('granularity.day');
+  }, [granularity, tReportsPage]);
 
   const { entities: patients, isFetching: isLoadingPatients } = usePatientList(1, MAX_PER_PAGE);
   const { entities: appointments, isFetching: isLoadingAppointments } = useAppointmentList(
@@ -479,7 +488,7 @@ export default function ReportsPage(): JSX.Element {
         amount: parseAmount(row.amount),
         amountInput: parseAmount(row.amountInput ?? row.amount_input ?? row.amount),
         category: asText(row.category) || 'Other',
-        currency: asText(row.currency).toUpperCase() || 'USD',
+        currency: 'AFN',
         exchangeRate: parseAmount(row.exchangeRate ?? row.exchange_rate ?? 1) || 1,
         expenseDate: asText(row.expenseDate ?? row.expense_date),
         expenseType: asText(row.expenseType ?? row.expense_type) || 'daily',
@@ -495,10 +504,10 @@ export default function ReportsPage(): JSX.Element {
         return {
           amount: parseAmount(row.amount),
           amountInput: parseAmount(row.amountInput ?? row.amount_input ?? row.amount),
-          currency: asText(row.currency).toUpperCase() || 'USD',
+          currency: 'AFN',
           direction: asText(row.direction),
-          exchangeRate: parseAmount(row.exchangeRate ?? row.exchange_rate ?? 1) || 1,
           entryType: asText(row.entryType ?? row.entry_type),
+          exchangeRate: parseAmount(row.exchangeRate ?? row.exchange_rate ?? 1) || 1,
           id: asText(row.id),
           notes: asText(row.notes),
           pickedByStaffId: asText(row.pickedByStaffId ?? row.picked_by_staff_id),
@@ -514,7 +523,7 @@ export default function ReportsPage(): JSX.Element {
             .join(' ')
           : '';
         return {
-          currency: asText(row.currency).toUpperCase() || 'USD',
+          currency: 'AFN',
           exchangeRate: parseAmount(row.exchangeRate ?? row.exchange_rate ?? 1) || 1,
           id: asText(row.id),
           netAmount: parseAmount(row.netAmount ?? row.net_amount),
@@ -612,7 +621,7 @@ export default function ReportsPage(): JSX.Element {
       const status = asText(invoiceRow.status).toLowerCase();
       const patientId = asText(invoiceRow.patientId ?? invoiceRow.patient_id);
       const visitId = asText(invoiceRow.visitId ?? invoiceRow.visit_id);
-      const currency = asText(invoiceRow.currency).toUpperCase() || 'USD';
+      const currency = 'AFN';
       const exchangeRate = parseAmount(invoiceRow.exchangeRate ?? invoiceRow.exchange_rate ?? 1) || 1;
       const total = parseAmount(invoiceRow.totalAmount ?? invoiceRow.total_amount);
       const totalInput = parseAmount(invoiceRow.totalAmountInput ?? invoiceRow.total_amount_input ?? invoiceRow.totalAmount ?? invoiceRow.total_amount);
@@ -639,7 +648,7 @@ export default function ReportsPage(): JSX.Element {
           return {
             amount: parseAmount(paymentRow.amount),
             amountInput: parseAmount(paymentRow.amountInput ?? paymentRow.amount_input ?? paymentRow.amount),
-            currency: asText(paymentRow.currency).toUpperCase() || currency,
+            currency,
             date: asText(paymentRow.paymentDate ?? paymentRow.payment_date) || invoiceDate,
             exchangeRate: parseAmount(paymentRow.exchangeRate ?? paymentRow.exchange_rate ?? exchangeRate) || exchangeRate,
             invoiceId,
@@ -664,6 +673,7 @@ export default function ReportsPage(): JSX.Element {
       const debt = Math.max(0, Number((net - paid).toFixed(2)));
 
       allInvoices.push({
+        currency,
         date: invoiceDate,
         debt,
         discount,
@@ -677,7 +687,6 @@ export default function ReportsPage(): JSX.Element {
         status,
         total,
         totalInput,
-        currency,
         visitId,
       });
 
@@ -805,6 +814,15 @@ export default function ReportsPage(): JSX.Element {
     startDate,
     typedPatients.length,
   ]);
+
+  const totalOutcome = useMemo(
+    () => Number((kpis.expenses + kpis.salaryPaid).toFixed(2)),
+    [kpis.expenses, kpis.salaryPaid]
+  );
+  const profitOrLoss = useMemo(
+    () => Number((kpis.paid - totalOutcome).toFixed(2)),
+    [kpis.paid, totalOutcome]
+  );
 
   const incomeTrend = useMemo<TrendPoint[]>(() => {
     const buckets = new Map<string, { income: number; label: string; paymentCount: number; sort: number }>();
@@ -951,6 +969,57 @@ export default function ReportsPage(): JSX.Element {
 
     return [...buckets.values()].sort((left, right) => left.key.localeCompare(right.key));
   }, [filteredInvoices, filteredPayments, granularity]);
+
+  const profitLossTrend = useMemo<ProfitLossPoint[]>(() => {
+    const buckets = new Map<string, { income: number; label: string; outcome: number; sort: number }>();
+
+    filteredPayments.forEach((payment) => {
+      const date = parseDate(payment.date);
+      if (!date) return;
+      const bucket = toBucket(date, granularity);
+      const current = buckets.get(bucket.key) ?? { income: 0, label: bucket.label, outcome: 0, sort: bucket.sort };
+      current.income = Number((current.income + payment.amount).toFixed(2));
+      buckets.set(bucket.key, current);
+    });
+
+    [...filteredDailyExpenses, ...filteredClinicalExpenses].forEach((expense) => {
+      const date = parseDate(expense.expenseDate);
+      if (!date) return;
+      const bucket = toBucket(date, granularity);
+      const current = buckets.get(bucket.key) ?? { income: 0, label: bucket.label, outcome: 0, sort: bucket.sort };
+      current.outcome = Number((current.outcome + expense.amount).toFixed(2));
+      buckets.set(bucket.key, current);
+    });
+
+    salaryRows
+      .filter((salary) => (salary.status === 'paid' || salary.status === 'partial') && inRange(salary.paymentDate, startDate, endDate))
+      .forEach((salary) => {
+        const date = parseDate(salary.paymentDate);
+        if (!date) return;
+        const bucket = toBucket(date, granularity);
+        const current = buckets.get(bucket.key) ?? { income: 0, label: bucket.label, outcome: 0, sort: bucket.sort };
+        current.outcome = Number((current.outcome + salary.netAmount).toFixed(2));
+        buckets.set(bucket.key, current);
+      });
+
+    return [...buckets.entries()]
+      .map(([key, value]) => ({
+        income: value.income,
+        key,
+        label: value.label,
+        outcome: value.outcome,
+        profit: Number((value.income - value.outcome).toFixed(2)),
+        sort: value.sort,
+      }))
+      .sort((left, right) => left.sort - right.sort)
+      .map((item) => ({
+        income: item.income,
+        key: item.key,
+        label: item.label,
+        outcome: item.outcome,
+        profit: item.profit,
+      }));
+  }, [endDate, filteredClinicalExpenses, filteredDailyExpenses, filteredPayments, granularity, salaryRows, startDate]);
 
   const paymentMethodMix = useMemo<PaymentMethodPoint[]>(() => {
     const grouped = new Map<string, PaymentMethodPoint>();
@@ -1101,12 +1170,154 @@ export default function ReportsPage(): JSX.Element {
       overview: 'Overview Reports',
     } as const;
 
+    const buildLineChart = (
+      points: Array<{ label: string; value: number }>,
+      color: string,
+      title: string
+    ): string => {
+      if (points.length === 0) {
+        return `<h3>${escapeHtml(title)}</h3><p class="muted">No chart data in selected range.</p>`;
+      }
+
+      const width = 760;
+      const height = 220;
+      const padding = 30;
+      const max = Math.max(...points.map((point) => point.value), 1);
+      const min = Math.min(...points.map((point) => point.value), 0);
+      const valueRange = Math.max(max - min, 1);
+      const stepX = points.length > 1 ? (width - padding * 2) / (points.length - 1) : 0;
+      const toY = (value: number): number => {
+        const ratio = (value - min) / valueRange;
+        return Math.round(height - padding - ratio * (height - padding * 2));
+      };
+
+      const polylinePoints = points
+        .map((point, index) => `${Math.round(padding + index * stepX)},${toY(point.value)}`)
+        .join(' ');
+      const dots = points
+        .map((point, index) => {
+          const x = Math.round(padding + index * stepX);
+          const y = toY(point.value);
+          return `<circle cx="${x}" cy="${y}" r="2.8" fill="${color}" />`;
+        })
+        .join('');
+      const xLabels = [0, Math.floor((points.length - 1) / 2), points.length - 1]
+        .filter((index, pos, list) => list.indexOf(index) === pos)
+        .map((index) => {
+          const x = Math.round(padding + index * stepX);
+          return `<text x="${x}" y="${height - 8}" text-anchor="middle" fill="#64748b" font-size="10">${escapeHtml(points[index].label)}</text>`;
+        })
+        .join('');
+
+      return `
+        <h3>${escapeHtml(title)}</h3>
+        <svg viewBox="0 0 ${width} ${height}" class="chart-svg" role="img" aria-label="${escapeHtml(title)}">
+          <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" stroke="#cbd5e1" stroke-width="1" />
+          <line x1="${padding}" y1="${padding}" x2="${padding}" y2="${height - padding}" stroke="#cbd5e1" stroke-width="1" />
+          <polyline points="${polylinePoints}" fill="none" stroke="${color}" stroke-width="2.2" />
+          ${dots}
+          ${xLabels}
+        </svg>
+      `;
+    };
+
+    const buildBarChart = (
+      bars: Array<{ label: string; value: number }>,
+      color: string,
+      title: string
+    ): string => {
+      if (bars.length === 0) {
+        return `<h3>${escapeHtml(title)}</h3><p class="muted">No chart data in selected range.</p>`;
+      }
+
+      const width = 760;
+      const height = 220;
+      const padding = 30;
+      const max = Math.max(...bars.map((bar) => bar.value), 1);
+      const slotWidth = (width - padding * 2) / bars.length;
+      const barWidth = Math.max(6, Math.floor(slotWidth * 0.6));
+
+      const barsSvg = bars
+        .map((bar, index) => {
+          const barHeight = Math.max(1, Math.round((bar.value / max) * (height - padding * 2)));
+          const x = Math.round(padding + index * slotWidth + (slotWidth - barWidth) / 2);
+          const y = height - padding - barHeight;
+          const label = bar.label.length > 12 ? `${bar.label.slice(0, 11)}...` : bar.label;
+          return `
+            <rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" fill="${color}" rx="2" ry="2" />
+            <text x="${x + barWidth / 2}" y="${height - 8}" text-anchor="middle" fill="#64748b" font-size="10">${escapeHtml(label)}</text>
+          `;
+        })
+        .join('');
+
+      return `
+        <h3>${escapeHtml(title)}</h3>
+        <svg viewBox="0 0 ${width} ${height}" class="chart-svg" role="img" aria-label="${escapeHtml(title)}">
+          <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" stroke="#cbd5e1" stroke-width="1" />
+          <line x1="${padding}" y1="${padding}" x2="${padding}" y2="${height - padding}" stroke="#cbd5e1" stroke-width="1" />
+          ${barsSvg}
+        </svg>
+      `;
+    };
+
+    const buildGroupedBarChart = (
+      rows: Array<{ billed: number; debt: number; label: string; paid: number }>,
+      title: string
+    ): string => {
+      if (rows.length === 0) {
+        return `<h3>${escapeHtml(title)}</h3><p class="muted">No chart data in selected range.</p>`;
+      }
+
+      const width = 760;
+      const height = 240;
+      const padding = 30;
+      const max = Math.max(
+        ...rows.flatMap((row) => [row.billed, row.paid, row.debt]),
+        1
+      );
+      const slotWidth = (width - padding * 2) / rows.length;
+      const barWidth = Math.max(4, Math.floor(slotWidth * 0.18));
+
+      const barsSvg = rows
+        .map((row, index) => {
+          const baseX = Math.round(padding + index * slotWidth + slotWidth * 0.2);
+          const billedHeight = Math.max(1, Math.round((row.billed / max) * (height - padding * 2)));
+          const paidHeight = Math.max(1, Math.round((row.paid / max) * (height - padding * 2)));
+          const debtHeight = Math.max(1, Math.round((row.debt / max) * (height - padding * 2)));
+          const label = row.label.length > 11 ? `${row.label.slice(0, 10)}...` : row.label;
+
+          return `
+            <rect x="${baseX}" y="${height - padding - billedHeight}" width="${barWidth}" height="${billedHeight}" fill="#0ea5e9" rx="2" ry="2" />
+            <rect x="${baseX + barWidth + 2}" y="${height - padding - paidHeight}" width="${barWidth}" height="${paidHeight}" fill="#22c55e" rx="2" ry="2" />
+            <rect x="${baseX + (barWidth + 2) * 2}" y="${height - padding - debtHeight}" width="${barWidth}" height="${debtHeight}" fill="#f97316" rx="2" ry="2" />
+            <text x="${baseX + barWidth * 1.5 + 2}" y="${height - 8}" text-anchor="middle" fill="#64748b" font-size="10">${escapeHtml(label)}</text>
+          `;
+        })
+        .join('');
+
+      return `
+        <h3>${escapeHtml(title)}</h3>
+        <div class="legend-row">
+          <span><i class="chip chip-blue"></i>Billed</span>
+          <span><i class="chip chip-green"></i>Paid</span>
+          <span><i class="chip chip-orange"></i>Debt</span>
+        </div>
+        <svg viewBox="0 0 ${width} ${height}" class="chart-svg" role="img" aria-label="${escapeHtml(title)}">
+          <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" stroke="#cbd5e1" stroke-width="1" />
+          <line x1="${padding}" y1="${padding}" x2="${padding}" y2="${height - padding}" stroke="#cbd5e1" stroke-width="1" />
+          ${barsSvg}
+        </svg>
+      `;
+    };
+
+    const totalOutcomeForPrint = Number((kpis.expenses + kpis.salaryPaid).toFixed(2));
+    const profitOrLossForPrint = Number((kpis.paid - totalOutcomeForPrint).toFixed(2));
     const formatRow = (label: string, value: string): string => `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`;
     const summaryRows = [
       formatRow('Date Range', `${startDate} to ${endDate}`),
       formatRow('Granularity', granularity),
       formatRow('Invoice Status Filter', statusFilter),
-      formatRow('Reporting Currency', 'USD (base) with original transaction currency columns'),
+      formatRow('Reporting Currency', 'AFN (Afghani)'),
       formatRow('Billed', formatCurrency(kpis.billed)),
       formatRow('Discount', formatCurrency(kpis.discount)),
       formatRow('Net', formatCurrency(kpis.net)),
@@ -1117,35 +1328,25 @@ export default function ReportsPage(): JSX.Element {
       formatRow('Safe Outflow', formatCurrency(kpis.safeOut)),
       formatRow('Salaries Paid', formatCurrency(kpis.salaryPaid)),
       formatRow('Collection Rate', `${kpis.collectionRate}%`),
+      formatRow('Profit / Loss', formatCurrency(profitOrLossForPrint)),
     ].join('');
 
-    const totalOutcome = Number((kpis.expenses + kpis.salaryPaid).toFixed(2));
-    const profitOrLoss = Number((kpis.paid - totalOutcome).toFixed(2));
-    const maxBar = Math.max(kpis.paid, totalOutcome, 1);
+    const maxBar = Math.max(kpis.paid, totalOutcomeForPrint, 1);
     const paidBarWidth = Math.min(100, (kpis.paid / maxBar) * 100);
-    const outcomeBarWidth = Math.min(100, (totalOutcome / maxBar) * 100);
-    const profitBarWidth = Math.min(100, (Math.abs(profitOrLoss) / maxBar) * 100);
-    const currencyMix = filteredInvoices.reduce<Record<string, number>>((acc, invoice) => {
-      const key = invoice.currency || 'USD';
-      acc[key] = Number(((acc[key] ?? 0) + invoice.netInput).toFixed(2));
-      return acc;
-    }, {});
-    const currencyMixRows = Object.entries(currencyMix)
-      .map(([currency, amount]) => `<tr><td>${escapeHtml(currency)}</td><td>${escapeHtml(amount.toFixed(2))}</td></tr>`)
-      .join('');
+    const outcomeBarWidth = Math.min(100, (totalOutcomeForPrint / maxBar) * 100);
+    const profitBarWidth = Math.min(100, (Math.abs(profitOrLossForPrint) / maxBar) * 100);
     const profitLossSection = `
       <h3>Profit / Loss Visual</h3>
       <div class="bar-wrap"><span>Income (Paid)</span><div class="bar bg-blue"><i style="width:${paidBarWidth}%"></i></div><b>${escapeHtml(formatCurrency(kpis.paid))}</b></div>
-      <div class="bar-wrap"><span>Outcome (Expenses + Salaries)</span><div class="bar bg-orange"><i style="width:${outcomeBarWidth}%"></i></div><b>${escapeHtml(formatCurrency(totalOutcome))}</b></div>
-      <div class="bar-wrap"><span>${profitOrLoss >= 0 ? 'Profit' : 'Loss'}</span><div class="bar ${profitOrLoss >= 0 ? 'bg-emerald' : 'bg-red'}"><i style="width:${profitBarWidth}%"></i></div><b>${escapeHtml(formatCurrency(profitOrLoss))}</b></div>
-      <h3>Invoice Currency Mix</h3>
-      <table><thead><tr><th>Currency</th><th>Amount (Input Currency)</th></tr></thead><tbody>${currencyMixRows || '<tr><td colspan="2">No data</td></tr>'}</tbody></table>
+      <div class="bar-wrap"><span>Outcome (Expenses + Salaries)</span><div class="bar bg-orange"><i style="width:${outcomeBarWidth}%"></i></div><b>${escapeHtml(formatCurrency(totalOutcomeForPrint))}</b></div>
+      <div class="bar-wrap"><span>${profitOrLossForPrint >= 0 ? 'Profit' : 'Loss'}</span><div class="bar ${profitOrLossForPrint >= 0 ? 'bg-emerald' : 'bg-red'}"><i style="width:${profitBarWidth}%"></i></div><b>${escapeHtml(formatCurrency(profitOrLossForPrint))}</b></div>
     `;
 
     let bodySections = '';
     if (activeTab === 'overview') {
       bodySections = `
         ${profitLossSection}
+        ${buildLineChart(incomeTrend.map((point) => ({ label: point.label, value: point.income })), '#0ea5e9', 'Income Trend Diagram')}
         <h3>Income Trend</h3>
         <table><thead><tr><th>Bucket</th><th>Income</th><th>Payments</th></tr></thead><tbody>
           ${incomeTrend.map((point) => `<tr><td>${escapeHtml(point.label)}</td><td>${escapeHtml(formatCurrency(point.income))}</td><td>${point.paymentCount}</td></tr>`).join('')}
@@ -1155,13 +1356,17 @@ export default function ReportsPage(): JSX.Element {
     if (activeTab === 'financial') {
       bodySections = `
         ${profitLossSection}
+        ${buildBarChart(expenseSummary.byCategory.map((row) => ({ label: row.category, value: row.amount })), '#ef4444', 'Expense by Category Diagram')}
         <h3>Expense Summary</h3>
         <table><thead><tr><th>Category</th><th>Amount</th></tr></thead><tbody>
           ${expenseSummary.byCategory.map((row) => `<tr><td>${escapeHtml(row.category)}</td><td>${escapeHtml(formatCurrency(row.amount))}</td></tr>`).join('')}
         </tbody></table>
-        <h3>Invoice Currency Details</h3>
-        <table><thead><tr><th>Invoice</th><th>Currency</th><th>Total (Input)</th><th>Net (Input)</th><th>Exchange Rate</th><th>Net (USD)</th></tr></thead><tbody>
-          ${filteredInvoices.map((invoice) => `<tr><td>#${escapeHtml(invoice.id)}</td><td>${escapeHtml(invoice.currency)}</td><td>${escapeHtml(invoice.totalInput.toFixed(2))}</td><td>${escapeHtml(invoice.netInput.toFixed(2))}</td><td>${escapeHtml(invoice.exchangeRate.toFixed(6))}</td><td>${escapeHtml(formatCurrency(invoice.net))}</td></tr>`).join('')}
+        ${buildBarChart(debtAging.map((row) => ({ label: row.bucket, value: row.amount })), '#f97316', 'Receivables Aging Diagram')}
+        ${buildGroupedBarChart(cashFlowTrend.map((row) => ({ billed: row.billed, debt: row.debt, label: row.label, paid: row.paid })), `Cash Flow by ${granularity} Diagram`)}
+        ${buildLineChart(ledgerRowsFilteredByPatient.map((row) => ({ label: formatShortDate(row.date), value: row.balance })), '#6366f1', `Ledger Trend (${selectedPatientName})`)}
+        <h3>Invoice Details</h3>
+        <table><thead><tr><th>Invoice</th><th>Total</th><th>Net</th></tr></thead><tbody>
+          ${filteredInvoices.map((invoice) => `<tr><td>#${escapeHtml(invoice.id)}</td><td>${escapeHtml(formatCurrency(invoice.totalInput))}</td><td>${escapeHtml(formatCurrency(invoice.netInput))}</td></tr>`).join('')}
         </tbody></table>
         <h3>Safe Pickups</h3>
         <table><thead><tr><th>Staff</th><th>Amount</th></tr></thead><tbody>
@@ -1199,6 +1404,13 @@ export default function ReportsPage(): JSX.Element {
       .bar-wrap{display:grid;grid-template-columns:220px 1fr 160px;gap:10px;align-items:center;margin:8px 0;font-size:12px}
       .bar{height:10px;border-radius:999px;background:#e2e8f0;overflow:hidden}
       .bar i{display:block;height:100%}
+      .chart-svg{width:100%;height:auto;border:1px solid #e2e8f0;border-radius:10px;margin:8px 0;background:#ffffff}
+      .legend-row{display:flex;gap:14px;margin:4px 0 8px;font-size:11px;color:#334155}
+      .legend-row .chip{display:inline-block;width:8px;height:8px;border-radius:999px;margin-right:4px}
+      .chip-blue{background:#0ea5e9}
+      .chip-green{background:#22c55e}
+      .chip-orange{background:#f97316}
+      .muted{font-size:12px;color:#64748b;margin:6px 0 10px}
       .bg-blue i{background:#2563eb}
       .bg-orange i{background:#f97316}
       .bg-emerald i{background:#16a34a}
@@ -1257,13 +1469,13 @@ export default function ReportsPage(): JSX.Element {
         ]}
       />
 
-      <div className="flex flex-1 flex-col px-4 pb-6 lg:px-6">
+      <div dir={isRtl ? 'rtl' : 'ltr'} className="flex flex-1 flex-col px-4 pb-6 lg:px-6">
         <div className="flex flex-col gap-4 py-4">
           <Card className="border-border/70 bg-card">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Report Controls</CardTitle>
+              <CardTitle className="text-base">{tReportsPage('controls.title')}</CardTitle>
               <CardDescription>
-                Standard reporting controls for financial, clinical, and operational insights.
+                {tReportsPage('controls.description')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -1275,22 +1487,80 @@ export default function ReportsPage(): JSX.Element {
                   onChange={(event) => setGranularity(event.target.value as ReportGranularity)}
                   className="h-10 rounded-md border border-input bg-background px-3 text-sm"
                 >
-                  <option value="day">Daily trend</option>
-                  <option value="week">Weekly trend</option>
-                  <option value="month">Monthly trend</option>
+                  <option value="day">{tReportsPage('granularity.day')}</option>
+                  <option value="month">{tReportsPage('granularity.month')}</option>
+                  <option value="year">{tReportsPage('granularity.year')}</option>
                 </select>
                 <select
                   value={statusFilter}
                   onChange={(event) => setStatusFilter(event.target.value as InvoiceStatusFilter)}
                   className="h-10 rounded-md border border-input bg-background px-3 text-sm"
                 >
-                  <option value="all">All invoice statuses</option>
-                  <option value="unpaid">Unpaid</option>
-                  <option value="partially_paid">Partially paid</option>
-                  <option value="paid">Paid</option>
-                  <option value="cancelled">Cancelled</option>
+                  <option value="all">{tReportsPage('status.all')}</option>
+                  <option value="unpaid">{tReportsPage('status.unpaid')}</option>
+                  <option value="partially_paid">{tReportsPage('status.partiallyPaid')}</option>
+                  <option value="paid">{tReportsPage('status.paid')}</option>
+                  <option value="cancelled">{tReportsPage('status.cancelled')}</option>
                 </select>
               </div>
+              <div className="grid gap-3 rounded-md border border-border/70 bg-muted/20 p-3 md:grid-cols-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">{tReportsPage('summary.incomePaid')}</p>
+                  <p className="text-lg font-semibold text-emerald-600">{formatCurrency(kpis.paid)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{tReportsPage('summary.outcome')}</p>
+                  <p className="text-lg font-semibold text-orange-600">{formatCurrency(totalOutcome)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{tReportsPage('summary.profitLoss')}</p>
+                  <p className={`text-lg font-semibold ${profitOrLoss >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {formatCurrency(profitOrLoss)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    printCurrentTabTemplate();
+                  }}
+                >
+                  {tReportsPage('actions.print')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    downloadCsv(
+                      `profit-loss-${startDate}-to-${endDate}.csv`,
+                      profitLossTrend.map((row) => ({
+                        income: row.income.toFixed(2),
+                        outcome: row.outcome.toFixed(2),
+                        period: row.label,
+                        profit: row.profit.toFixed(2),
+                      }))
+                    );
+                  }}
+                  disabled={profitLossTrend.length === 0}
+                >
+                  {tReportsPage('actions.exportProfitLoss')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setShowAdvancedControls((previous) => !previous);
+                  }}
+                >
+                  {showAdvancedControls ? tReportsPage('actions.hideAdvanced') : tReportsPage('actions.showAdvanced')}
+                </Button>
+              </div>
+
+              {showAdvancedControls ? (
+                <>
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   type="button"
@@ -1398,8 +1668,8 @@ export default function ReportsPage(): JSX.Element {
                         currency: row.currency,
                         date: row.transactionDate,
                         direction: row.direction,
-                        exchangeRate: row.exchangeRate.toFixed(6),
                         entryType: row.entryType,
+                        exchangeRate: row.exchangeRate.toFixed(6),
                         pickedBy: row.pickedByStaffName || row.pickedByStaffId || '-',
                       }));
                     downloadCsv(`safe-transactions-${startDate}-to-${endDate}.csv`, rows);
@@ -1517,15 +1787,15 @@ export default function ReportsPage(): JSX.Element {
                   </div>
                 </div>
               ) : null}
+                </>
+              ) : null}
             </CardContent>
           </Card>
 
           <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as typeof activeTab)} className="space-y-3">
             <TabsList>
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="financial">Financial</TabsTrigger>
-              <TabsTrigger value="clinical">Clinical</TabsTrigger>
-              <TabsTrigger value="operations">Operations</TabsTrigger>
+              <TabsTrigger value="overview">{tReportsPage('tabs.overview')}</TabsTrigger>
+              <TabsTrigger value="financial">{tReportsPage('tabs.financial')}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview" className="space-y-4">
@@ -1622,6 +1892,42 @@ export default function ReportsPage(): JSX.Element {
 
               <Card className="border-border/70">
                 <CardHeader className="pb-2">
+                  <CardTitle className="text-base">{tReportsPage('profitLossChart.title', { granularity: granularityLabel })}</CardTitle>
+                  <CardDescription>
+                    {tReportsPage('profitLossChart.description')}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {profitLossTrend.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">{tReportsPage('profitLossChart.empty')}</p>
+                  ) : (
+                    <div className="h-72">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={profitLossTrend}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="label" />
+                          <YAxis tickFormatter={(value) => `${Number(value).toFixed(0)}`} />
+                          <Tooltip
+                            formatter={(value: number, name: string) => [formatCurrency(Number(value)), name]}
+                            labelFormatter={(label) => `Period: ${label}`}
+                          />
+                          <Legend />
+                          <Bar dataKey="income" fill="#22c55e" name={tReportsPage('summary.incomePaid')} radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="outcome" fill="#f97316" name={tReportsPage('summary.outcome')} radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="profit" name={tReportsPage('summary.profitLoss')} radius={[4, 4, 0, 0]}>
+                            {profitLossTrend.map((entry) => (
+                              <Cell key={entry.key} fill={entry.profit >= 0 ? '#16a34a' : '#dc2626'} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/70">
+                <CardHeader className="pb-2">
                   <CardTitle className="text-base">Income Trend</CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -1643,7 +1949,7 @@ export default function ReportsPage(): JSX.Element {
                           <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} />
                           <YAxis
                             tick={{ fill: '#64748b', fontSize: 11 }}
-                            tickFormatter={(value) => `$${Number(value).toFixed(0)}`}
+                            tickFormatter={(value) => `AFN ${Number(value).toFixed(0)}`}
                             tickLine={false}
                             width={70}
                           />
@@ -1694,7 +2000,7 @@ export default function ReportsPage(): JSX.Element {
                           <XAxis dataKey="category" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} />
                           <YAxis
                             tick={{ fill: '#64748b', fontSize: 11 }}
-                            tickFormatter={(value) => `$${Number(value).toFixed(0)}`}
+                            tickFormatter={(value) => `AFN ${Number(value).toFixed(0)}`}
                             tickLine={false}
                             width={70}
                           />
@@ -1770,7 +2076,7 @@ export default function ReportsPage(): JSX.Element {
                           <XAxis dataKey="bucket" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} />
                           <YAxis
                             tick={{ fill: '#64748b', fontSize: 11 }}
-                            tickFormatter={(value) => `$${Number(value).toFixed(0)}`}
+                            tickFormatter={(value) => `AFN ${Number(value).toFixed(0)}`}
                             tickLine={false}
                             width={70}
                           />
@@ -1838,7 +2144,7 @@ export default function ReportsPage(): JSX.Element {
                           <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} />
                           <YAxis
                             tick={{ fill: '#64748b', fontSize: 11 }}
-                            tickFormatter={(value) => `$${Number(value).toFixed(0)}`}
+                            tickFormatter={(value) => `AFN ${Number(value).toFixed(0)}`}
                             tickLine={false}
                             width={70}
                           />
@@ -1896,7 +2202,7 @@ export default function ReportsPage(): JSX.Element {
                             />
                             <YAxis
                               tick={{ fill: '#64748b', fontSize: 11 }}
-                              tickFormatter={(value) => `$${Number(value).toFixed(0)}`}
+                              tickFormatter={(value) => `AFN ${Number(value).toFixed(0)}`}
                               tickLine={false}
                               width={70}
                             />

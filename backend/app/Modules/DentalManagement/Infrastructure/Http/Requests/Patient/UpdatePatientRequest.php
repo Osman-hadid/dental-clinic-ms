@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\DentalManagement\Infrastructure\Http\Requests\Patient;
 
 use App\Modules\Common\Infrastructure\Http\Requests\BaseFormRequest;
-use Illuminate\Validation\Rule;
 
 final class UpdatePatientRequest extends BaseFormRequest
 {
@@ -19,12 +18,7 @@ final class UpdatePatientRequest extends BaseFormRequest
     public function rules(): array
     {
         return [
-            'patientCode' => [
-                'required',
-                'string',
-                'max:255',
-                Rule::unique(table: 'patients', column: 'patient_code')->ignore(id: $this->route(param: 'patient')),
-            ],
+            'patientCode' => 'nullable|string|max:255',
             'firstName' => 'required|string|max:255',
             'lastName' => 'nullable|string|max:255',
             'gender' => 'nullable|string|in:male,female',

@@ -90,9 +90,9 @@ const parseAmount = (value: unknown): number => {
 
 const formatCurrency = (value: number): string =>
   new Intl.NumberFormat('en-US', {
-    currency: 'USD',
-    maximumFractionDigits: 2,
-    minimumFractionDigits: 2,
+    currency: 'AFN',
+    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
     style: 'currency',
   }).format(value);
 

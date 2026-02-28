@@ -1,6 +1,96 @@
 {
   "layout": {
     "SOURIRE": "SOURIRE",
-    "developedByAop": "جوړ شوی د محمد عثمان حدید له خوا"
+    "developedByAop": "د محمد عثمان حدید لخوا جوړ شوی"
+  },
+  "debtsPage": {
+    "title": "د پور د تصفیې مرکز",
+    "paymentDate": "د تادیاتو نیټه",
+    "paymentMethod": "د تادیاتو طریقه",
+    "notes": "یادښتونه (اختیاري)",
+    "notesPlaceholder": "د راټولونکي نوم، حواله ...",
+    "saving": "خوندي کول...",
+    "settleSelected": "{count} ټاکل شوي پورونه تصفیه کړئ",
+    "outstandingDebt": "بقایا پور",
+    "openInvoices": "{count} پرانستې انوائس",
+    "selectedDebt": "ټاکل شوی پور",
+    "selectedCount": "{count} غوره شوی",
+    "helpText": "تصفیه شوي پور د تادیې ریکارډونه رامینځته کوي ، د ناروغ مالي تاریخ تازه کوي ، او په اوتومات ډول عاید خوندي ته اړوي.",
+    "outstandingDebtsTable": "پاتې پورونه",
+    "refresh": "تازه کړئ",
+    "refreshing": "تازه کول...",
+    "loading": "پورونه پورته کول...",
+    "noDebts": "د نه تادیه شوي پور ریکارډونه.",
+    "columns": {
+      "invoice": "رسید",
+      "patient": "ناروغ",
+      "date": "نیټه",
+      "status": "حالت",
+      "net": "جال",
+      "paid": "ورکړې",
+      "debt": "پور"
+    },
+    "methods": {
+      "cash": "نغدې",
+      "card": "کارت",
+      "insurance": "بیمه"
+    },
+    "ariaSelectAll": "د پور ټول قطارونه غوره کړئ",
+    "ariaSelectInvoice": "رسید وټاکئ {invoiceId}",
+    "patientIdLabel": "پیژند: {id}",
+    "openStatus": "خلاص",
+    "selectAtLeastOne": "لږترلږه یو پور قطار غوره کړئ.",
+    "savedSuccess": "{count} د پور تادیات د ناروغ ریکارډونو ته خوندي شوي او خوندي دي.",
+    "partialFailure": "ځینې ​​پورونه نشي حل کیدی.",
+    "patientFallback": "ناروغ #{id}",
+    "remainingError": "تادیه د بقایا پور څخه زیاته ده. پاتې: {remaining}."
+  },
+  "reportsPage": {
+    "controls": {
+      "title": "د راپور کنټرول",
+      "description": "د مالي، کلینیکي، او عملیاتي بصیرت لپاره د معیاري راپور ورکولو کنټرول."
+    },
+    "granularity": {
+      "day": "ورځنی رجحان",
+      "month": "میاشتنی رجحان",
+      "year": "کلنی رجحان"
+    },
+    "status": {
+      "all": "د رسید ټول حالتونه",
+      "unpaid": "بې معاشه",
+      "partiallyPaid": "په جزوی توګه تادیه شوی",
+      "paid": "ورکړې",
+      "cancelled": "لغوه شو"
+    },
+    "summary": {
+      "incomePaid": "عاید (تادیه شوی)",
+      "outcome": "پایله (لګښتونه + معاشونه)",
+      "profitLoss": "ګټه / تاوان"
+    },
+    "actions": {
+      "print": "چاپ/PDF راپور",
+      "exportProfitLoss": "صادرات ګټه / تاوان CSV",
+      "showAdvanced": "پرمختللي کنټرولونه وښایاست",
+      "hideAdvanced": "پرمختللي کنټرولونه پټ کړئ"
+    },
+    "tabs": {
+      "overview": "کتنه",
+      "financial": "مالي"
+    },
+    "profitLossChart": {
+      "title": "ګټه / تاوان د {granularity} لخوا",
+      "description": "شنه ډنډونه ګټه ده، سره رنګونه تاوان دی. په پایله کې لګښتونه او معاشونه شامل دي.",
+      "empty": "په ټاکل شوي حد کې د ګټې / زیان هیڅ معلومات نشته."
+    }
+  },
+  "patientProfile": {
+    "badges": {
+      "originalDebtInvoice": "د اصلي پور رسید",
+      "debtPaidInvoice": "د پور تادیه رسید"
+    },
+    "messages": {
+      "settledByInvoice": "وروسته د پور تادیه شوي رسید #{invoiceId} لخوا تنظیم شوی.",
+      "generatedFromInvoice": "دا تادیه انوائس د مخکینۍ رسید #{invoiceId} څخه رامینځته شوی."
+    }
   }
 }

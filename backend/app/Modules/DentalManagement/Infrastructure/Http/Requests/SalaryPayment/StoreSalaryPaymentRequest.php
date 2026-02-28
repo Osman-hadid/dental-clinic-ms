@@ -27,7 +27,7 @@ final class StoreSalaryPaymentRequest extends BaseFormRequest
             'bonusAmount' => 'nullable|numeric|min:0',
             'deductionAmount' => 'nullable|numeric|min:0',
             'netAmount' => 'nullable|numeric|min:0',
-            'currency' => 'nullable|string|in:USD,AFN',
+            'currency' => 'nullable|string|in:AFN',
             'exchangeRate' => 'nullable|numeric|gt:0',
             'status' => 'required|string|in:pending,paid,partial',
             'paidFromSafe' => 'nullable|boolean',

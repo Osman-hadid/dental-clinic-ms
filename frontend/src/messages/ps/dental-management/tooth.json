@@ -1,58 +1,71 @@
 {
   "config": {
-    "title": "Teeth",
-    "entity": "Tooth",
+    "title": "غاښونه",
+    "entity": "غاښ",
     "table": {
-      "add": "Add Tooth",
-      "create": "Create Tooth",
-      "edit": "Edit Tooth",
-      "update": "Update Tooth"
+      "add": "غاښونه اضافه کړئ",
+      "create": "غاښونه جوړ کړئ",
+      "edit": "د غاښونو ترمیم",
+      "update": "د غاښونو تازه کول"
     },
     "form": {
       "toothNumber": {
-        "label": "Tooth Number",
+        "label": "د غاښونو شمیره",
         "validation": {
-          "required": "Tooth Number is required",
-          "maxLength": "Tooth Number must be 255 characters or less"
+          "required": "د غاښونو شمیره اړینه ده",
+          "maxLength": "د غاښونو شمیر باید 255 حروف یا لږ وي"
         }
       },
       "description": {
-        "label": "Description",
-        "validation": { "maxLength": "Description must be 255 characters or less" }
+        "label": "تفصیل",
+        "validation": {
+          "maxLength": "توضیحات باید 255 حروف یا لږ وي"
+        }
       },
       "createdBy": {
-        "label": "Created By",
-        "validation": { "pattern": "Created By must be a number" }
+        "label": "لخوا جوړ شوی",
+        "validation": {
+          "pattern": "جوړ شوی باید یو شمیر وي"
+        }
       },
       "updatedBy": {
-        "label": "Updated By",
-        "validation": { "pattern": "Updated By must be a number" }
+        "label": "لخوا تازه شوی",
+        "validation": {
+          "pattern": "تازه شوی باید یو شمیر وي"
+        }
       },
       "deletedBy": {
-        "label": "Deleted By",
-        "validation": { "pattern": "Deleted By must be a number" }
+        "label": "لخوا ړنګ شوی",
+        "validation": {
+          "pattern": "له منځه وړل باید یو شمیر وي"
+        }
       },
       "visitTreatments": {
-        "label": "Visit Treatments",
-        "validation": { "maxLength": "Visit Treatments must be 255 characters or less" }
+        "label": "د درملنې څخه لیدنه وکړئ",
+        "validation": {
+          "maxLength": "د لیدنې درملنې باید 255 حروف یا لږ وي"
+        }
       },
       "trashed": {
-        "label": "Trashed",
-        "options": { "with": "With Trashed", "only": "Only Trashed" }
+        "label": "کثافات",
+        "options": {
+          "with": "د کثافاتو سره",
+          "only": "یوازې کثافات"
+        }
       }
     },
     "repository": {
-      "createFailed": "Failed to create Tooth",
-      "fetchFailed": "Failed to fetch Tooth",
-      "updateFailed": "Failed to update Tooth",
-      "deleteFailed": "Failed to delete Tooth",
-      "fetchManyFailed": "Failed to fetch Teeth",
-      "fetchManySuccess": "Teeth fetched successfully"
+      "createFailed": "د غاښونو په جوړولو کې پاتې راغلی",
+      "fetchFailed": "د غاښ په راوړلو کې پاتې راغلی",
+      "updateFailed": "د غاښ په تازه کولو کې پاتې راغلی",
+      "deleteFailed": "د غاښونو ړنګولو کې پاتې راغلل",
+      "fetchManyFailed": "د غاښونو په راوړلو کې پاتې راغلی",
+      "fetchManySuccess": "غاښونه په بریالیتوب سره ترلاسه شول"
     },
     "presentation": {
-      "createSuccess": "Tooth created successfully",
-      "updateSuccess": "Tooth updated successfully",
-      "deleteSuccess": "Tooth deleted successfully"
+      "createSuccess": "غاښ په بریالیتوب سره جوړ شو",
+      "updateSuccess": "غاښ په بریالیتوب سره تازه شو",
+      "deleteSuccess": "غاښ په بریالیتوب سره ړنګ شو"
     }
   }
 }

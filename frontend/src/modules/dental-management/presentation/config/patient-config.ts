@@ -119,16 +119,6 @@ export const patientConfig: EntityModuleConfig = {
   ],
   formFields: [
     {
-      label: 'config.form.patientCode.label',
-      name: 'patientCode',
-      required: true,
-      type: 'text',
-      validation: {
-        required: 'config.form.patientCode.validation.required',
-        maxLength: { value: 255, message: 'config.form.patientCode.validation.maxLength' },
-      },
-    },
-    {
       label: 'config.form.firstName.label',
       name: 'firstName',
       required: true,

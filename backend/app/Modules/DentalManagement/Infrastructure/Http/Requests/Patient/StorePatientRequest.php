@@ -18,7 +18,7 @@ final class StorePatientRequest extends BaseFormRequest
     public function rules(): array
     {
         return [
-            'patientCode' => 'required|string|max:255|unique:patients,patient_code',
+            'patientCode' => 'nullable|string|max:255',
             'firstName' => 'required|string|max:255',
             'lastName' => 'nullable|string|max:255',
             'gender' => 'nullable|string|in:male,female',

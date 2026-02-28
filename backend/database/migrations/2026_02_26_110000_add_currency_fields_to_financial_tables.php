@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('invoices', function (Blueprint $table): void {
-            $table->string('currency', 3)->default('USD');
+            $table->string('currency', 3)->default('AFN');
             $table->decimal('exchange_rate', 14, 6)->default(1);
             $table->decimal('total_amount_input', 14, 2)->nullable();
             $table->decimal('discount_input', 14, 2)->nullable();
@@ -20,26 +20,26 @@ return new class extends Migration
         });
 
         Schema::table('payments', function (Blueprint $table): void {
-            $table->string('currency', 3)->default('USD');
+            $table->string('currency', 3)->default('AFN');
             $table->decimal('exchange_rate', 14, 6)->default(1);
             $table->decimal('amount_input', 14, 2)->nullable();
         });
 
         Schema::table('expenses', function (Blueprint $table): void {
-            $table->string('currency', 3)->default('USD');
+            $table->string('currency', 3)->default('AFN');
             $table->decimal('exchange_rate', 14, 6)->default(1);
             $table->decimal('amount_input', 14, 2)->nullable();
             $table->decimal('unit_cost_input', 14, 2)->nullable();
         });
 
         Schema::table('safe_transactions', function (Blueprint $table): void {
-            $table->string('currency', 3)->default('USD');
+            $table->string('currency', 3)->default('AFN');
             $table->decimal('exchange_rate', 14, 6)->default(1);
             $table->decimal('amount_input', 14, 2)->nullable();
         });
 
         Schema::table('salary_payments', function (Blueprint $table): void {
-            $table->string('currency', 3)->default('USD');
+            $table->string('currency', 3)->default('AFN');
             $table->decimal('exchange_rate', 14, 6)->default(1);
             $table->decimal('gross_amount_input', 14, 2)->nullable();
             $table->decimal('bonus_amount_input', 14, 2)->nullable();
@@ -48,7 +48,7 @@ return new class extends Migration
         });
 
         DB::table('invoices')->update([
-            'currency' => 'USD',
+            'currency' => 'AFN',
             'discount_input' => DB::raw('discount'),
             'exchange_rate' => 1,
             'net_amount_input' => DB::raw('net_amount'),
@@ -57,26 +57,26 @@ return new class extends Migration
 
         DB::table('payments')->update([
             'amount_input' => DB::raw('amount'),
-            'currency' => 'USD',
+            'currency' => 'AFN',
             'exchange_rate' => 1,
         ]);
 
         DB::table('expenses')->update([
             'amount_input' => DB::raw('amount'),
-            'currency' => 'USD',
+            'currency' => 'AFN',
             'exchange_rate' => 1,
             'unit_cost_input' => DB::raw('unit_cost'),
         ]);
 
         DB::table('safe_transactions')->update([
             'amount_input' => DB::raw('amount'),
-            'currency' => 'USD',
+            'currency' => 'AFN',
             'exchange_rate' => 1,
         ]);
 
         DB::table('salary_payments')->update([
             'bonus_amount_input' => DB::raw('bonus_amount'),
-            'currency' => 'USD',
+            'currency' => 'AFN',
             'deduction_amount_input' => DB::raw('deduction_amount'),
             'exchange_rate' => 1,
             'gross_amount_input' => DB::raw('gross_amount'),

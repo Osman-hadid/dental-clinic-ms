@@ -8,7 +8,7 @@ import { Slot } from '@radix-ui/react-slot';
 
 const PAST_YEARS_LIMIT = 120;
 const FUTURE_YEARS_LIMIT = 10;
-const DEFAULT_CURRENCY = 'USD';
+const DEFAULT_CURRENCY = 'AFN';
 const DEFAULT_LOCALE = 'en-US';
 
 const NUMERIC_MASK_PATTERNS =

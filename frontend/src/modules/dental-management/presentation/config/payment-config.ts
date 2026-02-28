@@ -15,14 +15,6 @@ export const paymentConfig: EntityModuleConfig = {
       header: 'config.form.amount.label',
     },
     {
-      accessorKey: 'currency',
-      header: 'config.form.currency.label',
-    },
-    {
-      accessorKey: 'exchangeRate',
-      header: 'config.form.exchangeRate.label',
-    },
-    {
       accessorKey: 'method',
       header: 'config.form.method.label',
     },
@@ -54,14 +46,6 @@ export const paymentConfig: EntityModuleConfig = {
         { label: 'config.form.method.options.cash', value: 'cash' },
         { label: 'config.form.method.options.card', value: 'card' },
         { label: 'config.form.method.options.insurance', value: 'insurance' },
-      ],
-    },
-    {
-      key: 'currency',
-      title: 'config.form.currency.label',
-      options: [
-        { label: 'config.form.currency.options.usd', value: 'USD' },
-        { label: 'config.form.currency.options.afn', value: 'AFN' },
       ],
     },
     {
@@ -103,31 +87,6 @@ export const paymentConfig: EntityModuleConfig = {
         required: 'config.form.amount.validation.required',
         maxLength: { value: 255, message: 'config.form.amount.validation.maxLength' },
       },
-    },
-    {
-      label: 'config.form.currency.label',
-      name: 'currency',
-      required: false,
-      type: 'select',
-      validation: {
-        in: { value: ['USD', 'AFN'], message: 'config.form.currency.validation.in' },
-      },
-      options: [
-        {
-          label: 'config.form.currency.options.usd',
-          value: 'USD',
-        },
-        {
-          label: 'config.form.currency.options.afn',
-          value: 'AFN',
-        },
-      ],
-    },
-    {
-      label: 'config.form.exchangeRate.label',
-      name: 'exchangeRate',
-      required: false,
-      type: 'number',
     },
     {
       label: 'config.form.method.label',
@@ -179,7 +138,7 @@ export const paymentConfig: EntityModuleConfig = {
   searchFields: [{ label: 'config.form.notes.label', value: 'notes' }],
   singleQueryKey: 'payment',
   title: 'config.title',
-  sortableColumns: ['id', 'paymentDate', 'amount', 'currency', 'createdAt'],
+  sortableColumns: ['id', 'paymentDate', 'amount', 'createdAt'],
   relations: ['invoice'],
   permissions: {
     view: 'dental-management.payments.view',

@@ -1,184 +1,183 @@
 {
   "config": {
-    "title": "Invoices",
-    "entity": "Invoice",
+    "title": "فاکتورها",
+    "entity": "فاکتور",
     "table": {
-      "add": "Add Invoice",
-      "create": "Create Invoice",
-      "edit": "Edit Invoice",
-      "update": "Update Invoice"
+      "add": "اضافه کردن فاکتور",
+      "create": "ایجاد فاکتور",
+      "edit": "ویرایش فاکتور",
+      "update": "به روز رسانی فاکتور"
     },
     "form": {
       "patientId": {
-        "label": "Patient Id",
+        "label": "شناسه بیمار",
         "validation": {
-          "required": "Patient Id is required",
-          "pattern": "Patient Id must be a number"
+          "required": "شناسه بیمار الزامی است",
+          "pattern": "شناسه بیمار باید یک عدد باشد"
         }
       },
       "visitId": {
-        "label": "Visit Id",
+        "label": "به شناسه مراجعه کنید",
         "validation": {
-          "required": "Visit Id is required",
-          "pattern": "Visit Id must be a number"
+          "required": "شناسه بازدید الزامی است",
+          "pattern": "شناسه بازدید باید یک عدد باشد"
         }
       },
       "totalAmount": {
-        "label": "Total Amount",
+        "label": "مقدار کل",
         "validation": {
-          "required": "Total Amount is required",
-          "maxLength": "Total Amount must be 255 characters or less"
+          "required": "مبلغ کل مورد نیاز است",
+          "maxLength": "مقدار کل باید 255 نویسه یا کمتر باشد"
         }
       },
       "netAmount": {
-        "label": "Net Amount",
+        "label": "مقدار خالص",
         "validation": {
-          "required": "Net Amount is required",
-          "maxLength": "Net Amount must be 255 characters or less"
+          "required": "مقدار خالص مورد نیاز است",
+          "maxLength": "مقدار خالص باید 255 نویسه یا کمتر باشد"
         }
       },
       "currency": {
-        "label": "Currency",
+        "label": "ارز",
         "validation": {
-          "in": "Currency must be one of the allowed values"
+          "in": "ارز باید یکی از مقادیر مجاز باشد"
         },
         "options": {
-          "usd": "USD ($)",
-          "afn": "AFN (Afghani)"
+          "usd": "AFN (افغانی)",
+          "afn": "AFN (افغانی)"
         }
       },
       "exchangeRate": {
-        "label": "Exchange Rate",
+        "label": "نرخ ارز",
         "validation": {
-          "maxLength": "Exchange Rate must be 255 characters or less"
+          "maxLength": "نرخ ارز باید 255 کاراکتر یا کمتر باشد"
         }
       },
       "invoiceDate": {
-        "label": "Invoice Date",
+        "label": "تاریخ فاکتور",
         "validation": {
-          "required": "Invoice Date is required",
-          "maxLength": "Invoice Date must be 255 characters or less"
+          "required": "تاریخ فاکتور الزامی است",
+          "maxLength": "تاریخ فاکتور باید 255 کاراکتر یا کمتر باشد"
         }
       },
       "notes": {
-        "label": "Notes",
+        "label": "یادداشت ها",
         "validation": {
-          "maxLength": "Notes must be 255 characters or less"
+          "maxLength": "یادداشت ها باید 255 کاراکتر یا کمتر باشند"
         }
       },
       "createdBy": {
-        "label": "Created By",
+        "label": "ایجاد شده توسط",
         "validation": {
-          "pattern": "Created By must be a number"
+          "pattern": "ایجاد شده توسط باید یک عدد باشد"
         }
       },
       "updatedBy": {
-        "label": "Updated By",
+        "label": "به روز شده توسط",
         "validation": {
-          "pattern": "Updated By must be a number"
+          "pattern": "Updated By باید یک عدد باشد"
         }
       },
       "deletedBy": {
-        "label": "Deleted By",
+        "label": "حذف شده توسط",
         "validation": {
-          "pattern": "Deleted By must be a number"
+          "pattern": "حذف شده توسط باید یک عدد باشد"
         }
       },
       "discount": {
-        "label": "Discount",
+        "label": "تخفیف",
         "validation": {
-          "maxLength": "Discount must be 255 characters or less"
+          "maxLength": "تخفیف باید 255 کاراکتر یا کمتر باشد"
         }
       },
       "status": {
-        "label": "Status",
+        "label": "وضعیت",
         "validation": {
-          "in": "Status must be one of the allowed values"
+          "in": "وضعیت باید یکی از مقادیر مجاز باشد"
         },
         "options": {
-          "unpaid": "Unpaid",
-          "partially_paid": "Partially Paid",
-          "paid": "Paid",
-          "cancelled": "Cancelled"
+          "unpaid": "پرداخت نشده",
+          "partially_paid": "تا حدی پرداخت شده است",
+          "paid": "پرداخت شده است",
+          "cancelled": "لغو شد"
         }
       },
       "paymentType": {
-        "label": "Payment Type",
+        "label": "نوع پرداخت",
         "validation": {
-          "in": "Payment type must be one of the allowed values"
+          "in": "نوع پرداخت باید یکی از مقادیر مجاز باشد"
         },
         "options": {
-          "cash": "Cash",
-          "card": "Card",
-          "bank_transfer": "Bank Transfer",
-          "insurance": "Insurance",
-          "other": "Other"
+          "cash": "پول نقد",
+          "card": "کارت",
+          "bank_transfer": "حواله بانکی",
+          "insurance": "بیمه",
+          "other": "دیگر"
         }
       },
       "payments": {
-        "label": "Payments",
+        "label": "پرداخت ها",
         "validation": {
-          "maxLength": "Payments must be 255 characters or less"
+          "maxLength": "پرداخت ها باید 255 کاراکتر یا کمتر باشد"
         }
       },
       "trashed": {
-        "label": "Trashed",
+        "label": "سطل زباله",
         "options": {
-          "with": "With Trashed",
-          "only": "Only Trashed"
+          "with": "با سطل زباله",
+          "only": "فقط سطل زباله"
         }
       }
     },
     "repository": {
-      "createFailed": "Failed to create Invoice",
-      "fetchFailed": "Failed to fetch Invoice",
-      "updateFailed": "Failed to update Invoice",
-      "deleteFailed": "Failed to delete Invoice",
-      "fetchManyFailed": "Failed to fetch Invoices",
-      "fetchManySuccess": "Invoices fetched successfully"
+      "createFailed": "فاکتور ایجاد نشد",
+      "fetchFailed": "فاکتور واکشی نشد",
+      "updateFailed": "فاکتور به‌روزرسانی نشد",
+      "deleteFailed": "فاکتور حذف نشد",
+      "fetchManyFailed": "فاکتورها واکشی نشد",
+      "fetchManySuccess": "فاکتورها با موفقیت واکشی شدند"
     },
     "presentation": {
-      "createSuccess": "Invoice created successfully",
-      "updateSuccess": "Invoice updated successfully",
-      "deleteSuccess": "Invoice deleted successfully"
+      "createSuccess": "فاکتور با موفقیت ایجاد شد",
+      "updateSuccess": "فاکتور با موفقیت به روز شد",
+      "deleteSuccess": "فاکتور با موفقیت حذف شد"
     },
     "sync": {
-      "title": "Visits to invoice",
-      "description": "Sync invoices with recent visits and keep manual control below.",
-      "refresh": "Refresh visits",
-      "loadingVisits": "Loading visits...",
-      "noVisits": "No recent visits found. Try refreshing to check for new entries.",
-      "selectVisitFirst": "Select a visit before creating an invoice.",
-      "selectedVisit": "Selected visit",
-      "noVisitSelected": "Pick a visit above to start invoicing.",
-      "selectedVisitButton": "Visit selected",
-      "selectVisitButton": "Select visit",
-      "visitAmount": "Visit amount",
-      "unpaidVisits": "Unpaid visits",
-      "paidVisits": "Paid visits",
-      "noUnpaidVisits": "No unpaid visits found.",
-      "noPaidVisits": "No paid visits found.",
-      "paidVisitButton": "Already paid",
-      "selectedCount": "Selected visit",
-      "combinedAmount": "Combined amount",
-      "clearSelection": "Clear selection",
-      "manualDescription": "Need full control? Use the table below to add or edit invoices manually.",
-      "createButton": "Create invoice from selected visit",
-      "multiDiscountHint": "Discount can only be applied when exactly one visit is selected.",
-      "createdCount": "{count, plural, one {# invoice created successfully} other {# invoices created successfully}}",
-      "failedSome": "Some selected visits could not be invoiced. Please review and retry.",
-      "samePatientRequired": "All selected visits must belong to the same patient.",
-      "discountTooHigh": "Discount cannot be greater than the combined amount.",
-      "linkedVisitsNote": "Linked visits",
+      "title": "بازدید برای فاکتور",
+      "description": "فاکتورها را با بازدیدهای اخیر همگام کنید و کنترل دستی را در زیر حفظ کنید.",
+      "refresh": "بازخوانی بازدیدها",
+      "loadingVisits": "در حال بارگیری بازدیدها...",
+      "noVisits": "هیچ بازدید اخیری یافت نشد. برای بررسی ورودی های جدید، بازخوانی را امتحان کنید.",
+      "selectVisitFirst": "قبل از ایجاد فاکتور، یک بازدید را انتخاب کنید.",
+      "selectedVisit": "بازدید انتخاب شده",
+      "noVisitSelected": "برای شروع صورتحساب، یک بازدید از بالا را انتخاب کنید.",
+      "selectedVisitButton": "از انتخاب شده بازدید کنید",
+      "selectVisitButton": "بازدید را انتخاب کنید",
+      "visitAmount": "مقدار بازدید",
+      "unpaidVisits": "بازدیدهای بدون پرداخت",
+      "paidVisits": "بازدیدهای پولی",
+      "noUnpaidVisits": "هیچ بازدید بدون پرداختی یافت نشد.",
+      "noPaidVisits": "هیچ بازدید پولی یافت نشد.",
+      "paidVisitButton": "قبلا پرداخت شده است",
+      "selectedCount": "بازدید انتخاب شده",
+      "combinedAmount": "مقدار ترکیبی",
+      "clearSelection": "پاک کردن انتخاب",
+      "manualDescription": "به کنترل کامل نیاز دارید؟ از جدول زیر برای افزودن یا ویرایش دستی فاکتورها استفاده کنید.",
+      "createButton": "ایجاد فاکتور از بازدید انتخاب شده",
+      "multiDiscountHint": "تخفیف فقط زمانی اعمال می شود که دقیقا یک بازدید انتخاب شده باشد.",
+      "createdCount": "{count, plural, one {# فاکتور با موفقیت ایجاد شد} other {# فاکتور با موفقیت ایجاد شدند}}",
+      "failedSome": "برخی از بازدیدهای انتخابی نمی توانند صورتحساب شوند. لطفا بررسی کنید و دوباره امتحان کنید.",
+      "samePatientRequired": "همه ویزیت های انتخاب شده باید متعلق به یک بیمار باشد.",
+      "discountTooHigh": "تخفیف نمی تواند بیشتر از مجموع مبلغ باشد.",
+      "linkedVisitsNote": "بازدیدهای مرتبط",
       "form": {
-        "totalAmount": "Total amount",
-        "discount": "Discount",
-        "netAmount": "Net amount",
-        "invoiceDate": "Invoice date",
-        "notes": "Notes",
-        "paymentType": "Payment Type"
+        "totalAmount": "مبلغ کل",
+        "discount": "تخفیف",
+        "netAmount": "مقدار خالص",
+        "invoiceDate": "تاریخ فاکتور",
+        "notes": "یادداشت ها",
+        "paymentType": "نوع پرداخت"
       }
     }
   }
 }
-

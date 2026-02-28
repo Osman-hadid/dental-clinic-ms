@@ -9,10 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import {
-  DEFAULT_AFN_PER_USD,
   formatCurrency,
-  formatDualFromUsd,
-  getExchangeRate,
   parseMoney,
 } from '@/lib/currency-utils';
 import { Trash2, Wallet } from 'lucide-react';
@@ -24,9 +21,8 @@ type DailyExpenseRecord = {
   amountInput: number;
   category: string;
   createdAt?: string;
-  currency: 'AFN' | 'USD';
+  currency: 'AFN';
   date: string;
-  exchangeRate: number;
   expenseType?: string;
   id: string;
   method: string;
@@ -45,9 +41,7 @@ type PaginatedRowsResponse = {
 type DailyFormState = {
   amount: string;
   category: string;
-  currency: 'AFN' | 'USD';
   date: string;
-  exchangeRate: string;
   method: string;
   notes: string;
   title: string;
@@ -73,18 +67,16 @@ const extractApiErrorMessage = (error: unknown, fallback: string): string => {
   if (code === 'SAFE_BALANCE_INSUFFICIENT') {
     const currentBalance = Number(payload?.details?.currentBalance ?? 0);
     const requestedAmount = Number(payload?.details?.requestedAmount ?? 0);
-    return `Safe balance is not enough. Current: ${formatCurrency(currentBalance, 'USD')}. Requested: ${formatCurrency(requestedAmount, 'USD')}.`;
+    return `Safe balance is not enough. Current: ${formatCurrency(currentBalance, 'AFN')}. Requested: ${formatCurrency(requestedAmount, 'AFN')}.`;
   }
 
   return payload?.message || fallback;
 };
 
-const createDefaultForm = (afnPerUsd: number): DailyFormState => ({
+const createDefaultForm = (): DailyFormState => ({
   amount: '',
   category: 'Utilities',
-  currency: 'USD',
   date: toInputDate(new Date()),
-  exchangeRate: String(afnPerUsd),
   method: 'cash',
   notes: '',
   title: '',
@@ -97,13 +89,12 @@ const parseNumber = (value: unknown): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 const normalizeExpenseRow = (row: Record<string, unknown>): DailyExpenseRecord => ({
-  amount: parseNumber(row.amount),
+  amount: parseNumber(row.amountInput ?? row.amount_input ?? row.amount),
   amountInput: parseNumber(row.amountInput ?? row.amount_input ?? row.amount),
   category: String(row.category ?? 'Other'),
   createdAt: typeof row.createdAt === 'string' ? row.createdAt : undefined,
-  currency: (String(row.currency ?? 'USD').toUpperCase() as 'AFN' | 'USD'),
+  currency: 'AFN',
   date: String(row.expenseDate ?? row.date ?? ''),
-  exchangeRate: parseNumber(row.exchangeRate ?? row.exchange_rate ?? 1),
   expenseType: typeof row.expenseType === 'string' ? row.expenseType : undefined,
   id: String(row.id ?? ''),
   method: String(row.paymentMethod ?? row.method ?? 'cash'),
@@ -114,8 +105,7 @@ const normalizeExpenseRow = (row: Record<string, unknown>): DailyExpenseRecord =
 const DailyExpensesPage = (): JSX.Element => {
   const tReports = useTranslations('sidebar.reports');
   const tSidebar = useTranslations('sidebar');
-  const [afnPerUsd, setAfnPerUsd] = useState(DEFAULT_AFN_PER_USD);
-  const [form, setForm] = useState<DailyFormState>(() => createDefaultForm(DEFAULT_AFN_PER_USD));
+  const [form, setForm] = useState<DailyFormState>(() => createDefaultForm());
   const [records, setRecords] = useState<DailyExpenseRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -170,13 +160,6 @@ const DailyExpensesPage = (): JSX.Element => {
     void fetchExpenses();
   }, [fetchExpenses]);
 
-  useEffect(() => {
-    void getExchangeRate(client).then((rate) => {
-      setAfnPerUsd(rate);
-      setForm((prev) => ({ ...prev, exchangeRate: String(rate) }));
-    });
-  }, []);
-
   const totals = useMemo(() => {
     const today = toInputDate(new Date());
     const monthToken = today.slice(0, 7);
@@ -224,14 +207,13 @@ const DailyExpensesPage = (): JSX.Element => {
     if (!form.title.trim() || !form.date || amount <= 0) {
       return;
     }
-    const exchangeRate = Math.max(0.000001, parseAmount(form.exchangeRate) || afnPerUsd);
     setIsSubmitting(true);
     void client
       .post('/api/v1/dental-management/expenses', {
         amount,
         category: form.category,
-        currency: form.currency,
-        exchangeRate,
+        currency: 'AFN',
+        exchangeRate: 1,
         expenseDate: form.date,
         expenseType: 'daily',
         notes: form.notes.trim() || undefined,
@@ -239,7 +221,7 @@ const DailyExpensesPage = (): JSX.Element => {
         title: form.title.trim(),
       })
       .then(async () => {
-        setForm(createDefaultForm(afnPerUsd));
+        setForm(createDefaultForm());
         await fetchExpenses();
         toast.success('Daily expense saved.');
       })
@@ -320,32 +302,6 @@ const DailyExpensesPage = (): JSX.Element => {
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-1.5">
-                      <Label htmlFor="expense-currency">Currency</Label>
-                      <select
-                        id="expense-currency"
-                        className="h-9 rounded-md border bg-background px-3 text-sm"
-                        value={form.currency}
-                        onChange={(event) => setForm((prev) => ({ ...prev, currency: event.target.value as 'AFN' | 'USD' }))}
-                      >
-                        <option value="USD">USD ($)</option>
-                        <option value="AFN">AFN (Afghani)</option>
-                      </select>
-                    </div>
-                    <div className="grid gap-1.5">
-                      <Label htmlFor="expense-exchange-rate">Exchange Rate (AFN per 1 USD)</Label>
-                      <Input
-                        id="expense-exchange-rate"
-                        type="number"
-                        min="0.0001"
-                        step="0.0001"
-                        value={form.exchangeRate}
-                        onChange={(event) => setForm((prev) => ({ ...prev, exchangeRate: event.target.value }))}
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="grid gap-1.5">
                       <Label htmlFor="expense-category">Category</Label>
                       <select
                         id="expense-category"
@@ -389,15 +345,15 @@ const DailyExpensesPage = (): JSX.Element => {
                   <div className="grid gap-3 sm:grid-cols-3">
                     <div className="rounded-xl border bg-white/80 p-3">
                       <p className="text-xs text-muted-foreground">Today</p>
-                      <p className="text-lg font-semibold">{formatDualFromUsd(totals.today, afnPerUsd)}</p>
+                      <p className="text-lg font-semibold">{formatCurrency(totals.today, 'AFN')}</p>
                     </div>
                     <div className="rounded-xl border bg-white/80 p-3">
                       <p className="text-xs text-muted-foreground">This Month</p>
-                      <p className="text-lg font-semibold">{formatDualFromUsd(totals.month, afnPerUsd)}</p>
+                      <p className="text-lg font-semibold">{formatCurrency(totals.month, 'AFN')}</p>
                     </div>
                     <div className="rounded-xl border bg-white/80 p-3">
                       <p className="text-xs text-muted-foreground">All Time</p>
-                      <p className="text-lg font-semibold">{formatDualFromUsd(totals.all, afnPerUsd)}</p>
+                      <p className="text-lg font-semibold">{formatCurrency(totals.all, 'AFN')}</p>
                     </div>
                   </div>
 
@@ -407,7 +363,7 @@ const DailyExpensesPage = (): JSX.Element => {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="date" hide={chartData.length > 8} />
                         <YAxis />
-                        <Tooltip formatter={(value) => formatCurrency(Number(value), 'USD')} />
+                        <Tooltip formatter={(value) => formatCurrency(Number(value), 'AFN')} />
                         <Bar dataKey="amount" fill="#10b981" radius={[8, 8, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
@@ -439,7 +395,6 @@ const DailyExpensesPage = (): JSX.Element => {
                           <th className="px-3 py-2">Category</th>
                           <th className="px-3 py-2">Method</th>
                           <th className="px-3 py-2">Amount</th>
-                          <th className="px-3 py-2">Currency</th>
                           <th className="px-3 py-2">Action</th>
                         </tr>
                       </thead>
@@ -450,10 +405,7 @@ const DailyExpensesPage = (): JSX.Element => {
                             <td className="px-3 py-2">{record.title}</td>
                             <td className="px-3 py-2">{record.category}</td>
                             <td className="px-3 py-2 capitalize">{record.method.replace('_', ' ')}</td>
-                            <td className="px-3 py-2 font-semibold">{formatDualFromUsd(record.amount, afnPerUsd)}</td>
-                            <td className="px-3 py-2">
-                              {formatCurrency(record.amountInput, record.currency)} ({record.currency})
-                            </td>
+                            <td className="px-3 py-2 font-semibold">{formatCurrency(record.amountInput, 'AFN')}</td>
                             <td className="px-3 py-2">
                               <Button type="button" variant="ghost" size="sm" onClick={() => removeRecord(record.id)}>
                                 <Trash2 className="size-4" />

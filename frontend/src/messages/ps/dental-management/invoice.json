@@ -1,184 +1,183 @@
 {
   "config": {
-    "title": "Invoices",
-    "entity": "Invoice",
+    "title": "رسیدونه",
+    "entity": "رسید",
     "table": {
-      "add": "Add Invoice",
-      "create": "Create Invoice",
-      "edit": "Edit Invoice",
-      "update": "Update Invoice"
+      "add": "انوائس اضافه کړئ",
+      "create": "انوائس جوړ کړئ",
+      "edit": "انوائس ایډیټ کړئ",
+      "update": "انوائس تازه کړئ"
     },
     "form": {
       "patientId": {
-        "label": "Patient Id",
+        "label": "د ناروغ پیژندنه",
         "validation": {
-          "required": "Patient Id is required",
-          "pattern": "Patient Id must be a number"
+          "required": "د ناروغ ID ته اړتیا ده",
+          "pattern": "د ناروغ ID باید یو شمیر وي"
         }
       },
       "visitId": {
-        "label": "Visit Id",
+        "label": "د ID څخه لیدنه وکړئ",
         "validation": {
-          "required": "Visit Id is required",
-          "pattern": "Visit Id must be a number"
+          "required": "د لیدنې ID اړین دی",
+          "pattern": "د لیدنې ID باید یو شمیر وي"
         }
       },
       "totalAmount": {
-        "label": "Total Amount",
+        "label": "ټول رقم",
         "validation": {
-          "required": "Total Amount is required",
-          "maxLength": "Total Amount must be 255 characters or less"
+          "required": "ټول مقدار ته اړتیا ده",
+          "maxLength": "ټول مقدار باید 255 حروف یا لږ وي"
         }
       },
       "netAmount": {
-        "label": "Net Amount",
+        "label": "خالص مقدار",
         "validation": {
-          "required": "Net Amount is required",
-          "maxLength": "Net Amount must be 255 characters or less"
+          "required": "خالص مقدار ته اړتیا ده",
+          "maxLength": "خالص مقدار باید 255 حروف یا لږ وي"
         }
       },
       "currency": {
-        "label": "Currency",
+        "label": "اسعارو",
         "validation": {
-          "in": "Currency must be one of the allowed values"
+          "in": "اسعارو باید یو له اجازه ورکړل شوي ارزښتونو څخه وي"
         },
         "options": {
-          "usd": "USD ($)",
-          "afn": "AFN (Afghani)"
+          "usd": "AFN (افغانۍ)",
+          "afn": "AFN (افغانۍ)"
         }
       },
       "exchangeRate": {
-        "label": "Exchange Rate",
+        "label": "د تبادلې نرخ",
         "validation": {
-          "maxLength": "Exchange Rate must be 255 characters or less"
+          "maxLength": "د تبادلې نرخ باید 255 حروف یا لږ وي"
         }
       },
       "invoiceDate": {
-        "label": "Invoice Date",
+        "label": "د رسید نیټه",
         "validation": {
-          "required": "Invoice Date is required",
-          "maxLength": "Invoice Date must be 255 characters or less"
+          "required": "د رسید نیټه اړینه ده",
+          "maxLength": "د رسید نیټه باید 255 حروف یا لږ وي"
         }
       },
       "notes": {
-        "label": "Notes",
+        "label": "یادښتونه",
         "validation": {
-          "maxLength": "Notes must be 255 characters or less"
+          "maxLength": "یادښتونه باید 255 حروف یا لږ وي"
         }
       },
       "createdBy": {
-        "label": "Created By",
+        "label": "لخوا جوړ شوی",
         "validation": {
-          "pattern": "Created By must be a number"
+          "pattern": "جوړ شوی باید یو شمیر وي"
         }
       },
       "updatedBy": {
-        "label": "Updated By",
+        "label": "لخوا تازه شوی",
         "validation": {
-          "pattern": "Updated By must be a number"
+          "pattern": "تازه شوی باید یو شمیر وي"
         }
       },
       "deletedBy": {
-        "label": "Deleted By",
+        "label": "لخوا ړنګ شوی",
         "validation": {
-          "pattern": "Deleted By must be a number"
+          "pattern": "له منځه وړل باید یو شمیر وي"
         }
       },
       "discount": {
-        "label": "Discount",
+        "label": "تخفیف",
         "validation": {
-          "maxLength": "Discount must be 255 characters or less"
+          "maxLength": "تخفیف باید 255 حروف یا لږ وي"
         }
       },
       "status": {
-        "label": "Status",
+        "label": "حالت",
         "validation": {
-          "in": "Status must be one of the allowed values"
+          "in": "حالت باید یو له اجازه ورکړل شوي ارزښتونو څخه وي"
         },
         "options": {
-          "unpaid": "Unpaid",
-          "partially_paid": "Partially Paid",
-          "paid": "Paid",
-          "cancelled": "Cancelled"
+          "unpaid": "بې معاشه",
+          "partially_paid": "په جزوی توګه تادیه شوی",
+          "paid": "ورکړې",
+          "cancelled": "لغوه شو"
         }
       },
       "paymentType": {
-        "label": "Payment Type",
+        "label": "د تادیاتو ډول",
         "validation": {
-          "in": "Payment type must be one of the allowed values"
+          "in": "د تادیې ډول باید یو له اجازه ورکړل شوي ارزښتونو څخه وي"
         },
         "options": {
-          "cash": "Cash",
-          "card": "Card",
-          "bank_transfer": "Bank Transfer",
-          "insurance": "Insurance",
-          "other": "Other"
+          "cash": "نغدې",
+          "card": "کارت",
+          "bank_transfer": "د بانک لیږد",
+          "insurance": "بیمه",
+          "other": "نور"
         }
       },
       "payments": {
-        "label": "Payments",
+        "label": "تادیات",
         "validation": {
-          "maxLength": "Payments must be 255 characters or less"
+          "maxLength": "تادیات باید 255 حروف یا لږ وي"
         }
       },
       "trashed": {
-        "label": "Trashed",
+        "label": "کثافات",
         "options": {
-          "with": "With Trashed",
-          "only": "Only Trashed"
+          "with": "د کثافاتو سره",
+          "only": "یوازې کثافات"
         }
       }
     },
     "repository": {
-      "createFailed": "Failed to create Invoice",
-      "fetchFailed": "Failed to fetch Invoice",
-      "updateFailed": "Failed to update Invoice",
-      "deleteFailed": "Failed to delete Invoice",
-      "fetchManyFailed": "Failed to fetch Invoices",
-      "fetchManySuccess": "Invoices fetched successfully"
+      "createFailed": "د رسید په جوړولو کې پاتې راغلی",
+      "fetchFailed": "د رسید په ترلاسه کولو کې پاتې راغلی",
+      "updateFailed": "د رسید په تازه کولو کې پاتې راغلی",
+      "deleteFailed": "د رسید په حذف کولو کې پاتې راغلی",
+      "fetchManyFailed": "د رسیدونو په ترلاسه کولو کې پاتې راغلل",
+      "fetchManySuccess": "رسیدونه په بریالیتوب سره ترلاسه شول"
     },
     "presentation": {
-      "createSuccess": "Invoice created successfully",
-      "updateSuccess": "Invoice updated successfully",
-      "deleteSuccess": "Invoice deleted successfully"
+      "createSuccess": "رسید په بریالیتوب سره جوړ شو",
+      "updateSuccess": "رسید په بریالیتوب سره تازه شو",
+      "deleteSuccess": "رسید په بریالیتوب سره ړنګ شو"
     },
     "sync": {
-      "title": "Visits to invoice",
-      "description": "Sync invoices with recent visits and keep manual control below.",
-      "refresh": "Refresh visits",
-      "loadingVisits": "Loading visits...",
-      "noVisits": "No recent visits found. Try refreshing to check for new entries.",
-      "selectVisitFirst": "Select a visit before creating an invoice.",
-      "selectedVisit": "Selected visit",
-      "noVisitSelected": "Pick a visit above to start invoicing.",
-      "selectedVisitButton": "Visit selected",
-      "selectVisitButton": "Select visit",
-      "visitAmount": "Visit amount",
-      "unpaidVisits": "Unpaid visits",
-      "paidVisits": "Paid visits",
-      "noUnpaidVisits": "No unpaid visits found.",
-      "noPaidVisits": "No paid visits found.",
-      "paidVisitButton": "Already paid",
-      "selectedCount": "Selected visit",
-      "combinedAmount": "Combined amount",
-      "clearSelection": "Clear selection",
-      "manualDescription": "Need full control? Use the table below to add or edit invoices manually.",
-      "createButton": "Create invoice from selected visit",
-      "multiDiscountHint": "Discount can only be applied when exactly one visit is selected.",
-      "createdCount": "{count, plural, one {# invoice created successfully} other {# invoices created successfully}}",
-      "failedSome": "Some selected visits could not be invoiced. Please review and retry.",
-      "samePatientRequired": "All selected visits must belong to the same patient.",
-      "discountTooHigh": "Discount cannot be greater than the combined amount.",
-      "linkedVisitsNote": "Linked visits",
+      "title": "د رسیدو لپاره لیدنه",
+      "description": "د وروستیو لیدنو سره رسیدونه همغږي کړئ او لاندې لاسي کنټرول وساتئ.",
+      "refresh": "لیدنې تازه کړئ",
+      "loadingVisits": "لیدنې لوډیږي...",
+      "noVisits": "هیڅ وروستي لیدنه ونه موندل شوه. د تازه کولو هڅه وکړئ ترڅو د نوي ننوتلو لپاره وګورئ.",
+      "selectVisitFirst": "د رسید جوړولو دمخه لیدنه غوره کړئ.",
+      "selectedVisit": "ټاکل شوې لیدنه",
+      "noVisitSelected": "د رسید پیل کولو لپاره پورته لیدنه غوره کړئ.",
+      "selectedVisitButton": "ټاکل شوی لیدنه",
+      "selectVisitButton": "لیدنه غوره کړئ",
+      "visitAmount": "د لیدنې مقدار",
+      "unpaidVisits": "بې پیسو لیدنې",
+      "paidVisits": "تادیه شوي لیدنې",
+      "noUnpaidVisits": "هیڅ نه تادیه شوي لیدنې ونه موندل شوې.",
+      "noPaidVisits": "هیڅ تادیه شوي لیدنې ونه موندل شوې.",
+      "paidVisitButton": "لا دمخه ورکړې",
+      "selectedCount": "ټاکل شوې لیدنه",
+      "combinedAmount": "ګډ مقدار",
+      "clearSelection": "روښانه انتخاب",
+      "manualDescription": "بشپړ کنټرول ته اړتیا لرئ؟ په لاسي ډول د رسیدونو اضافه کولو یا ایډیټ کولو لپاره لاندې جدول وکاروئ.",
+      "createButton": "د ټاکل شوي لیدنې څخه رسید جوړ کړئ",
+      "multiDiscountHint": "تخفیف یوازې هغه وخت پلي کیدی شي کله چې دقیقا یوه لیدنه غوره شي.",
+      "createdCount": "{count, plural, one {# رسید په بریالیتوب جوړ شو} other {# رسیدونه په بریالیتوب جوړ شول}}",
+      "failedSome": "ځینې ​​ټاکل شوي لیدنې رسید نشي کولی. مهرباني وکړئ بیاکتنه وکړئ او بیا هڅه وکړئ.",
+      "samePatientRequired": "ټول ټاکل شوي لیدنې باید د ورته ناروغ پورې اړه ولري.",
+      "discountTooHigh": "تخفیف نشي کولی د ګډ مقدار څخه ډیر وي.",
+      "linkedVisitsNote": "لینک شوي لیدنې",
       "form": {
-        "totalAmount": "Total amount",
-        "discount": "Discount",
-        "netAmount": "Net amount",
-        "invoiceDate": "Invoice date",
-        "notes": "Notes",
-        "paymentType": "Payment Type"
+        "totalAmount": "ټوله اندازه",
+        "discount": "تخفیف",
+        "netAmount": "خالص مقدار",
+        "invoiceDate": "د رسید نیټه",
+        "notes": "یادښتونه",
+        "paymentType": "د تادیاتو ډول"
       }
     }
   }
 }
-

@@ -1,107 +1,107 @@
 {
   "config": {
-    "title": "Payments",
-    "entity": "Payment",
+    "title": "پرداخت ها",
+    "entity": "پرداخت",
     "table": {
-      "add": "Add Payment",
-      "create": "Create Payment",
-      "edit": "Edit Payment",
-      "update": "Update Payment"
+      "add": "پرداخت را اضافه کنید",
+      "create": "ایجاد پرداخت",
+      "edit": "ویرایش پرداخت",
+      "update": "به روز رسانی پرداخت"
     },
     "form": {
       "invoiceId": {
-        "label": "Invoice Id",
+        "label": "شناسه فاکتور",
         "validation": {
-          "required": "Invoice Id is required",
-          "pattern": "Invoice Id must be a number"
+          "required": "شناسه فاکتور الزامی است",
+          "pattern": "شناسه فاکتور باید یک عدد باشد"
         }
       },
       "paymentDate": {
-        "label": "Payment Date",
+        "label": "تاریخ پرداخت",
         "validation": {
-          "required": "Payment Date is required",
-          "maxLength": "Payment Date must be 255 characters or less"
+          "required": "تاریخ پرداخت الزامی است",
+          "maxLength": "تاریخ پرداخت باید 255 کاراکتر یا کمتر باشد"
         }
       },
       "amount": {
-        "label": "Amount",
+        "label": "مقدار",
         "validation": {
-          "required": "Amount is required",
-          "maxLength": "Amount must be 255 characters or less"
+          "required": "مبلغ مورد نیاز است",
+          "maxLength": "مقدار باید 255 نویسه یا کمتر باشد"
         }
       },
       "currency": {
-        "label": "Currency",
+        "label": "ارز",
         "validation": {
-          "in": "Currency must be one of the allowed values"
+          "in": "ارز باید یکی از مقادیر مجاز باشد"
         },
         "options": {
-          "usd": "USD ($)",
-          "afn": "AFN (Afghani)"
+          "usd": "AFN (افغانی)",
+          "afn": "AFN (افغانی)"
         }
       },
       "exchangeRate": {
-        "label": "Exchange Rate",
+        "label": "نرخ ارز",
         "validation": {
-          "maxLength": "Exchange Rate must be 255 characters or less"
+          "maxLength": "نرخ ارز باید 255 کاراکتر یا کمتر باشد"
         }
       },
       "method": {
-        "label": "Method",
+        "label": "روش",
         "validation": {
-          "required": "Method is required",
-          "in": "Method must be one of the allowed values"
+          "required": "روش مورد نیاز است",
+          "in": "متد باید یکی از مقادیر مجاز باشد"
         },
         "options": {
-          "cash": "Cash",
-          "card": "Card",
-          "insurance": "Insurance"
+          "cash": "پول نقد",
+          "card": "کارت",
+          "insurance": "بیمه"
         }
       },
       "notes": {
-        "label": "Notes",
+        "label": "یادداشت ها",
         "validation": {
-          "maxLength": "Notes must be 255 characters or less"
+          "maxLength": "یادداشت ها باید 255 کاراکتر یا کمتر باشند"
         }
       },
       "createdBy": {
-        "label": "Created By",
+        "label": "ایجاد شده توسط",
         "validation": {
-          "pattern": "Created By must be a number"
+          "pattern": "ایجاد شده توسط باید یک عدد باشد"
         }
       },
       "updatedBy": {
-        "label": "Updated By",
+        "label": "به روز شده توسط",
         "validation": {
-          "pattern": "Updated By must be a number"
+          "pattern": "Updated By باید یک عدد باشد"
         }
       },
       "deletedBy": {
-        "label": "Deleted By",
+        "label": "حذف شده توسط",
         "validation": {
-          "pattern": "Deleted By must be a number"
+          "pattern": "حذف شده توسط باید یک عدد باشد"
         }
       },
       "trashed": {
-        "label": "Trashed",
+        "label": "سطل زباله",
         "options": {
-          "with": "With Trashed",
-          "only": "Only Trashed"
+          "with": "با سطل زباله",
+          "only": "فقط سطل زباله"
         }
       }
     },
     "repository": {
-      "createFailed": "Failed to create Payment",
-      "fetchFailed": "Failed to fetch Payment",
-      "updateFailed": "Failed to update Payment",
-      "deleteFailed": "Failed to delete Payment",
-      "fetchManyFailed": "Failed to fetch Payments",
-      "fetchManySuccess": "Payments fetched successfully"
+      "createFailed": "پرداخت ایجاد نشد",
+      "fetchFailed": "پرداخت واکشی نشد",
+      "updateFailed": "پرداخت به‌روزرسانی نشد",
+      "deleteFailed": "پرداخت حذف نشد",
+      "fetchManyFailed": "پرداخت‌ها واکشی نشد",
+      "fetchManySuccess": "پرداخت ها با موفقیت دریافت شد"
     },
     "presentation": {
-      "createSuccess": "Payment created successfully",
-      "updateSuccess": "Payment updated successfully",
-      "deleteSuccess": "Payment deleted successfully"
+      "createSuccess": "پرداخت با موفقیت ایجاد شد",
+      "updateSuccess": "پرداخت با موفقیت به روز شد",
+      "deleteSuccess": "پرداخت با موفقیت حذف شد"
     }
   }
 }

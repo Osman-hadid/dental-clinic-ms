@@ -32,6 +32,7 @@ export const NavMain = ({
     url: string;
     icon?: LucideIcon;
     items?: {
+      icon?: LucideIcon;
       title: string;
       newTab?: boolean;
       url: string;
@@ -145,8 +146,9 @@ export const NavMain = ({
                               href={subItem.url}
                               rel={subItem.newTab ? 'noopener noreferrer' : undefined}
                               target={subItem.newTab ? '_blank' : undefined}
-                              className="w-full"
+                              className="flex w-full items-center gap-2"
                             >
+                              {subItem.icon ? <subItem.icon className="size-4 shrink-0 opacity-80" /> : null}
                               {subItem.title}
                             </Link>
                           </DropdownMenuItem>
@@ -257,10 +259,11 @@ export const NavMain = ({
                               rel={subItem.newTab ? 'noopener noreferrer' : undefined}
                               target={subItem.newTab ? '_blank' : undefined}
                               className={cn(
-                                'block rounded-lg border border-transparent px-3 py-2 text-sm transition-colors hover:border-white/50 hover:bg-white/40 hover:text-foreground hover:backdrop-blur-md',
+                                'flex items-center gap-2 rounded-lg border border-transparent px-3 py-2 text-sm transition-colors hover:border-white/50 hover:bg-white/40 hover:text-foreground hover:backdrop-blur-md',
                                 isActive && 'bg-sidebar-primary/25 font-medium text-foreground'
                               )}
                             >
+                              {subItem.icon ? <subItem.icon className="size-4 shrink-0 opacity-80" /> : null}
                               {subItem.title}
                             </Link>
                           </SidebarMenuSubButton>

@@ -6,6 +6,7 @@ use App\Modules\DentalManagement\Infrastructure\Http\Controllers\AppointmentCont
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\AiImagingController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\InvoiceController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\ExpenseController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\DebtController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\FinancialSettingController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\PatientController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\PatientSessionTaskController;
@@ -65,6 +66,9 @@ Route::middleware(['api', 'auth:sanctum', 'set_locale'])->prefix('api/v1/dental-
     Route::apiResource('safe-transactions', SafeTransactionController::class);
     Route::apiResource('expenses', ExpenseController::class);
     Route::apiResource('salary-payments', SalaryPaymentController::class);
+    Route::get('/debts', [DebtController::class, 'index']);
+    Route::post('/debts/{id}/settle', [DebtController::class, 'settle']);
+    Route::post('/debts/rebuild', [DebtController::class, 'rebuild']);
     Route::get('/financial-settings/exchange-rate', [FinancialSettingController::class, 'showExchangeRate']);
     Route::put('/financial-settings/exchange-rate', [FinancialSettingController::class, 'updateExchangeRate']);
 });

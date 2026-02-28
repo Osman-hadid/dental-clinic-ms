@@ -11,10 +11,10 @@ final readonly class PatientData
     use IdCaster;
 
     public function __construct(
-        public string $patientCode,
+        public ?string $patientCode,
         public string $firstName,
         public ?string $lastName,
-        public string $gender,
+        public ?string $gender,
         public ?string $dateOfBirth,
         public ?string $contactNumber,
         public ?string $email,
@@ -61,8 +61,7 @@ final readonly class PatientData
 
     public function toArray(): array
     {
-        return [
-            'patient_code' => $this->patientCode,
+        $payload = [
             'first_name' => $this->firstName,
             'last_name' => $this->lastName,
             'gender' => $this->gender,
@@ -79,5 +78,11 @@ final readonly class PatientData
             'updated_by' => $this->updatedBy,
             'deleted_by' => $this->deletedBy,
         ];
+
+        if (is_string($this->patientCode) && trim($this->patientCode) !== '') {
+            $payload['patient_code'] = trim($this->patientCode);
+        }
+
+        return $payload;
     }
 }

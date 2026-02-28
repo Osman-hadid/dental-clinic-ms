@@ -22,7 +22,7 @@ final class UpdateExpenseRequest extends BaseFormRequest
             'title' => 'required|string|max:120',
             'category' => 'required|string|max:120',
             'amount' => 'required|numeric|gt:0',
-            'currency' => 'nullable|string|in:USD,AFN',
+            'currency' => 'nullable|string|in:AFN',
             'exchangeRate' => 'nullable|numeric|gt:0',
             'expenseDate' => 'required|date_format:Y-m-d',
             'paymentMethod' => 'nullable|string|max:40',

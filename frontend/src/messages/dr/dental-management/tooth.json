@@ -1,58 +1,71 @@
 {
   "config": {
-    "title": "Teeth",
-    "entity": "Tooth",
+    "title": "دندان ها",
+    "entity": "دندان",
     "table": {
-      "add": "Add Tooth",
-      "create": "Create Tooth",
-      "edit": "Edit Tooth",
-      "update": "Update Tooth"
+      "add": "اضافه کردن دندان",
+      "create": "ایجاد دندان",
+      "edit": "ویرایش دندان",
+      "update": "به روز رسانی دندان"
     },
     "form": {
       "toothNumber": {
-        "label": "Tooth Number",
+        "label": "شماره دندان",
         "validation": {
-          "required": "Tooth Number is required",
-          "maxLength": "Tooth Number must be 255 characters or less"
+          "required": "شماره دندان الزامی است",
+          "maxLength": "شماره دندان باید 255 کاراکتر یا کمتر باشد"
         }
       },
       "description": {
-        "label": "Description",
-        "validation": { "maxLength": "Description must be 255 characters or less" }
+        "label": "توضیحات",
+        "validation": {
+          "maxLength": "توضیحات باید 255 کاراکتر یا کمتر باشد"
+        }
       },
       "createdBy": {
-        "label": "Created By",
-        "validation": { "pattern": "Created By must be a number" }
+        "label": "ایجاد شده توسط",
+        "validation": {
+          "pattern": "ایجاد شده توسط باید یک عدد باشد"
+        }
       },
       "updatedBy": {
-        "label": "Updated By",
-        "validation": { "pattern": "Updated By must be a number" }
+        "label": "به روز شده توسط",
+        "validation": {
+          "pattern": "Updated By باید یک عدد باشد"
+        }
       },
       "deletedBy": {
-        "label": "Deleted By",
-        "validation": { "pattern": "Deleted By must be a number" }
+        "label": "حذف شده توسط",
+        "validation": {
+          "pattern": "حذف شده توسط باید یک عدد باشد"
+        }
       },
       "visitTreatments": {
-        "label": "Visit Treatments",
-        "validation": { "maxLength": "Visit Treatments must be 255 characters or less" }
+        "label": "از درمان ها دیدن کنید",
+        "validation": {
+          "maxLength": "بازدید از درمان باید 255 نویسه یا کمتر باشد"
+        }
       },
       "trashed": {
-        "label": "Trashed",
-        "options": { "with": "With Trashed", "only": "Only Trashed" }
+        "label": "سطل زباله",
+        "options": {
+          "with": "با سطل زباله",
+          "only": "فقط سطل زباله"
+        }
       }
     },
     "repository": {
-      "createFailed": "Failed to create Tooth",
-      "fetchFailed": "Failed to fetch Tooth",
-      "updateFailed": "Failed to update Tooth",
-      "deleteFailed": "Failed to delete Tooth",
-      "fetchManyFailed": "Failed to fetch Teeth",
-      "fetchManySuccess": "Teeth fetched successfully"
+      "createFailed": "Tooth ایجاد نشد",
+      "fetchFailed": "واکشی دندان انجام نشد",
+      "updateFailed": "Tooth به روز نشد",
+      "deleteFailed": "Tooth حذف نشد",
+      "fetchManyFailed": "واکشی دندان انجام نشد",
+      "fetchManySuccess": "دندان ها با موفقیت بیرون آمدند"
     },
     "presentation": {
-      "createSuccess": "Tooth created successfully",
-      "updateSuccess": "Tooth updated successfully",
-      "deleteSuccess": "Tooth deleted successfully"
+      "createSuccess": "دندان با موفقیت ایجاد شد",
+      "updateSuccess": "دندان با موفقیت به روز شد",
+      "deleteSuccess": "دندان با موفقیت حذف شد"
     }
   }
 }

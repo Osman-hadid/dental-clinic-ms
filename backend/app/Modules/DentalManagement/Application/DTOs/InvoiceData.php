@@ -40,7 +40,7 @@ final readonly class InvoiceData
             netAmount: round((float) ($data['netAmount'] ?? 0), 2),
             invoiceDate: $data['invoiceDate'] ?? null,
             notes: $data['notes'] ?? null,
-            currency: strtoupper((string) ($data['currency'] ?? 'USD')),
+            currency: strtoupper((string) ($data['currency'] ?? 'AFN')),
             exchangeRate: isset($data['exchangeRate']) ? (float) $data['exchangeRate'] : null,
             createdBy: $ids['createdBy'] ?? null,
             updatedBy: $ids['updatedBy'] ?? null,

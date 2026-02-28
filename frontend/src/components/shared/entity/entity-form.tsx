@@ -22,7 +22,12 @@ const normalizeFieldValue = (field: FormField, value: any): any => {
   const fieldType = field.type ?? 'text';
 
   if (fieldType === 'select') {
-    if (value === null || value === undefined || value === '') return '';
+    if (value === null || value === undefined || value === '') {
+      if (!field.relation && Array.isArray(field.options) && field.options.length > 0) {
+        return String(field.options[0].value);
+      }
+      return '';
+    }
     if (typeof value === 'object') {
       if (typeof value.id === 'string' || typeof value.id === 'number') return String(value.id);
       if (typeof value.value === 'string' || typeof value.value === 'number') return String(value.value);

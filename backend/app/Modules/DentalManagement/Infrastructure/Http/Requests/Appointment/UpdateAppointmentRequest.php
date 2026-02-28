@@ -20,7 +20,7 @@ final class UpdateAppointmentRequest extends BaseFormRequest
         return [
             'patientId' => 'required|integer|exists:patients,id',
             'dentistId' => 'required|integer|exists:staff,id',
-            'tag' => 'nullable|string|max:100',
+            'tag' => 'prohibited',
             'appointmentDate' => 'required|date_format:Y-m-d',
             'startTime' => 'required|date_format:H:i',
             'endTime' => 'required|date_format:H:i|after:startTime',

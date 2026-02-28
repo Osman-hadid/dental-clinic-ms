@@ -150,7 +150,7 @@ final class ExpenseController extends BaseApiController
             'direction' => 'out',
             'amount' => $expense->amount,
             'amount_input' => round((float) ($expense->amount_input ?? $expense->amount), 2),
-            'currency' => strtoupper((string) ($expense->currency ?? 'USD')),
+            'currency' => strtoupper((string) ($expense->currency ?? 'AFN')),
             'exchange_rate' => round((float) ($expense->exchange_rate ?? 1), 6),
             'notes' => $expense->title,
             'picked_by_staff_id' => $expense->staff_id,
@@ -164,7 +164,7 @@ final class ExpenseController extends BaseApiController
         $quantity = isset($data['quantity']) ? (int) $data['quantity'] : null;
         $unitCostInput = isset($data['unitCost']) ? round((float) $data['unitCost'], 2) : null;
         $resolvedCurrency = $this->currencyService->normalizeCurrency(
-            currency: (string) ($data['currency'] ?? 'USD'),
+            currency: (string) ($data['currency'] ?? 'AFN'),
             exchangeRate: isset($data['exchangeRate']) ? (float) $data['exchangeRate'] : null,
         );
         $amountInput = round((float) ($data['amount'] ?? 0), 2);

@@ -1,111 +1,111 @@
 {
   "config": {
-    "title": "Visits",
-    "entity": "Visit",
+    "title": "لیدنه",
+    "entity": "لیدنه",
     "table": {
-      "add": "Add Visit",
-      "create": "Create Visit",
-      "edit": "Edit Visit",
-      "update": "Update Visit"
+      "add": "لیدنه اضافه کړئ",
+      "create": "لیدنه جوړه کړئ",
+      "edit": "د لیدنې ترمیم",
+      "update": "تازه لیدنه"
     },
     "form": {
       "appointmentId": {
-        "label": "Appointment Id",
+        "label": "د ملاقات پیژندنه",
         "validation": {
-          "required": "Appointment Id is required",
-          "pattern": "Appointment Id must be a number"
+          "required": "د ملاقات ID ته اړتیا ده",
+          "pattern": "د ملاقات ID باید یو شمیر وي"
         }
       },
       "patientId": {
-        "label": "Patient Id",
+        "label": "د ناروغ پیژندنه",
         "validation": {
-          "required": "Patient Id is required",
-          "pattern": "Patient Id must be a number"
+          "required": "د ناروغ ID ته اړتیا ده",
+          "pattern": "د ناروغ ID باید یو شمیر وي"
         }
       },
       "dentistId": {
-        "label": "Dentist Id",
+        "label": "د غاښونو پیژندنه",
         "validation": {
-          "required": "Dentist Id is required",
-          "pattern": "Dentist Id must be a number"
+          "required": "د غاښونو پیژندنه اړینه ده",
+          "pattern": "د غاښونو پیژندنه باید یو شمیر وي"
         }
       },
       "tag": {
-        "label": "Visit Tag",
+        "label": "ټاګ ته مراجعه وکړئ",
         "validation": {
-          "required": "Visit Tag is required",
-          "maxLength": "Visit Tag must be 100 characters or less"
+          "required": "د لیدنې ټاګ اړین دی",
+          "maxLength": "د لیدنې ټاګ باید 100 حروف یا لږ وي"
         }
       },
       "visitDate": {
-        "label": "Visit Date",
+        "label": "د لیدنې نیټه",
         "validation": {
-          "required": "Visit Date is required",
-          "maxLength": "Visit Date must be 255 characters or less"
+          "required": "د لیدنې نیټه اړینه ده",
+          "maxLength": "د لیدنې نیټه باید 255 حروف یا لږ وي"
         }
       },
       "diagnosisNotes": {
-        "label": "Diagnosis Notes",
+        "label": "د تشخیص یادښتونه",
         "validation": {
-          "maxLength": "Diagnosis Notes must be 255 characters or less"
+          "maxLength": "د تشخیص یادښتونه باید 255 حروف یا لږ وي"
         }
       },
       "nextVisitDate": {
-        "label": "Next Visit Date",
+        "label": "د راتلونکی لیدنې نیټه",
         "validation": {
-          "maxLength": "Next Visit Date must be 255 characters or less"
+          "maxLength": "د راتلونکي لیدنې نیټه باید 255 حروف یا لږ وي"
         }
       },
       "createdBy": {
-        "label": "Created By",
+        "label": "لخوا جوړ شوی",
         "validation": {
-          "pattern": "Created By must be a number"
+          "pattern": "جوړ شوی باید یو شمیر وي"
         }
       },
       "updatedBy": {
-        "label": "Updated By",
+        "label": "لخوا تازه شوی",
         "validation": {
-          "pattern": "Updated By must be a number"
+          "pattern": "تازه شوی باید یو شمیر وي"
         }
       },
       "deletedBy": {
-        "label": "Deleted By",
+        "label": "لخوا ړنګ شوی",
         "validation": {
-          "pattern": "Deleted By must be a number"
+          "pattern": "له منځه وړل باید یو شمیر وي"
         }
       },
       "visitTreatments": {
-        "label": "Visit Treatments",
+        "label": "د درملنې څخه لیدنه وکړئ",
         "validation": {
-          "maxLength": "Visit Treatments must be 255 characters or less"
+          "maxLength": "د لیدنې درملنې باید 255 حروف یا لږ وي"
         }
       },
       "invoices": {
-        "label": "Invoices",
+        "label": "رسیدونه",
         "validation": {
-          "maxLength": "Invoices must be 255 characters or less"
+          "maxLength": "رسیدونه باید 255 حروف یا لږ وي"
         }
       },
       "trashed": {
-        "label": "Trashed",
+        "label": "کثافات",
         "options": {
-          "with": "With Trashed",
-          "only": "Only Trashed"
+          "with": "د کثافاتو سره",
+          "only": "یوازې کثافات"
         }
       }
     },
     "repository": {
-      "createFailed": "Failed to create Visit",
-      "fetchFailed": "Failed to fetch Visit",
-      "updateFailed": "Failed to update Visit",
-      "deleteFailed": "Failed to delete Visit",
-      "fetchManyFailed": "Failed to fetch Visits",
-      "fetchManySuccess": "Visits fetched successfully"
+      "createFailed": "د لیدنې په جوړولو کې پاتې راغلی",
+      "fetchFailed": "د لیدنې په ترلاسه کولو کې پاتې راغلل",
+      "updateFailed": "د لیدنې تازه کولو کې پاتې راغلی",
+      "deleteFailed": "د لیدنې ړنګولو کې پاتې راغلل",
+      "fetchManyFailed": "د لیدنو په ترلاسه کولو کې پاتې راغلل",
+      "fetchManySuccess": "لیدنې په بریالیتوب سره ترلاسه شوې"
     },
     "presentation": {
-      "createSuccess": "Visit created successfully",
-      "updateSuccess": "Visit updated successfully",
-      "deleteSuccess": "Visit deleted successfully"
+      "createSuccess": "لیدنه په بریالیتوب سره جوړه شوه",
+      "updateSuccess": "لیدنه په بریالیتوب سره تازه شوه",
+      "deleteSuccess": "لیدنه په بریالیتوب سره حذف شوه"
     }
   }
 }

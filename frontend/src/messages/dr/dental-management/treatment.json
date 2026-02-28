@@ -1,97 +1,97 @@
 {
   "config": {
-    "title": "Treatments",
-    "entity": "Treatment",
+    "title": "درمان ها",
+    "entity": "درمان",
     "table": {
-      "add": "Add Treatment",
-      "create": "Create Treatment",
-      "edit": "Edit Treatment",
-      "update": "Update Treatment"
+      "add": "اضافه کردن درمان",
+      "create": "ایجاد درمان",
+      "edit": "ویرایش درمان",
+      "update": "به روز رسانی درمان"
     },
     "form": {
       "name": {
-        "label": "Name",
+        "label": "نام",
         "validation": {
-          "required": "Name is required",
-          "maxLength": "Name must be 255 characters or less"
+          "required": "نام الزامی است",
+          "maxLength": "نام باید 255 کاراکتر یا کمتر باشد"
         }
       },
       "category": {
-        "label": "Category",
+        "label": "دسته بندی",
         "validation": {
-          "required": "Category is required",
-          "maxLength": "Category must be 255 characters or less"
+          "required": "دسته بندی الزامی است",
+          "maxLength": "رده باید 255 کاراکتر یا کمتر باشد"
         }
       },
       "defaultPrice": {
-        "label": "Default Price",
+        "label": "قیمت پیش فرض",
         "validation": {
-          "required": "Default Price is required",
-          "maxLength": "Default Price must be 255 characters or less"
+          "required": "قیمت پیش فرض الزامی است",
+          "maxLength": "قیمت پیش‌فرض باید 255 نویسه یا کمتر باشد"
         }
       },
       "durationMinutes": {
-        "label": "Duration Minutes"
+        "label": "مدت زمان دقیقه"
       },
       "description": {
-        "label": "Description",
+        "label": "توضیحات",
         "validation": {
-          "maxLength": "Description must be 255 characters or less"
+          "maxLength": "توضیحات باید 255 کاراکتر یا کمتر باشد"
         }
       },
       "createdBy": {
-        "label": "Created By",
+        "label": "ایجاد شده توسط",
         "validation": {
-          "pattern": "Created By must be a number"
+          "pattern": "ایجاد شده توسط باید یک عدد باشد"
         }
       },
       "updatedBy": {
-        "label": "Updated By",
+        "label": "به روز شده توسط",
         "validation": {
-          "pattern": "Updated By must be a number"
+          "pattern": "Updated By باید یک عدد باشد"
         }
       },
       "deletedBy": {
-        "label": "Deleted By",
+        "label": "حذف شده توسط",
         "validation": {
-          "pattern": "Deleted By must be a number"
+          "pattern": "حذف شده توسط باید یک عدد باشد"
         }
       },
       "enabled": {
-        "label": "Enabled",
+        "label": "فعال شد",
         "options": {
-          "Active": "Active",
-          "Inactive": "Inactive",
-          "active": "Active",
-          "inactive": "Inactive"
+          "Active": "فعال",
+          "Inactive": "غیر فعال",
+          "active": "فعال",
+          "inactive": "غیر فعال"
         }
       },
       "visitTreatments": {
-        "label": "Visit Treatments",
+        "label": "از درمان ها دیدن کنید",
         "validation": {
-          "maxLength": "Visit Treatments must be 255 characters or less"
+          "maxLength": "بازدید از درمان باید 255 نویسه یا کمتر باشد"
         }
       },
       "trashed": {
-        "label": "Trashed",
+        "label": "سطل زباله",
         "options": {
-          "with": "With Trashed",
-          "only": "Only Trashed"
+          "with": "با سطل زباله",
+          "only": "فقط سطل زباله"
         }
       }
     },
     "repository": {
-      "createFailed": "Failed to create Treatment",
-      "fetchFailed": "Failed to fetch Treatment",
-      "updateFailed": "Failed to update Treatment",
-      "deleteFailed": "Failed to delete Treatment",
-      "fetchManyFailed": "Failed to fetch Treatments",
-      "fetchManySuccess": "Treatments fetched successfully"
+      "createFailed": "درمان ایجاد نشد",
+      "fetchFailed": "دریافت درمان انجام نشد",
+      "updateFailed": "درمان به‌روزرسانی نشد",
+      "deleteFailed": "درمان حذف نشد",
+      "fetchManyFailed": "درمان‌ها دریافت نشد",
+      "fetchManySuccess": "درمان ها با موفقیت دریافت شدند"
     },
     "presentation": {
-      "createSuccess": "Treatment created successfully",
-      "updateSuccess": "Treatment updated successfully",
-      "deleteSuccess": "Treatment deleted successfully"
+      "createSuccess": "درمان با موفقیت ایجاد شد",
+      "updateSuccess": "درمان با موفقیت به روز شد",
+      "deleteSuccess": "درمان با موفقیت حذف شد"
     }
   }
 }

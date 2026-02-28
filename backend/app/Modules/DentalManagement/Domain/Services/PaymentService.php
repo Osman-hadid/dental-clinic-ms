@@ -18,6 +18,7 @@ final readonly class PaymentService
     public function __construct(
         private PaymentRepositoryInterface $paymentRepository,
         private CurrencyService $currencyService,
+        private DebtService $debtService,
     ) {}
 
     public function listPayments(QuerySpecification $querySpecification): LengthAwarePaginator
@@ -43,6 +44,7 @@ final readonly class PaymentService
             $this->deleteSyntheticInvoiceSafeTransaction($invoiceId);
 
             $this->syncInvoicePaymentStatus($invoiceId);
+            $this->debtService->syncByInvoiceId($invoiceId);
             $this->paymentRepository->invalidateCache();
 
             return $payment;
@@ -66,9 +68,11 @@ final readonly class PaymentService
             $this->deleteSyntheticInvoiceSafeTransaction($invoiceId);
 
             $this->syncInvoicePaymentStatus($invoiceId);
+            $this->debtService->syncByInvoiceId($invoiceId);
             if ($previousInvoiceId !== $invoiceId) {
                 $this->syncInvoicePaymentStatus($previousInvoiceId);
                 $this->deleteSyntheticInvoiceSafeTransaction($previousInvoiceId);
+                $this->debtService->syncByInvoiceId($previousInvoiceId);
             }
 
             $this->paymentRepository->invalidateCache();
@@ -86,6 +90,7 @@ final readonly class PaymentService
             $this->paymentRepository->delete(id: $id);
             $this->deleteSafeTransactionForPayment($id);
             $this->syncInvoicePaymentStatus($invoiceId);
+            $this->debtService->syncByInvoiceId($invoiceId);
             $this->paymentRepository->invalidateCache();
         });
     }
@@ -102,6 +107,7 @@ final readonly class PaymentService
                 ->where('source_id', $payment->id)
                 ->forceDelete();
             $this->syncInvoicePaymentStatus($invoiceId);
+            $this->debtService->syncByInvoiceId($invoiceId);
             $this->paymentRepository->invalidateCache();
         });
     }
@@ -122,7 +128,9 @@ final readonly class PaymentService
 
             $this->paymentRepository->delete(id: $id);
             $this->deleteSafeTransactionForPayment((int) $id);
-            $this->syncInvoicePaymentStatus((int) $payment->invoice_id);
+            $invoiceId = (int) $payment->invoice_id;
+            $this->syncInvoicePaymentStatus($invoiceId);
+            $this->debtService->syncByInvoiceId($invoiceId);
             $deleted[] = $id;
         }
 
@@ -144,7 +152,9 @@ final readonly class PaymentService
 
             $this->syncSafeTransactionForPayment($payment);
             $this->deleteSyntheticInvoiceSafeTransaction((int) $payment->invoice_id);
-            $this->syncInvoicePaymentStatus((int) $payment->invoice_id);
+            $invoiceId = (int) $payment->invoice_id;
+            $this->syncInvoicePaymentStatus($invoiceId);
+            $this->debtService->syncByInvoiceId($invoiceId);
             $this->paymentRepository->invalidateCache();
 
             return $payment;
@@ -153,7 +163,7 @@ final readonly class PaymentService
 
     private function normalizePaymentData(array $data, ?Payment $existing = null): array
     {
-        $currency = (string) ($data['currency'] ?? $existing?->currency ?? 'USD');
+        $currency = (string) ($data['currency'] ?? $existing?->currency ?? 'AFN');
         $exchangeRate = isset($data['exchange_rate'])
             ? (float) $data['exchange_rate']
             : (isset($existing?->exchange_rate) ? (float) $existing->exchange_rate : null);
@@ -261,7 +271,7 @@ final readonly class PaymentService
             'direction' => 'in',
             'amount' => $payment->amount,
             'amount_input' => round((float) ($payment->amount_input ?? $payment->amount), 2),
-            'currency' => strtoupper((string) ($payment->currency ?? 'USD')),
+            'currency' => strtoupper((string) ($payment->currency ?? 'AFN')),
             'exchange_rate' => round((float) ($payment->exchange_rate ?? 1), 6),
             'notes' => "Invoice payment #{$payment->id}",
             'picked_by_staff_id' => null,

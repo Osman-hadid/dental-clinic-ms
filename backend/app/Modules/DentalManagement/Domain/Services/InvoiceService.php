@@ -18,6 +18,7 @@ final readonly class InvoiceService
     public function __construct(
         private InvoiceRepositoryInterface $invoiceRepository,
         private CurrencyService $currencyService,
+        private DebtService $debtService,
     ) {}
 
     public function listInvoices(QuerySpecification $querySpecification): LengthAwarePaginator
@@ -35,6 +36,7 @@ final readonly class InvoiceService
         return DB::transaction(function () use ($id): Invoice {
             $invoice = $this->invoiceRepository->restore($id);
             $this->syncSafeTransactionForInvoice($invoice);
+            $this->debtService->syncForInvoice($invoice);
             $this->invoiceRepository->invalidateCache();
 
             return $invoice;
@@ -49,6 +51,7 @@ final readonly class InvoiceService
 
             $invoice = $this->invoiceRepository->create(data: $normalized);
             $this->syncSafeTransactionForInvoice($invoice);
+            $this->debtService->syncForInvoice($invoice);
             $this->invoiceRepository->invalidateCache();
 
             return $invoice;
@@ -63,6 +66,7 @@ final readonly class InvoiceService
 
             $invoice = $this->invoiceRepository->update(id: $id, data: $normalized);
             $this->syncSafeTransactionForInvoice($invoice);
+            $this->debtService->syncForInvoice($invoice);
             $this->invoiceRepository->invalidateCache();
 
             return $invoice;
@@ -77,6 +81,7 @@ final readonly class InvoiceService
                 ->where('source_type', 'invoice')
                 ->where('source_id', $id)
                 ->delete();
+            $this->debtService->deleteByInvoiceId($id);
             $this->invoiceRepository->invalidateCache();
         });
     }
@@ -90,6 +95,7 @@ final readonly class InvoiceService
                 ->where('source_type', 'invoice')
                 ->where('source_id', $permission->id)
                 ->forceDelete();
+            $this->debtService->deleteByInvoiceId($permission->id);
             $this->invoiceRepository->invalidateCache();
         });
     }
@@ -113,6 +119,7 @@ final readonly class InvoiceService
                 ->where('source_type', 'invoice')
                 ->where('source_id', $id)
                 ->delete();
+            $this->debtService->deleteByInvoiceId((int) $id);
             $deleted[] = $id;
         }
 
@@ -186,7 +193,7 @@ final readonly class InvoiceService
     private function normalizeAmounts(array $data): array
     {
         $resolvedCurrency = $this->currencyService->normalizeCurrency(
-            currency: (string) ($data['currency'] ?? 'USD'),
+            currency: (string) ($data['currency'] ?? 'AFN'),
             exchangeRate: isset($data['exchange_rate']) ? (float) $data['exchange_rate'] : null,
         );
 
@@ -231,7 +238,7 @@ final readonly class InvoiceService
             'direction' => 'in',
             'amount' => round((float) $invoice->net_amount, 2),
             'amount_input' => round((float) ($invoice->net_amount_input ?? $invoice->net_amount), 2),
-            'currency' => strtoupper((string) ($invoice->currency ?? 'USD')),
+            'currency' => strtoupper((string) ($invoice->currency ?? 'AFN')),
             'exchange_rate' => round((float) ($invoice->exchange_rate ?? 1), 6),
             'notes' => "Paid invoice #{$invoice->id}",
             'picked_by_staff_id' => null,

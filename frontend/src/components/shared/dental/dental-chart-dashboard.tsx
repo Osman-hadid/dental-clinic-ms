@@ -21,7 +21,6 @@ import {
   ChevronRight,
   ClipboardList,
   Clock3,
-  DollarSign,
   Search,
   Stethoscope,
   UsersRound,
@@ -182,7 +181,7 @@ const parseMoney = (value: unknown): number => {
 
 const roundCurrency = (value: number): number => Math.round(value * 100) / 100;
 
-const formatCurrency = (value: number): string => formatMoneyByCurrency(roundCurrency(value), 'USD');
+const formatCurrency = (value: number): string => formatMoneyByCurrency(roundCurrency(value), 'AFN');
 
 const toDateKey = (date: Date): string => {
   const year = date.getFullYear();
@@ -1114,7 +1113,7 @@ export const DentalChartDashboard = ({
 
                   <div className="grid gap-2 text-xs">
                     <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-100/70 px-3 py-2 text-emerald-900">
-                      <span className="inline-flex items-center gap-1"><DollarSign className="size-3.5" /> Billed</span>
+                      <span className="inline-flex items-center gap-1">Billed</span>
                       <span className="font-semibold">{formatCurrency(incomeMetrics.totalBilled)}</span>
                     </div>
                     <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white/90 px-3 py-2">
@@ -1339,7 +1338,6 @@ export const DentalChartDashboard = ({
                 </div>
               </div>
             </div>
-            <p className="mt-2 text-[11px] text-muted-foreground">Rate: 1 USD = {afnPerUsd} AFN</p>
           </CardContent>
         </Card>
 

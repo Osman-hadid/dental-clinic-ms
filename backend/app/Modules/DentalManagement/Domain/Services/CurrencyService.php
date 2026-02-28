@@ -9,7 +9,7 @@ use App\Modules\DentalManagement\Domain\Entities\FinancialSetting;
 
 final class CurrencyService
 {
-    private const DEFAULT_AFN_PER_USD = 70.0;
+    private const DEFAULT_AFN_PER_USD = 1.0;
 
     public function getDefaultAfnPerUsd(): float
     {
@@ -44,46 +44,22 @@ final class CurrencyService
     public function normalizeCurrency(string $currency, ?float $exchangeRate = null): array
     {
         $normalizedCurrency = strtoupper(trim($currency));
-        if (!\in_array($normalizedCurrency, ['USD', 'AFN'], true)) {
+        if ($normalizedCurrency !== 'AFN') {
             throw new ApiException(
                 errorCode: 'UNSUPPORTED_CURRENCY',
-                message: 'Only USD and AFN are supported.',
-                httpCode: 422,
-            );
-        }
-
-        if ($normalizedCurrency === 'USD') {
-            return [
-                'currency' => 'USD',
-                'exchangeRate' => 1.0,
-            ];
-        }
-
-        $resolvedRate = $exchangeRate ?? $this->getDefaultAfnPerUsd();
-        $resolvedRate = round($resolvedRate, 6);
-
-        if ($resolvedRate <= 0) {
-            throw new ApiException(
-                errorCode: 'INVALID_EXCHANGE_RATE',
-                message: 'Exchange rate must be greater than zero.',
+                message: 'Only AFN is supported.',
                 httpCode: 422,
             );
         }
 
         return [
             'currency' => 'AFN',
-            'exchangeRate' => $resolvedRate,
+            'exchangeRate' => 1.0,
         ];
     }
 
     public function toUsd(float $amountInput, string $currency, float $exchangeRate): float
     {
-        $amount = round($amountInput, 2);
-
-        if ($currency === 'AFN') {
-            return round($amount / $exchangeRate, 2);
-        }
-
-        return $amount;
+        return round($amountInput, 2);
     }
 }

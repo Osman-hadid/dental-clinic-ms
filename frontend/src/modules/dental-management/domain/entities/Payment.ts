@@ -7,10 +7,10 @@ export type Payment = {
   currency?: 'USD' | 'AFN' | string;
   exchangeRate?: string | number;
   method: string;
-  notes: string;
-  createdBy: string;
-  updatedBy: string;
-  deletedBy: string;
+  notes?: string;
+  createdBy?: string;
+  updatedBy?: string;
+  deletedBy?: string;
   createdAt: string;
   updatedAt: string;
 };

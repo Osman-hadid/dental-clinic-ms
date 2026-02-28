@@ -1,9 +1,63 @@
 import { type EntityModuleConfig } from '@/types/EntityModuleConfig';
+import { createElement } from 'react';
+
+const invoicePatientLabel = (row: any): string => {
+  const patient = row?.patient;
+  if (!patient || typeof patient !== 'object') {
+    return '-';
+  }
+
+  const firstName = typeof patient.firstName === 'string'
+    ? patient.firstName.trim()
+    : (typeof patient.first_name === 'string' ? patient.first_name.trim() : '');
+  const lastName = typeof patient.lastName === 'string'
+    ? patient.lastName.trim()
+    : (typeof patient.last_name === 'string' ? patient.last_name.trim() : '');
+  const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+  if (fullName) {
+    return fullName;
+  }
+
+  if (typeof patient.fullName === 'string' && patient.fullName.trim()) {
+    return patient.fullName.trim();
+  }
+
+  if (typeof patient.full_name === 'string' && patient.full_name.trim()) {
+    return patient.full_name.trim();
+  }
+
+  if (typeof patient.name === 'string' && patient.name.trim()) {
+    return patient.name.trim();
+  }
+
+  if (typeof patient.patientCode === 'string' && patient.patientCode.trim()) {
+    return patient.patientCode.trim();
+  }
+
+  if (typeof patient.patient_code === 'string' && patient.patient_code.trim()) {
+    return patient.patient_code.trim();
+  }
+
+  return '-';
+};
+
+const invoicePatientCell = (row: any): React.ReactNode => {
+  const patientId = String(row?.patientId ?? row?.patient_id ?? '-');
+  const patientName = invoicePatientLabel(row);
+
+  return createElement(
+    'div',
+    { className: 'leading-tight' },
+    createElement('div', { className: 'font-medium text-foreground' }, patientId),
+    createElement('div', { className: 'text-xs text-muted-foreground' }, patientName)
+  );
+};
 
 export const invoiceConfig: EntityModuleConfig = {
   columns: [
     {
       accessorKey: 'patientId',
+      cell: invoicePatientCell,
       header: 'config.form.patientId.label',
     },
     {
@@ -17,14 +71,6 @@ export const invoiceConfig: EntityModuleConfig = {
     {
       accessorKey: 'netAmount',
       header: 'config.form.netAmount.label',
-    },
-    {
-      accessorKey: 'currency',
-      header: 'config.form.currency.label',
-    },
-    {
-      accessorKey: 'exchangeRate',
-      header: 'config.form.exchangeRate.label',
     },
     {
       accessorKey: 'invoiceDate',
@@ -76,14 +122,6 @@ export const invoiceConfig: EntityModuleConfig = {
         { label: 'config.form.status.options.cancelled', value: 'cancelled' },
       ],
       title: 'config.form.status.label',
-    },
-    {
-      key: 'currency',
-      options: [
-        { label: 'config.form.currency.options.usd', value: 'USD' },
-        { label: 'config.form.currency.options.afn', value: 'AFN' },
-      ],
-      title: 'config.form.currency.label',
     },
     {
       key: 'paymentType',
@@ -217,34 +255,6 @@ export const invoiceConfig: EntityModuleConfig = {
       },
     },
     {
-      label: 'config.form.currency.label',
-      name: 'currency',
-      options: [
-        {
-          label: 'config.form.currency.options.usd',
-          value: 'USD',
-        },
-        {
-          label: 'config.form.currency.options.afn',
-          value: 'AFN',
-        },
-      ],
-      required: false,
-      type: 'select',
-      validation: {
-        in: {
-          message: 'config.form.currency.validation.in',
-          value: ['USD', 'AFN'],
-        },
-      },
-    },
-    {
-      label: 'config.form.exchangeRate.label',
-      name: 'exchangeRate',
-      required: false,
-      type: 'number',
-    },
-    {
       label: 'config.form.paymentType.label',
       name: 'paymentType',
       options: [
@@ -296,6 +306,6 @@ export const invoiceConfig: EntityModuleConfig = {
   relations: ['patient', 'visit'],
   searchFields: [{ label: 'config.form.notes.label', value: 'notes' }],
   singleQueryKey: 'invoice',
-  sortableColumns: ['id', 'invoiceDate', 'netAmount', 'currency', 'status', 'paymentType', 'createdAt'],
+  sortableColumns: ['id', 'invoiceDate', 'netAmount', 'status', 'paymentType', 'createdAt'],
   title: 'config.title',
 };

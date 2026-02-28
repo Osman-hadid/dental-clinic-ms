@@ -13,6 +13,8 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 
+const LOCALE_SWITCHER_ENABLED = false;
+
 type BreadcrumbItemType = {
   id: string;
   label: string;
@@ -66,7 +68,7 @@ export const Header = ({
           </BreadcrumbList>
         </Breadcrumb>
       </div>
-      {showLocaleSwitcher && (
+      {LOCALE_SWITCHER_ENABLED && showLocaleSwitcher && (
         <div className="px-4">
           <LocaleSwitcher />
         </div>

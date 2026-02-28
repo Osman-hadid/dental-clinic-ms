@@ -1,123 +1,163 @@
 {
   "config": {
-    "title": "Patients",
-    "entity": "Patient",
+    "title": "ناروغان",
+    "entity": "ناروغ",
     "table": {
-      "add": "Add Patient",
-      "create": "Create Patient",
-      "edit": "Edit Patient",
-      "update": "Update Patient"
+      "add": "ناروغ اضافه کړئ",
+      "create": "ناروغ جوړ کړئ",
+      "edit": "د ناروغ ترمیم",
+      "update": "ناروغ تازه کړئ"
     },
     "form": {
       "patientCode": {
-        "label": "Patient Code",
+        "label": "د ناروغ کوډ",
         "validation": {
-          "required": "Patient Code is required",
-          "maxLength": "Patient Code must be 255 characters or less"
+          "required": "د ناروغ کوډ ته اړتیا ده",
+          "maxLength": "د ناروغ کوډ باید 255 حروف یا لږ وي"
         }
       },
       "firstName": {
-        "label": "First Name",
+        "label": "لومړی نوم",
         "validation": {
-          "required": "First Name is required",
-          "maxLength": "First Name must be 255 characters or less"
+          "required": "لومړی نوم اړین دی",
+          "maxLength": "لومړی نوم باید 255 حروف یا لږ وي"
         }
       },
       "lastName": {
-        "label": "Last Name",
-        "validation": { "maxLength": "Last Name must be 255 characters or less" }
+        "label": "تخلص",
+        "validation": {
+          "maxLength": "وروستی نوم باید 255 حروف یا لږ وي"
+        }
       },
       "gender": {
-        "label": "Gender",
-        "validation": { "in": "Gender must be one of the allowed values" },
-        "options": { "male": "Male", "female": "Female" }
+        "label": "جندر",
+        "validation": {
+          "in": "جندر باید یو له اجازه ورکړل شوي ارزښتونو څخه وي"
+        },
+        "options": {
+          "male": "نارینه",
+          "female": "ښځینه"
+        }
       },
       "dateOfBirth": {
-        "label": "Date Of Birth",
-        "validation": { "maxLength": "Date Of Birth must be 255 characters or less" }
+        "label": "د زیږون نیټه",
+        "validation": {
+          "maxLength": "د زیږون نیټه باید 255 حروف یا لږ وي"
+        }
       },
       "contactNumber": {
-        "label": "Contact Number",
-        "validation": { "maxLength": "Contact Number must be 255 characters or less" }
+        "label": "د اړیکو شمیره",
+        "validation": {
+          "maxLength": "د اړیکې شمیره باید 255 حروف یا لږ وي"
+        }
       },
       "email": {
-        "label": "Email",
+        "label": "ایمیل",
         "validation": {
-          "email": "Invalid email format",
-          "maxLength": "Email must be 255 characters or less"
+          "email": "د بریښنالیک ناسم بڼه",
+          "maxLength": "بریښنالیک باید 255 حروف یا لږ وي"
         }
       },
       "address": {
-        "label": "Address",
-        "validation": { "maxLength": "Address must be 255 characters or less" }
+        "label": "پته",
+        "validation": {
+          "maxLength": "پته باید 255 حروف یا لږ وي"
+        }
       },
       "bloodGroup": {
-        "label": "Blood Group",
-        "validation": { "maxLength": "Blood Group must be 255 characters or less" }
+        "label": "د وینې ګروپ",
+        "validation": {
+          "maxLength": "د وینې ګروپ باید 255 حروف یا لږ وي"
+        }
       },
       "emergencyContact": {
-        "label": "Emergency Contact",
-        "validation": { "maxLength": "Emergency Contact must be 255 characters or less" }
+        "label": "بیړنۍ اړیکه",
+        "validation": {
+          "maxLength": "بیړنۍ اړیکه باید 255 حروف یا لږ وي"
+        }
       },
       "remarks": {
-        "label": "Remarks",
-        "validation": { "maxLength": "Remarks must be 255 characters or less" }
+        "label": "څرګندونې",
+        "validation": {
+          "maxLength": "تبصرې باید 255 حروف یا لږ وي"
+        }
       },
       "createdBy": {
-        "label": "Created By",
-        "validation": { "pattern": "Created By must be a number" }
+        "label": "لخوا جوړ شوی",
+        "validation": {
+          "pattern": "جوړ شوی باید یو شمیر وي"
+        }
       },
       "updatedBy": {
-        "label": "Updated By",
-        "validation": { "pattern": "Updated By must be a number" }
+        "label": "لخوا تازه شوی",
+        "validation": {
+          "pattern": "تازه شوی باید یو شمیر وي"
+        }
       },
       "deletedBy": {
-        "label": "Deleted By",
-        "validation": { "pattern": "Deleted By must be a number" }
+        "label": "لخوا ړنګ شوی",
+        "validation": {
+          "pattern": "له منځه وړل باید یو شمیر وي"
+        }
       },
       "enabled": {
-        "label": "Enabled",
+        "label": "فعال شوی",
         "options": {
-          "Active": "Active",
-          "Inactive": "Inactive",
-          "active": "Active",
-          "inactive": "Inactive"
+          "Active": "فعاله",
+          "Inactive": "غیر فعاله",
+          "active": "فعاله",
+          "inactive": "غیر فعاله"
         }
       },
       "status": {
-        "label": "Status",
-        "validation": { "in": "Status must be one of the allowed values" },
-        "options": { "pending": "Pending", "approved": "Approved", "rejected": "Rejected" }
+        "label": "حالت",
+        "validation": {
+          "in": "حالت باید یو له اجازه ورکړل شوي ارزښتونو څخه وي"
+        },
+        "options": {
+          "pending": "پاتې",
+          "approved": "تصویب شو",
+          "rejected": "رد کړل"
+        }
       },
       "trashed": {
-        "label": "Trashed",
-        "options": { "with": "With Trashed", "only": "Only Trashed" }
+        "label": "کثافات",
+        "options": {
+          "with": "د کثافاتو سره",
+          "only": "یوازې کثافات"
+        }
       },
       "appointments": {
-        "label": "Appointments",
-        "validation": { "maxLength": "Appointments must be 255 characters or less" }
+        "label": "ګمارنې",
+        "validation": {
+          "maxLength": "ملاقاتونه باید 255 حروف یا لږ وي"
+        }
       },
       "visits": {
-        "label": "Visits",
-        "validation": { "maxLength": "Visits must be 255 characters or less" }
+        "label": "لیدنه",
+        "validation": {
+          "maxLength": "لیدنې باید 255 حروف یا لږ وي"
+        }
       },
       "invoices": {
-        "label": "Invoices",
-        "validation": { "maxLength": "Invoices must be 255 characters or less" }
+        "label": "رسیدونه",
+        "validation": {
+          "maxLength": "رسیدونه باید 255 حروف یا لږ وي"
+        }
       }
     },
     "repository": {
-      "createFailed": "Failed to create Patient",
-      "fetchFailed": "Failed to fetch Patient",
-      "updateFailed": "Failed to update Patient",
-      "deleteFailed": "Failed to delete Patient",
-      "fetchManyFailed": "Failed to fetch Patients",
-      "fetchManySuccess": "Patients fetched successfully"
+      "createFailed": "د ناروغ په جوړولو کې پاتې راغلی",
+      "fetchFailed": "د ناروغ په راوړلو کې پاتې راغلی",
+      "updateFailed": "د ناروغ په تازه کولو کې پاتې راغلی",
+      "deleteFailed": "د ناروغ په حذف کولو کې پاتې راغلی",
+      "fetchManyFailed": "د ناروغانو په راوړلو کې پاتې راغلی",
+      "fetchManySuccess": "ناروغان په بریالیتوب سره راوړل شول"
     },
     "presentation": {
-      "createSuccess": "Patient created successfully",
-      "updateSuccess": "Patient updated successfully",
-      "deleteSuccess": "Patient deleted successfully"
+      "createSuccess": "ناروغ په بریالیتوب سره جوړ شو",
+      "updateSuccess": "ناروغ په بریالیتوب سره تازه شو",
+      "deleteSuccess": "ناروغ په بریالیتوب سره حذف شو"
     }
   }
 }

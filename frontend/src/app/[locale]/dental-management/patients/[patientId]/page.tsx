@@ -84,6 +84,8 @@ type PaymentItem = {
 type InvoicePaymentSummary = {
   id: string;
   invoiceDate: string;
+  invoiceKind: 'debt_settlement' | 'debt_source' | 'standard';
+  linkedInvoiceId: string;
   isEstimatedPaid: boolean;
   notes: string;
   paymentType: string;
@@ -263,9 +265,9 @@ const asText = (value: unknown): string => {
 
 const formatCurrency = (value: number): string => {
   return new Intl.NumberFormat('en-US', {
-    currency: 'USD',
-    maximumFractionDigits: 2,
-    minimumFractionDigits: 2,
+    currency: 'AFN',
+    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
     style: 'currency',
   }).format(value);
 };
@@ -308,11 +310,34 @@ const escapeHtml = (value: unknown): string => {
     .replaceAll("'", '&#039;');
 };
 
+const extractLinkedInvoiceId = (notes: string): string => {
+  if (!notes) return '';
+  const settlementMatch = notes.match(/settlement invoice\s*#(\d+)/i);
+  if (settlementMatch?.[1]) {
+    return settlementMatch[1];
+  }
+
+  const sourceMatch = notes.match(/generated from invoice\s*#(\d+)/i);
+  return sourceMatch?.[1] ?? '';
+};
+
+const resolveInvoiceKind = (notes: string): 'debt_settlement' | 'debt_source' | 'standard' => {
+  const normalized = notes.toLowerCase();
+  if (normalized.includes('settlement invoice generated from invoice #')) {
+    return 'debt_settlement';
+  }
+  if (normalized.includes('debt moved to a settlement flow from invoice #')) {
+    return 'debt_source';
+  }
+  return 'standard';
+};
+
 // eslint-disable-next-line react/function-component-definition
 export default function PatientProfilePage(): JSX.Element {
   const params = useParams<{ patientId: string }>();
   const patientId = Array.isArray(params?.patientId) ? params.patientId[0] : params?.patientId;
   const tSidebar = useTranslations('sidebar.dentalManagement');
+  const tPatientProfile = useTranslations('app.patientProfile');
   const locale = useLocale();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -520,6 +545,9 @@ export default function PatientProfilePage(): JSX.Element {
       const isEstimatedPaid = status === 'paid' && rawPaid <= 0 && totalNet > 0;
       const totalPaid = isEstimatedPaid ? totalNet : rawPaid;
       const remainingAmount = Math.max(0, Number((totalNet - totalPaid).toFixed(2)));
+      const notes = asText(invoice.notes);
+      const invoiceKind = resolveInvoiceKind(notes);
+      const linkedInvoiceId = extractLinkedInvoiceId(notes);
 
       const visit = invoice.visit && typeof invoice.visit === 'object'
         ? (invoice.visit as Record<string, unknown>)
@@ -530,8 +558,10 @@ export default function PatientProfilePage(): JSX.Element {
       summaries.push({
         id: asText(invoice.id),
         invoiceDate: asText(invoice.invoiceDate ?? invoice.invoice_date),
+        invoiceKind,
         isEstimatedPaid,
-        notes: asText(invoice.notes),
+        linkedInvoiceId,
+        notes,
         payments,
         paymentType: asText(invoice.paymentType ?? invoice.payment_type) || '-',
         remainingAmount,
@@ -1187,7 +1217,7 @@ export default function PatientProfilePage(): JSX.Element {
                             <YAxis
                               axisLine={false}
                               tick={{ fill: '#64748b', fontSize: 11 }}
-                              tickFormatter={(value) => `$${Number(value).toFixed(0)}`}
+                              tickFormatter={(value) => `AFN ${Number(value).toFixed(0)}`}
                               tickLine={false}
                               width={64}
                             />
@@ -1246,13 +1276,35 @@ export default function PatientProfilePage(): JSX.Element {
                             <p className="text-sm font-semibold text-foreground">
                               Invoice #{invoice.id}
                             </p>
-                            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase ${statusTone}`}>
-                              {invoice.status.replaceAll('_', ' ')}
-                            </span>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {invoice.invoiceKind === 'debt_source' ? (
+                                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold uppercase text-sky-700">
+                                  {tPatientProfile('badges.originalDebtInvoice')}
+                                </span>
+                              ) : null}
+                              {invoice.invoiceKind === 'debt_settlement' ? (
+                                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold uppercase text-emerald-700">
+                                  {tPatientProfile('badges.debtPaidInvoice')}
+                                </span>
+                              ) : null}
+                              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase ${statusTone}`}>
+                                {invoice.status.replaceAll('_', ' ')}
+                              </span>
+                            </div>
                           </div>
                           <p className="mt-1 text-xs text-muted-foreground">
                             Date: {formatDisplayDate(invoice.invoiceDate)} | Visit: {invoice.visitLabel}
                           </p>
+                          {invoice.invoiceKind === 'debt_source' && invoice.linkedInvoiceId ? (
+                            <p className="text-xs text-muted-foreground">
+                              {tPatientProfile('messages.settledByInvoice', { invoiceId: invoice.linkedInvoiceId })}
+                            </p>
+                          ) : null}
+                          {invoice.invoiceKind === 'debt_settlement' && invoice.linkedInvoiceId ? (
+                            <p className="text-xs text-muted-foreground">
+                              {tPatientProfile('messages.generatedFromInvoice', { invoiceId: invoice.linkedInvoiceId })}
+                            </p>
+                          ) : null}
                           <p className="text-xs text-muted-foreground">
                             Payment Type: {invoice.paymentType}
                           </p>
@@ -1262,7 +1314,7 @@ export default function PatientProfilePage(): JSX.Element {
                             <p>Discount: <span className="font-semibold text-foreground">{formatCurrency(invoice.totalDiscount)}</span></p>
                             <p>Net: <span className="font-semibold text-foreground">{formatCurrency(invoice.totalNet)}</span></p>
                             <p>Paid: <span className="font-semibold text-foreground">{formatCurrency(invoice.totalPaid)}</span></p>
-                            <p className="sm:col-span-2">Remaining: <span className="font-semibold text-foreground">{formatCurrency(invoice.remainingAmount)}</span></p>
+                            <p className="sm:col-span-2 bg-yellow-300 p-2 rounded">Remaining: <span className="font-semibold text-foreground">{formatCurrency(invoice.remainingAmount)}</span></p>
                           </div>
                           {invoice.isEstimatedPaid ? (
                             <p className="mt-1 text-[11px] text-muted-foreground">

@@ -1,111 +1,111 @@
 {
   "config": {
-    "title": "Visits",
-    "entity": "Visit",
+    "title": "بازدید می کند",
+    "entity": "بازدید کنید",
     "table": {
-      "add": "Add Visit",
-      "create": "Create Visit",
-      "edit": "Edit Visit",
-      "update": "Update Visit"
+      "add": "افزودن بازدید",
+      "create": "ایجاد بازدید",
+      "edit": "ویرایش بازدید",
+      "update": "به روز رسانی بازدید"
     },
     "form": {
       "appointmentId": {
-        "label": "Appointment Id",
+        "label": "شناسه قرار ملاقات",
         "validation": {
-          "required": "Appointment Id is required",
-          "pattern": "Appointment Id must be a number"
+          "required": "شناسه قرار ملاقات الزامی است",
+          "pattern": "شناسه قرار ملاقات باید یک عدد باشد"
         }
       },
       "patientId": {
-        "label": "Patient Id",
+        "label": "شناسه بیمار",
         "validation": {
-          "required": "Patient Id is required",
-          "pattern": "Patient Id must be a number"
+          "required": "شناسه بیمار الزامی است",
+          "pattern": "شناسه بیمار باید یک عدد باشد"
         }
       },
       "dentistId": {
-        "label": "Dentist Id",
+        "label": "شناسه دندانپزشک",
         "validation": {
-          "required": "Dentist Id is required",
-          "pattern": "Dentist Id must be a number"
+          "required": "شناسه دندانپزشک الزامی است",
+          "pattern": "شناسه دندانپزشک باید یک عدد باشد"
         }
       },
       "tag": {
-        "label": "Visit Tag",
+        "label": "از برچسب دیدن کنید",
         "validation": {
-          "required": "Visit Tag is required",
-          "maxLength": "Visit Tag must be 100 characters or less"
+          "required": "برچسب بازدید الزامی است",
+          "maxLength": "برچسب بازدید باید 100 کاراکتر یا کمتر باشد"
         }
       },
       "visitDate": {
-        "label": "Visit Date",
+        "label": "بازدید از تاریخ",
         "validation": {
-          "required": "Visit Date is required",
-          "maxLength": "Visit Date must be 255 characters or less"
+          "required": "تاریخ بازدید الزامی است",
+          "maxLength": "تاریخ بازدید باید 255 نویسه یا کمتر باشد"
         }
       },
       "diagnosisNotes": {
-        "label": "Diagnosis Notes",
+        "label": "نکات تشخیصی",
         "validation": {
-          "maxLength": "Diagnosis Notes must be 255 characters or less"
+          "maxLength": "یادداشت های تشخیصی باید 255 نویسه یا کمتر باشد"
         }
       },
       "nextVisitDate": {
-        "label": "Next Visit Date",
+        "label": "تاریخ بازدید بعدی",
         "validation": {
-          "maxLength": "Next Visit Date must be 255 characters or less"
+          "maxLength": "تاریخ بازدید بعدی باید 255 نویسه یا کمتر باشد"
         }
       },
       "createdBy": {
-        "label": "Created By",
+        "label": "ایجاد شده توسط",
         "validation": {
-          "pattern": "Created By must be a number"
+          "pattern": "ایجاد شده توسط باید یک عدد باشد"
         }
       },
       "updatedBy": {
-        "label": "Updated By",
+        "label": "به روز شده توسط",
         "validation": {
-          "pattern": "Updated By must be a number"
+          "pattern": "Updated By باید یک عدد باشد"
         }
       },
       "deletedBy": {
-        "label": "Deleted By",
+        "label": "حذف شده توسط",
         "validation": {
-          "pattern": "Deleted By must be a number"
+          "pattern": "حذف شده توسط باید یک عدد باشد"
         }
       },
       "visitTreatments": {
-        "label": "Visit Treatments",
+        "label": "از درمان ها دیدن کنید",
         "validation": {
-          "maxLength": "Visit Treatments must be 255 characters or less"
+          "maxLength": "بازدید از درمان باید 255 نویسه یا کمتر باشد"
         }
       },
       "invoices": {
-        "label": "Invoices",
+        "label": "فاکتورها",
         "validation": {
-          "maxLength": "Invoices must be 255 characters or less"
+          "maxLength": "فاکتورها باید 255 کاراکتر یا کمتر باشند"
         }
       },
       "trashed": {
-        "label": "Trashed",
+        "label": "سطل زباله",
         "options": {
-          "with": "With Trashed",
-          "only": "Only Trashed"
+          "with": "با سطل زباله",
+          "only": "فقط سطل زباله"
         }
       }
     },
     "repository": {
-      "createFailed": "Failed to create Visit",
-      "fetchFailed": "Failed to fetch Visit",
-      "updateFailed": "Failed to update Visit",
-      "deleteFailed": "Failed to delete Visit",
-      "fetchManyFailed": "Failed to fetch Visits",
-      "fetchManySuccess": "Visits fetched successfully"
+      "createFailed": "بازدید ایجاد نشد",
+      "fetchFailed": "واکشی بازدید انجام نشد",
+      "updateFailed": "بازدید انجام نشد",
+      "deleteFailed": "بازدید حذف نشد",
+      "fetchManyFailed": "بازدیدها واکشی نشد",
+      "fetchManySuccess": "بازدیدها با موفقیت واکشی شدند"
     },
     "presentation": {
-      "createSuccess": "Visit created successfully",
-      "updateSuccess": "Visit updated successfully",
-      "deleteSuccess": "Visit deleted successfully"
+      "createSuccess": "بازدید با موفقیت ایجاد شد",
+      "updateSuccess": "بازدید با موفقیت به روز شد",
+      "deleteSuccess": "بازدید با موفقیت حذف شد"
     }
   }
 }

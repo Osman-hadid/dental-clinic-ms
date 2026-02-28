@@ -1,107 +1,107 @@
 {
   "config": {
-    "title": "Payments",
-    "entity": "Payment",
+    "title": "تادیات",
+    "entity": "تادیه",
     "table": {
-      "add": "Add Payment",
-      "create": "Create Payment",
-      "edit": "Edit Payment",
-      "update": "Update Payment"
+      "add": "تادیه اضافه کړئ",
+      "create": "تادیه جوړه کړئ",
+      "edit": "تادیه ترمیم کړئ",
+      "update": "د تادیاتو تازه کول"
     },
     "form": {
       "invoiceId": {
-        "label": "Invoice Id",
+        "label": "د رسید ID",
         "validation": {
-          "required": "Invoice Id is required",
-          "pattern": "Invoice Id must be a number"
+          "required": "د رسید ID ته اړتیا ده",
+          "pattern": "د رسید ID باید یو شمیر وي"
         }
       },
       "paymentDate": {
-        "label": "Payment Date",
+        "label": "د تادیاتو نیټه",
         "validation": {
-          "required": "Payment Date is required",
-          "maxLength": "Payment Date must be 255 characters or less"
+          "required": "د تادیې نیټه اړینه ده",
+          "maxLength": "د تادیې نیټه باید 255 حروف یا لږ وي"
         }
       },
       "amount": {
-        "label": "Amount",
+        "label": "مقدار",
         "validation": {
-          "required": "Amount is required",
-          "maxLength": "Amount must be 255 characters or less"
+          "required": "مقدار ته اړتیا ده",
+          "maxLength": "مقدار باید 255 حروف یا لږ وي"
         }
       },
       "currency": {
-        "label": "Currency",
+        "label": "اسعارو",
         "validation": {
-          "in": "Currency must be one of the allowed values"
+          "in": "اسعارو باید یو له اجازه ورکړل شوي ارزښتونو څخه وي"
         },
         "options": {
-          "usd": "USD ($)",
-          "afn": "AFN (Afghani)"
+          "usd": "AFN (افغانۍ)",
+          "afn": "AFN (افغانۍ)"
         }
       },
       "exchangeRate": {
-        "label": "Exchange Rate",
+        "label": "د تبادلې نرخ",
         "validation": {
-          "maxLength": "Exchange Rate must be 255 characters or less"
+          "maxLength": "د تبادلې نرخ باید 255 حروف یا لږ وي"
         }
       },
       "method": {
-        "label": "Method",
+        "label": "طریقه",
         "validation": {
-          "required": "Method is required",
-          "in": "Method must be one of the allowed values"
+          "required": "طریقه اړینه ده",
+          "in": "میتود باید یو له اجازه ورکړل شوي ارزښتونو څخه وي"
         },
         "options": {
-          "cash": "Cash",
-          "card": "Card",
-          "insurance": "Insurance"
+          "cash": "نغدې",
+          "card": "کارت",
+          "insurance": "بیمه"
         }
       },
       "notes": {
-        "label": "Notes",
+        "label": "یادښتونه",
         "validation": {
-          "maxLength": "Notes must be 255 characters or less"
+          "maxLength": "یادښتونه باید 255 حروف یا لږ وي"
         }
       },
       "createdBy": {
-        "label": "Created By",
+        "label": "لخوا جوړ شوی",
         "validation": {
-          "pattern": "Created By must be a number"
+          "pattern": "جوړ شوی باید یو شمیر وي"
         }
       },
       "updatedBy": {
-        "label": "Updated By",
+        "label": "لخوا تازه شوی",
         "validation": {
-          "pattern": "Updated By must be a number"
+          "pattern": "تازه شوی باید یو شمیر وي"
         }
       },
       "deletedBy": {
-        "label": "Deleted By",
+        "label": "لخوا ړنګ شوی",
         "validation": {
-          "pattern": "Deleted By must be a number"
+          "pattern": "له منځه وړل باید یو شمیر وي"
         }
       },
       "trashed": {
-        "label": "Trashed",
+        "label": "کثافات",
         "options": {
-          "with": "With Trashed",
-          "only": "Only Trashed"
+          "with": "د کثافاتو سره",
+          "only": "یوازې کثافات"
         }
       }
     },
     "repository": {
-      "createFailed": "Failed to create Payment",
-      "fetchFailed": "Failed to fetch Payment",
-      "updateFailed": "Failed to update Payment",
-      "deleteFailed": "Failed to delete Payment",
-      "fetchManyFailed": "Failed to fetch Payments",
-      "fetchManySuccess": "Payments fetched successfully"
+      "createFailed": "د تادیې په جوړولو کې پاتې راغلی",
+      "fetchFailed": "د تادیاتو په ترلاسه کولو کې پاتې راغلی",
+      "updateFailed": "د تادیاتو په تازه کولو کې پاتې راغلی",
+      "deleteFailed": "د تادیاتو په حذف کولو کې پاتې راغلی",
+      "fetchManyFailed": "د تادیاتو په ترلاسه کولو کې پاتې راغلی",
+      "fetchManySuccess": "تادیات په بریالیتوب سره ترلاسه شوي"
     },
     "presentation": {
-      "createSuccess": "Payment created successfully",
-      "updateSuccess": "Payment updated successfully",
-      "deleteSuccess": "Payment deleted successfully"
+      "createSuccess": "تادیه په بریالیتوب سره رامینځته شوه",
+      "updateSuccess": "تادیه په بریالیتوب سره تازه شوه",
+      "deleteSuccess": "تادیه په بریالیتوب سره حذف شوه"
     }
   }
 }

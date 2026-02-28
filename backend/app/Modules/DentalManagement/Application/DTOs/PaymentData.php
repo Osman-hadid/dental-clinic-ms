@@ -31,7 +31,7 @@ final readonly class PaymentData
             invoiceId: $ids['invoiceId'] ?? null,
             paymentDate: $data['paymentDate'] ?? null,
             amount: round((float) ($data['amount'] ?? 0), 2),
-            currency: strtoupper((string) ($data['currency'] ?? 'USD')),
+            currency: strtoupper((string) ($data['currency'] ?? 'AFN')),
             exchangeRate: isset($data['exchangeRate']) ? (float) $data['exchangeRate'] : null,
             method: $data['method'] ?? null,
             notes: $data['notes'] ?? null,

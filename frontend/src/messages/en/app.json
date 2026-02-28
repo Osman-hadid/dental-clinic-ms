@@ -2,5 +2,95 @@
   "layout": {
     "SOURIRE": "SOURIRE",
     "developedByAop": "Developed By Mohammad Osman Hadid"
+  },
+  "debtsPage": {
+    "title": "Debt Settlement Center",
+    "paymentDate": "Payment Date",
+    "paymentMethod": "Payment Method",
+    "notes": "Notes (optional)",
+    "notesPlaceholder": "Collector name, reference...",
+    "saving": "Saving...",
+    "settleSelected": "Settle {count} selected debt(s)",
+    "outstandingDebt": "Outstanding Debt",
+    "openInvoices": "{count} open invoice(s)",
+    "selectedDebt": "Selected Debt",
+    "selectedCount": "{count} selected",
+    "helpText": "Settled debt creates payment records, updates patient financial history, and automatically pushes income into safe.",
+    "outstandingDebtsTable": "Outstanding Debts",
+    "refresh": "Refresh",
+    "refreshing": "Refreshing...",
+    "loading": "Loading debts...",
+    "noDebts": "No unpaid debt records.",
+    "columns": {
+      "invoice": "Invoice",
+      "patient": "Patient",
+      "date": "Date",
+      "status": "Status",
+      "net": "Net",
+      "paid": "Paid",
+      "debt": "Debt"
+    },
+    "methods": {
+      "cash": "Cash",
+      "card": "Card",
+      "insurance": "Insurance"
+    },
+    "ariaSelectAll": "Select all debt rows",
+    "ariaSelectInvoice": "Select invoice {invoiceId}",
+    "patientIdLabel": "ID: {id}",
+    "openStatus": "open",
+    "selectAtLeastOne": "Select at least one debt row.",
+    "savedSuccess": "{count} debt payment(s) saved to patient records and safe.",
+    "partialFailure": "Some debts could not be settled.",
+    "patientFallback": "Patient #{id}",
+    "remainingError": "Payment exceeds outstanding debt. Remaining: {remaining}."
+  },
+  "reportsPage": {
+    "controls": {
+      "title": "Report Controls",
+      "description": "Standard reporting controls for financial, clinical, and operational insights."
+    },
+    "granularity": {
+      "day": "Daily trend",
+      "month": "Monthly trend",
+      "year": "Yearly trend"
+    },
+    "status": {
+      "all": "All invoice statuses",
+      "unpaid": "Unpaid",
+      "partiallyPaid": "Partially paid",
+      "paid": "Paid",
+      "cancelled": "Cancelled"
+    },
+    "summary": {
+      "incomePaid": "Income (paid)",
+      "outcome": "Outcome (expenses + salaries)",
+      "profitLoss": "Profit / Loss"
+    },
+    "actions": {
+      "print": "Print/PDF Report",
+      "exportProfitLoss": "Export Profit/Loss CSV",
+      "showAdvanced": "Show Advanced Controls",
+      "hideAdvanced": "Hide Advanced Controls"
+    },
+    "tabs": {
+      "overview": "Overview",
+      "financial": "Financial"
+    },
+    "profitLossChart": {
+      "title": "Profit / Loss by {granularity}",
+      "description": "Green bars are profit, red bars are loss. Outcome includes expenses and salaries.",
+      "empty": "No profit/loss data in the selected range."
+    }
+  },
+  "patientProfile": {
+    "badges": {
+      "originalDebtInvoice": "Original debt invoice",
+      "debtPaidInvoice": "Debt paid invoice"
+    },
+    "messages": {
+      "settledByInvoice": "Settled later by debt paid invoice #{invoiceId}.",
+      "generatedFromInvoice": "This payment invoice is generated from previous invoice #{invoiceId}."
+    }
   }
 }

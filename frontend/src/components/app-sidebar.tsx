@@ -15,15 +15,32 @@ import {
 import { useCan } from '@/hooks/useCan';
 import { useAuthStore } from '@/modules/auth/application/stores/auth-store';
 import {
+  BadgeDollarSign,
   BarChart3,
+  Brain,
+  Calendar,
+  CalendarDays,
+  ClipboardList,
   GalleryVerticalEnd,
+  HandCoins,
   HeartPulse,
   House,
+  IdCard,
+  KeyRound,
   LucideIcon,
+  Receipt,
+  Shield,
   ShieldUser,
+  ShoppingCart,
+  Smile,
+  Stethoscope,
+  User,
+  Users,
+  Wallet,
 } from 'lucide-react';
 
 export type SidebarSubItem = {
+  icon?: LucideIcon;
   key: string;
   newTab?: boolean;
   url: string;
@@ -60,6 +77,7 @@ const staticNavItems: SidebarItem[] = [
       { key: 'teeth', url: '/dental-management/teeth' },
       { key: 'treatments', url: '/dental-management/treatments' },
       { key: 'implants', url: '/dental-management/implants' },
+      { key: 'implantsInProcess', url: '/dental-management/implants/in-process' },
       { key: 'visitTreatments', url: '/dental-management/visit-treatments' },
       { key: 'invoices', url: '/dental-management/invoices' },
       { key: 'payments', url: '/dental-management/payments' },
@@ -69,6 +87,19 @@ const staticNavItems: SidebarItem[] = [
     url: '/dental-management',
   },
   {
+    icon: BarChart3,
+    items: [
+      { key: 'overview', url: '/reports' },
+      { key: 'debts', permission: 'dental-management.debts.view', url: '/reports/debts' },
+      { key: 'dailyExpenses', url: '/reports/daily-expenses' },
+      { key: 'clinicalExpenses', url: '/reports/clinical-expenses' },
+      { key: 'safe', url: '/reports/safe' },
+      { key: 'salaries', url: '/reports/salaries' },
+    ],
+    key: 'reports',
+    url: '/reports',
+  },
+    {
   icon: ShieldUser,
   items: [
     { key: 'users', url: '/user-management/users' },
@@ -77,18 +108,6 @@ const staticNavItems: SidebarItem[] = [
     ],
     key: 'userManagement',
     url: '/user-management',
-  },
-  {
-    icon: BarChart3,
-    items: [
-      { key: 'overview', url: '/reports' },
-      { key: 'dailyExpenses', url: '/reports/daily-expenses' },
-      { key: 'clinicalExpenses', url: '/reports/clinical-expenses' },
-      { key: 'safe', url: '/reports/safe' },
-      { key: 'salaries', url: '/reports/salaries' },
-    ],
-    key: 'reports',
-    url: '/reports',
   },
   // {
   //   icon: ScrollText,
@@ -101,6 +120,31 @@ const staticNavItems: SidebarItem[] = [
   //   url: '/docs',
   // },
 ];
+
+const sidebarSubItemIcons: Record<string, LucideIcon> = {
+  aiImaging: Brain,
+  appointments: Calendar,
+  clinicalExpenses: ShoppingCart,
+  dailyExpenses: CalendarDays,
+  debts: HandCoins,
+  implants: Stethoscope,
+  implantsInProcess: ClipboardList,
+  invoices: Receipt,
+  overview: ClipboardList,
+  patients: User,
+  payments: Wallet,
+  permissions: KeyRound,
+  roles: ShieldUser,
+  safe: Shield,
+  salaries: BadgeDollarSign,
+  staff: Users,
+  staffProfiles: IdCard,
+  teeth: Smile,
+  treatments: Stethoscope,
+  users: Users,
+  visits: ClipboardList,
+  visitTreatments: ClipboardList,
+};
 
 export const AppSidebar = (props: React.ComponentProps<typeof Sidebar>): React.JSX.Element => {
   const [dynamicNavItems, setDynamicNavItems] = React.useState<SidebarItem[]>([]);
@@ -150,6 +194,7 @@ export const AppSidebar = (props: React.ComponentProps<typeof Sidebar>): React.J
     ...item,
     items: item.items?.map((subItem) => ({
       ...subItem,
+      icon: subItem.icon ?? sidebarSubItemIcons[subItem.key],
       title: t.has(`${item.key}.${subItem.key}`) ? t(`${item.key}.${subItem.key}`) : subItem.key,
     })),
     title: t.has(`${item.key}.title`) ? t(`${item.key}.title`) : item.key,
@@ -159,7 +204,7 @@ export const AppSidebar = (props: React.ComponentProps<typeof Sidebar>): React.J
     <Sidebar
       collapsible="icon"
       variant="floating"
-      className="border-none [&_[data-slot=sidebar-inner]]:rounded-[1.9rem] [&_[data-slot=sidebar-inner]]:border [&_[data-slot=sidebar-inner]]:border-sidebar-border/70 [&_[data-slot=sidebar-inner]]:bg-sidebar/95 [&_[data-slot=sidebar-inner]]:shadow-md"
+      className="border-none [&_[data-slot=sidebar-inner]]:rounded-[1.9rem] [&_[data-slot=sidebar-inner]]:border [&_[data-slot=sidebar-inner]]:border-sidebar-border/80 [&_[data-slot=sidebar-inner]]:bg-sidebar/98 [&_[data-slot=sidebar-inner]]:ring-1 [&_[data-slot=sidebar-inner]]:ring-sidebar-border/35 [&_[data-slot=sidebar-inner]]:shadow-[0_14px_30px_-18px_rgba(52,38,18,0.38)]"
       {...props}
     >
       <SidebarHeader className="px-2.5 pt-4">

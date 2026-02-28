@@ -181,7 +181,7 @@ final class SafeTransactionController extends BaseApiController
     private function toDatabasePayload(array $data): array
     {
         $resolvedCurrency = $this->currencyService->normalizeCurrency(
-            currency: (string) ($data['currency'] ?? 'USD'),
+            currency: (string) ($data['currency'] ?? 'AFN'),
             exchangeRate: isset($data['exchangeRate']) ? (float) $data['exchangeRate'] : null,
         );
         $amountInput = round((float) ($data['amount'] ?? 0), 2);

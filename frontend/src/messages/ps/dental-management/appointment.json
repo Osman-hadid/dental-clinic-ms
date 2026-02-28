@@ -1,117 +1,117 @@
 {
   "config": {
-    "title": "Appointments",
-    "entity": "Appointment",
+    "title": "ګمارنې",
+    "entity": "تقرر",
     "table": {
-      "add": "Add Appointment",
-      "create": "Create Appointment",
-      "edit": "Edit Appointment",
-      "update": "Update Appointment"
+      "add": "د ملاقات اضافه کول",
+      "create": "د ملاقات وخت جوړ کړئ",
+      "edit": "د ملاقات تدوین",
+      "update": "د ملاقات تازه کول"
     },
     "form": {
       "patientId": {
-        "label": "Patient Id",
+        "label": "د ناروغ پیژندنه",
         "validation": {
-          "required": "Patient Id is required",
-          "pattern": "Patient Id must be a number"
+          "required": "د ناروغ ID ته اړتیا ده",
+          "pattern": "د ناروغ ID باید یو شمیر وي"
         }
       },
       "dentistId": {
-        "label": "Dentist Id",
+        "label": "د غاښونو پیژندنه",
         "validation": {
-          "required": "Dentist Id is required",
-          "pattern": "Dentist Id must be a number"
+          "required": "د غاښونو پیژندنه اړینه ده",
+          "pattern": "د غاښونو پیژندنه باید یو شمیر وي"
         }
       },
       "tag": {
-        "label": "Appointment Tag",
+        "label": "د ملاقات نښه",
         "validation": {
-          "required": "Appointment Tag is required",
-          "maxLength": "Appointment Tag must be 100 characters or less"
+          "required": "د ملاقات نښه اړینه ده",
+          "maxLength": "د ملاقات نښه باید 100 حروف یا لږ وي"
         }
       },
       "appointmentDate": {
-        "label": "Appointment Date",
+        "label": "د ملاقات نیټه",
         "validation": {
-          "required": "Appointment Date is required",
-          "maxLength": "Appointment Date must be 255 characters or less"
+          "required": "د ملاقات نیټه اړینه ده",
+          "maxLength": "د ملاقات نیټه باید 255 حروف یا لږ وي"
         }
       },
       "startTime": {
-        "label": "Start Time",
+        "label": "د پیل وخت",
         "validation": {
-          "required": "Start Time is required",
-          "maxLength": "Start Time must be 255 characters or less"
+          "required": "د پیل وخت ته اړتیا ده",
+          "maxLength": "د پیل وخت باید 255 حروف یا لږ وي"
         }
       },
       "endTime": {
-        "label": "End Time",
+        "label": "د پای وخت",
         "validation": {
-          "required": "End Time is required",
-          "maxLength": "End Time must be 255 characters or less"
+          "required": "د پای وخت ته اړتیا ده",
+          "maxLength": "د پای وخت باید 255 حروف یا لږ وي"
         }
       },
       "notes": {
-        "label": "Notes",
+        "label": "یادښتونه",
         "validation": {
-          "maxLength": "Notes must be 255 characters or less"
+          "maxLength": "یادښتونه باید 255 حروف یا لږ وي"
         }
       },
       "createdBy": {
-        "label": "Created By",
+        "label": "لخوا جوړ شوی",
         "validation": {
-          "pattern": "Created By must be a number"
+          "pattern": "جوړ شوی باید یو شمیر وي"
         }
       },
       "updatedBy": {
-        "label": "Updated By",
+        "label": "لخوا تازه شوی",
         "validation": {
-          "pattern": "Updated By must be a number"
+          "pattern": "تازه شوی باید یو شمیر وي"
         }
       },
       "deletedBy": {
-        "label": "Deleted By",
+        "label": "لخوا ړنګ شوی",
         "validation": {
-          "pattern": "Deleted By must be a number"
+          "pattern": "له منځه وړل باید یو شمیر وي"
         }
       },
       "status": {
-        "label": "Status",
+        "label": "حالت",
         "validation": {
-          "in": "Status must be one of the allowed values"
+          "in": "حالت باید یو له اجازه ورکړل شوي ارزښتونو څخه وي"
         },
         "options": {
-          "scheduled": "Scheduled",
-          "completed": "Completed",
-          "cancelled": "Cancelled"
+          "scheduled": "مهالویش شوی",
+          "completed": "بشپړ شو",
+          "cancelled": "لغوه شو"
         }
       },
       "visits": {
-        "label": "Visits",
+        "label": "لیدنه",
         "validation": {
-          "maxLength": "Visits must be 255 characters or less"
+          "maxLength": "لیدنې باید 255 حروف یا لږ وي"
         }
       },
       "trashed": {
-        "label": "Trashed",
+        "label": "کثافات",
         "options": {
-          "with": "With Trashed",
-          "only": "Only Trashed"
+          "with": "د کثافاتو سره",
+          "only": "یوازې کثافات"
         }
       }
     },
     "repository": {
-      "createFailed": "Failed to create Appointment",
-      "fetchFailed": "Failed to fetch Appointment",
-      "updateFailed": "Failed to update Appointment",
-      "deleteFailed": "Failed to delete Appointment",
-      "fetchManyFailed": "Failed to fetch Appointments",
-      "fetchManySuccess": "Appointments fetched successfully"
+      "createFailed": "د ملاقات په جوړولو کې پاتې راغلی",
+      "fetchFailed": "د ملاقات په راوړلو کې پاتې راغلل",
+      "updateFailed": "د ملاقات تازه کولو کې پاتې راغلی",
+      "deleteFailed": "د ملاقات ړنګولو کې پاتې راغلل",
+      "fetchManyFailed": "د ملاقاتونو په راوړلو کې پاتې راغلل",
+      "fetchManySuccess": "ګمارنې په بریالیتوب سره ترلاسه شوې"
     },
     "presentation": {
-      "createSuccess": "Appointment created successfully",
-      "updateSuccess": "Appointment updated successfully",
-      "deleteSuccess": "Appointment deleted successfully"
+      "createSuccess": "ملاقات په بریالیتوب سره جوړ شو",
+      "updateSuccess": "ملاقات په بریالیتوب سره تازه شو",
+      "deleteSuccess": "ملاقات په بریالیتوب سره حذف شو"
     }
   }
 }

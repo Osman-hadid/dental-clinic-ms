@@ -1,97 +1,97 @@
 {
   "config": {
-    "title": "Treatments",
-    "entity": "Treatment",
+    "title": "درملنه",
+    "entity": "درملنه",
     "table": {
-      "add": "Add Treatment",
-      "create": "Create Treatment",
-      "edit": "Edit Treatment",
-      "update": "Update Treatment"
+      "add": "درملنه اضافه کړئ",
+      "create": "درملنه جوړ کړئ",
+      "edit": "تدوین درملنه",
+      "update": "د درملنې تازه کول"
     },
     "form": {
       "name": {
-        "label": "Name",
+        "label": "نوم",
         "validation": {
-          "required": "Name is required",
-          "maxLength": "Name must be 255 characters or less"
+          "required": "نوم اړین دی",
+          "maxLength": "نوم باید 255 حروف یا لږ وي"
         }
       },
       "category": {
-        "label": "Category",
+        "label": "کټګوري",
         "validation": {
-          "required": "Category is required",
-          "maxLength": "Category must be 255 characters or less"
+          "required": "کټګورۍ ته اړتیا ده",
+          "maxLength": "کټګورۍ باید 255 حروف یا لږ وي"
         }
       },
       "defaultPrice": {
-        "label": "Default Price",
+        "label": "ډیفالټ قیمت",
         "validation": {
-          "required": "Default Price is required",
-          "maxLength": "Default Price must be 255 characters or less"
+          "required": "ډیفالټ قیمت ته اړتیا ده",
+          "maxLength": "ډیفالټ قیمت باید 255 حروف یا لږ وي"
         }
       },
       "durationMinutes": {
-        "label": "Duration Minutes"
+        "label": "موده دقیقې"
       },
       "description": {
-        "label": "Description",
+        "label": "تفصیل",
         "validation": {
-          "maxLength": "Description must be 255 characters or less"
+          "maxLength": "توضیحات باید 255 حروف یا لږ وي"
         }
       },
       "createdBy": {
-        "label": "Created By",
+        "label": "لخوا جوړ شوی",
         "validation": {
-          "pattern": "Created By must be a number"
+          "pattern": "جوړ شوی باید یو شمیر وي"
         }
       },
       "updatedBy": {
-        "label": "Updated By",
+        "label": "لخوا تازه شوی",
         "validation": {
-          "pattern": "Updated By must be a number"
+          "pattern": "تازه شوی باید یو شمیر وي"
         }
       },
       "deletedBy": {
-        "label": "Deleted By",
+        "label": "لخوا ړنګ شوی",
         "validation": {
-          "pattern": "Deleted By must be a number"
+          "pattern": "له منځه وړل باید یو شمیر وي"
         }
       },
       "enabled": {
-        "label": "Enabled",
+        "label": "فعال شوی",
         "options": {
-          "Active": "Active",
-          "Inactive": "Inactive",
-          "active": "Active",
-          "inactive": "Inactive"
+          "Active": "فعاله",
+          "Inactive": "غیر فعاله",
+          "active": "فعاله",
+          "inactive": "غیر فعاله"
         }
       },
       "visitTreatments": {
-        "label": "Visit Treatments",
+        "label": "د درملنې څخه لیدنه وکړئ",
         "validation": {
-          "maxLength": "Visit Treatments must be 255 characters or less"
+          "maxLength": "د لیدنې درملنې باید 255 حروف یا لږ وي"
         }
       },
       "trashed": {
-        "label": "Trashed",
+        "label": "کثافات",
         "options": {
-          "with": "With Trashed",
-          "only": "Only Trashed"
+          "with": "د کثافاتو سره",
+          "only": "یوازې کثافات"
         }
       }
     },
     "repository": {
-      "createFailed": "Failed to create Treatment",
-      "fetchFailed": "Failed to fetch Treatment",
-      "updateFailed": "Failed to update Treatment",
-      "deleteFailed": "Failed to delete Treatment",
-      "fetchManyFailed": "Failed to fetch Treatments",
-      "fetchManySuccess": "Treatments fetched successfully"
+      "createFailed": "د درملنې په جوړولو کې پاتې راغلی",
+      "fetchFailed": "د درملنې په راوړلو کې پاتې راغلی",
+      "updateFailed": "د درملنې تازه کولو کې پاتې راغلی",
+      "deleteFailed": "د درملنې ړنګولو کې پاتې راغلل",
+      "fetchManyFailed": "د درملنې په راوړلو کې پاتې راغلی",
+      "fetchManySuccess": "درملنه په بریالیتوب سره ترسره شوه"
     },
     "presentation": {
-      "createSuccess": "Treatment created successfully",
-      "updateSuccess": "Treatment updated successfully",
-      "deleteSuccess": "Treatment deleted successfully"
+      "createSuccess": "درملنه په بریالیتوب سره رامینځته شوه",
+      "updateSuccess": "درملنه په بریالیتوب سره تازه شوه",
+      "deleteSuccess": "درملنه په بریالیتوب سره حذف شوه"
     }
   }
 }

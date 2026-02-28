@@ -1,130 +1,130 @@
 {
   "config": {
-    "title": "Staff",
-    "entity": "Staff",
+    "title": "کارکنان",
+    "entity": "کارکنان",
     "table": {
-      "add": "Add Staff",
-      "create": "Create Staff",
-      "edit": "Edit Staff",
-      "update": "Update Staff"
+      "add": "کارمندان را اضافه کنید",
+      "create": "کارکنان ایجاد کنید",
+      "edit": "کارکنان ویرایش",
+      "update": "به روز رسانی کارکنان"
     },
     "form": {
       "fullName": {
-        "label": "Full Name",
+        "label": "نام کامل",
         "validation": {
-          "required": "Full Name is required",
-          "maxLength": "Full Name must be 255 characters or less"
+          "required": "نام کامل الزامی است",
+          "maxLength": "نام کامل باید 255 کاراکتر یا کمتر باشد"
         }
       },
       "role": {
-        "label": "Role",
+        "label": "نقش",
         "validation": {
-          "required": "Role is required",
-          "in": "Role must be one of the allowed values"
+          "required": "نقش مورد نیاز است",
+          "in": "نقش باید یکی از مقادیر مجاز باشد"
         },
         "options": {
-          "dentist": "Dentist",
-          "assistant": "Assistant",
-          "reception": "Reception",
-          "admin": "Admin"
+          "dentist": "دندانپزشک",
+          "assistant": "دستیار",
+          "reception": "پذیرایی",
+          "admin": "مدیر"
         }
       },
       "specialization": {
-        "label": "Specialization",
+        "label": "تخصص",
         "validation": {
-          "maxLength": "Specialization must be 255 characters or less"
+          "maxLength": "تخصص باید 255 کاراکتر یا کمتر باشد"
         }
       },
       "contactNumber": {
-        "label": "Contact Number",
+        "label": "شماره تماس",
         "validation": {
-          "maxLength": "Contact Number must be 255 characters or less"
+          "maxLength": "شماره تماس باید 255 کاراکتر یا کمتر باشد"
         }
       },
       "email": {
-        "label": "Email",
+        "label": "ایمیل",
         "validation": {
-          "email": "Invalid email format",
-          "maxLength": "Email must be 255 characters or less"
+          "email": "قالب ایمیل نامعتبر است",
+          "maxLength": "ایمیل باید 255 کاراکتر یا کمتر باشد"
         }
       },
       "hireDate": {
-        "label": "Hire Date",
+        "label": "تاریخ استخدام",
         "validation": {
-          "maxLength": "Hire Date must be 255 characters or less"
+          "maxLength": "تاریخ استخدام باید 255 کاراکتر یا کمتر باشد"
         }
       },
       "remarks": {
-        "label": "Remarks",
+        "label": "اظهارات",
         "validation": {
-          "maxLength": "Remarks must be 255 characters or less"
+          "maxLength": "اظهارات باید 255 کاراکتر یا کمتر باشد"
         }
       },
       "createdBy": {
-        "label": "Created By",
+        "label": "ایجاد شده توسط",
         "validation": {
-          "pattern": "Created By must be a number"
+          "pattern": "ایجاد شده توسط باید یک عدد باشد"
         }
       },
       "updatedBy": {
-        "label": "Updated By",
+        "label": "به روز شده توسط",
         "validation": {
-          "pattern": "Updated By must be a number"
+          "pattern": "Updated By باید یک عدد باشد"
         }
       },
       "deletedBy": {
-        "label": "Deleted By",
+        "label": "حذف شده توسط",
         "validation": {
-          "pattern": "Deleted By must be a number"
+          "pattern": "حذف شده توسط باید یک عدد باشد"
         }
       },
       "enabled": {
-        "label": "Enabled",
+        "label": "فعال شد",
         "options": {
-          "Active": "Active",
-          "Inactive": "Inactive",
-          "active": "Active",
-          "inactive": "Inactive"
+          "Active": "فعال",
+          "Inactive": "غیر فعال",
+          "active": "فعال",
+          "inactive": "غیر فعال"
         }
       },
       "appointments": {
-        "label": "Appointments",
+        "label": "قرار ملاقات ها",
         "validation": {
-          "maxLength": "Appointments must be 255 characters or less"
+          "maxLength": "قرار ملاقات باید 255 کاراکتر یا کمتر باشد"
         }
       },
       "visits": {
-        "label": "Visits",
+        "label": "بازدید می کند",
         "validation": {
-          "maxLength": "Visits must be 255 characters or less"
+          "maxLength": "تعداد بازدیدها باید 255 کاراکتر یا کمتر باشد"
         }
       },
       "visitTreatments": {
-        "label": "Visit Treatments",
+        "label": "از درمان ها دیدن کنید",
         "validation": {
-          "maxLength": "Visit Treatments must be 255 characters or less"
+          "maxLength": "بازدید از درمان باید 255 نویسه یا کمتر باشد"
         }
       },
       "trashed": {
-        "label": "Trashed",
+        "label": "سطل زباله",
         "options": {
-          "with": "With Trashed",
-          "only": "Only Trashed"
+          "with": "با سطل زباله",
+          "only": "فقط سطل زباله"
         }
       }
     },
     "repository": {
-      "createFailed": "Failed to create Staff",
-      "fetchFailed": "Failed to fetch Staff",
-      "updateFailed": "Failed to update Staff",
-      "deleteFailed": "Failed to delete Staff",
-      "fetchManyFailed": "Failed to fetch Staff",
-      "fetchManySuccess": "Staff fetched successfully"
+      "createFailed": "ایجاد کارکنان ناموفق بود",
+      "fetchFailed": "واکشی کارکنان انجام نشد",
+      "updateFailed": "به روز رسانی کارکنان انجام نشد",
+      "deleteFailed": "حذف کارکنان انجام نشد",
+      "fetchManyFailed": "واکشی کارکنان انجام نشد",
+      "fetchManySuccess": "کارکنان با موفقیت واکشی شدند"
     },
     "presentation": {
-      "createSuccess": "Staff created successfully",
-      "updateSuccess": "Staff updated successfully",
-      "deleteSuccess": "Staff deleted successfully"
+      "createSuccess": "کارکنان با موفقیت ایجاد شدند",
+      "updateSuccess": "کارکنان با موفقیت به روز شدند",
+      "deleteSuccess": "کارکنان با موفقیت حذف شدند"
     }
   }
 }

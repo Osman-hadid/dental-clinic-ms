@@ -1,117 +1,117 @@
 {
   "config": {
-    "title": "Appointments",
-    "entity": "Appointment",
+    "title": "قرار ملاقات ها",
+    "entity": "قرار ملاقات",
     "table": {
-      "add": "Add Appointment",
-      "create": "Create Appointment",
-      "edit": "Edit Appointment",
-      "update": "Update Appointment"
+      "add": "قرار ملاقات را اضافه کنید",
+      "create": "ایجاد قرار ملاقات",
+      "edit": "ویرایش قرار ملاقات",
+      "update": "به روز رسانی قرار ملاقات"
     },
     "form": {
       "patientId": {
-        "label": "Patient Id",
+        "label": "شناسه بیمار",
         "validation": {
-          "required": "Patient Id is required",
-          "pattern": "Patient Id must be a number"
+          "required": "شناسه بیمار الزامی است",
+          "pattern": "شناسه بیمار باید یک عدد باشد"
         }
       },
       "dentistId": {
-        "label": "Dentist Id",
+        "label": "شناسه دندانپزشک",
         "validation": {
-          "required": "Dentist Id is required",
-          "pattern": "Dentist Id must be a number"
+          "required": "شناسه دندانپزشک الزامی است",
+          "pattern": "شناسه دندانپزشک باید یک عدد باشد"
         }
       },
       "tag": {
-        "label": "Appointment Tag",
+        "label": "برچسب قرار ملاقات",
         "validation": {
-          "required": "Appointment Tag is required",
-          "maxLength": "Appointment Tag must be 100 characters or less"
+          "required": "برچسب قرار ملاقات الزامی است",
+          "maxLength": "برچسب قرار باید 100 کاراکتر یا کمتر باشد"
         }
       },
       "appointmentDate": {
-        "label": "Appointment Date",
+        "label": "تاریخ انتصاب",
         "validation": {
-          "required": "Appointment Date is required",
-          "maxLength": "Appointment Date must be 255 characters or less"
+          "required": "تاریخ ملاقات الزامی است",
+          "maxLength": "تاریخ ملاقات باید 255 کاراکتر یا کمتر باشد"
         }
       },
       "startTime": {
-        "label": "Start Time",
+        "label": "زمان شروع",
         "validation": {
-          "required": "Start Time is required",
-          "maxLength": "Start Time must be 255 characters or less"
+          "required": "زمان شروع مورد نیاز است",
+          "maxLength": "زمان شروع باید 255 نویسه یا کمتر باشد"
         }
       },
       "endTime": {
-        "label": "End Time",
+        "label": "زمان پایان",
         "validation": {
-          "required": "End Time is required",
-          "maxLength": "End Time must be 255 characters or less"
+          "required": "زمان پایان مورد نیاز است",
+          "maxLength": "زمان پایان باید 255 نویسه یا کمتر باشد"
         }
       },
       "notes": {
-        "label": "Notes",
+        "label": "یادداشت ها",
         "validation": {
-          "maxLength": "Notes must be 255 characters or less"
+          "maxLength": "یادداشت ها باید 255 کاراکتر یا کمتر باشند"
         }
       },
       "createdBy": {
-        "label": "Created By",
+        "label": "ایجاد شده توسط",
         "validation": {
-          "pattern": "Created By must be a number"
+          "pattern": "ایجاد شده توسط باید یک عدد باشد"
         }
       },
       "updatedBy": {
-        "label": "Updated By",
+        "label": "به روز شده توسط",
         "validation": {
-          "pattern": "Updated By must be a number"
+          "pattern": "Updated By باید یک عدد باشد"
         }
       },
       "deletedBy": {
-        "label": "Deleted By",
+        "label": "حذف شده توسط",
         "validation": {
-          "pattern": "Deleted By must be a number"
+          "pattern": "حذف شده توسط باید یک عدد باشد"
         }
       },
       "status": {
-        "label": "Status",
+        "label": "وضعیت",
         "validation": {
-          "in": "Status must be one of the allowed values"
+          "in": "وضعیت باید یکی از مقادیر مجاز باشد"
         },
         "options": {
-          "scheduled": "Scheduled",
-          "completed": "Completed",
-          "cancelled": "Cancelled"
+          "scheduled": "برنامه ریزی شده است",
+          "completed": "تکمیل شد",
+          "cancelled": "لغو شد"
         }
       },
       "visits": {
-        "label": "Visits",
+        "label": "بازدید می کند",
         "validation": {
-          "maxLength": "Visits must be 255 characters or less"
+          "maxLength": "تعداد بازدیدها باید 255 کاراکتر یا کمتر باشد"
         }
       },
       "trashed": {
-        "label": "Trashed",
+        "label": "سطل زباله",
         "options": {
-          "with": "With Trashed",
-          "only": "Only Trashed"
+          "with": "با سطل زباله",
+          "only": "فقط سطل زباله"
         }
       }
     },
     "repository": {
-      "createFailed": "Failed to create Appointment",
-      "fetchFailed": "Failed to fetch Appointment",
-      "updateFailed": "Failed to update Appointment",
-      "deleteFailed": "Failed to delete Appointment",
-      "fetchManyFailed": "Failed to fetch Appointments",
-      "fetchManySuccess": "Appointments fetched successfully"
+      "createFailed": "قرار ملاقات ایجاد نشد",
+      "fetchFailed": "واکشی قرار ملاقات ناموفق بود",
+      "updateFailed": "قرار ملاقات به روز نشد",
+      "deleteFailed": "قرار ملاقات حذف نشد",
+      "fetchManyFailed": "قرار ملاقات ها واکشی نشد",
+      "fetchManySuccess": "قرارها با موفقیت واکشی شدند"
     },
     "presentation": {
-      "createSuccess": "Appointment created successfully",
-      "updateSuccess": "Appointment updated successfully",
-      "deleteSuccess": "Appointment deleted successfully"
+      "createSuccess": "قرار ملاقات با موفقیت ایجاد شد",
+      "updateSuccess": "قرار با موفقیت به روز شد",
+      "deleteSuccess": "قرار با موفقیت حذف شد"
     }
   }
 }

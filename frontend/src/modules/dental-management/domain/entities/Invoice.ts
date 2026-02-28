@@ -7,7 +7,7 @@ export type Invoice = {
   totalAmountInput?: string | number;
   netAmount: string | number;
   netAmountInput?: string | number;
-  currency?: 'USD' | 'AFN' | string;
+  currency?: 'AFN' | string;
   exchangeRate?: string | number;
   invoiceDate: string;
   notes?: string;

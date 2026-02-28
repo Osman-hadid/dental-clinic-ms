@@ -156,7 +156,7 @@ final class SalaryPaymentController extends BaseApiController
             'direction' => 'out',
             'amount' => $salary->net_amount,
             'amount_input' => round((float) ($salary->net_amount_input ?? $salary->net_amount), 2),
-            'currency' => strtoupper((string) ($salary->currency ?? 'USD')),
+            'currency' => strtoupper((string) ($salary->currency ?? 'AFN')),
             'exchange_rate' => round((float) ($salary->exchange_rate ?? 1), 6),
             'picked_by_staff_id' => $salary->staff_id,
             'notes' => "Salary {$salary->salary_month}",
@@ -168,7 +168,7 @@ final class SalaryPaymentController extends BaseApiController
     private function toDatabasePayload(array $data): array
     {
         $resolvedCurrency = $this->currencyService->normalizeCurrency(
-            currency: (string) ($data['currency'] ?? 'USD'),
+            currency: (string) ($data['currency'] ?? 'AFN'),
             exchangeRate: isset($data['exchangeRate']) ? (float) $data['exchangeRate'] : null,
         );
 
