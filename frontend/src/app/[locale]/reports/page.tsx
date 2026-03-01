@@ -21,6 +21,11 @@ import {
   useVisitTreatmentList,
 } from '@/modules/dental-management/presentation/hooks';
 import {
+  aggregateImplantSupplierBalances,
+  type ImplantAvailabilityStatus,
+  type ImplantSupplierTaskLike,
+} from '@/modules/dental-management/presentation/utils/implant-supplier-analytics';
+import {
   Area,
   AreaChart,
   Bar,
@@ -96,6 +101,9 @@ type DebtAgingPoint = {
   amount: number;
   bucket: string;
 };
+
+const DEBT_AGING_BUCKETS = ['0-30 days', '31-60 days', '61-90 days', '90+ days'] as const;
+type DebtAgingBucket = (typeof DEBT_AGING_BUCKETS)[number];
 
 type TreatmentVolumePoint = {
   name: string;
@@ -190,6 +198,13 @@ type SalaryPaymentRow = {
   status: string;
 };
 
+type ThirdCompanyLiabilityStatusPoint = {
+  count: number;
+  label: string;
+  status: ImplantAvailabilityStatus;
+  unpaid: number;
+};
+
 type PaginatedRowsResponse = {
   data?: Array<Record<string, unknown>>;
   meta?: {
@@ -258,6 +273,19 @@ const formatFullDate = (value?: string): string => {
   if (!parsed) return '-';
   return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(parsed);
 };
+
+const formatDateTime = (value?: string): string => {
+  const parsed = parseDate(value);
+  if (!parsed) return '-';
+  return new Intl.DateTimeFormat('en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(parsed);
+};
+
+const toHumanLabel = (value: string): string => value
+  .replaceAll('_', ' ')
+  .replace(/\b\w/g, (char) => char.toUpperCase());
 
 const escapeHtml = (value: unknown): string => {
   return String(value ?? '')
@@ -332,6 +360,25 @@ const inRange = (value: string, startDate: string, endDate: string): boolean => 
   return parsed.getTime() >= start.getTime() && parsed.getTime() <= end.getTime() + MS_PER_DAY - 1;
 };
 
+const isImplantAvailabilityStatus = (value: string): value is ImplantAvailabilityStatus => (
+  value === 'not_available' || value === 'in_purchase' || value === 'available' || value === 'done'
+);
+
+const isDebtAgingBucket = (value: string): value is DebtAgingBucket => (
+  DEBT_AGING_BUCKETS.includes(value as DebtAgingBucket)
+);
+
+const toDebtAgingBucket = (invoiceDate: string, endDate: string): DebtAgingBucket | null => {
+  const end = parseDate(endDate);
+  const date = parseDate(invoiceDate);
+  if (!end || !date) return null;
+  const ageDays = Math.max(0, Math.floor((end.getTime() - date.getTime()) / MS_PER_DAY));
+  if (ageDays <= 30) return '0-30 days';
+  if (ageDays <= 60) return '31-60 days';
+  if (ageDays <= 90) return '61-90 days';
+  return '90+ days';
+};
+
 const fetchAllRows = async (
   endpoint: string,
   params: Record<string, unknown>
@@ -363,6 +410,42 @@ const fetchAllRows = async (
   return rows;
 };
 
+const fetchPatientSessionTasks = async (patientIds: string[]): Promise<ImplantSupplierTaskLike[]> => {
+  if (patientIds.length === 0) return [];
+
+  const rows: ImplantSupplierTaskLike[] = [];
+  const batchSize = 15;
+
+  for (let index = 0; index < patientIds.length; index += batchSize) {
+    const batch = patientIds.slice(index, index + batchSize);
+    const batchResponses = await Promise.all(
+      batch.map(async (patientId) => {
+        const response = await apiClient.get<Array<Record<string, unknown>>>(
+          `/api/v1/dental-management/patients/${patientId}/session-tasks`
+        );
+        if (!response.success || !Array.isArray(response.data)) {
+          return [] as ImplantSupplierTaskLike[];
+        }
+
+        return response.data.map((task) => ({
+          createdAt: asText(task.createdAt ?? task.created_at),
+          id: asText(task.id),
+          notes: asText(task.notes),
+          patientId,
+          status: asText(task.status),
+          title: asText(task.title),
+        }));
+      })
+    );
+
+    batchResponses.forEach((batchRows) => {
+      rows.push(...batchRows);
+    });
+  }
+
+  return rows;
+};
+
 // eslint-disable-next-line react/function-component-definition
 export default function ReportsPage(): JSX.Element {
   const locale = useLocale();
@@ -383,6 +466,8 @@ export default function ReportsPage(): JSX.Element {
   const [showAdvancedControls, setShowAdvancedControls] = useState(false);
   const [activeTab, setActiveTab] = useState<'clinical' | 'financial' | 'operations' | 'overview'>('overview');
   const [selectedPatientLedgerId, setSelectedPatientLedgerId] = useState<string>('all');
+  const [selectedThirdCompanyAvailability, setSelectedThirdCompanyAvailability] = useState<ImplantAvailabilityStatus | 'all'>('all');
+  const [selectedDebtAgingBucket, setSelectedDebtAgingBucket] = useState<DebtAgingBucket | 'all'>('all');
   const [snapshotCadence, setSnapshotCadence] = useState<SnapshotCadence>(() => {
     if (typeof window === 'undefined') return 'off';
     const raw = window.localStorage.getItem(REPORT_SCHEDULE_KEY);
@@ -406,6 +491,8 @@ export default function ReportsPage(): JSX.Element {
   const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([]);
   const [safeRows, setSafeRows] = useState<SafeTransactionRow[]>([]);
   const [salaryRows, setSalaryRows] = useState<SalaryPaymentRow[]>([]);
+  const [implantSupplierTasks, setImplantSupplierTasks] = useState<ImplantSupplierTaskLike[]>([]);
+  const [allPatientNameRows, setAllPatientNameRows] = useState<Record<string, string>>({});
   const [isLoadingFinanceData, setIsLoadingFinanceData] = useState(false);
   const granularityLabel = useMemo(() => {
     if (granularity === 'year') return tReportsPage('granularity.year');
@@ -462,11 +549,20 @@ export default function ReportsPage(): JSX.Element {
     });
     return map;
   }, [typedPatients]);
+  const mergedPatientNameById = useMemo(() => {
+    const merged = new Map(patientNameById);
+    Object.entries(allPatientNameRows).forEach(([id, name]) => {
+      if (!merged.has(id)) {
+        merged.set(id, name);
+      }
+    });
+    return merged;
+  }, [allPatientNameRows, patientNameById]);
 
   const fetchFinanceData = useCallback(async (): Promise<void> => {
     setIsLoadingFinanceData(true);
     try {
-      const [expenseItems, safeItems, salaryItems] = await Promise.all([
+      const [expenseItems, safeItems, salaryItems, patientItems] = await Promise.all([
         fetchAllRows('/api/v1/dental-management/expenses', {
           include: ['staff'],
           sortBy: 'expenseDate',
@@ -482,7 +578,28 @@ export default function ReportsPage(): JSX.Element {
           sortBy: 'paymentDate',
           sortDirection: 'desc',
         }),
+        fetchAllRows('/api/v1/dental-management/patients', {
+          sortBy: 'createdAt',
+          sortDirection: 'desc',
+        }),
       ]);
+
+      const patientNameMap: Record<string, string> = {};
+      const patientIds = patientItems
+        .map((row) => {
+          const patientId = asText(row.id);
+          if (!patientId) return '';
+          const firstName = asText(row.firstName ?? row.first_name);
+          const lastName = asText(row.lastName ?? row.last_name);
+          const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+          patientNameMap[patientId] = fullName || asText(row.patientCode ?? row.patient_code) || `Patient #${patientId}`;
+          return patientId;
+        })
+        .filter(Boolean);
+
+      const sessionTasks = await fetchPatientSessionTasks(patientIds);
+      setImplantSupplierTasks(sessionTasks);
+      setAllPatientNameRows(patientNameMap);
 
       setExpenseRows(expenseItems.map((row) => ({
         amount: parseAmount(row.amount),
@@ -609,6 +726,40 @@ export default function ReportsPage(): JSX.Element {
       records: filtered.length,
     };
   }, [endDate, salaryRows, startDate]);
+  const filteredImplantSupplierTasks = useMemo(
+    () =>
+      implantSupplierTasks.filter((task) => {
+        const createdAt = asText(task.createdAt);
+        if (!createdAt) return true;
+        return inRange(createdAt, startDate, endDate);
+      }),
+    [endDate, implantSupplierTasks, startDate]
+  );
+  const thirdCompanySummary = useMemo(
+    () => aggregateImplantSupplierBalances(filteredImplantSupplierTasks),
+    [filteredImplantSupplierTasks]
+  );
+  const thirdCompanyStatusChart = useMemo<ThirdCompanyLiabilityStatusPoint[]>(() => {
+    const statusLabels: Record<ImplantAvailabilityStatus, string> = {
+      available: 'Available',
+      done: 'Done',
+      in_purchase: 'In Purchase',
+      not_available: 'Not Available',
+    };
+
+    return (['not_available', 'in_purchase', 'available', 'done'] as ImplantAvailabilityStatus[]).map((status) => ({
+      count: thirdCompanySummary.byAvailability[status].count,
+      label: statusLabels[status],
+      status,
+      unpaid: thirdCompanySummary.byAvailability[status].unpaid,
+    }));
+  }, [thirdCompanySummary.byAvailability]);
+  const thirdCompanyUnpaidRows = useMemo(() => {
+    const rows = selectedThirdCompanyAvailability === 'all'
+      ? thirdCompanySummary.unpaidRows
+      : thirdCompanySummary.unpaidRows.filter((row) => row.availability === selectedThirdCompanyAvailability);
+    return rows.slice(0, 100);
+  }, [selectedThirdCompanyAvailability, thirdCompanySummary.unpaidRows]);
 
   const parsedData = useMemo(() => {
     const allPayments: ParsedPayment[] = [];
@@ -800,6 +951,10 @@ export default function ReportsPage(): JSX.Element {
       paid,
       safeOut,
       salaryPaid: salarySummary.paid,
+      thirdCompanyPaid: thirdCompanySummary.totalPaid,
+      thirdCompanyTotal: thirdCompanySummary.totalSupplierCost,
+      thirdCompanyUnpaid: thirdCompanySummary.totalUnpaid,
+      thirdCompanyUnpaidCount: thirdCompanySummary.unpaidCount,
       totalPatients: typedPatients.length,
       visits: filteredVisits.length,
     };
@@ -812,12 +967,16 @@ export default function ReportsPage(): JSX.Element {
     safeRows,
     salarySummary.paid,
     startDate,
+    thirdCompanySummary.totalPaid,
+    thirdCompanySummary.totalSupplierCost,
+    thirdCompanySummary.totalUnpaid,
+    thirdCompanySummary.unpaidCount,
     typedPatients.length,
   ]);
 
   const totalOutcome = useMemo(
-    () => Number((kpis.expenses + kpis.salaryPaid).toFixed(2)),
-    [kpis.expenses, kpis.salaryPaid]
+    () => Number((kpis.expenses + kpis.salaryPaid + kpis.thirdCompanyPaid).toFixed(2)),
+    [kpis.expenses, kpis.salaryPaid, kpis.thirdCompanyPaid]
   );
   const profitOrLoss = useMemo(
     () => Number((kpis.paid - totalOutcome).toFixed(2)),
@@ -849,36 +1008,25 @@ export default function ReportsPage(): JSX.Element {
   }, [filteredPayments, granularity]);
 
   const debtAging = useMemo<DebtAgingPoint[]>(() => {
-    const end = parseDate(endDate) ?? new Date();
-    const buckets: Record<string, number> = {
+    const buckets: Record<DebtAgingBucket, number> = {
       '0-30 days': 0,
       '31-60 days': 0,
       '61-90 days': 0,
       '90+ days': 0,
     };
 
-    parsedData.allInvoices.forEach((invoice) => {
+    filteredInvoices.forEach((invoice) => {
       if (invoice.debt <= 0) return;
-      const date = parseDate(invoice.date);
-      if (!date) return;
-      const ageDays = Math.max(0, Math.floor((end.getTime() - date.getTime()) / MS_PER_DAY));
-
-      if (ageDays <= 30) {
-        buckets['0-30 days'] += invoice.debt;
-      } else if (ageDays <= 60) {
-        buckets['31-60 days'] += invoice.debt;
-      } else if (ageDays <= 90) {
-        buckets['61-90 days'] += invoice.debt;
-      } else {
-        buckets['90+ days'] += invoice.debt;
-      }
+      const bucket = toDebtAgingBucket(invoice.date, endDate);
+      if (!bucket) return;
+      buckets[bucket] += invoice.debt;
     });
 
     return Object.entries(buckets).map(([bucket, amount]) => ({
       amount: Number(amount.toFixed(2)),
       bucket,
     }));
-  }, [endDate, parsedData.allInvoices]);
+  }, [endDate, filteredInvoices]);
 
   const treatmentVolume = useMemo<TreatmentVolumePoint[]>(() => {
     const grouped = new Map<string, TreatmentVolumePoint>();
@@ -1070,16 +1218,55 @@ export default function ReportsPage(): JSX.Element {
       return 'All patients';
     }
 
-    return patientNameById.get(selectedPatientLedgerId) || `Patient #${selectedPatientLedgerId}`;
-  }, [patientNameById, selectedPatientLedgerId]);
+    return mergedPatientNameById.get(selectedPatientLedgerId) || `Patient #${selectedPatientLedgerId}`;
+  }, [mergedPatientNameById, selectedPatientLedgerId]);
+  const handleThirdCompanyStatusBarClick = useCallback((payload: unknown): void => {
+    const maybeStatus = asText((payload as { payload?: { status?: unknown } } | null)?.payload?.status).toLowerCase();
+    if (!isImplantAvailabilityStatus(maybeStatus)) return;
+    setSelectedThirdCompanyAvailability((current) => (current === maybeStatus ? 'all' : maybeStatus));
+  }, []);
+  const handleDebtAgingBarClick = useCallback((payload: unknown): void => {
+    const maybeBucket = asText((payload as { payload?: { bucket?: unknown } } | null)?.payload?.bucket);
+    if (!isDebtAgingBucket(maybeBucket)) return;
+    setSelectedDebtAgingBucket((current) => (current === maybeBucket ? 'all' : maybeBucket));
+  }, []);
+  const ledgerTypeStyles: Record<LedgerEntry['type'], {
+    badgeClass: string;
+    creditClass: string;
+    debitClass: string;
+    dotClass: string;
+    label: string;
+    rowClass: string;
+  }> = {
+    invoice: {
+      badgeClass: 'border-amber-300 bg-amber-100 text-amber-800',
+      creditClass: 'text-muted-foreground',
+      debitClass: 'text-amber-700',
+      dotClass: 'bg-amber-500',
+      label: 'Invoice Debit',
+      rowClass: 'bg-amber-100/70',
+    },
+    payment: {
+      badgeClass: 'border-emerald-300 bg-emerald-100 text-emerald-800',
+      creditClass: 'text-emerald-700',
+      debitClass: 'text-muted-foreground',
+      dotClass: 'bg-emerald-500',
+      label: 'Payment Credit',
+      rowClass: 'bg-emerald-100/70',
+    },
+  };
 
   const outstandingInvoices = useMemo(
     () =>
-      parsedData.allInvoices
-        .filter((invoice) => invoice.debt > 0)
+      filteredInvoices
+        .filter((invoice) => {
+          if (invoice.debt <= 0) return false;
+          if (selectedDebtAgingBucket === 'all') return true;
+          return toDebtAgingBucket(invoice.date, endDate) === selectedDebtAgingBucket;
+        })
         .sort((left, right) => right.debt - left.debt)
         .slice(0, 20),
-    [parsedData.allInvoices]
+    [endDate, filteredInvoices, selectedDebtAgingBucket]
   );
 
   const isLoadingAny = isLoadingPatients
@@ -1165,9 +1352,9 @@ export default function ReportsPage(): JSX.Element {
   const printCurrentTabTemplate = (): void => {
     const titleByTab = {
       clinical: 'Clinical Reports',
-      financial: 'Financial Reports',
+      financial: 'Overview & Financial Reports',
       operations: 'Operations Reports',
-      overview: 'Overview Reports',
+      overview: 'Overview & Financial Reports',
     } as const;
 
     const buildLineChart = (
@@ -1310,13 +1497,13 @@ export default function ReportsPage(): JSX.Element {
       `;
     };
 
-    const totalOutcomeForPrint = Number((kpis.expenses + kpis.salaryPaid).toFixed(2));
+    const totalOutcomeForPrint = Number((kpis.expenses + kpis.salaryPaid + kpis.thirdCompanyPaid).toFixed(2));
     const profitOrLossForPrint = Number((kpis.paid - totalOutcomeForPrint).toFixed(2));
     const formatRow = (label: string, value: string): string => `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`;
     const summaryRows = [
-      formatRow('Date Range', `${startDate} to ${endDate}`),
-      formatRow('Granularity', granularity),
-      formatRow('Invoice Status Filter', statusFilter),
+      formatRow('Date Range', `${formatFullDate(startDate)} to ${formatFullDate(endDate)}`),
+      formatRow('Granularity', toHumanLabel(granularity)),
+      formatRow('Invoice Status Filter', toHumanLabel(statusFilter)),
       formatRow('Reporting Currency', 'AFN (Afghani)'),
       formatRow('Billed', formatCurrency(kpis.billed)),
       formatRow('Discount', formatCurrency(kpis.discount)),
@@ -1324,6 +1511,10 @@ export default function ReportsPage(): JSX.Element {
       formatRow('Paid', formatCurrency(kpis.paid)),
       formatRow('Debt', formatCurrency(kpis.debt)),
       formatRow('Expenses', formatCurrency(kpis.expenses)),
+      formatRow('Third-Company Paid', formatCurrency(kpis.thirdCompanyPaid)),
+      formatRow('Third-Company Unpaid', formatCurrency(kpis.thirdCompanyUnpaid)),
+      formatRow('Third-Company Supplier Total', formatCurrency(kpis.thirdCompanyTotal)),
+      formatRow('Third-Company Unpaid Teeth', String(kpis.thirdCompanyUnpaidCount)),
       formatRow('Net After Expenses', formatCurrency(kpis.netAfterExpenses)),
       formatRow('Safe Outflow', formatCurrency(kpis.safeOut)),
       formatRow('Salaries Paid', formatCurrency(kpis.salaryPaid)),
@@ -1338,44 +1529,106 @@ export default function ReportsPage(): JSX.Element {
     const profitLossSection = `
       <h3>Profit / Loss Visual</h3>
       <div class="bar-wrap"><span>Income (Paid)</span><div class="bar bg-blue"><i style="width:${paidBarWidth}%"></i></div><b>${escapeHtml(formatCurrency(kpis.paid))}</b></div>
-      <div class="bar-wrap"><span>Outcome (Expenses + Salaries)</span><div class="bar bg-orange"><i style="width:${outcomeBarWidth}%"></i></div><b>${escapeHtml(formatCurrency(totalOutcomeForPrint))}</b></div>
+      <div class="bar-wrap"><span>Outcome (Expenses + Salaries + Third-Company)</span><div class="bar bg-orange"><i style="width:${outcomeBarWidth}%"></i></div><b>${escapeHtml(formatCurrency(totalOutcomeForPrint))}</b></div>
       <div class="bar-wrap"><span>${profitOrLossForPrint >= 0 ? 'Profit' : 'Loss'}</span><div class="bar ${profitOrLossForPrint >= 0 ? 'bg-emerald' : 'bg-red'}"><i style="width:${profitBarWidth}%"></i></div><b>${escapeHtml(formatCurrency(profitOrLossForPrint))}</b></div>
     `;
+    const salaryRowsForPrint = salaryRows
+      .filter((row) => inRange(row.paymentDate, startDate, endDate))
+      .slice(0, 50);
+    const paymentMethodRowsForPrint = paymentMethodMix.slice(0, 20);
+    const outstandingInvoicesForPrint = outstandingInvoices.slice(0, 30);
+    const thirdCompanyStatusUnpaidRows = thirdCompanyStatusChart.filter((row) => row.unpaid > 0);
+    const thirdCompanyStatusCountRows = thirdCompanyStatusChart.filter((row) => row.count > 0);
 
+    const overviewBodySection = `
+      ${profitLossSection}
+      ${buildLineChart(incomeTrend.map((point) => ({ label: point.label, value: point.income })), '#0ea5e9', 'Income Trend Diagram')}
+      <h3>Income Trend</h3>
+      <table><thead><tr><th>Bucket</th><th>Income</th><th>Payments</th></tr></thead><tbody>
+        ${incomeTrend.map((point) => `<tr><td>${escapeHtml(point.label)}</td><td>${escapeHtml(formatCurrency(point.income))}</td><td>${point.paymentCount}</td></tr>`).join('')}
+      </tbody></table>
+    `;
+    const financialBodySection = `
+      ${profitLossSection}
+      ${buildBarChart([
+        { label: 'Paid', value: kpis.thirdCompanyPaid },
+        { label: 'Unpaid', value: kpis.thirdCompanyUnpaid },
+      ], '#f97316', 'Third-Company Liability Diagram')}
+      ${buildBarChart(
+        thirdCompanyStatusUnpaidRows.map((row) => ({ label: row.label, value: row.unpaid })),
+        '#f97316',
+        'Third-Company Unpaid by Status Diagram'
+      )}
+      ${buildBarChart(
+        thirdCompanyStatusCountRows.map((row) => ({ label: row.label, value: row.count })),
+        '#0ea5e9',
+        'Implant Teeth Count by Status Diagram'
+      )}
+      <h3>Unpaid Third-Company Payments</h3>
+      <table><thead><tr><th>Patient</th><th>Tooth</th><th>Status</th><th>Total</th><th>Paid</th><th>Unpaid</th></tr></thead><tbody>
+        ${thirdCompanyUnpaidRows.map((row) => `<tr><td>${escapeHtml(mergedPatientNameById.get(row.patientId) || `Patient #${row.patientId || '-'}`)}</td><td>${escapeHtml(row.toothNumber)}</td><td>${escapeHtml(toHumanLabel(row.availability))}</td><td>${escapeHtml(formatCurrency(row.supplierTotal))}</td><td>${escapeHtml(formatCurrency(row.supplierPaid))}</td><td>${escapeHtml(formatCurrency(row.supplierRemaining))}</td></tr>`).join('')}
+      </tbody></table>
+      ${buildBarChart(expenseSummary.byCategory.map((row) => ({ label: row.category, value: row.amount })), '#ef4444', 'Expense by Category Diagram')}
+      <h3>Expense Summary</h3>
+      <table><thead><tr><th>Category</th><th>Amount</th></tr></thead><tbody>
+        ${expenseSummary.byCategory.map((row) => `<tr><td>${escapeHtml(row.category)}</td><td>${escapeHtml(formatCurrency(row.amount))}</td></tr>`).join('')}
+      </tbody></table>
+      ${buildBarChart(debtAging.map((row) => ({ label: row.bucket, value: row.amount })), '#f97316', 'Receivables Aging Diagram')}
+      ${buildGroupedBarChart(cashFlowTrend.map((row) => ({ billed: row.billed, debt: row.debt, label: row.label, paid: row.paid })), `Cash Flow by ${granularity} Diagram`)}
+      ${buildBarChart(
+        paymentMethodRowsForPrint.map((row) => ({ label: toHumanLabel(row.method), value: row.amount })),
+        '#6366f1',
+        'Payment Method Mix Diagram'
+      )}
+      ${buildLineChart(ledgerRowsFilteredByPatient.map((row) => ({ label: formatShortDate(row.date), value: row.balance })), '#6366f1', `Ledger Trend (${selectedPatientName})`)}
+      <h3>Invoice Details</h3>
+      <table><thead><tr><th>Invoice</th><th>Total</th><th>Net</th></tr></thead><tbody>
+        ${filteredInvoices.map((invoice) => `<tr><td>#${escapeHtml(invoice.id)}</td><td>${escapeHtml(formatCurrency(invoice.totalInput))}</td><td>${escapeHtml(formatCurrency(invoice.netInput))}</td></tr>`).join('')}
+      </tbody></table>
+      <h3>Salary Payments</h3>
+      ${salaryRowsForPrint.length === 0
+    ? '<p class="muted">No salary payments in selected range.</p>'
+    : `<table><thead><tr><th>Staff</th><th>Status</th><th>Date</th><th>Amount</th></tr></thead><tbody>
+          ${salaryRowsForPrint.map((row) => `<tr><td>${escapeHtml(row.staffName || row.staffId)}</td><td>${escapeHtml(toHumanLabel(row.status))}</td><td>${escapeHtml(formatFullDate(row.paymentDate))}</td><td>${escapeHtml(formatCurrency(row.netAmount))}</td></tr>`).join('')}
+        </tbody></table>`}
+      <h3>Highest Outstanding Invoices</h3>
+      ${outstandingInvoicesForPrint.length === 0
+    ? '<p class="muted">No outstanding invoices.</p>'
+    : `<table><thead><tr><th>Invoice</th><th>Patient</th><th>Date</th><th>Net</th><th>Paid</th><th>Debt</th></tr></thead><tbody>
+          ${outstandingInvoicesForPrint.map((invoice) => `<tr><td>#${escapeHtml(invoice.id)}</td><td>${escapeHtml(mergedPatientNameById.get(invoice.patientId) || `Patient #${invoice.patientId || '-'}`)}</td><td>${escapeHtml(formatFullDate(invoice.date))}</td><td>${escapeHtml(formatCurrency(invoice.net))}</td><td>${escapeHtml(formatCurrency(invoice.paid))}</td><td>${escapeHtml(formatCurrency(invoice.debt))}</td></tr>`).join('')}
+        </tbody></table>`}
+      <h3>Payment Method Mix</h3>
+      ${paymentMethodRowsForPrint.length === 0
+    ? '<p class="muted">No payment method data in selected range.</p>'
+    : `<table><thead><tr><th>Method</th><th>Payments</th><th>Amount</th></tr></thead><tbody>
+          ${paymentMethodRowsForPrint.map((row) => `<tr><td>${escapeHtml(toHumanLabel(row.method))}</td><td>${row.count}</td><td>${escapeHtml(formatCurrency(row.amount))}</td></tr>`).join('')}
+        </tbody></table>`}
+      <h3>Safe Pickups</h3>
+      <table><thead><tr><th>Staff</th><th>Amount</th></tr></thead><tbody>
+        ${safePickups.map((row) => `<tr><td>${escapeHtml(row.name)}</td><td>${escapeHtml(formatCurrency(row.amount))}</td></tr>`).join('')}
+      </tbody></table>
+      <h3>Ledger (${escapeHtml(selectedPatientName)})</h3>
+      <div class="legend-row">
+        <span><i class="chip chip-invoice"></i>Invoice Debit</span>
+        <span><i class="chip chip-payment"></i>Payment Credit</span>
+      </div>
+      <table><thead><tr><th>Date</th><th>Type</th><th>Invoice</th><th>Method</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead><tbody>
+        ${ledgerRowsFilteredByPatient.map((entry) => {
+    const isInvoice = entry.type === 'invoice';
+    const rowClass = isInvoice ? 'type-invoice' : 'type-payment';
+    const rowBackground = isInvoice ? '#fffbeb' : '#ecfdf5';
+    const cellStyle = `background:${rowBackground};-webkit-print-color-adjust:exact;print-color-adjust:exact;`;
+    return `<tr class="${rowClass}"><td style="${cellStyle}">${escapeHtml(formatFullDate(entry.date))}</td><td style="${cellStyle}"><span class="type-chip ${isInvoice ? 'chip-invoice' : 'chip-payment'}">${isInvoice ? 'Invoice Debit' : 'Payment Credit'}</span></td><td style="${cellStyle}">#${escapeHtml(entry.invoiceId)}</td><td style="${cellStyle}">${escapeHtml(toHumanLabel(entry.method))}</td><td style="${cellStyle}">${entry.debit > 0 ? escapeHtml(formatCurrency(entry.debit)) : '-'}</td><td style="${cellStyle}">${entry.credit > 0 ? escapeHtml(formatCurrency(entry.credit)) : '-'}</td><td style="${cellStyle}">${escapeHtml(formatCurrency(entry.balance))}</td></tr>`;
+  }).join('')}
+      </tbody></table>
+    `;
     let bodySections = '';
-    if (activeTab === 'overview') {
+    if (activeTab === 'overview' || activeTab === 'financial') {
       bodySections = `
-        ${profitLossSection}
-        ${buildLineChart(incomeTrend.map((point) => ({ label: point.label, value: point.income })), '#0ea5e9', 'Income Trend Diagram')}
-        <h3>Income Trend</h3>
-        <table><thead><tr><th>Bucket</th><th>Income</th><th>Payments</th></tr></thead><tbody>
-          ${incomeTrend.map((point) => `<tr><td>${escapeHtml(point.label)}</td><td>${escapeHtml(formatCurrency(point.income))}</td><td>${point.paymentCount}</td></tr>`).join('')}
-        </tbody></table>
-      `;
-    }
-    if (activeTab === 'financial') {
-      bodySections = `
-        ${profitLossSection}
-        ${buildBarChart(expenseSummary.byCategory.map((row) => ({ label: row.category, value: row.amount })), '#ef4444', 'Expense by Category Diagram')}
-        <h3>Expense Summary</h3>
-        <table><thead><tr><th>Category</th><th>Amount</th></tr></thead><tbody>
-          ${expenseSummary.byCategory.map((row) => `<tr><td>${escapeHtml(row.category)}</td><td>${escapeHtml(formatCurrency(row.amount))}</td></tr>`).join('')}
-        </tbody></table>
-        ${buildBarChart(debtAging.map((row) => ({ label: row.bucket, value: row.amount })), '#f97316', 'Receivables Aging Diagram')}
-        ${buildGroupedBarChart(cashFlowTrend.map((row) => ({ billed: row.billed, debt: row.debt, label: row.label, paid: row.paid })), `Cash Flow by ${granularity} Diagram`)}
-        ${buildLineChart(ledgerRowsFilteredByPatient.map((row) => ({ label: formatShortDate(row.date), value: row.balance })), '#6366f1', `Ledger Trend (${selectedPatientName})`)}
-        <h3>Invoice Details</h3>
-        <table><thead><tr><th>Invoice</th><th>Total</th><th>Net</th></tr></thead><tbody>
-          ${filteredInvoices.map((invoice) => `<tr><td>#${escapeHtml(invoice.id)}</td><td>${escapeHtml(formatCurrency(invoice.totalInput))}</td><td>${escapeHtml(formatCurrency(invoice.netInput))}</td></tr>`).join('')}
-        </tbody></table>
-        <h3>Safe Pickups</h3>
-        <table><thead><tr><th>Staff</th><th>Amount</th></tr></thead><tbody>
-          ${safePickups.map((row) => `<tr><td>${escapeHtml(row.name)}</td><td>${escapeHtml(formatCurrency(row.amount))}</td></tr>`).join('')}
-        </tbody></table>
-        <h3>Ledger (${escapeHtml(selectedPatientName)})</h3>
-        <table><thead><tr><th>Date</th><th>Type</th><th>Invoice</th><th>Method</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead><tbody>
-          ${ledgerRowsFilteredByPatient.map((entry) => `<tr><td>${escapeHtml(formatFullDate(entry.date))}</td><td>${escapeHtml(entry.type)}</td><td>#${escapeHtml(entry.invoiceId)}</td><td>${escapeHtml(entry.method)}</td><td>${entry.debit > 0 ? escapeHtml(formatCurrency(entry.debit)) : '-'}</td><td>${entry.credit > 0 ? escapeHtml(formatCurrency(entry.credit)) : '-'}</td><td>${escapeHtml(formatCurrency(entry.balance))}</td></tr>`).join('')}
-        </tbody></table>
+        <h2>Overview</h2>
+        ${overviewBodySection}
+        <h2>Financial</h2>
+        ${financialBodySection}
       `;
     }
     if (activeTab === 'clinical') {
@@ -1410,14 +1663,27 @@ export default function ReportsPage(): JSX.Element {
       .chip-blue{background:#0ea5e9}
       .chip-green{background:#22c55e}
       .chip-orange{background:#f97316}
+      .chip-invoice{background:#f59e0b}
+      .chip-payment{background:#22c55e}
+      .type-chip{display:inline-block;border:1px solid #d1d5db;border-radius:999px;padding:1px 8px;font-size:10px;font-weight:700}
+      .type-invoice td{background:#fffbeb}
+      .type-payment td{background:#ecfdf5}
       .muted{font-size:12px;color:#64748b;margin:6px 0 10px}
       .bg-blue i{background:#2563eb}
       .bg-orange i{background:#f97316}
       .bg-emerald i{background:#16a34a}
       .bg-red i{background:#dc2626}
+      @media print{
+        body,th,td{
+          -webkit-print-color-adjust:exact !important;
+          print-color-adjust:exact !important;
+        }
+        .type-invoice td{background:#fffbeb !important}
+        .type-payment td{background:#ecfdf5 !important}
+      }
     </style></head><body>
       <h1>${escapeHtml(titleByTab[activeTab])}</h1>
-      <p>Generated at: ${escapeHtml(formatFullDate(new Date().toISOString()))}</p>
+      <p>Generated at: ${escapeHtml(formatDateTime(new Date().toISOString()))}</p>
       <h3>Summary</h3>
       <table><tbody>${summaryRows}</tbody></table>
       ${bodySections}
@@ -1503,7 +1769,7 @@ export default function ReportsPage(): JSX.Element {
                   <option value="cancelled">{tReportsPage('status.cancelled')}</option>
                 </select>
               </div>
-              <div className="grid gap-3 rounded-md border border-border/70 bg-muted/20 p-3 md:grid-cols-3">
+              <div className="grid gap-3 rounded-md border border-border/70 bg-muted/20 p-3 md:grid-cols-4">
                 <div>
                   <p className="text-xs text-muted-foreground">{tReportsPage('summary.incomePaid')}</p>
                   <p className="text-lg font-semibold text-emerald-600">{formatCurrency(kpis.paid)}</p>
@@ -1517,6 +1783,11 @@ export default function ReportsPage(): JSX.Element {
                   <p className={`text-lg font-semibold ${profitOrLoss >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                     {formatCurrency(profitOrLoss)}
                   </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Third-Company Unpaid</p>
+                  <p className="text-lg font-semibold text-orange-600">{formatCurrency(kpis.thirdCompanyUnpaid)}</p>
+                  <p className="text-xs text-muted-foreground">{kpis.thirdCompanyUnpaidCount} implant teeth</p>
                 </div>
               </div>
 
@@ -1537,10 +1808,11 @@ export default function ReportsPage(): JSX.Element {
                     downloadCsv(
                       `profit-loss-${startDate}-to-${endDate}.csv`,
                       profitLossTrend.map((row) => ({
-                        income: row.income.toFixed(2),
-                        outcome: row.outcome.toFixed(2),
-                        period: row.label,
-                        profit: row.profit.toFixed(2),
+                        'Income (AFN)': formatCurrency(row.income),
+                        'Outcome (AFN)': formatCurrency(row.outcome),
+                        Period: row.label,
+                        'Profit/Loss (AFN)': formatCurrency(row.profit),
+                        Result: row.profit >= 0 ? 'Profit' : 'Loss',
                       }))
                     );
                   }}
@@ -1569,19 +1841,20 @@ export default function ReportsPage(): JSX.Element {
                     downloadCsv(
                       `financial-report-${startDate}-to-${endDate}.csv`,
                       filteredInvoices.map((invoice) => ({
-                        currency: invoice.currency,
-                        debt: invoice.debt.toFixed(2),
-                        discount: invoice.discount.toFixed(2),
-                        discountInput: invoice.discountInput.toFixed(2),
-                        exchangeRate: invoice.exchangeRate.toFixed(6),
-                        invoiceDate: invoice.date,
-                        invoiceId: invoice.id,
-                        net: invoice.net.toFixed(2),
-                        netInput: invoice.netInput.toFixed(2),
-                        paid: invoice.paid.toFixed(2),
-                        status: invoice.status,
-                        total: invoice.total.toFixed(2),
-                        totalInput: invoice.totalInput.toFixed(2),
+                        'Currency': invoice.currency,
+                        'Discount (AFN)': formatCurrency(invoice.discount),
+                        'Entered Discount (AFN)': formatCurrency(invoice.discountInput),
+                        'Entered Net (AFN)': formatCurrency(invoice.netInput),
+                        'Entered Total (AFN)': formatCurrency(invoice.totalInput),
+                        'Exchange Rate': Number(invoice.exchangeRate).toFixed(6),
+                        'Invoice #': invoice.id,
+                        'Invoice Date': formatFullDate(invoice.date),
+                        'Net Total (AFN)': formatCurrency(invoice.net),
+                        'Outstanding Debt (AFN)': formatCurrency(invoice.debt),
+                        'Paid Amount (AFN)': formatCurrency(invoice.paid),
+                        'Patient': mergedPatientNameById.get(invoice.patientId) || `Patient #${invoice.patientId || '-'}`,
+                        'Status': toHumanLabel(invoice.status),
+                        'Total Amount (AFN)': formatCurrency(invoice.total),
                       }))
                     );
                   }}
@@ -1595,9 +1868,9 @@ export default function ReportsPage(): JSX.Element {
                     downloadCsv(
                       `income-trend-${startDate}-to-${endDate}.csv`,
                       incomeTrend.map((point) => ({
-                        bucket: point.label,
-                        income: point.income.toFixed(2),
-                        paymentCount: point.paymentCount,
+                        'Income (AFN)': formatCurrency(point.income),
+                        'Number of Payments': point.paymentCount,
+                        Period: point.label,
                       }))
                     );
                   }}
@@ -1610,24 +1883,26 @@ export default function ReportsPage(): JSX.Element {
                   onClick={() => {
                     const rows = [
                       {
-                        balance: ledgerRows.openingBalance.toFixed(2),
-                        credit: '0.00',
-                        date: startDate,
-                        debit: '0.00',
-                        invoiceId: '-',
-                        label: 'Opening Balance',
-                        method: '-',
-                        type: 'opening',
+                        'Balance (AFN)': formatCurrency(ledgerRows.openingBalance),
+                        'Credit (AFN)': '-',
+                        'Date': formatFullDate(startDate),
+                        'Debit (AFN)': '-',
+                        'Description': 'Opening Balance',
+                        'Entry Type': 'Opening',
+                        'Invoice #': '-',
+                        'Patient': selectedPatientName,
+                        'Payment Method': '-',
                       },
                       ...ledgerRows.inRangeEntries.map((entry) => ({
-                        balance: entry.balance.toFixed(2),
-                        credit: entry.credit.toFixed(2),
-                        date: entry.date,
-                        debit: entry.debit.toFixed(2),
-                        invoiceId: entry.invoiceId,
-                        label: entry.label,
-                        method: entry.method,
-                        type: entry.type,
+                        'Balance (AFN)': formatCurrency(entry.balance),
+                        'Credit (AFN)': entry.credit > 0 ? formatCurrency(entry.credit) : '-',
+                        'Date': formatFullDate(entry.date),
+                        'Debit (AFN)': entry.debit > 0 ? formatCurrency(entry.debit) : '-',
+                        'Description': entry.label,
+                        'Entry Type': toHumanLabel(entry.type),
+                        'Invoice #': entry.invoiceId || '-',
+                        'Patient': mergedPatientNameById.get(entry.patientId) || `Patient #${entry.patientId || '-'}`,
+                        'Payment Method': toHumanLabel(entry.method || '-'),
                       })),
                     ];
                     downloadCsv(`ledger-${startDate}-to-${endDate}.csv`, rows);
@@ -1642,14 +1917,14 @@ export default function ReportsPage(): JSX.Element {
                     downloadCsv(
                       `expenses-${startDate}-to-${endDate}.csv`,
                       [...filteredDailyExpenses, ...filteredClinicalExpenses].map((row) => ({
-                        amount: row.amount.toFixed(2),
-                        amountInput: row.amountInput.toFixed(2),
-                        category: row.category,
-                        currency: row.currency,
-                        date: row.expenseDate,
-                        exchangeRate: row.exchangeRate.toFixed(6),
-                        expenseType: row.expenseType,
-                        id: row.id,
+                        'Amount (AFN)': formatCurrency(row.amount),
+                        'Category': row.category,
+                        'Currency': row.currency,
+                        'Date': formatFullDate(row.expenseDate),
+                        'Entered Amount (AFN)': formatCurrency(row.amountInput),
+                        'Exchange Rate': row.exchangeRate.toFixed(6),
+                        'Expense Type': toHumanLabel(row.expenseType),
+                        'Record ID': row.id,
                       }))
                     );
                   }}
@@ -1663,14 +1938,15 @@ export default function ReportsPage(): JSX.Element {
                     const rows = safeRows
                       .filter((row) => inRange(row.transactionDate, startDate, endDate))
                       .map((row) => ({
-                        amount: row.amount.toFixed(2),
-                        amountInput: row.amountInput.toFixed(2),
-                        currency: row.currency,
-                        date: row.transactionDate,
-                        direction: row.direction,
-                        entryType: row.entryType,
-                        exchangeRate: row.exchangeRate.toFixed(6),
-                        pickedBy: row.pickedByStaffName || row.pickedByStaffId || '-',
+                        'Amount (AFN)': formatCurrency(row.amount),
+                        'Currency': row.currency,
+                        'Date': formatFullDate(row.transactionDate),
+                        'Direction': toHumanLabel(row.direction),
+                        'Entered Amount (AFN)': formatCurrency(row.amountInput),
+                        'Entry Type': toHumanLabel(row.entryType),
+                        'Exchange Rate': row.exchangeRate.toFixed(6),
+                        'Notes': row.notes || '-',
+                        'Picked By': row.pickedByStaffName || row.pickedByStaffId || '-',
                       }));
                     downloadCsv(`safe-transactions-${startDate}-to-${endDate}.csv`, rows);
                   }}
@@ -1684,18 +1960,38 @@ export default function ReportsPage(): JSX.Element {
                     const rows = salaryRows
                       .filter((row) => inRange(row.paymentDate, startDate, endDate))
                       .map((row) => ({
-                        currency: row.currency,
-                        exchangeRate: row.exchangeRate.toFixed(6),
-                        netAmount: row.netAmount.toFixed(2),
-                        netAmountInput: row.netAmountInput.toFixed(2),
-                        paymentDate: row.paymentDate,
-                        staff: row.staffName || row.staffId,
-                        status: row.status,
+                        'Currency': row.currency,
+                        'Entered Net (AFN)': formatCurrency(row.netAmountInput),
+                        'Exchange Rate': row.exchangeRate.toFixed(6),
+                        'Net Paid (AFN)': formatCurrency(row.netAmount),
+                        'Payment Date': formatFullDate(row.paymentDate),
+                        'Staff': row.staffName || row.staffId,
+                        'Status': toHumanLabel(row.status),
                       }));
                     downloadCsv(`salaries-${startDate}-to-${endDate}.csv`, rows);
                   }}
                 >
                   Export Salaries CSV
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    downloadCsv(
+                      `third-company-unpaid-${startDate}-to-${endDate}.csv`,
+                      thirdCompanyUnpaidRows.map((row) => ({
+                        'Availability': toHumanLabel(row.availability),
+                        'Paid To Supplier (AFN)': formatCurrency(row.supplierPaid),
+                        'Patient': mergedPatientNameById.get(row.patientId) || `Patient #${row.patientId || '-'}`,
+                        'Supplier Total (AFN)': formatCurrency(row.supplierTotal),
+                        'Tooth': row.toothNumber,
+                        'Unpaid To Supplier (AFN)': formatCurrency(row.supplierRemaining),
+                      }))
+                    );
+                  }}
+                  disabled={thirdCompanyUnpaidRows.length === 0}
+                >
+                  Export Third-Company Unpaid CSV
                 </Button>
                 <Button
                   type="button"
@@ -1749,21 +2045,21 @@ export default function ReportsPage(): JSX.Element {
                     downloadCsv(
                       `report-snapshots-${today}.csv`,
                       snapshotRecords.map((snapshot) => ({
-                        activePatients: snapshot.activePatients,
-                        appointmentCompletionRate: snapshot.appointmentCompletionRate,
-                        appointments: snapshot.appointments,
-                        billed: snapshot.billed.toFixed(2),
-                        collectionRate: snapshot.collectionRate,
-                        debt: snapshot.debt.toFixed(2),
-                        discount: snapshot.discount.toFixed(2),
-                        generatedAt: snapshot.generatedAt,
-                        granularity: snapshot.granularity,
-                        net: snapshot.net.toFixed(2),
-                        paid: snapshot.paid.toFixed(2),
-                        rangeEnd: snapshot.rangeEnd,
-                        rangeStart: snapshot.rangeStart,
-                        statusFilter: snapshot.statusFilter,
-                        visits: snapshot.visits,
+                        'Active Patients': snapshot.activePatients,
+                        'Appointment Completion Rate (%)': `${snapshot.appointmentCompletionRate}%`,
+                        'Appointments': snapshot.appointments,
+                        'Billed (AFN)': formatCurrency(snapshot.billed),
+                        'Collection Rate (%)': `${snapshot.collectionRate}%`,
+                        'Debt (AFN)': formatCurrency(snapshot.debt),
+                        'Discount (AFN)': formatCurrency(snapshot.discount),
+                        'Generated At': formatDateTime(snapshot.generatedAt),
+                        'Granularity': toHumanLabel(snapshot.granularity),
+                        'Invoice Status Filter': toHumanLabel(snapshot.statusFilter),
+                        'Net (AFN)': formatCurrency(snapshot.net),
+                        'Paid (AFN)': formatCurrency(snapshot.paid),
+                        'Range End': formatFullDate(snapshot.rangeEnd),
+                        'Range Start': formatFullDate(snapshot.rangeStart),
+                        'Visits': snapshot.visits,
                       }))
                     );
                   }}
@@ -1799,7 +2095,7 @@ export default function ReportsPage(): JSX.Element {
             </TabsList>
 
             <TabsContent value="overview" className="space-y-4">
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
                 <Card className="border-border/70">
                   <CardContent className="pt-5">
                     <p className="text-xs text-muted-foreground">Total Patients</p>
@@ -1839,8 +2135,19 @@ export default function ReportsPage(): JSX.Element {
                   <CardContent className="pt-5">
                     <p className="text-xs text-muted-foreground">All Expenses</p>
                     <p className="text-2xl font-semibold">{formatCurrency(kpis.expenses)}</p>
-                    <p className="text-xs text-muted-foreground">Safe outflow: {formatCurrency(kpis.safeOut)} | Salaries: {formatCurrency(kpis.salaryPaid)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Safe outflow: {formatCurrency(kpis.safeOut)} | Salaries: {formatCurrency(kpis.salaryPaid)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Third-company paid: {formatCurrency(kpis.thirdCompanyPaid)}</p>
                     <p className="text-xs text-muted-foreground">Net after expenses: {formatCurrency(kpis.netAfterExpenses)}</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/70">
+                  <CardContent className="pt-5">
+                    <p className="text-xs text-muted-foreground">Third-Company Unpaid</p>
+                    <p className="text-2xl font-semibold">{formatCurrency(kpis.thirdCompanyUnpaid)}</p>
+                    <p className="text-xs text-muted-foreground">Supplier total: {formatCurrency(kpis.thirdCompanyTotal)}</p>
+                    <p className="text-xs text-muted-foreground">Unpaid teeth: {kpis.thirdCompanyUnpaidCount}</p>
                   </CardContent>
                 </Card>
               </div>
@@ -1873,7 +2180,15 @@ export default function ReportsPage(): JSX.Element {
                       <p className="text-sm font-semibold text-foreground">
                         {formatCurrency(expenseSummary.total)} ({formatCurrency(expenseSummary.daily)} daily / {formatCurrency(expenseSummary.clinical)} clinical)
                       </p>
+                      <p className="text-xs text-muted-foreground">Third-company paid: {formatCurrency(kpis.thirdCompanyPaid)}</p>
                       <p className="text-xs text-muted-foreground">Operational net cash: {formatCurrency(kpis.netAfterExpenses)}</p>
+                    </div>
+                    <div className="rounded-md border border-border/70 bg-muted/20 p-2 md:col-span-2">
+                      <p className="text-xs text-muted-foreground">Third-Company Liability</p>
+                      <p className="text-sm font-semibold text-foreground">
+                        Unpaid {formatCurrency(kpis.thirdCompanyUnpaid)} / Total {formatCurrency(kpis.thirdCompanyTotal)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Unpaid teeth: {kpis.thirdCompanyUnpaidCount}</p>
                     </div>
                   </div>
                   <div className="space-y-1">
@@ -1908,7 +2223,7 @@ export default function ReportsPage(): JSX.Element {
                           <XAxis dataKey="label" />
                           <YAxis tickFormatter={(value) => `${Number(value).toFixed(0)}`} />
                           <Tooltip
-                            formatter={(value: number, name: string) => [formatCurrency(Number(value)), name]}
+                            formatter={(value, name) => [formatCurrency(Number(value ?? 0)), name]}
                             labelFormatter={(label) => `Period: ${label}`}
                           />
                           <Legend />
@@ -1954,7 +2269,7 @@ export default function ReportsPage(): JSX.Element {
                             width={70}
                           />
                           <Tooltip
-                            formatter={(value: number) => [formatCurrency(Number(value)), 'Income']}
+                            formatter={(value) => [formatCurrency(Number(value ?? 0)), 'Income']}
                             labelFormatter={(label) => `Bucket: ${label}`}
                           />
                           <Area dataKey="income" fill="url(#reportsIncomeGradient)" stroke="#0ea5e9" strokeWidth={2} />
@@ -1967,6 +2282,159 @@ export default function ReportsPage(): JSX.Element {
             </TabsContent>
 
             <TabsContent value="financial" className="space-y-4">
+              <Card className="border-border/70">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Third-Company Implant Liability</CardTitle>
+                  <CardDescription>
+                    Tracks clinic obligations to implant supplier across lifecycle statuses.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid gap-2 md:grid-cols-4">
+                    <div className="rounded-md border border-border/70 bg-muted/20 p-2">
+                      <p className="text-xs text-muted-foreground">Supplier Total</p>
+                      <p className="text-sm font-semibold text-foreground">{formatCurrency(thirdCompanySummary.totalSupplierCost)}</p>
+                    </div>
+                    <div className="rounded-md border border-border/70 bg-muted/20 p-2">
+                      <p className="text-xs text-muted-foreground">Supplier Paid</p>
+                      <p className="text-sm font-semibold text-foreground">{formatCurrency(thirdCompanySummary.totalPaid)}</p>
+                    </div>
+                    <div className="rounded-md border border-border/70 bg-muted/20 p-2">
+                      <p className="text-xs text-muted-foreground">Supplier Unpaid</p>
+                      <p className="text-sm font-semibold text-foreground">{formatCurrency(thirdCompanySummary.totalUnpaid)}</p>
+                    </div>
+                    <div className="rounded-md border border-border/70 bg-muted/20 p-2">
+                      <p className="text-xs text-muted-foreground">Unpaid Teeth</p>
+                      <p className="text-sm font-semibold text-foreground">
+                        {thirdCompanySummary.unpaidCount} / {thirdCompanySummary.implantCount}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="rounded-full border border-border/70 bg-muted/20 px-2 py-1 text-muted-foreground">
+                      Click chart bars to filter unpaid rows
+                    </span>
+                    {selectedThirdCompanyAvailability !== 'all' ? (
+                      <>
+                        <span className="rounded-full border border-orange-300 bg-orange-100 px-2 py-1 font-semibold text-orange-800">
+                          Status filter: {toHumanLabel(selectedThirdCompanyAvailability)}
+                        </span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2 text-[11px]"
+                          onClick={() => {
+                            setSelectedThirdCompanyAvailability('all');
+                          }}
+                        >
+                          Clear Filter
+                        </Button>
+                      </>
+                    ) : null}
+                  </div>
+                  {thirdCompanyStatusChart.every((item) => item.unpaid <= 0) ? (
+                    <p className="text-sm text-muted-foreground">No unpaid third-company amount right now.</p>
+                  ) : (
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={thirdCompanyStatusChart}>
+                          <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
+                          <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} />
+                          <YAxis
+                            yAxisId="amount"
+                            tick={{ fill: '#64748b', fontSize: 11 }}
+                            tickFormatter={(value) => `AFN ${Number(value).toFixed(0)}`}
+                            tickLine={false}
+                            width={70}
+                          />
+                          <YAxis
+                            yAxisId="count"
+                            orientation="right"
+                            tick={{ fill: '#64748b', fontSize: 11 }}
+                            tickFormatter={(value) => Number(value).toFixed(0)}
+                            tickLine={false}
+                            width={52}
+                          />
+                          <Tooltip
+                            formatter={(value, name) => {
+                              if (name === 'Implant Teeth') {
+                                return [`${Number(value ?? 0).toFixed(0)}`, 'Implant Teeth'];
+                              }
+                              return [formatCurrency(Number(value ?? 0)), 'Unpaid'];
+                            }}
+                            labelFormatter={(label) => `Status: ${label}`}
+                          />
+                          <Legend />
+                          <Bar
+                            yAxisId="amount"
+                            dataKey="unpaid"
+                            fill="#f97316"
+                            name="Unpaid"
+                            onClick={handleThirdCompanyStatusBarClick}
+                          />
+                          <Bar
+                            yAxisId="count"
+                            dataKey="count"
+                            fill="#0ea5e9"
+                            name="Implant Teeth"
+                            onClick={handleThirdCompanyStatusBarClick}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/70">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Unpaid Third-Company Payments</CardTitle>
+                  <CardDescription>
+                    Outstanding amount the clinic still owes to implant supplier.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {selectedThirdCompanyAvailability !== 'all' ? (
+                    <p className="mb-2 text-xs text-muted-foreground">
+                      Showing only <span className="font-semibold text-foreground">{toHumanLabel(selectedThirdCompanyAvailability)}</span> status.
+                    </p>
+                  ) : null}
+                  {thirdCompanyUnpaidRows.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No unpaid supplier balances.</p>
+                  ) : (
+                    <div className="overflow-x-auto rounded-md border border-border/70">
+                      <table className="min-w-full text-xs">
+                        <thead className="bg-muted/30">
+                          <tr>
+                            <th className="px-2 py-2 text-left font-semibold text-foreground">Patient</th>
+                            <th className="px-2 py-2 text-left font-semibold text-foreground">Tooth</th>
+                            <th className="px-2 py-2 text-left font-semibold text-foreground">Status</th>
+                            <th className="px-2 py-2 text-right font-semibold text-foreground">Total</th>
+                            <th className="px-2 py-2 text-right font-semibold text-foreground">Paid</th>
+                            <th className="px-2 py-2 text-right font-semibold text-foreground">Unpaid</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {thirdCompanyUnpaidRows.map((row) => (
+                            <tr key={`third-company-unpaid-${row.patientId}-${row.taskId}-${row.toothNumber}`} className="border-t border-border/70">
+                              <td className="px-2 py-2 text-muted-foreground">
+                                {mergedPatientNameById.get(row.patientId) || `Patient #${row.patientId || '-'}`}
+                              </td>
+                              <td className="px-2 py-2 text-foreground">{row.toothNumber}</td>
+                              <td className="px-2 py-2 text-muted-foreground">{row.availability.replaceAll('_', ' ')}</td>
+                              <td className="px-2 py-2 text-right text-foreground">{formatCurrency(row.supplierTotal)}</td>
+                              <td className="px-2 py-2 text-right text-foreground">{formatCurrency(row.supplierPaid)}</td>
+                              <td className="px-2 py-2 text-right font-semibold text-orange-700">{formatCurrency(row.supplierRemaining)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
               <Card className="border-border/70">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">Expense Control (Daily + Clinical Buys)</CardTitle>
@@ -2004,7 +2472,7 @@ export default function ReportsPage(): JSX.Element {
                             tickLine={false}
                             width={70}
                           />
-                          <Tooltip formatter={(value: number) => [formatCurrency(Number(value)), 'Expense']} />
+                          <Tooltip formatter={(value) => [formatCurrency(Number(value ?? 0)), 'Expense']} />
                           <Bar dataKey="amount" fill="#ef4444" radius={[8, 8, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
@@ -2065,7 +2533,30 @@ export default function ReportsPage(): JSX.Element {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">Receivables Aging</CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="rounded-full border border-border/70 bg-muted/20 px-2 py-1 text-muted-foreground">
+                      Click bars to filter outstanding invoices
+                    </span>
+                    {selectedDebtAgingBucket !== 'all' ? (
+                      <>
+                        <span className="rounded-full border border-amber-300 bg-amber-100 px-2 py-1 font-semibold text-amber-800">
+                          Aging filter: {selectedDebtAgingBucket}
+                        </span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2 text-[11px]"
+                          onClick={() => {
+                            setSelectedDebtAgingBucket('all');
+                          }}
+                        >
+                          Clear Filter
+                        </Button>
+                      </>
+                    ) : null}
+                  </div>
                   {debtAging.every((item) => item.amount <= 0) ? (
                     <p className="text-sm text-muted-foreground">No outstanding debt at the moment.</p>
                   ) : (
@@ -2080,8 +2571,8 @@ export default function ReportsPage(): JSX.Element {
                             tickLine={false}
                             width={70}
                           />
-                          <Tooltip formatter={(value: number) => [formatCurrency(Number(value)), 'Outstanding']} />
-                          <Bar dataKey="amount" fill="#f97316" radius={[8, 8, 0, 0]} />
+                          <Tooltip formatter={(value) => [formatCurrency(Number(value ?? 0)), 'Outstanding']} />
+                          <Bar dataKey="amount" fill="#f97316" radius={[8, 8, 0, 0]} onClick={handleDebtAgingBarClick} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -2094,6 +2585,11 @@ export default function ReportsPage(): JSX.Element {
                   <CardTitle className="text-base">Highest Outstanding Invoices</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
+                  {selectedDebtAgingBucket !== 'all' ? (
+                    <p className="text-xs text-muted-foreground">
+                      Filtered by aging bucket: <span className="font-semibold text-foreground">{selectedDebtAgingBucket}</span>
+                    </p>
+                  ) : null}
                   {outstandingInvoices.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No outstanding invoices.</p>
                   ) : (
@@ -2107,7 +2603,7 @@ export default function ReportsPage(): JSX.Element {
                           Date: {formatFullDate(invoice.date)} | Net: {formatCurrency(invoice.net)} | Paid: {formatCurrency(invoice.paid)}
                         </p>
                         <p className="text-muted-foreground">
-                          Patient: {patientNameById.get(invoice.patientId) || `Patient #${invoice.patientId || '-'}`}
+                          Patient: {mergedPatientNameById.get(invoice.patientId) || `Patient #${invoice.patientId || '-'}`}
                         </p>
                         <p className="font-semibold text-foreground">Debt: {formatCurrency(invoice.debt)}</p>
                         {invoice.patientId ? (
@@ -2148,7 +2644,7 @@ export default function ReportsPage(): JSX.Element {
                             tickLine={false}
                             width={70}
                           />
-                          <Tooltip formatter={(value: number) => formatCurrency(Number(value))} />
+                          <Tooltip formatter={(value) => formatCurrency(Number(value ?? 0))} />
                           <Legend />
                           <Bar dataKey="billed" fill="#0ea5e9" name="Billed" />
                           <Bar dataKey="paid" fill="#22c55e" name="Paid" />
@@ -2207,7 +2703,7 @@ export default function ReportsPage(): JSX.Element {
                               width={70}
                             />
                             <Tooltip
-                              formatter={(value: number) => [formatCurrency(Number(value)), 'Balance']}
+                              formatter={(value) => [formatCurrency(Number(value ?? 0)), 'Balance']}
                               labelFormatter={(value) => `Date: ${formatFullDate(String(value))}`}
                             />
                             <Line dataKey="balance" stroke="#6366f1" strokeWidth={2} dot={false} name="Balance" />
@@ -2260,6 +2756,16 @@ export default function ReportsPage(): JSX.Element {
                     <p className="font-semibold text-foreground">{formatCurrency(ledgerRows.openingBalance)}</p>
                     <p className="text-muted-foreground">Ledger Scope: {selectedPatientName}</p>
                   </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2 py-1 text-amber-800">
+                      <span className="size-2 rounded-full bg-amber-500" />
+                      Invoice Debit
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-100 px-2 py-1 text-emerald-800">
+                      <span className="size-2 rounded-full bg-emerald-500" />
+                      Payment Credit
+                    </span>
+                  </div>
 
                   {ledgerRowsFilteredByPatient.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No ledger entries in selected range.</p>
@@ -2279,12 +2785,18 @@ export default function ReportsPage(): JSX.Element {
                           </tr>
                         </thead>
                         <tbody>
-                          {ledgerRowsFilteredByPatient.map((entry) => (
-                            <tr key={`ledger-${entry.type}-${entry.invoiceId}-${entry.date}-${entry.debit}-${entry.credit}`} className="border-t border-border/70">
+                          {ledgerRowsFilteredByPatient.map((entry) => {
+                            const typeStyle = ledgerTypeStyles[entry.type] ?? ledgerTypeStyles.invoice;
+                            return (
+                              <tr
+                                key={`ledger-${entry.type}-${entry.invoiceId}-${entry.date}-${entry.debit}-${entry.credit}`}
+                                className={`border-t border-border/70 ${typeStyle.rowClass}`}
+                              >
                               <td className="px-2 py-2 text-muted-foreground">{formatFullDate(entry.date)}</td>
                               <td className="px-2 py-2">
-                                <Badge variant={entry.type === 'invoice' ? 'outline' : 'secondary'}>
-                                  {entry.type}
+                                <Badge variant="outline" className={typeStyle.badgeClass}>
+                                  <span className={`me-1 inline-flex size-2 rounded-full ${typeStyle.dotClass}`} />
+                                  {typeStyle.label}
                                 </Badge>
                               </td>
                               <td className="px-2 py-2 text-muted-foreground">
@@ -2297,16 +2809,21 @@ export default function ReportsPage(): JSX.Element {
                                   }}
                                   className="underline decoration-dotted underline-offset-2 hover:text-foreground"
                                 >
-                                  {patientNameById.get(entry.patientId) || `Patient #${entry.patientId || '-'}`}
+                                  {mergedPatientNameById.get(entry.patientId) || `Patient #${entry.patientId || '-'}`}
                                 </button>
                               </td>
                               <td className="px-2 py-2 text-muted-foreground">#{entry.invoiceId || '-'}</td>
                               <td className="px-2 py-2 text-muted-foreground">{entry.method.replaceAll('_', ' ')}</td>
-                              <td className="px-2 py-2 text-right text-foreground">{entry.debit > 0 ? formatCurrency(entry.debit) : '-'}</td>
-                              <td className="px-2 py-2 text-right text-foreground">{entry.credit > 0 ? formatCurrency(entry.credit) : '-'}</td>
+                              <td className={`px-2 py-2 text-right ${entry.debit > 0 ? typeStyle.debitClass : 'text-muted-foreground'}`}>
+                                {entry.debit > 0 ? formatCurrency(entry.debit) : '-'}
+                              </td>
+                              <td className={`px-2 py-2 text-right ${entry.credit > 0 ? typeStyle.creditClass : 'text-muted-foreground'}`}>
+                                {entry.credit > 0 ? formatCurrency(entry.credit) : '-'}
+                              </td>
                               <td className="px-2 py-2 text-right font-semibold text-foreground">{formatCurrency(entry.balance)}</td>
-                            </tr>
-                          ))}
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>

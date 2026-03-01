@@ -12,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -19,6 +20,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { ListPatientsUseCase } from '@/modules/dental-management/application/use-cases/patients/list-patients-use-case';
 import { type Patient } from '@/modules/dental-management/domain/entities/Patient';
 import { PatientRepository } from '@/modules/dental-management/infrastructure/repositories/patient-repository';
@@ -29,7 +38,7 @@ import { toast } from 'sonner';
 
 type SessionTaskStatus = 'pending' | 'in_progress' | 'done';
 type SessionTaskMark = 'green' | 'blue' | 'yellow' | 'orange' | 'red' | 'purple';
-type ImplantAvailabilityStatus = 'not_available' | 'in_purchase' | 'available';
+type ImplantAvailabilityStatus = 'not_available' | 'in_purchase' | 'available' | 'done';
 type SessionTask = {
   id: number;
   mark: SessionTaskMark;
@@ -41,26 +50,38 @@ type SessionTask = {
 
 const IMPLANT_TASK_MARKER = 'implant_tooth';
 const AVAILABILITY_TO_TASK_STATUS: Record<ImplantAvailabilityStatus, SessionTaskStatus> = {
-  available: 'done',
+  available: 'in_progress',
+  done: 'done',
   in_purchase: 'in_progress',
   not_available: 'pending',
 };
-const TASK_STATUS_TO_AVAILABILITY: Record<SessionTaskStatus, ImplantAvailabilityStatus> = {
-  done: 'available',
-  in_progress: 'in_purchase',
-  pending: 'not_available',
-};
 const AVAILABILITY_TO_TASK_MARK: Record<ImplantAvailabilityStatus, SessionTaskMark> = {
   available: 'green',
+  done: 'blue',
   in_purchase: 'yellow',
   not_available: 'red',
 };
 const AVAILABILITY_TITLES: Record<ImplantAvailabilityStatus, string> = {
   available: 'Available',
+  done: 'Done',
   in_purchase: 'In Purchase',
   not_available: 'Not Available',
 };
-const AVAILABILITY_ORDER: ImplantAvailabilityStatus[] = ['not_available', 'in_purchase', 'available'];
+const AVAILABILITY_ORDER: ImplantAvailabilityStatus[] = ['not_available', 'in_purchase', 'available', 'done'];
+const FALLBACK_TASK_STATUS_TO_AVAILABILITY: Record<SessionTaskStatus, ImplantAvailabilityStatus> = {
+  done: 'done',
+  in_progress: 'available',
+  pending: 'not_available',
+};
+
+type ImplantCard = {
+  availability: ImplantAvailabilityStatus;
+  supplierPaid: number;
+  supplierRemaining: number;
+  supplierTotal: number;
+  taskId: number;
+  toothNumber: string;
+};
 
 const extractImplantToothFromTask = (task: Pick<SessionTask, 'notes' | 'title'>): string | null => {
   const notesMatch = task.notes?.match(/\[implant_tooth:([0-9]{2})\]/i);
@@ -72,12 +93,52 @@ const extractImplantToothFromTask = (task: Pick<SessionTask, 'notes' | 'title'>)
   return titleMatch?.[1] ?? null;
 };
 
+const parseAvailabilityFromTaskNotes = (notes?: string): ImplantAvailabilityStatus | null => {
+  if (!notes) {
+    return null;
+  }
+
+  const match = notes.match(/\[implant_availability:(not_available|in_purchase|available|done)\]/i);
+  if (!match?.[1]) {
+    return null;
+  }
+
+  const value = match[1].toLowerCase();
+  if (value === 'not_available' || value === 'in_purchase' || value === 'available' || value === 'done') {
+    return value;
+  }
+
+  return null;
+};
+
+const parseTaggedAmount = (notes: string | undefined, key: 'supplier_paid' | 'supplier_total'): number => {
+  if (!notes) {
+    return 0;
+  }
+
+  const match = notes.match(new RegExp(`\\[${key}:([0-9]+(?:\\.[0-9]+)?)\\]`, 'i'));
+  if (!match?.[1]) {
+    return 0;
+  }
+
+  const parsed = Number.parseFloat(match[1]);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+};
+
+const formatCurrency = (value: number): string => new Intl.NumberFormat('en-US', {
+  currency: 'AFN',
+  maximumFractionDigits: 0,
+  minimumFractionDigits: 0,
+  style: 'currency',
+}).format(value);
+
 const buildImplantTaskPayload = (
   toothNumber: string,
-  availability: ImplantAvailabilityStatus
+  availability: ImplantAvailabilityStatus,
+  supplier: { paid: number; total: number }
 ): Pick<SessionTask, 'mark' | 'notes' | 'status' | 'title'> => ({
   mark: AVAILABILITY_TO_TASK_MARK[availability],
-  notes: `[${IMPLANT_TASK_MARKER}:${toothNumber}]`,
+  notes: `[${IMPLANT_TASK_MARKER}:${toothNumber}] [implant_availability:${availability}] [supplier_paid:${supplier.paid.toFixed(2)}] [supplier_total:${supplier.total.toFixed(2)}]`,
   status: AVAILABILITY_TO_TASK_STATUS[availability],
   title: `Implant Tooth ${toothNumber}`,
 });
@@ -88,6 +149,7 @@ export default function InProcessImplantsPage(): JSX.Element {
   const queryClient = useQueryClient();
   const [patientId, setPatientId] = useState('');
   const [availabilityToothSaving, setAvailabilityToothSaving] = useState<string | null>(null);
+  const [supplierPayNowByTooth, setSupplierPayNowByTooth] = useState<Record<string, string>>({});
   const patientTasksQueryKey = useMemo(() => ['patient-session-tasks', patientId], [patientId]);
 
   const { data: allPatients = [], isFetching: isLoadingPatients } = useQuery<Patient[]>({
@@ -149,7 +211,7 @@ export default function InProcessImplantsPage(): JSX.Element {
     [allPatients]
   );
 
-  const implantCards = useMemo(() => {
+  const implantCards = useMemo<ImplantCard[]>(() => {
     return patientSessionTasks
       .map((task) => {
         const notes = task.notes ?? '';
@@ -162,19 +224,37 @@ export default function InProcessImplantsPage(): JSX.Element {
           return null;
         }
 
+        const availabilityFromNotes = parseAvailabilityFromTaskNotes(task.notes);
+        const supplierTotal = parseTaggedAmount(task.notes, 'supplier_total');
+        const supplierPaidRaw = parseTaggedAmount(task.notes, 'supplier_paid');
+        const supplierPaid = Math.min(supplierTotal, supplierPaidRaw);
+        const supplierRemaining = Math.max(0, supplierTotal - supplierPaid);
+
         return {
-          availability: TASK_STATUS_TO_AVAILABILITY[task.status],
+          availability: availabilityFromNotes ?? FALLBACK_TASK_STATUS_TO_AVAILABILITY[task.status],
+          supplierPaid,
+          supplierRemaining,
+          supplierTotal,
           taskId: task.id,
           toothNumber,
         };
       })
-      .filter((card): card is { availability: ImplantAvailabilityStatus; taskId: number; toothNumber: string } => Boolean(card))
+      .filter((card): card is ImplantCard => Boolean(card))
       .sort((left, right) => left.toothNumber.localeCompare(right.toothNumber, undefined, { numeric: true }));
   }, [patientSessionTasks]);
 
+  const implantCardByTooth = useMemo<Record<string, ImplantCard>>(() => {
+    const result: Record<string, ImplantCard> = {};
+    implantCards.forEach((card) => {
+      result[card.toothNumber] = card;
+    });
+    return result;
+  }, [implantCards]);
+
   const groupedImplants = useMemo(() => {
-    const grouped: Record<ImplantAvailabilityStatus, { availability: ImplantAvailabilityStatus; taskId: number; toothNumber: string }[]> = {
+    const grouped: Record<ImplantAvailabilityStatus, ImplantCard[]> = {
       available: [],
+      done: [],
       in_purchase: [],
       not_available: [],
     };
@@ -184,6 +264,11 @@ export default function InProcessImplantsPage(): JSX.Element {
     });
 
     return grouped;
+  }, [implantCards]);
+  const unpaidSupplierRows = useMemo(() => {
+    return implantCards
+      .filter((card) => card.supplierRemaining > 0)
+      .sort((left, right) => left.toothNumber.localeCompare(right.toothNumber, undefined, { numeric: true }));
   }, [implantCards]);
 
   const fetchCsrfClient = async (): Promise<AxiosClient> => {
@@ -195,10 +280,14 @@ export default function InProcessImplantsPage(): JSX.Element {
   const setImplantAvailabilityMutation = useMutation({
     mutationFn: async ({
       nextAvailability,
+      supplierPaid,
+      supplierTotal,
       taskId,
       toothNumber,
     }: {
       nextAvailability: ImplantAvailabilityStatus;
+      supplierPaid: number;
+      supplierTotal: number;
       taskId: number;
       toothNumber: string;
     }) => {
@@ -209,7 +298,10 @@ export default function InProcessImplantsPage(): JSX.Element {
       const client = await fetchCsrfClient();
       return client.put<SessionTask>(
         `/api/v1/dental-management/patients/${patientId}/session-tasks/${taskId}`,
-        buildImplantTaskPayload(toothNumber, nextAvailability)
+        buildImplantTaskPayload(toothNumber, nextAvailability, {
+          paid: supplierPaid,
+          total: supplierTotal,
+        })
       );
     },
     onSettled: async () => {
@@ -227,10 +319,55 @@ export default function InProcessImplantsPage(): JSX.Element {
       return;
     }
 
+    const card = implantCardByTooth[toothNumber];
+    if (!card) {
+      toast.error('Implant card not found.');
+      return;
+    }
+
+    let supplierPaidNext = card.supplierPaid;
+    const supplierRemainingBefore = Math.max(0, card.supplierTotal - card.supplierPaid);
+    const requestedPayNow = Number.parseFloat(supplierPayNowByTooth[toothNumber] ?? '');
+    const supplierPayNow = Number.isFinite(requestedPayNow)
+      ? Math.min(Math.max(0, requestedPayNow), supplierRemainingBefore)
+      : 0;
+
+    if (card.availability === nextAvailability && supplierPayNow <= 0) {
+      return;
+    }
+
     setAvailabilityToothSaving(toothNumber);
     try {
+      if (supplierPayNow > 0) {
+        const safeClient = await fetchCsrfClient();
+        const today = new Date().toISOString().slice(0, 10);
+        const safeResponse = await safeClient.post<{ id: number }>(
+          '/api/v1/dental-management/safe-transactions',
+          {
+            amount: supplierPayNow,
+            currency: 'AFN',
+            direction: 'out',
+            entryType: 'expense',
+            exchangeRate: 1,
+            notes: `Implant supplier payment for tooth ${toothNumber}.`,
+            sourceId: taskId,
+            sourceType: 'implant_supplier',
+            transactionDate: today,
+          }
+        );
+
+        if (!safeResponse.success) {
+          toast.error(safeResponse.error?.message || 'Could not record supplier payment in safe.');
+          return;
+        }
+
+        supplierPaidNext = Math.min(card.supplierTotal, card.supplierPaid + supplierPayNow);
+      }
+
       const response = await setImplantAvailabilityMutation.mutateAsync({
         nextAvailability,
+        supplierPaid: supplierPaidNext,
+        supplierTotal: card.supplierTotal,
         taskId,
         toothNumber,
       });
@@ -240,6 +377,7 @@ export default function InProcessImplantsPage(): JSX.Element {
         return;
       }
 
+      setSupplierPayNowByTooth((prev) => ({ ...prev, [toothNumber]: '' }));
       toast.success(`Tooth ${toothNumber} moved to ${AVAILABILITY_TITLES[nextAvailability]}.`);
     } catch {
       toast.error('Failed to update implant status.');
@@ -263,7 +401,7 @@ export default function InProcessImplantsPage(): JSX.Element {
           <CardHeader>
             <CardTitle>In-Process Implants</CardTitle>
             <CardDescription>
-              Manage implant tooth lifecycle cards: not-available, in purchase, and available.
+              Manage implant tooth lifecycle cards: not-available, in purchase, available, and done.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -289,12 +427,12 @@ export default function InProcessImplantsPage(): JSX.Element {
             {!patientId ? (
               <p className="text-sm text-muted-foreground">Select a patient to see implant lifecycle cards.</p>
             ) : (
-              <div className="grid gap-3 xl:grid-cols-3">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 {AVAILABILITY_ORDER.map((availability) => (
                   <div key={availability} className="space-y-2 rounded-md border border-border p-3">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-semibold">{AVAILABILITY_TITLES[availability]}</p>
-                      <Badge variant={availability === 'available' ? 'default' : availability === 'in_purchase' ? 'secondary' : 'destructive'}>
+                      <Badge variant={availability === 'done' || availability === 'available' ? 'default' : availability === 'in_purchase' ? 'secondary' : 'destructive'}>
                         {groupedImplants[availability].length}
                       </Badge>
                     </div>
@@ -308,6 +446,26 @@ export default function InProcessImplantsPage(): JSX.Element {
                             <div className="flex items-center justify-between">
                               <span className="text-sm font-medium">Tooth {card.toothNumber}</span>
                               <Badge variant="outline">{AVAILABILITY_TITLES[card.availability]}</Badge>
+                            </div>
+                            <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                              <p>Total company cost: <span className="font-medium text-foreground">{formatCurrency(card.supplierTotal)}</span></p>
+                              <p>Paid to company: <span className="font-medium text-foreground">{formatCurrency(card.supplierPaid)}</span></p>
+                              <p>Unpaid company amount: <span className="font-medium text-foreground">{formatCurrency(card.supplierRemaining)}</span></p>
+                            </div>
+                            <div className="mt-2 flex items-center gap-2">
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                placeholder="Company pay now"
+                                value={supplierPayNowByTooth[card.toothNumber] ?? ''}
+                                onChange={(event) => {
+                                  setSupplierPayNowByTooth((prev) => ({
+                                    ...prev,
+                                    [card.toothNumber]: event.target.value,
+                                  }));
+                                }}
+                              />
                             </div>
                             <div className="mt-2 flex flex-wrap gap-2">
                               {AVAILABILITY_ORDER.map((targetAvailability) => (
@@ -336,6 +494,45 @@ export default function InProcessImplantsPage(): JSX.Element {
                 ))}
               </div>
             )}
+
+            {patientId ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Unpaid Third-Company Payments</CardTitle>
+                  <CardDescription>
+                    Outstanding clinic payments to implant supplier by tooth.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {unpaidSupplierRows.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No unpaid supplier balances.</p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Tooth</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Total</TableHead>
+                          <TableHead>Paid</TableHead>
+                          <TableHead>Unpaid</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {unpaidSupplierRows.map((row) => (
+                          <TableRow key={`unpaid-${row.taskId}`}>
+                            <TableCell>Tooth {row.toothNumber}</TableCell>
+                            <TableCell>{AVAILABILITY_TITLES[row.availability]}</TableCell>
+                            <TableCell>{formatCurrency(row.supplierTotal)}</TableCell>
+                            <TableCell>{formatCurrency(row.supplierPaid)}</TableCell>
+                            <TableCell>{formatCurrency(row.supplierRemaining)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+            ) : null}
           </CardContent>
         </Card>
       </div>

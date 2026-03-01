@@ -45,7 +45,7 @@ const createDefaultFormState = (invoiceDate: string): VisitInvoiceFormState => (
   netAmount: '0',
   notes: '',
   paymentType: 'cash',
-  status: 'unpaid',
+  status: 'paid',
 });
 
 const asText = (value: unknown): string => {
@@ -743,11 +743,11 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
                   onChange={updateField('status')}
                   disabled={selectedVisits.length === 0}
                 >
-                  <option value="unpaid">{t('config.form.status.options.unpaid')}</option>
+                  <option value="paid">{t('config.form.status.options.paid')}</option>
                   <option value="partially_paid">
                     {t('config.form.status.options.partially_paid')}
                   </option>
-                  <option value="paid">{t('config.form.status.options.paid')}</option>
+                  <option value="unpaid">{t('config.form.status.options.unpaid')}</option>
                   <option value="cancelled">{t('config.form.status.options.cancelled')}</option>
                 </select>
               </div>

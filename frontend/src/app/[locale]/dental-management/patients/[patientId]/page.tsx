@@ -101,6 +101,7 @@ type InvoicePaymentSummary = {
 };
 
 type IncomeTrendPoint = {
+  debt: number;
   income: number;
   label: string;
   monthKey: string;
@@ -337,7 +338,6 @@ export default function PatientProfilePage(): JSX.Element {
   const params = useParams<{ patientId: string }>();
   const patientId = Array.isArray(params?.patientId) ? params.patientId[0] : params?.patientId;
   const tSidebar = useTranslations('sidebar.dentalManagement');
-  const tPatientProfile = useTranslations('app.patientProfile');
   const locale = useLocale();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -584,19 +584,53 @@ export default function PatientProfilePage(): JSX.Element {
       return left.id.localeCompare(right.id, undefined, { numeric: true, sensitivity: 'base' });
     });
   }, [invoices]);
+  const paymentSummaryById = useMemo(() => {
+    const map = new Map<string, InvoicePaymentSummary>();
+    paymentSummaries.forEach((invoice) => {
+      map.set(invoice.id, invoice);
+    });
+    return map;
+  }, [paymentSummaries]);
+  const debtFlowByInvoiceId = useMemo(() => {
+    const map = new Map<string, { settlementId: string; sourceId: string }>();
+
+    paymentSummaries.forEach((invoice) => {
+      if (invoice.invoiceKind === 'debt_source' && invoice.linkedInvoiceId) {
+        const settlementId = invoice.linkedInvoiceId;
+        map.set(invoice.id, { settlementId, sourceId: invoice.id });
+        map.set(settlementId, { settlementId, sourceId: invoice.id });
+      }
+
+      if (invoice.invoiceKind === 'debt_settlement' && invoice.linkedInvoiceId) {
+        const sourceId = invoice.linkedInvoiceId;
+        map.set(invoice.id, { settlementId: invoice.id, sourceId });
+        map.set(sourceId, { settlementId: invoice.id, sourceId });
+      }
+    });
+
+    return map;
+  }, [paymentSummaries]);
 
   const incomeTrend = useMemo<IncomeTrendPoint[]>(() => {
-    const buckets = new Map<string, number>();
+    const buckets = new Map<string, { debt: number; income: number }>();
 
     for (const invoice of paymentSummaries) {
+      const invoiceMonthKey = toMonthKey(invoice.invoiceDate);
+      if (invoiceMonthKey) {
+        const currentBucket = buckets.get(invoiceMonthKey) ?? { debt: 0, income: 0 };
+        currentBucket.debt = Number((currentBucket.debt + invoice.remainingAmount).toFixed(2));
+        buckets.set(invoiceMonthKey, currentBucket);
+      }
+
       if (invoice.payments.length > 0) {
         for (const payment of invoice.payments) {
           const monthKey = toMonthKey(payment.paymentDate || invoice.invoiceDate);
           if (!monthKey) {
             continue;
           }
-          const nextAmount = (buckets.get(monthKey) ?? 0) + parseAmount(payment.amount);
-          buckets.set(monthKey, Number(nextAmount.toFixed(2)));
+          const currentBucket = buckets.get(monthKey) ?? { debt: 0, income: 0 };
+          currentBucket.income = Number((currentBucket.income + parseAmount(payment.amount)).toFixed(2));
+          buckets.set(monthKey, currentBucket);
         }
         continue;
       }
@@ -606,15 +640,17 @@ export default function PatientProfilePage(): JSX.Element {
         if (!monthKey) {
           continue;
         }
-        const nextAmount = (buckets.get(monthKey) ?? 0) + invoice.totalPaid;
-        buckets.set(monthKey, Number(nextAmount.toFixed(2)));
+        const currentBucket = buckets.get(monthKey) ?? { debt: 0, income: 0 };
+        currentBucket.income = Number((currentBucket.income + invoice.totalPaid).toFixed(2));
+        buckets.set(monthKey, currentBucket);
       }
     }
 
     return [...buckets.entries()]
       .sort(([left], [right]) => left.localeCompare(right))
-      .map(([monthKey, income]) => ({
-        income,
+      .map(([monthKey, values]) => ({
+        debt: values.debt,
+        income: values.income,
         label: toMonthLabel(monthKey),
         monthKey,
       }));
@@ -624,7 +660,12 @@ export default function PatientProfilePage(): JSX.Element {
     () => incomeTrend.reduce((sum, point) => Number((sum + point.income).toFixed(2)), 0),
     [incomeTrend]
   );
+  const totalDebt = useMemo(
+    () => incomeTrend.reduce((sum, point) => Number((sum + point.debt).toFixed(2)), 0),
+    [incomeTrend]
+  );
   const latestIncome = incomeTrend.length > 0 ? incomeTrend[incomeTrend.length - 1].income : 0;
+  const latestDebt = incomeTrend.length > 0 ? incomeTrend[incomeTrend.length - 1].debt : 0;
   const averageIncome = incomeTrend.length > 0 ? Number((totalIncome / incomeTrend.length).toFixed(2)) : 0;
 
   const fetchCsrfClient = async (): Promise<AxiosClient> => {
@@ -1179,17 +1220,25 @@ export default function PatientProfilePage(): JSX.Element {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {incomeTrend.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No income data available yet.</p>
+                    <p className="text-sm text-muted-foreground">No income or debt data available yet.</p>
                   ) : (
                     <>
-                      <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/15 p-3 text-xs sm:grid-cols-3">
+                      <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/15 p-3 text-xs sm:grid-cols-5">
                         <p className="text-muted-foreground">
                           Total Income
                           <span className="mt-1 block text-sm font-semibold text-foreground">{formatCurrency(totalIncome)}</span>
                         </p>
                         <p className="text-muted-foreground">
+                          Total Debt
+                          <span className="mt-1 block text-sm font-semibold text-foreground">{formatCurrency(totalDebt)}</span>
+                        </p>
+                        <p className="text-muted-foreground">
                           Latest Month
                           <span className="mt-1 block text-sm font-semibold text-foreground">{formatCurrency(latestIncome)}</span>
+                        </p>
+                        <p className="text-muted-foreground">
+                          Latest Debt
+                          <span className="mt-1 block text-sm font-semibold text-foreground">{formatCurrency(latestDebt)}</span>
                         </p>
                         <p className="text-muted-foreground">
                           Avg / Month
@@ -1204,6 +1253,10 @@ export default function PatientProfilePage(): JSX.Element {
                               <linearGradient id="patientIncomeGradient" x1="0" x2="0" y1="0" y2="1">
                                 <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.45} />
                                 <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0.04} />
+                              </linearGradient>
+                              <linearGradient id="patientDebtGradient" x1="0" x2="0" y1="0" y2="1">
+                                <stop offset="5%" stopColor="#f97316" stopOpacity={0.35} />
+                                <stop offset="95%" stopColor="#f97316" stopOpacity={0.04} />
                               </linearGradient>
                             </defs>
                             <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
@@ -1229,7 +1282,10 @@ export default function PatientProfilePage(): JSX.Element {
                                 boxShadow: '0 8px 22px rgba(15, 23, 42, 0.12)',
                                 color: '#0f172a',
                               }}
-                              formatter={(value: number) => [formatCurrency(Number(value)), 'Income']}
+                              formatter={(value, key) => [
+                                formatCurrency(Number(value ?? 0)),
+                                key === 'debt' ? 'Debt' : 'Income',
+                              ]}
                               labelFormatter={(label) => `Month: ${label}`}
                             />
                             <Area
@@ -1237,6 +1293,13 @@ export default function PatientProfilePage(): JSX.Element {
                               fill="url(#patientIncomeGradient)"
                               stroke="#0ea5e9"
                               strokeWidth={2.2}
+                              type="monotone"
+                            />
+                            <Area
+                              dataKey="debt"
+                              fill="url(#patientDebtGradient)"
+                              stroke="#f97316"
+                              strokeWidth={1.8}
                               type="monotone"
                             />
                           </AreaChart>
@@ -1269,9 +1332,48 @@ export default function PatientProfilePage(): JSX.Element {
                           : normalizedStatus === 'cancelled'
                             ? 'bg-slate-200 text-slate-700'
                             : 'bg-rose-100 text-rose-700';
+                      const debtFlow = debtFlowByInvoiceId.get(invoice.id);
+                      const sourceInvoice = debtFlow ? paymentSummaryById.get(debtFlow.sourceId) : null;
+                      const settlementInvoice = debtFlow ? paymentSummaryById.get(debtFlow.settlementId) : null;
+                      const showPartialFlow = normalizedStatus === 'partially_paid' && Boolean(debtFlow);
+                      const movedRemainingAmount = invoice.invoiceKind === 'debt_source'
+                        ? settlementInvoice?.totalNet ?? 0
+                        : 0;
+                      const displayedRemainingAmount = Math.max(invoice.remainingAmount, movedRemainingAmount);
+                      const hasRemainingAmount = displayedRemainingAmount > 0;
+                      const isConnectedInvoice = Boolean(debtFlow);
+                      const isBaseConnected = isConnectedInvoice && invoice.invoiceKind === 'debt_source';
+                      const isSettlementConnected = isConnectedInvoice && invoice.invoiceKind === 'debt_settlement';
+                      const connectionCardTone = isBaseConnected
+                        ? 'border-sky-300 bg-sky-50/30'
+                        : isSettlementConnected
+                          ? 'border-emerald-300 bg-emerald-50/30'
+                          : isConnectedInvoice
+                            ? 'border-amber-300 bg-amber-50/30'
+                            : 'border-border bg-background';
+                      const connectionChipTone = isBaseConnected
+                        ? 'bg-sky-100 text-sky-700'
+                        : isSettlementConnected
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-amber-100 text-amber-700';
+                      const connectionDotTone = isBaseConnected
+                        ? 'bg-sky-500'
+                        : isSettlementConnected
+                          ? 'bg-emerald-500'
+                          : 'bg-amber-500';
+                      const connectionTextTone = isBaseConnected
+                        ? 'text-sky-700'
+                        : isSettlementConnected
+                          ? 'text-emerald-700'
+                          : 'text-amber-700';
+                      const connectionLabel = isBaseConnected
+                        ? 'Connected Flow - Base'
+                        : isSettlementConnected
+                          ? 'Connected Flow - Settlement'
+                          : 'Connected Flow';
 
                       return (
-                        <div key={`patient-payment-${invoice.id}`} className="rounded-lg border border-border bg-background p-3">
+                        <div key={`patient-payment-${invoice.id}`} className={`rounded-lg border p-3 ${connectionCardTone}`}>
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <p className="text-sm font-semibold text-foreground">
                               Invoice #{invoice.id}
@@ -1279,42 +1381,74 @@ export default function PatientProfilePage(): JSX.Element {
                             <div className="flex flex-wrap items-center gap-1.5">
                               {invoice.invoiceKind === 'debt_source' ? (
                                 <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold uppercase text-sky-700">
-                                  {tPatientProfile('badges.originalDebtInvoice')}
+                                  Base Invoice
                                 </span>
                               ) : null}
                               {invoice.invoiceKind === 'debt_settlement' ? (
                                 <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold uppercase text-emerald-700">
-                                  {tPatientProfile('badges.debtPaidInvoice')}
+                                  Settlement Invoice
                                 </span>
                               ) : null}
                               <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase ${statusTone}`}>
                                 {invoice.status.replaceAll('_', ' ')}
                               </span>
+                              {isConnectedInvoice ? (
+                                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${connectionChipTone}`}>
+                                  <span className={`size-2 rounded-full ${connectionDotTone}`} />
+                                  {connectionLabel}
+                                </span>
+                              ) : null}
                             </div>
                           </div>
                           <p className="mt-1 text-xs text-muted-foreground">
                             Date: {formatDisplayDate(invoice.invoiceDate)} | Visit: {invoice.visitLabel}
                           </p>
-                          {invoice.invoiceKind === 'debt_source' && invoice.linkedInvoiceId ? (
-                            <p className="text-xs text-muted-foreground">
-                              {tPatientProfile('messages.settledByInvoice', { invoiceId: invoice.linkedInvoiceId })}
-                            </p>
-                          ) : null}
-                          {invoice.invoiceKind === 'debt_settlement' && invoice.linkedInvoiceId ? (
-                            <p className="text-xs text-muted-foreground">
-                              {tPatientProfile('messages.generatedFromInvoice', { invoiceId: invoice.linkedInvoiceId })}
+                          {invoice.linkedInvoiceId ? (
+                            <p className={`text-xs ${connectionTextTone}`}>
+                              Connected Invoice: #{invoice.linkedInvoiceId}
                             </p>
                           ) : null}
                           <p className="text-xs text-muted-foreground">
                             Payment Type: {invoice.paymentType}
                           </p>
 
+                          {showPartialFlow ? (
+                            <div className="mt-2 rounded-md border border-amber-300/70 bg-amber-50/70 p-2.5">
+                              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
+                                Partial Payment Flow
+                              </p>
+                              <div className="grid gap-2 md:grid-cols-[1fr_auto_1fr] md:items-center">
+                                <div className="rounded-md border border-sky-200 bg-sky-50 p-2">
+                                  <p className="text-[11px] font-semibold text-sky-800">Step 1: Base Invoice</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    #{sourceInvoice?.id || debtFlow?.sourceId || '-'} | {formatDisplayDate(sourceInvoice?.invoiceDate)}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Net: {formatCurrency(sourceInvoice?.totalNet ?? 0)} | Paid: {formatCurrency(sourceInvoice?.totalPaid ?? 0)}
+                                  </p>
+                                </div>
+                                <div className="text-center text-lg font-semibold text-amber-700">{'->'}</div>
+                                <div className="rounded-md border border-emerald-200 bg-emerald-50 p-2">
+                                  <p className="text-[11px] font-semibold text-emerald-800">Step 2: Settlement Invoice</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    #{settlementInvoice?.id || debtFlow?.settlementId || '-'} | {formatDisplayDate(settlementInvoice?.invoiceDate)}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Net: {formatCurrency(settlementInvoice?.totalNet ?? 0)} | Paid: {formatCurrency(settlementInvoice?.totalPaid ?? 0)}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ) : null}
+
                           <div className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
                             <p>Total: <span className="font-semibold text-foreground">{formatCurrency(invoice.totalAmount)}</span></p>
                             <p>Discount: <span className="font-semibold text-foreground">{formatCurrency(invoice.totalDiscount)}</span></p>
                             <p>Net: <span className="font-semibold text-foreground">{formatCurrency(invoice.totalNet)}</span></p>
                             <p>Paid: <span className="font-semibold text-foreground">{formatCurrency(invoice.totalPaid)}</span></p>
-                            <p className="sm:col-span-2 bg-yellow-300 p-2 rounded">Remaining: <span className="font-semibold text-foreground">{formatCurrency(invoice.remainingAmount)}</span></p>
+                            <p className={`sm:col-span-2 rounded p-2 ${hasRemainingAmount ? 'bg-yellow-300' : ''}`}>
+                              Remaining: <span className="font-semibold text-foreground">{formatCurrency(displayedRemainingAmount)}</span>
+                            </p>
                           </div>
                           {invoice.isEstimatedPaid ? (
                             <p className="mt-1 text-[11px] text-muted-foreground">

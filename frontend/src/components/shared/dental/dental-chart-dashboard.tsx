@@ -16,6 +16,7 @@ import {
   Activity,
   ArrowDownLeft,
   ArrowUpRight,
+  Building2,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -39,6 +40,7 @@ import {
 } from 'recharts';
 
 type EventType = 'appointment' | 'visit';
+type ImplantAvailabilityStatus = 'not_available' | 'in_purchase' | 'available' | 'done';
 
 type ScheduleEvent = {
   date: Date;
@@ -148,8 +150,27 @@ export type DashboardSafeSummary = {
   transactions: DashboardSafeTransaction[];
 };
 
+export type DashboardImplantSupplierAvailability = {
+  count: number;
+  paid: number;
+  status: ImplantAvailabilityStatus;
+  total: number;
+  unpaid: number;
+};
+
+export type DashboardImplantSupplierSummary = {
+  implantCount: number;
+  paidRatio: number;
+  totalPaid: number;
+  totalSupplierCost: number;
+  totalUnpaid: number;
+  unpaidCount: number;
+  byAvailability: DashboardImplantSupplierAvailability[];
+};
+
 type DentalChartDashboardProps = {
   appointments: DashboardAppointment[];
+  implantSupplierSummary?: DashboardImplantSupplierSummary;
   invoices: DashboardInvoice[];
   isLoading?: boolean;
   locale: string;
@@ -443,6 +464,7 @@ const ToothIllustration = (): JSX.Element => {
 
 export const DentalChartDashboard = ({
   appointments,
+  implantSupplierSummary,
   invoices,
   isLoading = false,
   locale,
@@ -636,71 +658,6 @@ export const DentalChartDashboard = ({
 
   const returningPatients = Math.max(patients.length - newPatients, 0);
 
-  const incomeMetrics = useMemo(() => {
-    const activeInvoices = invoices.filter((invoice) => normalizeStatus(asText(invoice.status || '')) !== 'cancelled');
-    const invoiceIdSet = new Set(activeInvoices.map((invoice) => String(invoice.id)));
-    const paidByInvoiceId = new Map<string, number>();
-
-    payments.forEach((payment) => {
-      const invoiceId = asText(payment.invoiceId);
-      if (!invoiceId) return;
-      const current = paidByInvoiceId.get(invoiceId) ?? 0;
-      paidByInvoiceId.set(invoiceId, roundCurrency(current + parseMoney(payment.amount)));
-    });
-
-    const totalBilled = roundCurrency(
-      activeInvoices.reduce((sum, invoice) => sum + parseMoney(invoice.netAmount), 0)
-    );
-
-    const collectedFromInvoices = activeInvoices.reduce((sum, invoice) => {
-      const invoiceId = String(invoice.id);
-      const paidFromRecords = paidByInvoiceId.get(invoiceId) ?? 0;
-      if (paidFromRecords > 0) {
-        return sum + paidFromRecords;
-      }
-
-      if (normalizeStatus(asText(invoice.status || '')) === 'paid') {
-        return sum + parseMoney(invoice.netAmount);
-      }
-
-      return sum;
-    }, 0);
-
-    const orphanPayments = payments.reduce((sum, payment) => {
-      const invoiceId = asText(payment.invoiceId);
-      if (invoiceId && invoiceIdSet.has(invoiceId)) return sum;
-      return sum + parseMoney(payment.amount);
-    }, 0);
-
-    const totalCollected = roundCurrency(collectedFromInvoices + orphanPayments);
-    const totalOutstanding = Math.max(0, roundCurrency(totalBilled - totalCollected));
-
-    const currentMonthIncome = roundCurrency(
-      payments.reduce((sum, payment) => {
-        const paymentDate = parseDateOnly(payment.paymentDate);
-        if (!paymentDate) return sum;
-        if (
-          paymentDate.getFullYear() !== today.getFullYear()
-          || paymentDate.getMonth() !== today.getMonth()
-        ) {
-          return sum;
-        }
-        return sum + parseMoney(payment.amount);
-      }, 0)
-    );
-
-    const collectionRate = totalBilled > 0
-      ? Math.min(100, Math.round((totalCollected / totalBilled) * 100))
-      : 0;
-
-    return {
-      collectionRate,
-      currentMonthIncome,
-      totalBilled,
-      totalCollected,
-      totalOutstanding,
-    };
-  }, [invoices, payments, today]);
   const financeTrend = useMemo(() => {
     const grouped = new Map<string, { billed: number; paid: number }>();
 
@@ -744,6 +701,38 @@ export const DentalChartDashboard = ({
   const safeTotalIn = safeSummary?.totalIn ?? 0;
   const safeTotalOut = safeSummary?.totalOut ?? 0;
   const afnPerUsd = safeSummary?.afnPerUsd ?? DEFAULT_AFN_PER_USD;
+  const emptyImplantAvailability = useMemo<DashboardImplantSupplierAvailability[]>(
+    () => [
+      { count: 0, paid: 0, status: 'not_available', total: 0, unpaid: 0 },
+      { count: 0, paid: 0, status: 'in_purchase', total: 0, unpaid: 0 },
+      { count: 0, paid: 0, status: 'available', total: 0, unpaid: 0 },
+      { count: 0, paid: 0, status: 'done', total: 0, unpaid: 0 },
+    ],
+    []
+  );
+  const implantSupplierData = implantSupplierSummary ?? {
+    byAvailability: emptyImplantAvailability,
+    implantCount: 0,
+    paidRatio: 0,
+    totalPaid: 0,
+    totalSupplierCost: 0,
+    totalUnpaid: 0,
+    unpaidCount: 0,
+  };
+  const implantAvailabilityChart = useMemo(() => {
+    const labelByStatus: Record<ImplantAvailabilityStatus, string> = {
+      available: 'Available',
+      done: 'Done',
+      in_purchase: 'In Purchase',
+      not_available: 'Not Available',
+    };
+
+    return implantSupplierData.byAvailability.map((entry) => ({
+      count: entry.count,
+      label: labelByStatus[entry.status],
+      unpaid: entry.unpaid,
+    }));
+  }, [implantSupplierData.byAvailability]);
   const formatDualCurrency = (usdValue: number): string => formatDualFromUsd(usdValue, afnPerUsd);
   const topSafePickups = useMemo(() => {
     const grouped = new Map<string, number>();
@@ -808,28 +797,66 @@ export const DentalChartDashboard = ({
   };
 
   const selectedEventStatus = statusTheme(selectedEvent?.status ?? 'scheduled');
-  const incomeRingStyle = useMemo<CSSProperties>(() => {
-    if (incomeMetrics.totalBilled <= 0) {
+  const debtOutstanding = useMemo(() => {
+    const activeInvoices = invoices.filter((invoice) => normalizeStatus(asText(invoice.status || '')) !== 'cancelled');
+    const paidByInvoiceId = new Map<string, number>();
+
+    payments.forEach((payment) => {
+      const invoiceId = asText(payment.invoiceId);
+      if (!invoiceId) return;
+      paidByInvoiceId.set(
+        invoiceId,
+        roundCurrency((paidByInvoiceId.get(invoiceId) ?? 0) + parseMoney(payment.amount))
+      );
+    });
+
+    return roundCurrency(activeInvoices.reduce((sum, invoice) => {
+      const invoiceId = String(invoice.id);
+      const netAmount = parseMoney(invoice.netAmount);
+      const paidAmount = paidByInvoiceId.get(invoiceId) ?? 0;
+      const isPaidStatus = normalizeStatus(asText(invoice.status || '')) === 'paid';
+      const effectivePaid = paidAmount > 0 ? paidAmount : isPaidStatus ? netAmount : 0;
+      return sum + Math.max(0, netAmount - effectivePaid);
+    }, 0));
+  }, [invoices, payments]);
+  const safeMoneyForRing = Math.max(0, roundCurrency(safeBalance));
+  const supplierUnpaids = Math.max(0, roundCurrency(implantSupplierData.totalUnpaid));
+  const ringBreakdown = useMemo(() => {
+    const total = safeMoneyForRing + debtOutstanding + supplierUnpaids;
+    if (total <= 0) {
+      return {
+        debtPercent: 0,
+        safePercent: 0,
+        unpaidPercent: 0,
+      };
+    }
+
+    const safePercent = Math.min(100, Math.max(0, (safeMoneyForRing / total) * 100));
+    const debtPercent = Math.min(100 - safePercent, Math.max(0, (debtOutstanding / total) * 100));
+    const unpaidPercent = Math.max(0, 100 - safePercent - debtPercent);
+
+    return {
+      debtPercent,
+      safePercent,
+      unpaidPercent,
+    };
+  }, [debtOutstanding, safeMoneyForRing, supplierUnpaids]);
+  const safeDebtRingStyle = useMemo<CSSProperties>(() => {
+    const total = safeMoneyForRing + debtOutstanding + supplierUnpaids;
+    if (total <= 0) {
       return {
         backgroundImage: 'conic-gradient(from -90deg, #e2e8f0 0% 100%)',
       };
     }
 
-    const paidPercent = Math.min(
-      100,
-      Math.max(0, (incomeMetrics.totalCollected / incomeMetrics.totalBilled) * 100)
-    );
-    const debtPercent = Math.min(
-      100 - paidPercent,
-      Math.max(0, (incomeMetrics.totalOutstanding / incomeMetrics.totalBilled) * 100)
-    );
-    const paidEnd = paidPercent;
-    const debtEnd = paidPercent + debtPercent;
+    const safeEnd = ringBreakdown.safePercent;
+    const debtsEnd = ringBreakdown.safePercent + ringBreakdown.debtPercent;
+    const unpaidsEnd = debtsEnd + ringBreakdown.unpaidPercent;
 
     return {
-      backgroundImage: `conic-gradient(from -90deg, #16a34a 0% ${paidEnd}%, #f97316 ${paidEnd}% ${debtEnd}%, #e2e8f0 ${debtEnd}% 100%)`,
+      backgroundImage: `conic-gradient(from -90deg, #16a34a 0% ${safeEnd}%, #eab308 ${safeEnd}% ${debtsEnd}%, #dc2626 ${debtsEnd}% ${unpaidsEnd}%, #e2e8f0 ${unpaidsEnd}% 100%)`,
     };
-  }, [incomeMetrics.totalBilled, incomeMetrics.totalCollected, incomeMetrics.totalOutstanding]);
+  }, [debtOutstanding, ringBreakdown.debtPercent, ringBreakdown.safePercent, ringBreakdown.unpaidPercent, safeMoneyForRing, supplierUnpaids]);
 
   const openTreatmentChartFromSelection = (): void => {
     if (!selectedEvent) return;
@@ -1084,45 +1111,51 @@ export const DentalChartDashboard = ({
                 <div className="relative z-10">
                   <div className="mb-3 flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-semibold">Total Income</p>
-                      <p className="text-xs text-muted-foreground">Circular bar: paid vs debts</p>
+                      <p className="text-sm font-semibold">Safe, Debts, Unpaids</p>
+                      <p className="text-xs text-muted-foreground">Circular bar: in safe vs debts vs unpaids</p>
                     </div>
                     <span className="rounded-full border border-emerald-300 bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">
-                      {incomeMetrics.collectionRate}%
+                      {Math.round(ringBreakdown.safePercent)}% safe
                     </span>
                   </div>
 
-                  <div className="mx-auto mb-4 grid h-44 w-44 place-items-center rounded-full p-3 shadow-[0_10px_35px_-18px_rgba(22,163,74,0.85)]" style={incomeRingStyle}>
+                  <div className="mx-auto mb-4 grid h-44 w-44 place-items-center rounded-full p-3 shadow-[0_10px_35px_-18px_rgba(22,163,74,0.85)]" style={safeDebtRingStyle}>
                     <div className="grid h-full w-full place-items-center rounded-full border border-border/70 bg-background/95 text-center">
-                      <p className="text-xs text-muted-foreground">Paid</p>
-                      <p className="text-lg font-bold leading-tight">{formatCurrency(incomeMetrics.totalCollected)}</p>
-                      <p className="text-[11px] text-muted-foreground">Debt {formatCurrency(incomeMetrics.totalOutstanding)}</p>
+                      <p className="text-xs text-muted-foreground">In Safe</p>
+                      <p className="text-lg font-bold leading-tight">{formatDualCurrency(safeBalance)}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Debts {formatCurrency(debtOutstanding)} | Unpaids {formatCurrency(supplierUnpaids)}
+                      </p>
                     </div>
                   </div>
 
                   <div className="mb-3 flex items-center justify-center gap-4 text-[11px]">
                     <span className="inline-flex items-center gap-1.5 text-emerald-700">
                       <span className="size-2.5 rounded-full bg-emerald-600" />
-                      Paid
+                      In Safe
                     </span>
-                    <span className="inline-flex items-center gap-1.5 text-orange-700">
-                      <span className="size-2.5 rounded-full bg-orange-500" />
+                    <span className="inline-flex items-center gap-1.5 text-yellow-700">
+                      <span className="size-2.5 rounded-full bg-yellow-500" />
                       Debts
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 text-rose-700">
+                      <span className="size-2.5 rounded-full bg-red-600" />
+                      Unpaids
                     </span>
                   </div>
 
                   <div className="grid gap-2 text-xs">
                     <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-100/70 px-3 py-2 text-emerald-900">
-                      <span className="inline-flex items-center gap-1">Billed</span>
-                      <span className="font-semibold">{formatCurrency(incomeMetrics.totalBilled)}</span>
+                      <span className="inline-flex items-center gap-1">Money In Safe</span>
+                      <span className="font-semibold">{formatDualCurrency(safeBalance)}</span>
                     </div>
                     <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white/90 px-3 py-2">
-                      <span className="text-muted-foreground">Outstanding</span>
-                      <span className="font-semibold text-foreground">{formatCurrency(incomeMetrics.totalOutstanding)}</span>
+                      <span className="text-muted-foreground">Debts</span>
+                      <span className="font-semibold text-foreground">{formatCurrency(debtOutstanding)}</span>
                     </div>
-                    <div className="flex items-center justify-between rounded-lg border border-cyan-200 bg-cyan-100/70 px-3 py-2 text-cyan-900">
-                      <span>This month</span>
-                      <span className="font-semibold">{formatCurrency(incomeMetrics.currentMonthIncome)}</span>
+                    <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-800">
+                      <span>Unpaids</span>
+                      <span className="font-semibold text-red-700">{formatCurrency(supplierUnpaids)}</span>
                     </div>
                   </div>
                 </div>
@@ -1238,7 +1271,7 @@ export const DentalChartDashboard = ({
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-3">
         <Card className="rounded-2xl border border-border/80 bg-gradient-to-br from-blue-50 via-background to-cyan-50">
           <CardContent className="p-4">
             <div className="mb-3">
@@ -1251,7 +1284,7 @@ export const DentalChartDashboard = ({
                   <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
                   <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} />
                   <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} width={70} />
-                  <Tooltip formatter={(value: number) => formatCurrency(Number(value))} />
+                  <Tooltip formatter={(value) => formatCurrency(Number(value ?? 0))} />
                   <Line type="monotone" dataKey="billed" stroke="#2563eb" strokeWidth={2} dot={false} />
                   <Line type="monotone" dataKey="paid" stroke="#16a34a" strokeWidth={2} dot={false} />
                 </LineChart>
@@ -1274,6 +1307,50 @@ export const DentalChartDashboard = ({
                   <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} width={60} />
                   <Tooltip />
                   <Bar dataKey="value" fill="#0ea5e9" radius={[10, 10, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl border border-border/80 bg-gradient-to-br from-sky-50 via-background to-blue-50">
+          <CardContent className="p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold">Third-Company Liability</p>
+                <p className="text-xs text-muted-foreground">Implant supplier paid vs unpaid</p>
+              </div>
+              <Building2 className="size-5 text-blue-700" />
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="rounded-xl border border-blue-200 bg-blue-100/70 p-3">
+                <p className="text-xs text-blue-900">Total Supplier Cost</p>
+                <p className="text-sm font-semibold text-blue-900">{formatDualCurrency(implantSupplierData.totalSupplierCost)}</p>
+              </div>
+              <div className="rounded-xl border border-emerald-200 bg-emerald-100/70 p-3">
+                <p className="text-xs text-emerald-900">Paid to Supplier</p>
+                <p className="text-sm font-semibold text-emerald-900">{formatDualCurrency(implantSupplierData.totalPaid)}</p>
+              </div>
+              <div className="rounded-xl border border-orange-200 bg-orange-100/70 p-3">
+                <p className="text-xs text-orange-900">Unpaid to Supplier</p>
+                <p className="text-sm font-semibold text-orange-900">{formatDualCurrency(implantSupplierData.totalUnpaid)}</p>
+              </div>
+              <div className="rounded-xl border bg-white/90 p-3">
+                <p className="text-xs text-muted-foreground">Unpaid Teeth</p>
+                <p className="text-sm font-semibold text-foreground">
+                  {implantSupplierData.unpaidCount} / {implantSupplierData.implantCount}
+                </p>
+                <p className="text-xs text-muted-foreground">Paid ratio: {implantSupplierData.paidRatio}%</p>
+              </div>
+            </div>
+            <div className="mt-3 h-36">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={implantAvailabilityChart}>
+                  <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
+                  <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 10 }} tickLine={false} />
+                  <YAxis tick={{ fill: '#64748b', fontSize: 10 }} tickLine={false} width={70} />
+                  <Tooltip formatter={(value) => formatDualCurrency(Number(value ?? 0))} />
+                  <Bar dataKey="unpaid" fill="#f97316" radius={[8, 8, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -1336,6 +1413,16 @@ export const DentalChartDashboard = ({
                   </span>
                   <span className="font-semibold">{formatDualCurrency(safeTotalOut)}</span>
                 </div>
+                <div className="mt-2 border-t border-border/70 pt-2 text-xs">
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <span>Supplier unpaid</span>
+                    <span className="font-semibold text-orange-700">{formatDualCurrency(implantSupplierData.totalUnpaid)}</span>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between text-muted-foreground">
+                    <span>Supplier paid</span>
+                    <span className="font-semibold text-emerald-700">{formatDualCurrency(implantSupplierData.totalPaid)}</span>
+                  </div>
+                </div>
               </div>
             </div>
           </CardContent>
@@ -1382,7 +1469,7 @@ export const DentalChartDashboard = ({
         </Card>
       </section>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <Card className="rounded-2xl border">
           <CardContent className="p-4">
             <div className="mb-2 flex items-center gap-2">
@@ -1413,6 +1500,19 @@ export const DentalChartDashboard = ({
             </div>
             <p className="text-3xl font-semibold">{patients.length}</p>
             <p className="text-xs text-muted-foreground">Registered patients in current feed</p>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl border">
+          <CardContent className="p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <Building2 className="size-4 text-primary" />
+              <p className="text-sm font-semibold">Supplier Unpaid</p>
+            </div>
+            <p className="text-3xl font-semibold">{formatDualCurrency(implantSupplierData.totalUnpaid)}</p>
+            <p className="text-xs text-muted-foreground">
+              {implantSupplierData.unpaidCount} implant teeth still unpaid
+            </p>
           </CardContent>
         </Card>
       </div>

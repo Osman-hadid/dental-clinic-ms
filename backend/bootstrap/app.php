@@ -44,4 +44,9 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $schedule->command('cache:warm --pages=5')
             ->dailyAt('02:00');
+
+        $schedule->command('dental:backup:auto-run')
+            ->everyThirtyMinutes()
+            ->withoutOverlapping()
+            ->appendOutputTo(storage_path('logs/dental-backup.log'));
     })->create();

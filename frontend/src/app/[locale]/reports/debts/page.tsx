@@ -139,9 +139,12 @@ const normalizeDebtRows = (
       }
 
       const patient = (row.patient ?? {}) as Record<string, unknown>;
-      const patientName = `${asText(patient.firstName)} ${asText(patient.lastName)}`.trim()
+      const patientId = asText(row.patientId ?? row.patient_id);
+      const patientName = `${asText(patient.firstName ?? patient.first_name)} ${asText(patient.lastName ?? patient.last_name)}`.trim()
+        || asText(patient.fullName ?? patient.full_name)
+        || asText(row.patientName ?? row.patient_name)
         || asText(patient.patientCode)
-        || patientFallback(asText(row.patientId ?? row.patient_id) || '-');
+        || patientFallback(patientId || '-');
 
       const netAmountInput = parseAmount(row.netAmount ?? row.net_amount);
       const paidAmount = parseAmount(row.paidAmount ?? row.paid_amount);
@@ -156,7 +159,7 @@ const normalizeDebtRows = (
         invoiceId,
         netAmountInput,
         paidAmount: Number(paidAmount.toFixed(2)),
-        patientId: asText(row.patientId ?? row.patient_id),
+        patientId,
         patientName,
         status,
       };

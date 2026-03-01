@@ -116,9 +116,9 @@ export const invoiceConfig: EntityModuleConfig = {
     {
       key: 'status',
       options: [
+        { label: 'config.form.status.options.paid', value: 'paid' },
         { label: 'config.form.status.options.unpaid', value: 'unpaid' },
         { label: 'config.form.status.options.partially_paid', value: 'partially_paid' },
-        { label: 'config.form.status.options.paid', value: 'paid' },
         { label: 'config.form.status.options.cancelled', value: 'cancelled' },
       ],
       title: 'config.form.status.label',
@@ -229,16 +229,16 @@ export const invoiceConfig: EntityModuleConfig = {
       name: 'status',
       options: [
         {
-          label: 'config.form.status.options.unpaid',
-          value: 'unpaid',
+          label: 'config.form.status.options.paid',
+          value: 'paid',
         },
         {
           label: 'config.form.status.options.partially_paid',
           value: 'partially_paid',
         },
         {
-          label: 'config.form.status.options.paid',
-          value: 'paid',
+          label: 'config.form.status.options.unpaid',
+          value: 'unpaid',
         },
         {
           label: 'config.form.status.options.cancelled',
@@ -250,7 +250,7 @@ export const invoiceConfig: EntityModuleConfig = {
       validation: {
         in: {
           message: 'config.form.status.validation.in',
-          value: ['unpaid', 'partially_paid', 'paid', 'cancelled'],
+          value: ['paid', 'unpaid', 'partially_paid', 'cancelled'],
         },
       },
     },

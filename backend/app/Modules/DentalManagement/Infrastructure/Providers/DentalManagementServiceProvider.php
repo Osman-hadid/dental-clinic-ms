@@ -6,6 +6,7 @@ namespace App\Modules\DentalManagement\Infrastructure\Providers;
 
 use App\Modules\DentalManagement\Application\Policies\AppointmentPolicy;
 use App\Modules\DentalManagement\Application\Policies\DebtPolicy;
+use App\Modules\DentalManagement\Application\Policies\DentalBackupPolicy;
 use App\Modules\DentalManagement\Application\Policies\InvoicePolicy;
 use App\Modules\DentalManagement\Application\Policies\PatientPolicy;
 use App\Modules\DentalManagement\Application\Policies\PaymentPolicy;
@@ -16,6 +17,7 @@ use App\Modules\DentalManagement\Application\Policies\VisitPolicy;
 use App\Modules\DentalManagement\Application\Policies\VisitTreatmentPolicy;
 use App\Modules\DentalManagement\Domain\Entities\Appointment;
 use App\Modules\DentalManagement\Domain\Entities\Debt;
+use App\Modules\DentalManagement\Domain\Entities\DentalBackup;
 use App\Modules\DentalManagement\Domain\Entities\Invoice;
 use App\Modules\DentalManagement\Domain\Entities\Patient;
 use App\Modules\DentalManagement\Domain\Entities\Payment;
@@ -49,6 +51,7 @@ final class DentalManagementServiceProvider extends BaseAuthServiceProvider
     protected $policies = [
         Appointment::class => AppointmentPolicy::class,
         Debt::class => DebtPolicy::class,
+        DentalBackup::class => DentalBackupPolicy::class,
         Invoice::class => InvoicePolicy::class,
         Patient::class => PatientPolicy::class,
         Payment::class => PaymentPolicy::class,

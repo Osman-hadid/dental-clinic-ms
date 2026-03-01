@@ -49,7 +49,7 @@ import {
 import { ListPatientsUseCase } from '@/modules/dental-management/application/use-cases/patients/list-patients-use-case';
 
 type LoadingProtocol = 'delayed' | 'early' | 'immediate';
-type ImplantArch = 'maxilla' | 'mandible';
+type ImplantArch = 'maxilla' | 'mandible' | 'both';
 type ImagingType = 'cbct' | 'panoramic' | 'none';
 
 type RiskFactorKey =
@@ -79,7 +79,6 @@ type ImplantPlanningForm = {
   patientId: string;
   paymentMethod: 'cash' | 'card' | 'insurance';
   supplierCostPerTooth: string;
-  supplierPaidNowAmount: string;
   primaryStabilityIsq: string;
   prosthesisType: string;
   riskFactors: RiskFactorKey[];
@@ -98,8 +97,8 @@ type SaveSummary = {
   invoiceId: number;
   paidNowAmount: number;
   paymentId?: number;
-  supplierPaidNowAmount: number;
-  supplierSafeTransactionId?: number;
+  supplierRemainingAmount: number;
+  supplierTotalCost: number;
   remainingDebt: number;
   savedAt: string;
   treatmentCount: number;
@@ -108,7 +107,7 @@ type SaveSummary = {
 
 type SessionTaskStatus = 'pending' | 'in_progress' | 'done';
 type SessionTaskMark = 'green' | 'blue' | 'yellow' | 'orange' | 'red' | 'purple';
-type ImplantAvailabilityStatus = 'not_available' | 'in_purchase' | 'available';
+type ImplantAvailabilityStatus = 'not_available' | 'in_purchase' | 'available' | 'done';
 type SessionTask = {
   id: number;
   mark: SessionTaskMark;
@@ -129,12 +128,14 @@ const RISK_FACTOR_LABELS: Record<RiskFactorKey, string> = {
 
 const IMPLANT_TASK_MARKER = 'implant_tooth';
 const AVAILABILITY_TO_TASK_STATUS: Record<ImplantAvailabilityStatus, SessionTaskStatus> = {
-  available: 'done',
+  available: 'in_progress',
+  done: 'done',
   in_purchase: 'in_progress',
   not_available: 'pending',
 };
 const AVAILABILITY_TO_TASK_MARK: Record<ImplantAvailabilityStatus, SessionTaskMark> = {
   available: 'green',
+  done: 'blue',
   in_purchase: 'yellow',
   not_available: 'red',
 };
@@ -161,7 +162,6 @@ const DEFAULT_FORM: ImplantPlanningForm = {
   prosthesisType: 'Single crown',
   riskFactors: [],
   supplierCostPerTooth: '0',
-  supplierPaidNowAmount: '0',
   surgeryGuideType: 'pilot',
   treatmentId: '',
   visitDate: '',
@@ -194,13 +194,20 @@ const extractImplantToothFromTask = (task: Pick<SessionTask, 'notes' | 'title'>)
 };
 
 const buildImplantTaskTitle = (toothNumber: string): string => `Implant Tooth ${toothNumber}`;
-const buildImplantTaskNotes = (toothNumber: string): string => `[${IMPLANT_TASK_MARKER}:${toothNumber}]`;
+const buildImplantTaskNotes = (
+  toothNumber: string,
+  availability: ImplantAvailabilityStatus,
+  supplierPaid: number,
+  supplierTotal: number
+): string =>
+  `[${IMPLANT_TASK_MARKER}:${toothNumber}] [implant_availability:${availability}] [supplier_paid:${supplierPaid.toFixed(2)}] [supplier_total:${supplierTotal.toFixed(2)}]`;
 const buildImplantTaskPayload = (
   toothNumber: string,
-  availability: ImplantAvailabilityStatus
+  availability: ImplantAvailabilityStatus,
+  supplier: { paid: number; total: number }
 ): Pick<SessionTask, 'mark' | 'notes' | 'status' | 'title'> => ({
   mark: AVAILABILITY_TO_TASK_MARK[availability],
-  notes: buildImplantTaskNotes(toothNumber),
+  notes: buildImplantTaskNotes(toothNumber, availability, supplier.paid, supplier.total),
   status: AVAILABILITY_TO_TASK_STATUS[availability],
   title: buildImplantTaskTitle(toothNumber),
 });
@@ -215,6 +222,17 @@ const formatCurrency = (value: number): string => {
 };
 
 const isToothNumber = (value: string): boolean => /^[0-9]{2}$/.test(value);
+const resolveArchFromToothNumber = (toothNumber: string): Exclude<ImplantArch, 'both'> | null => {
+  const quadrant = toothNumber.charAt(0);
+  if (quadrant === '1' || quadrant === '2') {
+    return 'maxilla';
+  }
+  if (quadrant === '3' || quadrant === '4') {
+    return 'mandible';
+  }
+
+  return null;
+};
 
 const parseToothNumbersFromValue = (value?: string): string[] => {
   if (!value) {
@@ -579,6 +597,31 @@ export default function ImplantsPage(): JSX.Element {
     const source = selectedTeeth ?? implantTeethFromChart;
     return source.filter((toothNumber) => implantTeethFromChart.includes(toothNumber));
   }, [form.patientId, implantTeethFromChart, selectedTeethByPatient]);
+  const inferredImplantArch = useMemo<ImplantArch | null>(() => {
+    let hasMandible = false;
+    let hasMaxilla = false;
+
+    selectedImplantTeeth.forEach((toothNumber) => {
+      const arch = resolveArchFromToothNumber(toothNumber);
+      if (arch === 'maxilla') {
+        hasMaxilla = true;
+      } else if (arch === 'mandible') {
+        hasMandible = true;
+      }
+    });
+
+    if (hasMaxilla && hasMandible) {
+      return 'both';
+    }
+    if (hasMaxilla) {
+      return 'maxilla';
+    }
+    if (hasMandible) {
+      return 'mandible';
+    }
+
+    return null;
+  }, [selectedImplantTeeth]);
 
   const toggleImplantTooth = (toothNumber: string): void => {
     if (!form.patientId) {
@@ -683,9 +726,7 @@ export default function ImplantsPage(): JSX.Element {
   const effectiveInvoiceStatus = remainingDebtAmount <= 0 ? 'paid' : paidNowAmount > 0 ? 'partially_paid' : 'unpaid';
   const supplierCostPerTooth = Math.max(0, toNumber(form.supplierCostPerTooth) ?? 0);
   const totalSupplierCost = supplierCostPerTooth * selectedImplantTeeth.length;
-  const requestedSupplierPaidNowAmount = Math.max(0, toNumber(form.supplierPaidNowAmount) ?? 0);
-  const supplierPaidNowAmount = Math.min(totalSupplierCost, requestedSupplierPaidNowAmount);
-  const supplierRemainingAmount = Math.max(0, totalSupplierCost - supplierPaidNowAmount);
+  const supplierRemainingAmount = totalSupplierCost;
 
   const selectedPatient = useMemo(
     () => allPatients.find((patient) => String(patient.id) === form.patientId),
@@ -745,6 +786,14 @@ export default function ImplantsPage(): JSX.Element {
     const preferred = treatmentOptions.find((option) => option.label.toLowerCase().includes('implant'));
     setForm((prev) => ({ ...prev, treatmentId: preferred?.id ?? treatmentOptions[0].id }));
   }, [form.treatmentId, treatmentOptions]);
+
+  useEffect(() => {
+    if (!inferredImplantArch || form.implantArch === inferredImplantArch) {
+      return;
+    }
+
+    setField('implantArch', inferredImplantArch);
+  }, [form.implantArch, inferredImplantArch]);
 
   useEffect(() => {
     if (!selectedLinkedVisit || form.dentistId) {
@@ -849,11 +898,6 @@ export default function ImplantsPage(): JSX.Element {
 
     if (requestedPaidNowAmount > invoiceNetAmount) {
       toast.error('Paid amount cannot exceed net invoice amount.');
-      return;
-    }
-
-    if (requestedSupplierPaidNowAmount > totalSupplierCost) {
-      toast.error('Third-party paid amount cannot exceed total third-party cost.');
       return;
     }
 
@@ -996,7 +1040,6 @@ export default function ImplantsPage(): JSX.Element {
 
       const createdInvoiceId = Number(invoiceResponse.data.id);
       let createdPaymentId: number | undefined;
-      let supplierSafeTransactionId: number | undefined;
 
       if (paidNowAmount > 0 && Number.isFinite(createdInvoiceId) && createdInvoiceId > 0) {
         const paymentResponse = await createPaymentUseCase.execute({
@@ -1019,37 +1062,6 @@ export default function ImplantsPage(): JSX.Element {
         }
       }
 
-      if (supplierPaidNowAmount > 0) {
-        try {
-          const safeClient = await fetchCsrfClient();
-          const supplierSafeResponse = await safeClient.post<{ id: number }>(
-            '/api/v1/dental-management/safe-transactions',
-            {
-              amount: supplierPaidNowAmount,
-              currency: 'AFN',
-              direction: 'out',
-              entryType: 'expense',
-              exchangeRate: 1,
-              notes: truncate(
-                `Implant supplier payment for teeth [${selectedImplantTeeth.join(', ')}] from implant planning.`,
-                255
-              ),
-              sourceId: Number.isFinite(visitId) ? visitId : undefined,
-              sourceType: 'implant_supplier',
-              transactionDate: recordDate,
-            }
-          );
-
-          if (!supplierSafeResponse.success) {
-            toast.error('Implant saved, but third-party payment was not recorded in safe.');
-          } else {
-            supplierSafeTransactionId = Number(supplierSafeResponse.data?.id);
-          }
-        } catch {
-          toast.error('Implant saved, but third-party payment was not recorded in safe.');
-        }
-      }
-
       if (form.patientId) {
         try {
           const taskClient = await fetchCsrfClient();
@@ -1062,7 +1074,10 @@ export default function ImplantsPage(): JSX.Element {
 
             const taskResponse = await taskClient.post<SessionTask>(
               `/api/v1/dental-management/patients/${form.patientId}/session-tasks`,
-              buildImplantTaskPayload(toothNumber, 'not_available')
+              buildImplantTaskPayload(toothNumber, 'not_available', {
+                paid: 0,
+                total: supplierCostPerTooth,
+              })
             );
 
             if (!taskResponse.success) {
@@ -1083,8 +1098,8 @@ export default function ImplantsPage(): JSX.Element {
         paymentId: createdPaymentId,
         remainingDebt: remainingDebtAmount,
         savedAt: new Date().toISOString(),
-        supplierPaidNowAmount,
-        supplierSafeTransactionId,
+        supplierRemainingAmount,
+        supplierTotalCost: totalSupplierCost,
         treatmentCount: selectedImplantTeeth.length,
         visitId,
       });
@@ -1230,6 +1245,7 @@ export default function ImplantsPage(): JSX.Element {
                   >
                     <option value="maxilla">Maxilla</option>
                     <option value="mandible">Mandible</option>
+                    <option value="both">Both</option>
                   </select>
                   <select
                     value={form.imagingType}
@@ -1358,23 +1374,13 @@ export default function ImplantsPage(): JSX.Element {
                     readOnly
                   />
                   <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="Company paid now"
-                    value={form.supplierPaidNowAmount}
-                    onChange={(event) => {
-                      setField('supplierPaidNowAmount', event.target.value);
-                    }}
-                  />
-                  <Input
                     placeholder="Company remaining payable"
                     value={formatCurrency(supplierRemainingAmount)}
                     readOnly
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Company paid-now amount is saved as an expense transaction in safe.
+                  Company payment is handled in the implants in-process page when status changes to in purchase.
                 </p>
               </section>
 
@@ -1629,10 +1635,8 @@ export default function ImplantsPage(): JSX.Element {
                   <p>Paid now: {formatCurrency(saveSummary.paidNowAmount)}</p>
                   <p>Remaining debt: {formatCurrency(saveSummary.remainingDebt)}</p>
                   {saveSummary.paymentId ? <p>Payment #{saveSummary.paymentId}</p> : null}
-                  <p>Third-company paid now: {formatCurrency(saveSummary.supplierPaidNowAmount)}</p>
-                  {saveSummary.supplierSafeTransactionId ? (
-                    <p>Safe expense #{saveSummary.supplierSafeTransactionId}</p>
-                  ) : null}
+                  <p>Third-company total: {formatCurrency(saveSummary.supplierTotalCost)}</p>
+                  <p>Third-company unpaid: {formatCurrency(saveSummary.supplierRemainingAmount)}</p>
                 </CardContent>
               </Card>
             ) : null}

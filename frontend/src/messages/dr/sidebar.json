@@ -5,6 +5,10 @@
     "title": "داشبورد",
     "overview": "نمای کلی"
   },
+  "backupManagement": {
+    "title": "Backup Management",
+    "backups": "Backups"
+  },
   "userManagement": {
     "title": "مدیریت کاربر",
     "users": "کاربران",

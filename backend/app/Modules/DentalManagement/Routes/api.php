@@ -8,6 +8,7 @@ use App\Modules\DentalManagement\Infrastructure\Http\Controllers\InvoiceControll
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\ExpenseController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\DebtController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\FinancialSettingController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\DentalBackupController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\PatientController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\PatientSessionTaskController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\PaymentController;
@@ -69,6 +70,9 @@ Route::middleware(['api', 'auth:sanctum', 'set_locale'])->prefix('api/v1/dental-
     Route::get('/debts', [DebtController::class, 'index']);
     Route::post('/debts/{id}/settle', [DebtController::class, 'settle']);
     Route::post('/debts/rebuild', [DebtController::class, 'rebuild']);
+    Route::get('/backups/settings', [DentalBackupController::class, 'showSchedule']);
+    Route::put('/backups/settings', [DentalBackupController::class, 'updateSchedule']);
+    Route::post('/backups/run', [DentalBackupController::class, 'run']);
     Route::get('/financial-settings/exchange-rate', [FinancialSettingController::class, 'showExchangeRate']);
     Route::put('/financial-settings/exchange-rate', [FinancialSettingController::class, 'updateExchangeRate']);
 });

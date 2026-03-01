@@ -4,12 +4,14 @@ import { JSX, useCallback, useEffect, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Header } from '@/components/header';
 import {
+  type DashboardImplantSupplierSummary,
   type DashboardSafeSummary,
   type DashboardSafeTransaction,
   DentalChartDashboard,
 } from '@/components/shared/dental/dental-chart-dashboard';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import { DEFAULT_AFN_PER_USD } from '@/lib/currency-utils';
+import { aggregateImplantSupplierBalances } from '@/modules/dental-management/presentation/utils/implant-supplier-analytics';
 import {
   useAppointmentList,
   useInvoiceList,
@@ -32,6 +34,15 @@ type PaginatedRowsResponse = {
     currentPage?: number;
     lastPage?: number;
   };
+};
+
+type SessionTaskRow = {
+  createdAt?: string;
+  id: number | string;
+  notes?: string;
+  patientId: string;
+  status?: string;
+  title?: string;
 };
 
 const asText = (value: unknown): string => {
@@ -91,6 +102,69 @@ const fetchAllSafeRows = async (): Promise<DashboardSafeTransaction[]> => {
   return rows;
 };
 
+const fetchAllPatientIds = async (): Promise<string[]> => {
+  const patientIds: string[] = [];
+  let page = 1;
+
+  while (true) {
+    const response = await apiClient.get<PaginatedRowsResponse>('/api/v1/dental-management/patients', {
+      params: {
+        page,
+        perPage: TABLE_PER_PAGE,
+      },
+    });
+    const payload = response.data;
+    const pageRows = Array.isArray(payload?.data) ? payload.data : [];
+    patientIds.push(...pageRows
+      .map((row) => asText(row.id))
+      .filter(Boolean));
+
+    const currentPage = Number(payload?.meta?.currentPage ?? page);
+    const lastPage = Number(payload?.meta?.lastPage ?? currentPage);
+    if (pageRows.length === 0 || currentPage >= lastPage) break;
+    page += 1;
+  }
+
+  return [...new Set(patientIds)];
+};
+
+const fetchImplantSessionTasks = async (): Promise<SessionTaskRow[]> => {
+  const patientIds = await fetchAllPatientIds();
+  if (patientIds.length === 0) return [];
+
+  const rows: SessionTaskRow[] = [];
+  const batchSize = 15;
+
+  for (let index = 0; index < patientIds.length; index += batchSize) {
+    const batch = patientIds.slice(index, index + batchSize);
+    const batchResponses = await Promise.all(
+      batch.map(async (patientId) => {
+        const response = await apiClient.get<Array<Record<string, unknown>>>(
+          `/api/v1/dental-management/patients/${patientId}/session-tasks`
+        );
+        if (!response.success || !Array.isArray(response.data)) {
+          return [] as SessionTaskRow[];
+        }
+
+        return response.data.map((task) => ({
+          createdAt: asText(task.createdAt ?? task.created_at),
+          id: asText(task.id),
+          notes: asText(task.notes),
+          patientId,
+          status: asText(task.status),
+          title: asText(task.title),
+        }));
+      })
+    );
+
+    batchResponses.forEach((batchRows) => {
+      rows.push(...batchRows);
+    });
+  }
+
+  return rows;
+};
+
 // eslint-disable-next-line react/function-component-definition
 export default function Page(): JSX.Element {
   const locale = useLocale();
@@ -102,7 +176,17 @@ export default function Page(): JSX.Element {
     totalOut: 0,
     transactions: [],
   });
+  const [implantSupplierSummary, setImplantSupplierSummary] = useState<DashboardImplantSupplierSummary>({
+    byAvailability: [],
+    implantCount: 0,
+    paidRatio: 0,
+    totalPaid: 0,
+    totalSupplierCost: 0,
+    totalUnpaid: 0,
+    unpaidCount: 0,
+  });
   const [isSafeLoading, setIsSafeLoading] = useState(false);
+  const [isImplantSupplierLoading, setIsImplantSupplierLoading] = useState(false);
 
   const { entities: appointments, isFetching: isLoadingAppointments } = useAppointmentList(
     1,
@@ -181,6 +265,47 @@ export default function Page(): JSX.Element {
     void fetchSafeSummary();
   }, [fetchSafeSummary]);
 
+  const fetchImplantSupplierSummary = useCallback(async (): Promise<void> => {
+    setIsImplantSupplierLoading(true);
+    try {
+      const allTasks = await fetchImplantSessionTasks();
+      const summary = aggregateImplantSupplierBalances(allTasks);
+      const byAvailability = (['not_available', 'in_purchase', 'available', 'done'] as const).map((status) => ({
+        count: summary.byAvailability[status].count,
+        paid: summary.byAvailability[status].paid,
+        status,
+        total: summary.byAvailability[status].total,
+        unpaid: summary.byAvailability[status].unpaid,
+      }));
+
+      setImplantSupplierSummary({
+        byAvailability,
+        implantCount: summary.implantCount,
+        paidRatio: summary.paidRatio,
+        totalPaid: summary.totalPaid,
+        totalSupplierCost: summary.totalSupplierCost,
+        totalUnpaid: summary.totalUnpaid,
+        unpaidCount: summary.unpaidCount,
+      });
+    } catch {
+      setImplantSupplierSummary({
+        byAvailability: [],
+        implantCount: 0,
+        paidRatio: 0,
+        totalPaid: 0,
+        totalSupplierCost: 0,
+        totalUnpaid: 0,
+        unpaidCount: 0,
+      });
+    } finally {
+      setIsImplantSupplierLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchImplantSupplierSummary();
+  }, [fetchImplantSupplierSummary]);
+
   return (
     <>
       <Header
@@ -194,6 +319,7 @@ export default function Page(): JSX.Element {
           <div className="flex flex-col gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6">
             <DentalChartDashboard
               appointments={appointments}
+              implantSupplierSummary={implantSupplierSummary}
               invoices={invoices}
               locale={locale}
               payments={payments}
@@ -207,6 +333,7 @@ export default function Page(): JSX.Element {
                 || isLoadingInvoices
                 || isLoadingPayments
                 || isSafeLoading
+                || isImplantSupplierLoading
               }
             />
           </div>

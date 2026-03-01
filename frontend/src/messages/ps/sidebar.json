@@ -5,6 +5,10 @@
     "title": "ډشبورډ",
     "overview": "کتنه"
   },
+  "backupManagement": {
+    "title": "Backup Management",
+    "backups": "Backups"
+  },
   "userManagement": {
     "title": "د کارن مدیریت",
     "users": "کاروونکي",

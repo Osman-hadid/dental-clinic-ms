@@ -15,6 +15,7 @@ import {
 import { useCan } from '@/hooks/useCan';
 import { useAuthStore } from '@/modules/auth/application/stores/auth-store';
 import {
+  Archive,
   BadgeDollarSign,
   BarChart3,
   Brain,
@@ -99,12 +100,18 @@ const staticNavItems: SidebarItem[] = [
     key: 'reports',
     url: '/reports',
   },
-    {
-  icon: ShieldUser,
-  items: [
-    { key: 'users', url: '/user-management/users' },
-    { key: 'roles', url: '/user-management/roles' },
-    { key: 'permissions', url: '/user-management/permissions' },
+  {
+    icon: Archive,
+    items: [{ key: 'backups', permission: 'dental-management.backups.view', url: '/dental-management/backups' }],
+    key: 'backupManagement',
+    url: '/dental-management/backups',
+  },
+  {
+    icon: ShieldUser,
+    items: [
+      { key: 'users', url: '/user-management/users' },
+      { key: 'roles', url: '/user-management/roles' },
+      { key: 'permissions', url: '/user-management/permissions' },
     ],
     key: 'userManagement',
     url: '/user-management',
@@ -124,6 +131,7 @@ const staticNavItems: SidebarItem[] = [
 const sidebarSubItemIcons: Record<string, LucideIcon> = {
   aiImaging: Brain,
   appointments: Calendar,
+  backups: Archive,
   clinicalExpenses: ShoppingCart,
   dailyExpenses: CalendarDays,
   debts: HandCoins,
@@ -204,7 +212,7 @@ export const AppSidebar = (props: React.ComponentProps<typeof Sidebar>): React.J
     <Sidebar
       collapsible="icon"
       variant="floating"
-      className="border-none [&_[data-slot=sidebar-inner]]:rounded-[1.9rem] [&_[data-slot=sidebar-inner]]:border [&_[data-slot=sidebar-inner]]:border-sidebar-border/80 [&_[data-slot=sidebar-inner]]:bg-sidebar/98 [&_[data-slot=sidebar-inner]]:ring-1 [&_[data-slot=sidebar-inner]]:ring-sidebar-border/35 [&_[data-slot=sidebar-inner]]:shadow-[0_14px_30px_-18px_rgba(52,38,18,0.38)]"
+      className="border-none [&_[data-slot=sidebar-inner]]:rounded-[1.9rem] [&_[data-slot=sidebar-inner]]:border [&_[data-slot=sidebar-inner]]:border-sidebar-border/80 [&_[data-slot=sidebar-inner]]:bg-sidebar/98 [&_[data-slot=sidebar-inner]]:ring-1 [&_[data-slot=sidebar-inner]]:ring-sidebar-border/35 [&_[data-slot=sidebar-inner]]:shadow-[0_14px_30px_-18px_rgba(21,75,169,0.34)]"
       {...props}
     >
       <SidebarHeader className="px-2.5 pt-4">

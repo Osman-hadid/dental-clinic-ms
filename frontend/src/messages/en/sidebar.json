@@ -5,6 +5,10 @@
     "title": "Dashboard",
     "overview": "Overview"
   },
+  "backupManagement": {
+    "title": "Backup Management",
+    "backups": "Backups"
+  },
   "userManagement": {
     "title": "User Management",
     "users": "Users",
