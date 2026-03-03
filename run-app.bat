@@ -8,4 +8,4 @@ cd ..\frontend
 start /b npm run dev >nul 2>&1
 
 :: Open browser
-start http://localhost:3006
+start http://localhost:3000
