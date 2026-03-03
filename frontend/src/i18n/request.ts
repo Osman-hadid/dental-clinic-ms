@@ -1,5 +1,4 @@
 import { getRequestConfig } from 'next-intl/server';
-import { cookies } from 'next/headers';
 import { routing } from './routing';
 
 type Messages = {
@@ -25,11 +24,6 @@ type Messages = {
 
 export default getRequestConfig(async ({ requestLocale }) => {
   let locale = (await requestLocale) || routing.defaultLocale;
-
-  const cookieLocale = (await cookies()).get('NEXT_LOCALE')?.value;
-  if (cookieLocale && routing.locales.includes(cookieLocale as (typeof routing.locales)[number])) {
-    locale = cookieLocale;
-  }
 
   if (!routing.locales.includes(locale as (typeof routing.locales)[number])) {
     locale = routing.defaultLocale;

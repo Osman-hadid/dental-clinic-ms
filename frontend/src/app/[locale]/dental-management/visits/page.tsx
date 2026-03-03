@@ -162,7 +162,8 @@ export default function VisitsPage(): JSX.Element {
     const appointmentId = String(appointment.id);
     const existingVisit = visitsByAppointmentId.get(appointmentId);
     if (existingVisit) {
-      router.push(`/${locale}/dental-management/visits/${existingVisit.id}`);
+      const encodedVisitId = encodeURIComponent(String(existingVisit.id));
+      router.push(`/${locale}/dental-management/visits/chart?visitId=${encodedVisitId}`);
       return;
     }
 
@@ -204,7 +205,8 @@ export default function VisitsPage(): JSX.Element {
         return;
       }
 
-      router.push(`/${locale}/dental-management/visits/${response.data.id}`);
+      const encodedVisitId = encodeURIComponent(String(response.data.id));
+      router.push(`/${locale}/dental-management/visits/chart?visitId=${encodedVisitId}`);
     } finally {
       setPendingAppointmentId(null);
     }

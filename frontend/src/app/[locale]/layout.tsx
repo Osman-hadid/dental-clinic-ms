@@ -2,6 +2,7 @@ import '../globals.css';
 import { JSX } from 'react';
 import type { Metadata } from 'next';
 import { NextIntlClientProvider } from 'next-intl';
+import { setRequestLocale } from 'next-intl/server';
 import localFont from 'next/font/local';
 import { notFound } from 'next/navigation';
 import { ClientLayoutWrapper } from '@/components/client-layout-wrapper';
@@ -45,6 +46,8 @@ export default async function RootLayout({
   if (!routing.locales.includes(locale as (typeof routing.locales)[number])) {
     notFound();
   }
+
+  setRequestLocale(locale);
 
   const direction = getDirection(locale);
 

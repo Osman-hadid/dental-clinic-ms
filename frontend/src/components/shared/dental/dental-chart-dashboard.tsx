@@ -863,7 +863,8 @@ export const DentalChartDashboard = ({
 
     if (isCompletedStatus(selectedEvent.status)) {
       if (selectedEvent.patientId !== null && selectedEvent.patientId !== undefined) {
-        router.push(`/${locale}/dental-management/patients/${selectedEvent.patientId}`);
+        const encodedPatientId = encodeURIComponent(String(selectedEvent.patientId));
+        router.push(`/${locale}/dental-management/patients/patient-profile?patientId=${encodedPatientId}`);
         return;
       }
 
@@ -872,7 +873,8 @@ export const DentalChartDashboard = ({
     }
 
     if (selectedEvent.linkedVisitId !== null && selectedEvent.linkedVisitId !== undefined) {
-      router.push(`/${locale}/dental-management/visits/${selectedEvent.linkedVisitId}`);
+      const encodedVisitId = encodeURIComponent(String(selectedEvent.linkedVisitId));
+      router.push(`/${locale}/dental-management/visits/chart?visitId=${encodedVisitId}`);
       return;
     }
 

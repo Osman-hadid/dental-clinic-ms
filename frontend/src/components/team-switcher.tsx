@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { JSX } from 'react';
 import Image from 'next/image';
+import { useLocale } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@/components/ui/sidebar';
 import { LucideIcon } from 'lucide-react';
@@ -12,12 +13,13 @@ export const TeamSwitcher = ({
 }: Readonly<{ teams: { name: string; logo: LucideIcon; plan: string }[] }>): JSX.Element | null => {
   const [activeTeam] = React.useState(teams[0]);
   const router = useRouter();
+  const locale = useLocale();
   const { state } = useSidebar();
   const isCollapsed = state === 'collapsed';
 
   const handleClick = React.useCallback(() => {
-    router.push('/');
-  }, [router]);
+    router.push(`/${locale}`);
+  }, [locale, router]);
 
   if (!activeTeam) {
     return null;

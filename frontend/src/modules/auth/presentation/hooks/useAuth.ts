@@ -3,6 +3,7 @@ import { LocalStorageService } from '@/modules/common/infrastructure/storage/loc
 import { useUIStore } from '@/modules/common/store/ui-store';
 import { ApiErrorDetail } from '@/types/ApiResponse';
 import { useMutation } from '@tanstack/react-query';
+import { useLocale } from 'next-intl';
 import { toast } from 'sonner';
 import { useAuthStore } from '../../application/stores/auth-store';
 import { LoginUseCase } from '../../application/use-cases/login-use-case';
@@ -35,6 +36,7 @@ type UseAuthResult = {
 
 export const useAuth = (): UseAuthResult => {
   const router = useRouter();
+  const locale = useLocale();
   const { markSessionChecked, setUser } = useAuthStore();
   const { setLoading } = useUIStore();
 
@@ -56,7 +58,7 @@ export const useAuth = (): UseAuthResult => {
     },
     onSuccess: (user) => {
       setUser(user);
-      router.push('/dashboard');
+      router.push(`/${locale}/dashboard`);
     },
   });
 
@@ -78,7 +80,7 @@ export const useAuth = (): UseAuthResult => {
       storage.clearAll();
       setUser(null);
       toast.success('👋 You’ve been logged out.');
-      router.push('/auth/login');
+      router.push(`/${locale}/auth/login`);
     },
   });
 

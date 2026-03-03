@@ -62,7 +62,8 @@ export default function PatientsPage(): JSX.Element {
   );
 
   const handleOpenPatient = (patientId: string | number): void => {
-    router.push(`/${locale}/dental-management/patients/${patientId}`);
+    const encodedPatientId = encodeURIComponent(String(patientId));
+    router.push(`/${locale}/dental-management/patients/patient-profile?patientId=${encodedPatientId}`);
   };
 
   const isTableQueryReset = useMemo(() => {
