@@ -44,6 +44,10 @@
     "safe": "دفتر کل امن",
     "salaries": "حقوق و دستمزد"
   },
+  "inventoryManagement": {
+    "title": "Inventory Management",
+    "inventory": "Inventory"
+  },
   "dentalManagement": {
     "title": "مدیریت دندانپزشکی",
     "patients": "بیماران",

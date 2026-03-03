@@ -185,8 +185,6 @@ export default function Page(): JSX.Element {
     totalUnpaid: 0,
     unpaidCount: 0,
   });
-  const [isSafeLoading, setIsSafeLoading] = useState(false);
-  const [isImplantSupplierLoading, setIsImplantSupplierLoading] = useState(false);
 
   const { entities: appointments, isFetching: isLoadingAppointments } = useAppointmentList(
     1,
@@ -230,9 +228,14 @@ export default function Page(): JSX.Element {
     [],
     {}
   );
+  const isPrimaryDashboardLoading =
+    isLoadingAppointments
+    || isLoadingVisits
+    || isLoadingPatients
+    || isLoadingInvoices
+    || isLoadingPayments;
 
   const fetchSafeSummary = useCallback(async (): Promise<void> => {
-    setIsSafeLoading(true);
     try {
       const [balanceResponse, transactions] = await Promise.all([
         apiClient.get<{ afnPerUsd?: number; balance?: number; totalIn?: number; totalOut?: number }>(
@@ -256,8 +259,6 @@ export default function Page(): JSX.Element {
         totalOut: 0,
         transactions: [],
       });
-    } finally {
-      setIsSafeLoading(false);
     }
   }, []);
 
@@ -266,7 +267,6 @@ export default function Page(): JSX.Element {
   }, [fetchSafeSummary]);
 
   const fetchImplantSupplierSummary = useCallback(async (): Promise<void> => {
-    setIsImplantSupplierLoading(true);
     try {
       const allTasks = await fetchImplantSessionTasks();
       const summary = aggregateImplantSupplierBalances(allTasks);
@@ -297,8 +297,6 @@ export default function Page(): JSX.Element {
         totalUnpaid: 0,
         unpaidCount: 0,
       });
-    } finally {
-      setIsImplantSupplierLoading(false);
     }
   }, []);
 
@@ -326,15 +324,7 @@ export default function Page(): JSX.Element {
               visits={visits}
               patients={patients}
               safeSummary={safeSummary}
-              isLoading={
-                isLoadingAppointments
-                || isLoadingVisits
-                || isLoadingPatients
-                || isLoadingInvoices
-                || isLoadingPayments
-                || isSafeLoading
-                || isImplantSupplierLoading
-              }
+              isLoading={isPrimaryDashboardLoading}
             />
           </div>
         </div>

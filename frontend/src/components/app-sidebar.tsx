@@ -18,6 +18,7 @@ import {
   Archive,
   BadgeDollarSign,
   BarChart3,
+  Boxes,
   Brain,
   Calendar,
   CalendarDays,
@@ -101,6 +102,12 @@ const staticNavItems: SidebarItem[] = [
     url: '/reports',
   },
   {
+    icon: Boxes,
+    items: [{ key: 'inventory', url: '/inventory-management' }],
+    key: 'inventoryManagement',
+    url: '/inventory-management',
+  },
+  {
     icon: Archive,
     items: [{ key: 'backups', permission: 'dental-management.backups.view', url: '/dental-management/backups' }],
     key: 'backupManagement',
@@ -137,6 +144,7 @@ const sidebarSubItemIcons: Record<string, LucideIcon> = {
   debts: HandCoins,
   implants: Stethoscope,
   implantsInProcess: ClipboardList,
+  inventory: Archive,
   invoices: Receipt,
   overview: ClipboardList,
   patients: User,

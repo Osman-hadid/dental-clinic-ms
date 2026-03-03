@@ -4,7 +4,22 @@ import { type CSSProperties, JSX, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utilities';
 import {
@@ -24,20 +39,31 @@ import {
   Clock3,
   Search,
   Stethoscope,
+  TrendingUp,
   UsersRound,
   Vault,
 } from 'lucide-react';
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
-  Line,
-  LineChart,
+  PolarGrid,
+  RadialBar,
+  RadialBarChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 type EventType = 'appointment' | 'visit';
 type ImplantAvailabilityStatus = 'not_available' | 'in_purchase' | 'available' | 'done';
@@ -179,6 +205,21 @@ type DentalChartDashboardProps = {
   safeSummary?: DashboardSafeSummary;
   visits: DashboardVisit[];
 };
+
+const safeRadialChartConfig = {
+  debts: {
+    color: '#eab308',
+    label: 'Debts',
+  },
+  inSafe: {
+    color: '#16a34a',
+    label: 'Safe',
+  },
+  unpaids: {
+    color: '#dc2626',
+    label: 'Unpaids',
+  },
+} satisfies ChartConfig;
 
 const CALENDAR_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MS_IN_DAY = 24 * 60 * 60 * 1000;
@@ -479,6 +520,7 @@ export const DentalChartDashboard = ({
 
   const [currentMonth, setCurrentMonth] = useState<Date>(startOfMonth(today));
   const [searchTerm, setSearchTerm] = useState('');
+  const [revenueTimeRange, setRevenueTimeRange] = useState<'90d' | '30d' | '7d'>('90d');
   const [selectedDate, setSelectedDate] = useState<Date>(today);
   const [manualSelectedEventKey, setManualSelectedEventKey] = useState<string | null>(null);
 
@@ -658,36 +700,115 @@ export const DentalChartDashboard = ({
 
   const returningPatients = Math.max(patients.length - newPatients, 0);
 
-  const financeTrend = useMemo(() => {
-    const grouped = new Map<string, { billed: number; paid: number }>();
+  const revenueAreaSeries = useMemo(() => {
+    const financialGrouped = new Map<string, { billed: number; paid: number }>();
 
     invoices.forEach((invoice) => {
       const date = parseDateOnly(invoice.invoiceDate);
       if (!date) return;
       const key = toDateKey(date);
-      const current = grouped.get(key) ?? { billed: 0, paid: 0 };
+      const current = financialGrouped.get(key) ?? { billed: 0, paid: 0 };
       current.billed = roundCurrency(current.billed + parseMoney(invoice.netAmount));
-      grouped.set(key, current);
+      financialGrouped.set(key, current);
     });
 
     payments.forEach((payment) => {
       const date = parseDateOnly(payment.paymentDate);
       if (!date) return;
       const key = toDateKey(date);
-      const current = grouped.get(key) ?? { billed: 0, paid: 0 };
+      const current = financialGrouped.get(key) ?? { billed: 0, paid: 0 };
       current.paid = roundCurrency(current.paid + parseMoney(payment.amount));
-      grouped.set(key, current);
+      financialGrouped.set(key, current);
     });
 
-    return [...grouped.entries()]
+    const financialData = [...financialGrouped.entries()]
       .sort((left, right) => left[0].localeCompare(right[0]))
-      .slice(-10)
       .map(([date, value]) => ({
         billed: value.billed,
-        date: formatDayHeading(new Date(date)),
+        date,
         paid: value.paid,
       }));
-  }, [invoices, payments]);
+
+    if (financialData.length > 0) {
+      return {
+        data: financialData,
+        source: 'financial' as const,
+      };
+    }
+
+    const activityGrouped = new Map<string, { billed: number; paid: number }>();
+    appointmentEvents.forEach((event) => {
+      const current = activityGrouped.get(event.dateKey) ?? { billed: 0, paid: 0 };
+      current.billed += 1;
+      activityGrouped.set(event.dateKey, current);
+    });
+
+    visitEvents.forEach((event) => {
+      const current = activityGrouped.get(event.dateKey) ?? { billed: 0, paid: 0 };
+      current.paid += 1;
+      activityGrouped.set(event.dateKey, current);
+    });
+
+    const activityData = [...activityGrouped.entries()]
+      .sort((left, right) => left[0].localeCompare(right[0]))
+      .map(([date, value]) => ({
+        billed: value.billed,
+        date,
+        paid: value.paid,
+      }));
+
+    if (activityData.length > 0) {
+      return {
+        data: activityData,
+        source: 'activity' as const,
+      };
+    }
+
+    return {
+      data: [] as Array<{ billed: number; date: string; paid: number }>,
+      source: 'empty' as const,
+    };
+  }, [appointmentEvents, invoices, payments, visitEvents]);
+  const revenueAreaData = revenueAreaSeries.data;
+  const revenueAreaChartConfig = useMemo(() => ({
+    billed: {
+      color: 'var(--chart-1)',
+      label: revenueAreaSeries.source === 'financial' ? 'Billed' : 'Appointments',
+    },
+    paid: {
+      color: 'var(--chart-2)',
+      label: revenueAreaSeries.source === 'financial' ? 'Paid' : 'Visits',
+    },
+  }) satisfies ChartConfig, [revenueAreaSeries.source]);
+  const revenueAreaDescription = useMemo(() => {
+    if (revenueAreaSeries.source === 'financial') {
+      return 'Showing total billed and paid for the selected range';
+    }
+    if (revenueAreaSeries.source === 'activity') {
+      return 'Showing appointments and visits for the selected range';
+    }
+    return 'No billing or activity data available yet';
+  }, [revenueAreaSeries.source]);
+  const filteredRevenueAreaData = useMemo(() => {
+    if (revenueAreaData.length === 0) {
+      return [];
+    }
+
+    const latestDateText = revenueAreaData[revenueAreaData.length - 1]?.date;
+    const referenceDate = latestDateText ? new Date(latestDateText) : new Date();
+    if (Number.isNaN(referenceDate.getTime())) {
+      return revenueAreaData;
+    }
+
+    const daysToSubtract = revenueTimeRange === '7d' ? 7 : revenueTimeRange === '30d' ? 30 : 90;
+    const startDate = new Date(referenceDate);
+    startDate.setDate(startDate.getDate() - daysToSubtract);
+
+    return revenueAreaData.filter((item) => {
+      const date = new Date(item.date);
+      return !Number.isNaN(date.getTime()) && date >= startDate;
+    });
+  }, [revenueAreaData, revenueTimeRange]);
   const appointmentMixData = useMemo(() => ([
     { name: 'Scheduled', value: scheduledAppointmentCount },
     { name: 'Completed', value: completedAppointmentCount },
@@ -841,22 +962,15 @@ export const DentalChartDashboard = ({
       unpaidPercent,
     };
   }, [debtOutstanding, safeMoneyForRing, supplierUnpaids]);
-  const safeDebtRingStyle = useMemo<CSSProperties>(() => {
-    const total = safeMoneyForRing + debtOutstanding + supplierUnpaids;
-    if (total <= 0) {
-      return {
-        backgroundImage: 'conic-gradient(from -90deg, #e2e8f0 0% 100%)',
-      };
-    }
-
-    const safeEnd = ringBreakdown.safePercent;
-    const debtsEnd = ringBreakdown.safePercent + ringBreakdown.debtPercent;
-    const unpaidsEnd = debtsEnd + ringBreakdown.unpaidPercent;
-
-    return {
-      backgroundImage: `conic-gradient(from -90deg, #16a34a 0% ${safeEnd}%, #eab308 ${safeEnd}% ${debtsEnd}%, #dc2626 ${debtsEnd}% ${unpaidsEnd}%, #e2e8f0 ${unpaidsEnd}% 100%)`,
-    };
-  }, [debtOutstanding, ringBreakdown.debtPercent, ringBreakdown.safePercent, ringBreakdown.unpaidPercent, safeMoneyForRing, supplierUnpaids]);
+  const safeRadialChartData = useMemo(
+    () => [
+      { category: 'inSafe', value: safeMoneyForRing, fill: 'var(--color-inSafe)' },
+      { category: 'debts', value: debtOutstanding, fill: 'var(--color-debts)' },
+      { category: 'unpaids', value: supplierUnpaids, fill: 'var(--color-unpaids)' },
+    ].filter((entry) => entry.value > 0),
+    [debtOutstanding, safeMoneyForRing, supplierUnpaids]
+  );
+  const hasSafeRadialChartData = safeRadialChartData.length > 0;
 
   const openTreatmentChartFromSelection = (): void => {
     if (!selectedEvent) return;
@@ -1110,57 +1224,42 @@ export const DentalChartDashboard = ({
                 <div className="pointer-events-none absolute -right-8 -top-8 size-24 rounded-full bg-emerald-200/60 blur-2xl" />
                 <div className="pointer-events-none absolute -bottom-10 -left-8 size-24 rounded-full bg-cyan-200/50 blur-2xl" />
 
-                <div className="relative z-10">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-semibold">Safe, Debts, Unpaids</p>
-                      <p className="text-xs text-muted-foreground">Circular bar: in safe vs debts vs unpaids</p>
+                <Card className="relative z-10 border-border/70 bg-background/85">
+                  <CardHeader className="items-center pb-0">
+                    <CardTitle>Radial Chart - Grid</CardTitle>
+                    <CardDescription>Safe vs debts vs unpaids</CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex-1 pb-0">
+                    {hasSafeRadialChartData ? (
+                      <ChartContainer
+                        config={safeRadialChartConfig}
+                        className="mx-auto aspect-square max-h-[250px]"
+                      >
+                        <RadialBarChart data={safeRadialChartData} innerRadius={30} outerRadius={100}>
+                          <ChartTooltip
+                            cursor={false}
+                            content={<ChartTooltipContent hideLabel nameKey="category" />}
+                          />
+                          <PolarGrid gridType="circle" />
+                          <RadialBar dataKey="value" />
+                        </RadialBarChart>
+                      </ChartContainer>
+                    ) : (
+                      <div className="grid h-52 place-items-center rounded-xl border border-dashed text-sm text-muted-foreground">
+                        No safe, debt, or unpaid data yet.
+                      </div>
+                    )}
+                  </CardContent>
+                  <CardFooter className="flex-col gap-2 text-sm">
+                    <div className="flex items-center gap-2 leading-none font-medium">
+                      Safe share {Math.round(ringBreakdown.safePercent)}% <TrendingUp className="h-4 w-4" />
                     </div>
-                    <span className="rounded-full border border-emerald-300 bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">
-                      {Math.round(ringBreakdown.safePercent)}% safe
-                    </span>
-                  </div>
+                    <div className="leading-none text-muted-foreground">
+                      Safe {formatDualCurrency(safeBalance)} | Debts {formatCurrency(debtOutstanding)} | Unpaids {formatCurrency(supplierUnpaids)}
+                    </div>
+                  </CardFooter>
+                </Card>
 
-                  <div className="mx-auto mb-4 grid h-44 w-44 place-items-center rounded-full p-3 shadow-[0_10px_35px_-18px_rgba(22,163,74,0.85)]" style={safeDebtRingStyle}>
-                    <div className="grid h-full w-full place-items-center rounded-full border border-border/70 bg-background/95 text-center">
-                      <p className="text-xs text-muted-foreground">In Safe</p>
-                      <p className="text-lg font-bold leading-tight">{formatDualCurrency(safeBalance)}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        Debts {formatCurrency(debtOutstanding)} | Unpaids {formatCurrency(supplierUnpaids)}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mb-3 flex items-center justify-center gap-4 text-[11px]">
-                    <span className="inline-flex items-center gap-1.5 text-emerald-700">
-                      <span className="size-2.5 rounded-full bg-emerald-600" />
-                      In Safe
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 text-yellow-700">
-                      <span className="size-2.5 rounded-full bg-yellow-500" />
-                      Debts
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 text-rose-700">
-                      <span className="size-2.5 rounded-full bg-red-600" />
-                      Unpaids
-                    </span>
-                  </div>
-
-                  <div className="grid gap-2 text-xs">
-                    <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-100/70 px-3 py-2 text-emerald-900">
-                      <span className="inline-flex items-center gap-1">Money In Safe</span>
-                      <span className="font-semibold">{formatDualCurrency(safeBalance)}</span>
-                    </div>
-                    <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white/90 px-3 py-2">
-                      <span className="text-muted-foreground">Debts</span>
-                      <span className="font-semibold text-foreground">{formatCurrency(debtOutstanding)}</span>
-                    </div>
-                    <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-800">
-                      <span>Unpaids</span>
-                      <span className="font-semibold text-red-700">{formatCurrency(supplierUnpaids)}</span>
-                    </div>
-                  </div>
-                </div>
               </section>
 
               <section className="rounded-2xl border bg-background p-4">
@@ -1274,24 +1373,121 @@ export const DentalChartDashboard = ({
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="rounded-2xl border border-border/80 bg-gradient-to-br from-blue-50 via-background to-cyan-50">
-          <CardContent className="p-4">
-            <div className="mb-3">
-              <p className="text-sm font-semibold">Revenue Pulse</p>
-              <p className="text-xs text-muted-foreground">Last 10 recorded days (billed vs paid)</p>
+        <Card className="rounded-2xl border border-border/80 bg-gradient-to-br from-blue-50 via-background to-cyan-50 pt-0">
+          <CardHeader className="flex items-center gap-2 space-y-0 border-b py-5 sm:flex-row">
+            <div className="grid flex-1 gap-1">
+              <CardTitle>Area Chart - Interactive</CardTitle>
+              <CardDescription>{revenueAreaDescription}</CardDescription>
             </div>
-            <div className="h-52">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={financeTrend}>
-                  <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
-                  <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} />
-                  <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} width={70} />
-                  <Tooltip formatter={(value) => formatCurrency(Number(value ?? 0))} />
-                  <Line type="monotone" dataKey="billed" stroke="#2563eb" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="paid" stroke="#16a34a" strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+            <Select value={revenueTimeRange} onValueChange={(value) => {
+              if (value === '7d' || value === '30d' || value === '90d') {
+                setRevenueTimeRange(value);
+              }
+            }}
+            >
+              <SelectTrigger
+                className="hidden w-[160px] rounded-lg sm:ml-auto sm:flex"
+                aria-label="Select revenue range"
+              >
+                <SelectValue placeholder="Last 3 months" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl">
+                <SelectItem value="90d" className="rounded-lg">
+                  Last 3 months
+                </SelectItem>
+                <SelectItem value="30d" className="rounded-lg">
+                  Last 30 days
+                </SelectItem>
+                <SelectItem value="7d" className="rounded-lg">
+                  Last 7 days
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </CardHeader>
+          <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
+            {filteredRevenueAreaData.length === 0 ? (
+              <div className="grid h-[250px] place-items-center rounded-xl border border-dashed text-sm text-muted-foreground">
+                No chart data available yet.
+              </div>
+            ) : (
+              <ChartContainer
+                config={revenueAreaChartConfig}
+                className="aspect-auto h-[250px] w-full"
+              >
+                <AreaChart data={filteredRevenueAreaData}>
+                  <defs>
+                    <linearGradient id="fillBilled" x1="0" y1="0" x2="0" y2="1">
+                      <stop
+                        offset="5%"
+                        stopColor="var(--color-billed)"
+                        stopOpacity={0.8}
+                      />
+                      <stop
+                        offset="95%"
+                        stopColor="var(--color-billed)"
+                        stopOpacity={0.1}
+                      />
+                    </linearGradient>
+                    <linearGradient id="fillPaid" x1="0" y1="0" x2="0" y2="1">
+                      <stop
+                        offset="5%"
+                        stopColor="var(--color-paid)"
+                        stopOpacity={0.8}
+                      />
+                      <stop
+                        offset="95%"
+                        stopColor="var(--color-paid)"
+                        stopOpacity={0.1}
+                      />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} />
+                  <XAxis
+                    dataKey="date"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={8}
+                    minTickGap={32}
+                    tickFormatter={(value) => {
+                      const date = new Date(value);
+                      return date.toLocaleDateString('en-US', {
+                        day: 'numeric',
+                        month: 'short',
+                      });
+                    }}
+                  />
+                  <ChartTooltip
+                    cursor={false}
+                    content={(
+                      <ChartTooltipContent
+                        indicator="dot"
+                        labelFormatter={(value) => {
+                          return new Date(String(value)).toLocaleDateString('en-US', {
+                            day: 'numeric',
+                            month: 'short',
+                          });
+                        }}
+                      />
+                    )}
+                  />
+                  <Area
+                    dataKey="paid"
+                    type="natural"
+                    fill="url(#fillPaid)"
+                    stroke="var(--color-paid)"
+                    stackId="a"
+                  />
+                  <Area
+                    dataKey="billed"
+                    type="natural"
+                    fill="url(#fillBilled)"
+                    stroke="var(--color-billed)"
+                    stackId="a"
+                  />
+                  <ChartLegend content={<ChartLegendContent />} />
+                </AreaChart>
+              </ChartContainer>
+            )}
           </CardContent>
         </Card>
 

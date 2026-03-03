@@ -12,6 +12,13 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -29,8 +36,14 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ListPatientsUseCase } from '@/modules/dental-management/application/use-cases/patients/list-patients-use-case';
+import { ListVisitTreatmentsUseCase } from '@/modules/dental-management/application/use-cases/visit-treatments/list-visit-treatments-use-case';
+import { ListVisitsUseCase } from '@/modules/dental-management/application/use-cases/visits/list-visits-use-case';
 import { type Patient } from '@/modules/dental-management/domain/entities/Patient';
+import { type Visit } from '@/modules/dental-management/domain/entities/Visit';
+import { type VisitTreatment } from '@/modules/dental-management/domain/entities/VisitTreatment';
 import { PatientRepository } from '@/modules/dental-management/infrastructure/repositories/patient-repository';
+import { VisitTreatmentRepository } from '@/modules/dental-management/infrastructure/repositories/visit-treatment-repository';
+import { VisitRepository } from '@/modules/dental-management/infrastructure/repositories/visit-repository';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
@@ -83,6 +96,27 @@ type ImplantCard = {
   toothNumber: string;
 };
 
+type ImplantPlanningRecord = {
+  arch: string;
+  createdAt: string;
+  dentistId?: string;
+  diameterMm: string;
+  id: number;
+  implantSystem: string;
+  lengthMm: string;
+  loadingProtocol: string;
+  notes: string;
+  patientId: string;
+  patientPrice: number;
+  rawNotes: string;
+  supplierCost: number;
+  toothNumber: string;
+  treatmentId: string;
+  updatedAt: string;
+  visitDate: string;
+  visitId: string;
+};
+
 const extractImplantToothFromTask = (task: Pick<SessionTask, 'notes' | 'title'>): string | null => {
   const notesMatch = task.notes?.match(/\[implant_tooth:([0-9]{2})\]/i);
   if (notesMatch?.[1]) {
@@ -125,6 +159,46 @@ const parseTaggedAmount = (notes: string | undefined, key: 'supplier_paid' | 'su
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 };
 
+const parseTaggedText = (notes: string | undefined, key: string): string => {
+  if (!notes) {
+    return '';
+  }
+
+  const match = notes.match(new RegExp(`\\[${key}:([^\\]]+)\\]`, 'i'));
+  return match?.[1]?.trim() ?? '';
+};
+
+const parseTaggedNumber = (notes: string | undefined, key: string): number => {
+  const text = parseTaggedText(notes, key);
+  if (!text) {
+    return 0;
+  }
+
+  const parsed = Number.parseFloat(text);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+};
+
+const stripTaggedTokens = (notes: string | undefined): string => {
+  if (!notes) {
+    return '';
+  }
+
+  return notes.replace(/\[[^\]]+\]/g, ' ').replace(/\s+/g, ' ').trim();
+};
+
+const formatDateTime = (value: string): string => {
+  if (!value) {
+    return '-';
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleString();
+};
+
 const formatCurrency = (value: number): string => new Intl.NumberFormat('en-US', {
   currency: 'AFN',
   maximumFractionDigits: 0,
@@ -150,6 +224,7 @@ export default function InProcessImplantsPage(): JSX.Element {
   const [patientId, setPatientId] = useState('');
   const [availabilityToothSaving, setAvailabilityToothSaving] = useState<string | null>(null);
   const [supplierPayNowByTooth, setSupplierPayNowByTooth] = useState<Record<string, string>>({});
+  const [selectedPlanningRecord, setSelectedPlanningRecord] = useState<ImplantPlanningRecord | null>(null);
   const patientTasksQueryKey = useMemo(() => ['patient-session-tasks', patientId], [patientId]);
 
   const { data: allPatients = [], isFetching: isLoadingPatients } = useQuery<Patient[]>({
@@ -197,6 +272,122 @@ export default function InProcessImplantsPage(): JSX.Element {
       return response.data;
     },
     queryKey: patientTasksQueryKey,
+    refetchOnWindowFocus: false,
+    staleTime: 60 * 1000,
+  });
+  const {
+    data: implantPlanningRecords = [],
+    isFetching: isLoadingImplantPlanningRecords,
+  } = useQuery<ImplantPlanningRecord[]>({
+    enabled: Boolean(patientId),
+    queryFn: async () => {
+      if (!patientId) {
+        return [];
+      }
+
+      const visitRepository = new VisitRepository();
+      const listVisitsUseCase = new ListVisitsUseCase(visitRepository);
+      const allVisits: Visit[] = [];
+      let currentVisitPage = 1;
+      let lastVisitPage = 1;
+
+      do {
+        const visitResponse = await listVisitsUseCase.execute(
+          '',
+          [],
+          [],
+          { patientId: [patientId] },
+          currentVisitPage,
+          100
+        );
+        if (visitResponse.error || !visitResponse.data) {
+          return [];
+        }
+
+        allVisits.push(...visitResponse.data.data);
+        lastVisitPage = visitResponse.data.meta?.lastPage ?? currentVisitPage;
+        currentVisitPage += 1;
+      } while (currentVisitPage <= lastVisitPage);
+
+      if (allVisits.length === 0) {
+        return [];
+      }
+
+      const visitIds = allVisits.map((visit) => String(visit.id));
+      const visitDateById = allVisits.reduce<Record<string, string>>((accumulator, visit) => {
+        accumulator[String(visit.id)] = visit.visitDate;
+        return accumulator;
+      }, {});
+
+      const visitTreatmentRepository = new VisitTreatmentRepository();
+      const listVisitTreatmentsUseCase = new ListVisitTreatmentsUseCase(visitTreatmentRepository);
+      const allVisitTreatments: VisitTreatment[] = [];
+      const chunkSize = 30;
+
+      for (let index = 0; index < visitIds.length; index += chunkSize) {
+        const visitIdChunk = visitIds.slice(index, index + chunkSize);
+        let currentVisitTreatmentPage = 1;
+        let lastVisitTreatmentPage = 1;
+
+        do {
+          const visitTreatmentResponse = await listVisitTreatmentsUseCase.execute(
+            '',
+            [],
+            [],
+            { visitId: visitIdChunk },
+            currentVisitTreatmentPage,
+            100
+          );
+
+          if (visitTreatmentResponse.error || !visitTreatmentResponse.data) {
+            break;
+          }
+
+          allVisitTreatments.push(...visitTreatmentResponse.data.data);
+          lastVisitTreatmentPage = visitTreatmentResponse.data.meta?.lastPage ?? currentVisitTreatmentPage;
+          currentVisitTreatmentPage += 1;
+        } while (currentVisitTreatmentPage <= lastVisitTreatmentPage);
+      }
+
+      return allVisitTreatments
+        .filter((visitTreatment) => {
+          const notes = visitTreatment.notes?.toLowerCase() ?? '';
+          return notes.includes('[condition:implant]');
+        })
+        .map((visitTreatment) => {
+          const rawNotes = visitTreatment.notes ?? '';
+          const taggedTooth = parseTaggedText(rawNotes, 'tooth');
+          const patientPriceFromNotes = parseTaggedNumber(rawNotes, 'patientPrice');
+          const supplierCostFromNotes = parseTaggedNumber(rawNotes, 'supplierCost');
+          const patientPriceFromRow = Number.parseFloat(visitTreatment.price);
+          const patientPrice = Number.isFinite(patientPriceFromRow)
+            ? patientPriceFromRow
+            : patientPriceFromNotes;
+
+          return {
+            arch: parseTaggedText(rawNotes, 'arch') || '-',
+            createdAt: visitTreatment.createdAt,
+            dentistId: visitTreatment.dentistId,
+            diameterMm: parseTaggedText(rawNotes, 'diameter') || '-',
+            id: visitTreatment.id,
+            implantSystem: visitTreatment.material?.trim() || '-',
+            lengthMm: parseTaggedText(rawNotes, 'length') || '-',
+            loadingProtocol: parseTaggedText(rawNotes, 'protocol') || '-',
+            notes: stripTaggedTokens(rawNotes) || '-',
+            patientId,
+            patientPrice: Math.max(0, patientPrice),
+            rawNotes: rawNotes || '-',
+            supplierCost: supplierCostFromNotes,
+            toothNumber: visitTreatment.toothNumber || taggedTooth || '-',
+            treatmentId: visitTreatment.treatmentId,
+            updatedAt: visitTreatment.updatedAt,
+            visitDate: visitDateById[visitTreatment.visitId] || '-',
+            visitId: visitTreatment.visitId,
+          } satisfies ImplantPlanningRecord;
+        })
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    },
+    queryKey: ['in-process-implant-planning-records', patientId],
     refetchOnWindowFocus: false,
     staleTime: 60 * 1000,
   });
@@ -427,71 +618,116 @@ export default function InProcessImplantsPage(): JSX.Element {
             {!patientId ? (
               <p className="text-sm text-muted-foreground">Select a patient to see implant lifecycle cards.</p>
             ) : (
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                {AVAILABILITY_ORDER.map((availability) => (
-                  <div key={availability} className="space-y-2 rounded-md border border-border p-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-semibold">{AVAILABILITY_TITLES[availability]}</p>
-                      <Badge variant={availability === 'done' || availability === 'available' ? 'default' : availability === 'in_purchase' ? 'secondary' : 'destructive'}>
-                        {groupedImplants[availability].length}
-                      </Badge>
-                    </div>
-
-                    {groupedImplants[availability].length === 0 ? (
-                      <p className="text-xs text-muted-foreground">No implant cards in this state.</p>
+              <div className="space-y-4">
+                <Card id="saved-implant-records">
+                  <CardHeader>
+                    <CardTitle className="text-base">Saved Implant Records</CardTitle>
+                    <CardDescription>
+                      Implant records created from the Implant Planning page. Click a card to view full data.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoadingImplantPlanningRecords ? (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="size-4 animate-spin" />
+                        Loading implant records...
+                      </div>
+                    ) : implantPlanningRecords.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No saved implant planning records found.</p>
                     ) : (
-                      <div className="space-y-2">
-                        {groupedImplants[availability].map((card) => (
-                          <div key={card.taskId} className="rounded-md border border-border p-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium">Tooth {card.toothNumber}</span>
-                              <Badge variant="outline">{AVAILABILITY_TITLES[card.availability]}</Badge>
+                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                        {implantPlanningRecords.map((record) => (
+                          <button
+                            key={`planning-record-${record.id}`}
+                            type="button"
+                            className="rounded-md border border-border p-3 text-start transition-colors hover:bg-muted/40"
+                            onClick={() => {
+                              setSelectedPlanningRecord(record);
+                            }}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-sm font-semibold">Tooth {record.toothNumber}</p>
+                              <Badge variant="outline">Visit {record.visitId}</Badge>
                             </div>
                             <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-                              <p>Total company cost: <span className="font-medium text-foreground">{formatCurrency(card.supplierTotal)}</span></p>
-                              <p>Paid to company: <span className="font-medium text-foreground">{formatCurrency(card.supplierPaid)}</span></p>
-                              <p>Unpaid company amount: <span className="font-medium text-foreground">{formatCurrency(card.supplierRemaining)}</span></p>
+                              <p>Patient price: <span className="font-medium text-foreground">{formatCurrency(record.patientPrice)}</span></p>
+                              <p>Supplier cost: <span className="font-medium text-foreground">{formatCurrency(record.supplierCost)}</span></p>
+                              <p>Implant system: <span className="font-medium text-foreground">{record.implantSystem}</span></p>
+                              <p>Saved at: <span className="font-medium text-foreground">{formatDateTime(record.createdAt)}</span></p>
                             </div>
-                            <div className="mt-2 flex items-center gap-2">
-                              <Input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                placeholder="Company pay now"
-                                value={supplierPayNowByTooth[card.toothNumber] ?? ''}
-                                onChange={(event) => {
-                                  setSupplierPayNowByTooth((prev) => ({
-                                    ...prev,
-                                    [card.toothNumber]: event.target.value,
-                                  }));
-                                }}
-                              />
-                            </div>
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              {AVAILABILITY_ORDER.map((targetAvailability) => (
-                                <Button
-                                  key={targetAvailability}
-                                  type="button"
-                                  size="sm"
-                                  variant={card.availability === targetAvailability ? 'default' : 'outline'}
-                                  disabled={availabilityToothSaving === card.toothNumber}
-                                  onClick={() => {
-                                    void handleSetImplantAvailability(card.taskId, card.toothNumber, targetAvailability);
-                                  }}
-                                >
-                                  {availabilityToothSaving === card.toothNumber && card.availability !== targetAvailability ? (
-                                    <Loader2 className="me-2 size-4 animate-spin" />
-                                  ) : null}
-                                  {AVAILABILITY_TITLES[targetAvailability]}
-                                </Button>
-                              ))}
-                            </div>
-                          </div>
+                          </button>
                         ))}
                       </div>
                     )}
-                  </div>
-                ))}
+                  </CardContent>
+                </Card>
+
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  {AVAILABILITY_ORDER.map((availability) => (
+                    <div key={availability} className="space-y-2 rounded-md border border-border p-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold">{AVAILABILITY_TITLES[availability]}</p>
+                        <Badge variant={availability === 'done' || availability === 'available' ? 'default' : availability === 'in_purchase' ? 'secondary' : 'destructive'}>
+                          {groupedImplants[availability].length}
+                        </Badge>
+                      </div>
+
+                      {groupedImplants[availability].length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No implant cards in this state.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {groupedImplants[availability].map((card) => (
+                            <div key={card.taskId} className="rounded-md border border-border p-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium">Tooth {card.toothNumber}</span>
+                                <Badge variant="outline">{AVAILABILITY_TITLES[card.availability]}</Badge>
+                              </div>
+                              <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                                <p>Total company cost: <span className="font-medium text-foreground">{formatCurrency(card.supplierTotal)}</span></p>
+                                <p>Paid to company: <span className="font-medium text-foreground">{formatCurrency(card.supplierPaid)}</span></p>
+                                <p>Unpaid company amount: <span className="font-medium text-foreground">{formatCurrency(card.supplierRemaining)}</span></p>
+                              </div>
+                              <div className="mt-2 flex items-center gap-2">
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  placeholder="Company pay now"
+                                  value={supplierPayNowByTooth[card.toothNumber] ?? ''}
+                                  onChange={(event) => {
+                                    setSupplierPayNowByTooth((prev) => ({
+                                      ...prev,
+                                      [card.toothNumber]: event.target.value,
+                                    }));
+                                  }}
+                                />
+                              </div>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {AVAILABILITY_ORDER.map((targetAvailability) => (
+                                  <Button
+                                    key={targetAvailability}
+                                    type="button"
+                                    size="sm"
+                                    variant={card.availability === targetAvailability ? 'default' : 'outline'}
+                                    disabled={availabilityToothSaving === card.toothNumber}
+                                    onClick={() => {
+                                      void handleSetImplantAvailability(card.taskId, card.toothNumber, targetAvailability);
+                                    }}
+                                  >
+                                    {availabilityToothSaving === card.toothNumber && card.availability !== targetAvailability ? (
+                                      <Loader2 className="me-2 size-4 animate-spin" />
+                                    ) : null}
+                                    {AVAILABILITY_TITLES[targetAvailability]}
+                                  </Button>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -536,6 +772,54 @@ export default function InProcessImplantsPage(): JSX.Element {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog
+        open={Boolean(selectedPlanningRecord)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedPlanningRecord(null);
+          }
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              Implant Record {selectedPlanningRecord ? `#${selectedPlanningRecord.id}` : ''}
+            </DialogTitle>
+            <DialogDescription>
+              Full record data saved from the Implant Planning page.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedPlanningRecord ? (
+            <div className="grid gap-2 text-sm md:grid-cols-2">
+              <p><span className="text-muted-foreground">Patient ID:</span> {selectedPlanningRecord.patientId}</p>
+              <p><span className="text-muted-foreground">Visit ID:</span> {selectedPlanningRecord.visitId}</p>
+              <p><span className="text-muted-foreground">Visit date:</span> {selectedPlanningRecord.visitDate}</p>
+              <p><span className="text-muted-foreground">Treatment ID:</span> {selectedPlanningRecord.treatmentId}</p>
+              <p><span className="text-muted-foreground">Dentist ID:</span> {selectedPlanningRecord.dentistId || '-'}</p>
+              <p><span className="text-muted-foreground">Tooth:</span> {selectedPlanningRecord.toothNumber}</p>
+              <p><span className="text-muted-foreground">Patient price:</span> {formatCurrency(selectedPlanningRecord.patientPrice)}</p>
+              <p><span className="text-muted-foreground">Supplier cost:</span> {formatCurrency(selectedPlanningRecord.supplierCost)}</p>
+              <p><span className="text-muted-foreground">Implant system:</span> {selectedPlanningRecord.implantSystem}</p>
+              <p><span className="text-muted-foreground">Diameter (mm):</span> {selectedPlanningRecord.diameterMm}</p>
+              <p><span className="text-muted-foreground">Length (mm):</span> {selectedPlanningRecord.lengthMm}</p>
+              <p><span className="text-muted-foreground">Arch:</span> {selectedPlanningRecord.arch}</p>
+              <p><span className="text-muted-foreground">Loading protocol:</span> {selectedPlanningRecord.loadingProtocol}</p>
+              <p><span className="text-muted-foreground">Created:</span> {formatDateTime(selectedPlanningRecord.createdAt)}</p>
+              <p><span className="text-muted-foreground">Updated:</span> {formatDateTime(selectedPlanningRecord.updatedAt)}</p>
+              <div className="space-y-1 md:col-span-2">
+                <p className="text-muted-foreground">Notes:</p>
+                <p className="rounded-md border border-border bg-muted/20 p-2">{selectedPlanningRecord.notes}</p>
+              </div>
+              <div className="space-y-1 md:col-span-2">
+                <p className="text-muted-foreground">Raw record:</p>
+                <p className="rounded-md border border-border bg-muted/20 p-2 text-xs">{selectedPlanningRecord.rawNotes}</p>
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

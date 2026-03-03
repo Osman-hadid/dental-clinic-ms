@@ -24,6 +24,7 @@ import {
   aggregateImplantSupplierBalances,
   type ImplantAvailabilityStatus,
   type ImplantSupplierTaskLike,
+  parseAvailabilityFromTaskNotes,
 } from '@/modules/dental-management/presentation/utils/implant-supplier-analytics';
 import {
   Area,
@@ -43,6 +44,17 @@ import {
 
 type ReportGranularity = 'day' | 'month' | 'year';
 type InvoiceStatusFilter = 'all' | 'cancelled' | 'paid' | 'partially_paid' | 'unpaid';
+type ReportStatusFilter = 'all' | 'cancelled' | 'completed' | 'pending';
+type ReportExportFormat = 'csv' | 'pdf';
+type CsvExportType =
+  | 'audit_log'
+  | 'clinical_treatment'
+  | 'executive_summary'
+  | 'financial_daily_safe'
+  | 'financial_implant_installment'
+  | 'financial_outstanding'
+  | 'financial_revenue'
+  | 'inventory_stock';
 
 type ParsedPayment = {
   amount: number;
@@ -152,7 +164,7 @@ type SnapshotRecord = {
   paid: number;
   rangeEnd: string;
   rangeStart: string;
-  statusFilter: InvoiceStatusFilter;
+  statusFilter: ReportStatusFilter;
   visits: number;
 };
 
@@ -203,6 +215,33 @@ type ThirdCompanyLiabilityStatusPoint = {
   label: string;
   status: ImplantAvailabilityStatus;
   unpaid: number;
+};
+
+type InventoryReportRow = {
+  acquisitionSource: 'previous_stock' | 'purchase';
+  category: string;
+  entryDate: string;
+  expiryDate: string;
+  id: string;
+  itemName: string;
+  lotNumber: string;
+  minStock: number;
+  quantity: number;
+  sellingPrice: number;
+  supplier: string;
+  totalCost: number;
+  unit: string;
+  unitCost: number;
+  updatedAt: string;
+};
+
+type FinancialModificationLogRow = {
+  action: string;
+  afterValue: string;
+  beforeValue: string;
+  changedBy: string;
+  entity: string;
+  timestamp: string;
 };
 
 type PaginatedRowsResponse = {
@@ -262,6 +301,13 @@ const formatCurrency = (value: number): string => {
   }).format(value);
 };
 
+const formatCsvAmount = (value: number): string => {
+  return new Intl.NumberFormat('en-US', {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  }).format(Number.isFinite(value) ? value : 0);
+};
+
 const formatShortDate = (value?: string): string => {
   const parsed = parseDate(value);
   if (!parsed) return '-';
@@ -286,6 +332,13 @@ const formatDateTime = (value?: string): string => {
 const toHumanLabel = (value: string): string => value
   .replaceAll('_', ' ')
   .replace(/\b\w/g, (char) => char.toUpperCase());
+
+const toReportStatus = (value: string): ReportStatusFilter => {
+  const normalized = value.toLowerCase();
+  if (normalized === 'cancelled') return 'cancelled';
+  if (normalized === 'paid' || normalized === 'completed' || normalized === 'done') return 'completed';
+  return 'pending';
+};
 
 const escapeHtml = (value: unknown): string => {
   return String(value ?? '')
@@ -326,8 +379,16 @@ const toBucket = (date: Date, granularity: ReportGranularity): { key: string; la
 const toCsv = (rows: Array<Record<string, string | number>>): string => {
   if (rows.length === 0) return '';
   const headers = Object.keys(rows[0]);
+  const normalizeCsvValue = (value: string | number): string => {
+    if (typeof value === 'number') return String(value);
+    return String(value ?? '')
+      .replace(/\s*AFN\s*/gi, ' ')
+      .replace(/\u00A0/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  };
   const escape = (value: string | number): string => {
-    const raw = String(value ?? '');
+    const raw = normalizeCsvValue(value);
     if (raw.includes(',') || raw.includes('"') || raw.includes('\n')) {
       return `"${raw.replace(/"/g, '""')}"`;
     }
@@ -462,9 +523,17 @@ export default function ReportsPage(): JSX.Element {
   const [startDate, setStartDate] = useState(ninetyDaysAgo);
   const [endDate, setEndDate] = useState(today);
   const [granularity, setGranularity] = useState<ReportGranularity>('day');
-  const [statusFilter, setStatusFilter] = useState<InvoiceStatusFilter>('all');
+  const [statusFilter] = useState<InvoiceStatusFilter>('all');
+  const [globalStatusFilter, setGlobalStatusFilter] = useState<ReportStatusFilter>('all');
+  const [selectedDentistFilter, setSelectedDentistFilter] = useState<string>('all');
+  const [selectedTreatmentFilter, setSelectedTreatmentFilter] = useState<string>('all');
+  const [selectedPaymentMethodFilter, setSelectedPaymentMethodFilter] = useState<string>('all');
+  const [selectedPatientFilter, setSelectedPatientFilter] = useState<string>('all');
+  const [exportFormat, setExportFormat] = useState<ReportExportFormat>('pdf');
+  const [csvExportType, setCsvExportType] = useState<CsvExportType>('executive_summary');
+  const [physicalSafeBalanceInput, setPhysicalSafeBalanceInput] = useState<string>('0');
   const [showAdvancedControls, setShowAdvancedControls] = useState(false);
-  const [activeTab, setActiveTab] = useState<'clinical' | 'financial' | 'operations' | 'overview'>('overview');
+  const [activeTab, setActiveTab] = useState<'audit' | 'clinical' | 'executive' | 'financial' | 'inventory'>('executive');
   const [selectedPatientLedgerId, setSelectedPatientLedgerId] = useState<string>('all');
   const [selectedThirdCompanyAvailability, setSelectedThirdCompanyAvailability] = useState<ImplantAvailabilityStatus | 'all'>('all');
   const [selectedDebtAgingBucket, setSelectedDebtAgingBucket] = useState<DebtAgingBucket | 'all'>('all');
@@ -492,8 +561,46 @@ export default function ReportsPage(): JSX.Element {
   const [safeRows, setSafeRows] = useState<SafeTransactionRow[]>([]);
   const [salaryRows, setSalaryRows] = useState<SalaryPaymentRow[]>([]);
   const [implantSupplierTasks, setImplantSupplierTasks] = useState<ImplantSupplierTaskLike[]>([]);
+  const [inventoryRows, setInventoryRows] = useState<InventoryReportRow[]>([]);
+  const [allPatientsRows, setAllPatientsRows] = useState<Patient[]>([]);
+  const [allAppointmentsRows, setAllAppointmentsRows] = useState<Appointment[]>([]);
+  const [allVisitsRows, setAllVisitsRows] = useState<Visit[]>([]);
+  const [allInvoiceRows, setAllInvoiceRows] = useState<Array<Record<string, unknown>>>([]);
+  const [allVisitTreatmentRows, setAllVisitTreatmentRows] = useState<Array<VisitTreatment & {
+    treatment?: { name?: string };
+    visit?: { dentistName?: string; visitDate?: string };
+  }>>([]);
   const [allPatientNameRows, setAllPatientNameRows] = useState<Record<string, string>>({});
+  const [isLoadingCoreData, setIsLoadingCoreData] = useState(false);
   const [isLoadingFinanceData, setIsLoadingFinanceData] = useState(false);
+  const [isLoadingInventoryData, setIsLoadingInventoryData] = useState(false);
+  const csvExportOptions = useMemo<Array<{ label: string; value: CsvExportType }>>(() => {
+    if (activeTab === 'financial') {
+      return [
+        { label: 'Revenue Report', value: 'financial_revenue' },
+        { label: 'Outstanding Aging', value: 'financial_outstanding' },
+        { label: 'Daily Safe Report', value: 'financial_daily_safe' },
+        { label: 'Implant Installment', value: 'financial_implant_installment' },
+      ];
+    }
+    if (activeTab === 'clinical') {
+      return [{ label: 'Treatment Report', value: 'clinical_treatment' }];
+    }
+    if (activeTab === 'inventory') {
+      return [{ label: 'Inventory Stock Report', value: 'inventory_stock' }];
+    }
+    if (activeTab === 'audit') {
+      return [{ label: 'Audit Log Report', value: 'audit_log' }];
+    }
+    return [{ label: 'Executive Summary', value: 'executive_summary' }];
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (!csvExportOptions.some((option) => option.value === csvExportType)) {
+      setCsvExportType(csvExportOptions[0]?.value ?? 'executive_summary');
+    }
+  }, [csvExportOptions, csvExportType]);
+
   const granularityLabel = useMemo(() => {
     if (granularity === 'year') return tReportsPage('granularity.year');
     if (granularity === 'month') return tReportsPage('granularity.month');
@@ -534,13 +641,33 @@ export default function ReportsPage(): JSX.Element {
     {}
   );
 
-  const typedPatients = patients as Patient[];
-  const typedAppointments = appointments as Appointment[];
-  const typedVisits = visits as Visit[];
-  const typedVisitTreatments = visitTreatments as Array<VisitTreatment & {
-    treatment?: { name?: string };
-    visit?: { dentistName?: string; visitDate?: string };
-  }>;
+  const typedPatients = useMemo(
+    () => (allPatientsRows.length > 0 ? allPatientsRows : (patients as Patient[])),
+    [allPatientsRows, patients]
+  );
+  const typedAppointments = useMemo(
+    () => (allAppointmentsRows.length > 0 ? allAppointmentsRows : (appointments as Appointment[])),
+    [allAppointmentsRows, appointments]
+  );
+  const typedVisits = useMemo(
+    () => (allVisitsRows.length > 0 ? allVisitsRows : (visits as Visit[])),
+    [allVisitsRows, visits]
+  );
+  const typedVisitTreatments = useMemo(
+    () => (
+      allVisitTreatmentRows.length > 0
+        ? allVisitTreatmentRows
+        : (visitTreatments as Array<VisitTreatment & {
+          treatment?: { name?: string };
+          visit?: { dentistName?: string; visitDate?: string };
+        }>)
+    ),
+    [allVisitTreatmentRows, visitTreatments]
+  );
+  const invoiceRows = useMemo(
+    () => (allInvoiceRows.length > 0 ? allInvoiceRows : (invoices as Array<Record<string, unknown>>)),
+    [allInvoiceRows, invoices]
+  );
   const patientNameById = useMemo(() => {
     const map = new Map<string, string>();
     typedPatients.forEach((patient) => {
@@ -558,6 +685,53 @@ export default function ReportsPage(): JSX.Element {
     });
     return merged;
   }, [allPatientNameRows, patientNameById]);
+
+  const fetchCoreData = useCallback(async (): Promise<void> => {
+    setIsLoadingCoreData(true);
+    try {
+      const [patientsItems, appointmentItems, visitItems, invoiceItems, visitTreatmentItems] = await Promise.all([
+        fetchAllRows('/api/v1/dental-management/patients', {
+          sortBy: 'createdAt',
+          sortDirection: 'desc',
+        }),
+        fetchAllRows('/api/v1/dental-management/appointments', {
+          include: ['patient', 'dentist'],
+          sortBy: 'appointmentDate',
+          sortDirection: 'desc',
+        }),
+        fetchAllRows('/api/v1/dental-management/visits', {
+          include: ['patient', 'dentist'],
+          sortBy: 'visitDate',
+          sortDirection: 'desc',
+        }),
+        fetchAllRows('/api/v1/dental-management/invoices', {
+          include: ['patient', 'visit', 'payments'],
+          sortBy: 'invoiceDate',
+          sortDirection: 'desc',
+        }),
+        fetchAllRows('/api/v1/dental-management/visit-treatments', {
+          include: ['treatment', 'visit'],
+          sortBy: 'createdAt',
+          sortDirection: 'desc',
+        }),
+      ]);
+
+      setAllPatientsRows(patientsItems as Patient[]);
+      setAllAppointmentsRows(appointmentItems as Appointment[]);
+      setAllVisitsRows(visitItems as Visit[]);
+      setAllInvoiceRows(invoiceItems);
+      setAllVisitTreatmentRows(visitTreatmentItems as Array<VisitTreatment & {
+        treatment?: { name?: string };
+        visit?: { dentistName?: string; visitDate?: string };
+      }>);
+    } finally {
+      setIsLoadingCoreData(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchCoreData();
+  }, [fetchCoreData]);
 
   const fetchFinanceData = useCallback(async (): Promise<void> => {
     setIsLoadingFinanceData(true);
@@ -660,6 +834,39 @@ export default function ReportsPage(): JSX.Element {
     void fetchFinanceData();
   }, [fetchFinanceData]);
 
+  const fetchInventoryData = useCallback(async (): Promise<void> => {
+    setIsLoadingInventoryData(true);
+    try {
+      const items = await fetchAllRows('/api/v1/dental-management/inventory-items', {
+        sortBy: 'entryDate',
+        sortDirection: 'desc',
+      });
+      setInventoryRows(items.map((row) => ({
+        acquisitionSource: asText(row.acquisitionSource ?? row.acquisition_source) === 'purchase' ? 'purchase' : 'previous_stock',
+        category: asText(row.category) || 'other',
+        entryDate: asText(row.entryDate ?? row.entry_date),
+        expiryDate: asText(row.expiryDate ?? row.expiry_date),
+        id: asText(row.id),
+        itemName: asText(row.itemName ?? row.item_name),
+        lotNumber: asText(row.lotNumber ?? row.lot_number),
+        minStock: parseAmount(row.minStock ?? row.min_stock),
+        quantity: parseAmount(row.quantity),
+        sellingPrice: parseAmount(row.sellingPrice ?? row.selling_price),
+        supplier: asText(row.supplier),
+        totalCost: parseAmount(row.totalCost ?? row.total_cost),
+        unit: asText(row.unit) || 'piece',
+        unitCost: parseAmount(row.unitCost ?? row.unit_cost),
+        updatedAt: asText(row.updatedAt ?? row.updated_at ?? row.entryDate ?? row.entry_date),
+      })));
+    } finally {
+      setIsLoadingInventoryData(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchInventoryData();
+  }, [fetchInventoryData]);
+
   const filteredDailyExpenses = useMemo(
     () => expenseRows.filter((item) => item.expenseType === 'daily' && inRange(item.expenseDate, startDate, endDate)),
     [endDate, expenseRows, startDate]
@@ -690,8 +897,7 @@ export default function ReportsPage(): JSX.Element {
 
     const categoryRows: ExpensePoint[] = [...byCategory.entries()]
       .map(([category, amount]) => ({ amount, category }))
-      .sort((left, right) => right.amount - left.amount)
-      .slice(0, 12);
+      .sort((left, right) => right.amount - left.amount);
 
     return {
       byCategory: categoryRows,
@@ -711,8 +917,7 @@ export default function ReportsPage(): JSX.Element {
 
     return [...grouped.entries()]
       .map(([name, amount]) => ({ amount, name }))
-      .sort((left, right) => right.amount - left.amount)
-      .slice(0, 12);
+      .sort((left, right) => right.amount - left.amount);
   }, [endDate, safeRows, startDate]);
   const salarySummary = useMemo(() => {
     const filtered = salaryRows.filter((row) => inRange(row.paymentDate, startDate, endDate));
@@ -730,10 +935,17 @@ export default function ReportsPage(): JSX.Element {
     () =>
       implantSupplierTasks.filter((task) => {
         const createdAt = asText(task.createdAt);
+        const availability = parseAvailabilityFromTaskNotes(task.notes, task.status);
         if (!createdAt) return true;
-        return inRange(createdAt, startDate, endDate);
+        if (!inRange(createdAt, startDate, endDate)) return false;
+        if (selectedPatientFilter !== 'all' && asText(task.patientId) !== selectedPatientFilter) return false;
+        if (globalStatusFilter !== 'all') {
+          const mappedStatus: ReportStatusFilter = availability === 'done' ? 'completed' : 'pending';
+          if (mappedStatus !== globalStatusFilter) return false;
+        }
+        return true;
       }),
-    [endDate, implantSupplierTasks, startDate]
+    [endDate, globalStatusFilter, implantSupplierTasks, selectedPatientFilter, startDate]
   );
   const thirdCompanySummary = useMemo(
     () => aggregateImplantSupplierBalances(filteredImplantSupplierTasks),
@@ -758,7 +970,7 @@ export default function ReportsPage(): JSX.Element {
     const rows = selectedThirdCompanyAvailability === 'all'
       ? thirdCompanySummary.unpaidRows
       : thirdCompanySummary.unpaidRows.filter((row) => row.availability === selectedThirdCompanyAvailability);
-    return rows.slice(0, 100);
+    return rows;
   }, [selectedThirdCompanyAvailability, thirdCompanySummary.unpaidRows]);
 
   const parsedData = useMemo(() => {
@@ -766,7 +978,7 @@ export default function ReportsPage(): JSX.Element {
     const allInvoices: ParsedInvoice[] = [];
     const ledgerEvents: Array<Omit<LedgerEntry, 'balance'>> = [];
 
-    for (const invoiceRow of invoices as Array<Record<string, unknown>>) {
+    for (const invoiceRow of invoiceRows) {
       const invoiceId = asText(invoiceRow.id);
       const invoiceDate = asText(invoiceRow.invoiceDate ?? invoiceRow.invoice_date);
       const status = asText(invoiceRow.status).toLowerCase();
@@ -879,35 +1091,206 @@ export default function ReportsPage(): JSX.Element {
     }, []);
 
     return { allInvoices, allPayments, ledgerEntries };
-  }, [invoices]);
+  }, [invoiceRows]);
+
+  const visitById = useMemo(() => {
+    const map = new Map<string, Visit>();
+    typedVisits.forEach((visit) => {
+      map.set(String(visit.id), visit);
+    });
+    return map;
+  }, [typedVisits]);
+
+  const treatmentNamesByVisitId = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    typedVisitTreatments.forEach((row) => {
+      const visitId = asText(row.visitId);
+      if (!visitId) return;
+      const current = map.get(visitId) ?? new Set<string>();
+      current.add((row.treatment?.name || `Treatment ${row.treatmentId}`).toLowerCase());
+      map.set(visitId, current);
+    });
+    return map;
+  }, [typedVisitTreatments]);
+
+  const paymentMethodsByInvoiceId = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    parsedData.allPayments.forEach((payment) => {
+      const current = map.get(payment.invoiceId) ?? new Set<string>();
+      current.add(payment.method.toLowerCase());
+      map.set(payment.invoiceId, current);
+    });
+    return map;
+  }, [parsedData.allPayments]);
 
   const filteredInvoices = useMemo(() => {
     return parsedData.allInvoices.filter((invoice) => {
       if (statusFilter !== 'all' && invoice.status !== statusFilter) return false;
-      return inRange(invoice.date, startDate, endDate);
+      if (globalStatusFilter !== 'all' && toReportStatus(invoice.status) !== globalStatusFilter) return false;
+      if (!inRange(invoice.date, startDate, endDate)) return false;
+      if (selectedPatientFilter !== 'all' && invoice.patientId !== selectedPatientFilter) return false;
+
+      const visit = visitById.get(invoice.visitId);
+      if (selectedDentistFilter !== 'all') {
+        const dentistId = asText(visit?.dentistId);
+        const dentistName = asText(visit?.dentistName);
+        if (dentistId !== selectedDentistFilter && dentistName !== selectedDentistFilter) return false;
+      }
+
+      if (selectedTreatmentFilter !== 'all') {
+        const treatments = treatmentNamesByVisitId.get(invoice.visitId);
+        if (!treatments?.has(selectedTreatmentFilter.toLowerCase())) return false;
+      }
+
+      if (selectedPaymentMethodFilter !== 'all') {
+        const methods = paymentMethodsByInvoiceId.get(invoice.id);
+        if (!methods?.has(selectedPaymentMethodFilter.toLowerCase())) return false;
+      }
+
+      return true;
     });
-  }, [endDate, parsedData.allInvoices, startDate, statusFilter]);
+  }, [
+    endDate,
+    globalStatusFilter,
+    parsedData.allInvoices,
+    paymentMethodsByInvoiceId,
+    selectedDentistFilter,
+    selectedPatientFilter,
+    selectedPaymentMethodFilter,
+    selectedTreatmentFilter,
+    startDate,
+    statusFilter,
+    treatmentNamesByVisitId,
+    visitById,
+  ]);
 
   const filteredPayments = useMemo(() => {
-    return parsedData.allPayments.filter((payment) => inRange(payment.date, startDate, endDate));
-  }, [endDate, parsedData.allPayments, startDate]);
+    return parsedData.allPayments.filter((payment) => {
+      if (!inRange(payment.date, startDate, endDate)) return false;
+      if (selectedPaymentMethodFilter !== 'all' && payment.method.toLowerCase() !== selectedPaymentMethodFilter.toLowerCase()) {
+        return false;
+      }
+
+      const invoice = parsedData.allInvoices.find((row) => row.id === payment.invoiceId);
+      if (!invoice) return false;
+
+      if (selectedPatientFilter !== 'all' && invoice.patientId !== selectedPatientFilter) return false;
+      if (globalStatusFilter !== 'all' && toReportStatus(invoice.status) !== globalStatusFilter) return false;
+      if (selectedTreatmentFilter !== 'all') {
+        const treatments = treatmentNamesByVisitId.get(invoice.visitId);
+        if (!treatments?.has(selectedTreatmentFilter.toLowerCase())) return false;
+      }
+
+      if (selectedDentistFilter !== 'all') {
+        const visit = visitById.get(invoice.visitId);
+        const dentistId = asText(visit?.dentistId);
+        const dentistName = asText(visit?.dentistName);
+        if (dentistId !== selectedDentistFilter && dentistName !== selectedDentistFilter) return false;
+      }
+
+      return true;
+    });
+  }, [
+    endDate,
+    globalStatusFilter,
+    parsedData.allInvoices,
+    parsedData.allPayments,
+    selectedDentistFilter,
+    selectedPatientFilter,
+    selectedPaymentMethodFilter,
+    selectedTreatmentFilter,
+    startDate,
+    treatmentNamesByVisitId,
+    visitById,
+  ]);
 
   const filteredAppointments = useMemo(
-    () => typedAppointments.filter((item) => inRange(item.appointmentDate, startDate, endDate)),
-    [endDate, startDate, typedAppointments]
+    () =>
+      typedAppointments.filter((item) => {
+        if (!inRange(item.appointmentDate, startDate, endDate)) return false;
+        if (selectedPatientFilter !== 'all' && asText(item.patientId) !== selectedPatientFilter) return false;
+        if (selectedDentistFilter !== 'all') {
+          const dentistId = asText(item.dentistId);
+          const dentistName = asText(item.dentistName);
+          if (dentistId !== selectedDentistFilter && dentistName !== selectedDentistFilter) return false;
+        }
+        if (globalStatusFilter !== 'all' && toReportStatus(item.status || 'pending') !== globalStatusFilter) return false;
+        return true;
+      }),
+    [endDate, globalStatusFilter, selectedDentistFilter, selectedPatientFilter, startDate, typedAppointments]
   );
   const filteredVisits = useMemo(
-    () => typedVisits.filter((item) => inRange(item.visitDate, startDate, endDate)),
-    [endDate, startDate, typedVisits]
+    () =>
+      typedVisits.filter((item) => {
+        if (!inRange(item.visitDate, startDate, endDate)) return false;
+        if (selectedPatientFilter !== 'all' && asText(item.patientId) !== selectedPatientFilter) return false;
+        if (selectedDentistFilter !== 'all') {
+          const dentistId = asText(item.dentistId);
+          const dentistName = asText(item.dentistName);
+          if (dentistId !== selectedDentistFilter && dentistName !== selectedDentistFilter) return false;
+        }
+        return true;
+      }),
+    [endDate, selectedDentistFilter, selectedPatientFilter, startDate, typedVisits]
   );
   const filteredVisitTreatments = useMemo(
     () =>
       typedVisitTreatments.filter((item) => {
         const date = item.visit?.visitDate || item.createdAt;
-        return inRange(date, startDate, endDate);
+        if (!inRange(date, startDate, endDate)) return false;
+        if (selectedTreatmentFilter !== 'all') {
+          const treatmentName = item.treatment?.name || `Treatment ${item.treatmentId}`;
+          if (treatmentName.toLowerCase() !== selectedTreatmentFilter.toLowerCase()) return false;
+        }
+        if (selectedDentistFilter !== 'all') {
+          const dentistName = asText(item.visit?.dentistName);
+          if (dentistName !== selectedDentistFilter) return false;
+        }
+        if (selectedPatientFilter !== 'all') {
+          const visitId = asText(item.visitId);
+          const visit = visitById.get(visitId);
+          if (asText(visit?.patientId) !== selectedPatientFilter) return false;
+        }
+        return true;
       }),
-    [endDate, startDate, typedVisitTreatments]
+    [endDate, selectedDentistFilter, selectedPatientFilter, selectedTreatmentFilter, startDate, typedVisitTreatments, visitById]
   );
+
+  const dentistFilterOptions = useMemo(() => {
+    const names = new Set<string>();
+    typedAppointments.forEach((item) => {
+      const dentist = asText(item.dentistName) || asText(item.dentistId);
+      if (dentist) names.add(dentist);
+    });
+    typedVisits.forEach((item) => {
+      const dentist = asText(item.dentistName) || asText(item.dentistId);
+      if (dentist) names.add(dentist);
+    });
+    return [...names].sort((left, right) => left.localeCompare(right));
+  }, [typedAppointments, typedVisits]);
+
+  const treatmentFilterOptions = useMemo(() => {
+    const names = new Set<string>();
+    typedVisitTreatments.forEach((item) => {
+      const name = item.treatment?.name || `Treatment ${item.treatmentId}`;
+      if (name) names.add(name);
+    });
+    return [...names].sort((left, right) => left.localeCompare(right));
+  }, [typedVisitTreatments]);
+
+  const paymentMethodFilterOptions = useMemo(() => {
+    const names = new Set<string>();
+    parsedData.allPayments.forEach((item) => {
+      if (item.method) names.add(item.method.toLowerCase());
+    });
+    return [...names].sort((left, right) => left.localeCompare(right));
+  }, [parsedData.allPayments]);
+
+  const patientFilterOptions = useMemo(() => {
+    return [...mergedPatientNameById.entries()]
+      .map(([id, name]) => ({ id, name: name || `Patient #${id}` }))
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }, [mergedPatientNameById]);
 
   const kpis = useMemo(() => {
     const billed = Number(filteredInvoices.reduce((sum, invoice) => sum + invoice.total, 0).toFixed(2));
@@ -983,6 +1366,217 @@ export default function ReportsPage(): JSX.Element {
     [kpis.paid, totalOutcome]
   );
 
+  const dailyFinancialSummary = useMemo(() => {
+    const start = parseDate(startDate)?.getTime() ?? Number.MIN_SAFE_INTEGER;
+    let opening = 0;
+    let cashIn = 0;
+    let cashOut = 0;
+
+    safeRows.forEach((row) => {
+      const date = parseDate(row.transactionDate)?.getTime() ?? Number.MIN_SAFE_INTEGER;
+      const amount = parseAmount(row.amount);
+      if (date < start) {
+        opening += row.direction === 'in' ? amount : -amount;
+        return;
+      }
+      if (!inRange(row.transactionDate, startDate, endDate)) return;
+      if (row.direction === 'in') {
+        cashIn += amount;
+      } else {
+        cashOut += amount;
+      }
+    });
+
+    const openingBalance = Number(opening.toFixed(2));
+    const totalCashIn = Number(cashIn.toFixed(2));
+    const totalCashOut = Number(cashOut.toFixed(2));
+    const closingBalance = Number((openingBalance + totalCashIn - totalCashOut).toFixed(2));
+    const physicalBalance = parseAmount(physicalSafeBalanceInput);
+    const variance = Number((physicalBalance - closingBalance).toFixed(2));
+
+    return {
+      closingBalance,
+      openingBalance,
+      physicalBalance,
+      totalCashIn,
+      totalCashOut,
+      variance,
+    };
+  }, [endDate, physicalSafeBalanceInput, safeRows, startDate]);
+
+  const inventoryRowsInRange = useMemo(
+    () => inventoryRows.filter((row) => inRange(row.entryDate, startDate, endDate)),
+    [endDate, inventoryRows, startDate]
+  );
+
+  const stockStatusRows = useMemo(() => {
+    return inventoryRowsInRange.map((row) => {
+      const status = row.quantity <= 0
+        ? 'Out'
+        : row.quantity <= row.minStock
+          ? 'Low'
+          : 'In Stock';
+      return {
+        ...row,
+        status,
+      };
+    });
+  }, [inventoryRowsInRange]);
+
+  const materialUsagePerTreatment = useMemo(() => {
+    const grouped = new Map<string, { cost: number; sessions: number }>();
+    filteredVisitTreatments.forEach((row) => {
+      const treatment = row.treatment?.name || `Treatment ${row.treatmentId}`;
+      const current = grouped.get(treatment) ?? { cost: 0, sessions: 0 };
+      current.sessions += 1;
+      current.cost = Number((current.cost + parseAmount(row.price)).toFixed(2));
+      grouped.set(treatment, current);
+    });
+    return [...grouped.entries()]
+      .map(([treatment, value]) => ({
+        avgCost: Number((value.cost / Math.max(value.sessions, 1)).toFixed(2)),
+        sessions: value.sessions,
+        totalCost: value.cost,
+        treatment,
+      }))
+      .sort((left, right) => right.totalCost - left.totalCost);
+  }, [filteredVisitTreatments]);
+
+  const implantInventoryRows = useMemo(
+    () => inventoryRowsInRange.filter((row) => row.category.toLowerCase() === 'implant'),
+    [inventoryRowsInRange]
+  );
+
+  const implantPlacementTrend = useMemo(() => {
+    const grouped = new Map<string, { count: number; label: string; revenue: number; sort: number }>();
+    filteredVisitTreatments.forEach((row) => {
+      const treatmentName = (row.treatment?.name || '').toLowerCase();
+      if (!treatmentName.includes('implant')) return;
+      const date = parseDate(row.visit?.visitDate || row.createdAt);
+      if (!date) return;
+      const bucket = toBucket(date, 'month');
+      const current = grouped.get(bucket.key) ?? { count: 0, label: bucket.label, revenue: 0, sort: bucket.sort };
+      current.count += 1;
+      current.revenue = Number((current.revenue + parseAmount(row.price)).toFixed(2));
+      grouped.set(bucket.key, current);
+    });
+    return [...grouped.entries()]
+      .map(([key, value]) => ({ count: value.count, key, label: value.label, revenue: value.revenue, sort: value.sort }))
+      .sort((left, right) => left.sort - right.sort)
+      .map((row) => ({ count: row.count, key: row.key, label: row.label, revenue: row.revenue }));
+  }, [filteredVisitTreatments]);
+
+  const executiveRevenueTrendMonthly = useMemo(() => {
+    const grouped = new Map<string, { amount: number; label: string; sort: number }>();
+    filteredPayments.forEach((payment) => {
+      const date = parseDate(payment.date);
+      if (!date) return;
+      const bucket = toBucket(date, 'month');
+      const current = grouped.get(bucket.key) ?? { amount: 0, label: bucket.label, sort: bucket.sort };
+      current.amount = Number((current.amount + payment.amount).toFixed(2));
+      grouped.set(bucket.key, current);
+    });
+    return [...grouped.entries()]
+      .map(([key, value]) => ({ amount: value.amount, key, label: value.label, sort: value.sort }))
+      .sort((left, right) => left.sort - right.sort)
+      .map((row) => ({ amount: row.amount, key: row.key, label: row.label }));
+  }, [filteredPayments]);
+
+  const bankBalance = useMemo(() => {
+    return Number(
+      filteredPayments
+        .filter((row) => ['bank', 'bank_transfer', 'transfer', 'card'].includes(row.method.toLowerCase()))
+        .reduce((sum, row) => sum + row.amount, 0)
+        .toFixed(2)
+    );
+  }, [filteredPayments]);
+
+  const cashInSafe = useMemo(() => {
+    let balance = 0;
+    safeRows
+      .filter((row) => {
+        const date = parseDate(row.transactionDate);
+        const end = parseDate(endDate);
+        return Boolean(date && end && date.getTime() <= end.getTime() + MS_PER_DAY - 1);
+      })
+      .forEach((row) => {
+        balance += row.direction === 'in' ? row.amount : -row.amount;
+      });
+    return Number(balance.toFixed(2));
+  }, [endDate, safeRows]);
+
+  const newPatientsCount = useMemo(() => {
+    return typedPatients.filter((patient) => {
+      if (selectedPatientFilter !== 'all' && asText(patient.id) !== selectedPatientFilter) return false;
+      const created = asText((patient as unknown as Record<string, unknown>).createdAt ?? (patient as unknown as Record<string, unknown>).created_at);
+      return inRange(created, startDate, endDate);
+    }).length;
+  }, [endDate, selectedPatientFilter, startDate, typedPatients]);
+
+  const implantRevenue = useMemo(
+    () => Number(implantPlacementTrend.reduce((sum, row) => sum + row.revenue, 0).toFixed(2)),
+    [implantPlacementTrend]
+  );
+
+  const treatmentAcceptanceRate = useMemo(() => {
+    if (filteredAppointments.length === 0) return 0;
+    return Number(Math.min(100, (filteredVisits.length / filteredAppointments.length) * 100).toFixed(1));
+  }, [filteredAppointments.length, filteredVisits.length]);
+
+  const chairUtilizationRate = useMemo(() => {
+    const start = parseDate(startDate);
+    const end = parseDate(endDate);
+    if (!start || !end) return 0;
+    const days = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / MS_PER_DAY) + 1);
+    return Number(Math.min(100, (filteredVisits.length / days) * 100).toFixed(1));
+  }, [endDate, filteredVisits.length, startDate]);
+
+  const financialModificationLogRows = useMemo<FinancialModificationLogRow[]>(() => {
+    const rows: FinancialModificationLogRow[] = [];
+    invoiceRows.forEach((invoice) => {
+      const createdAt = asText(invoice.createdAt ?? invoice.created_at);
+      const updatedAt = asText(invoice.updatedAt ?? invoice.updated_at);
+      if (!createdAt || !updatedAt || createdAt === updatedAt) return;
+      rows.push({
+        action: 'Invoice Updated',
+        afterValue: `Invoice #${asText(invoice.id)} current total ${formatCurrency(parseAmount(invoice.netAmount ?? invoice.net_amount))}`,
+        beforeValue: 'Previous values stored in backend audit log',
+        changedBy: asText(invoice.updatedBy ?? invoice.updated_by) || 'System',
+        entity: `Invoice #${asText(invoice.id)}`,
+        timestamp: updatedAt,
+      });
+    });
+
+    safeRows
+      .filter((row) => row.notes.toLowerCase().includes('delete'))
+      .forEach((row) => {
+        rows.push({
+          action: 'Payment/Safe Deleted',
+          afterValue: `Deleted amount ${formatCurrency(row.amount)}`,
+          beforeValue: `Original entry ${row.id}`,
+          changedBy: row.pickedByStaffName || row.pickedByStaffId || 'System',
+          entity: `Safe Transaction #${row.id}`,
+          timestamp: row.transactionDate,
+        });
+      });
+
+    return rows
+      .sort((left, right) => {
+        const leftTime = parseDate(left.timestamp)?.getTime() ?? 0;
+        const rightTime = parseDate(right.timestamp)?.getTime() ?? 0;
+        return rightTime - leftTime;
+      });
+  }, [invoiceRows, safeRows]);
+
+  const accessLogRows = useMemo(() => {
+    return snapshotRecords.map((snapshot) => ({
+      action: `Report snapshot (${snapshot.granularity})`,
+      generatedAt: snapshot.generatedAt,
+      range: `${snapshot.rangeStart} to ${snapshot.rangeEnd}`,
+      user: 'Current user',
+    }));
+  }, [snapshotRecords]);
+
   const incomeTrend = useMemo<TrendPoint[]>(() => {
     const buckets = new Map<string, { income: number; label: string; paymentCount: number; sort: number }>();
 
@@ -1039,8 +1633,7 @@ export default function ReportsPage(): JSX.Element {
     });
 
     return [...grouped.values()]
-      .sort((left, right) => right.revenue - left.revenue || right.sessions - left.sessions)
-      .slice(0, 12);
+      .sort((left, right) => right.revenue - left.revenue || right.sessions - left.sessions);
   }, [filteredVisitTreatments]);
 
   const dentistProductivity = useMemo<DentistProductivityPoint[]>(() => {
@@ -1060,20 +1653,8 @@ export default function ReportsPage(): JSX.Element {
     });
 
     return [...grouped.values()]
-      .sort((left, right) => right.revenue - left.revenue || right.visits - left.visits)
-      .slice(0, 12);
+      .sort((left, right) => right.revenue - left.revenue || right.visits - left.visits);
   }, [filteredInvoices, filteredVisits]);
-
-  const appointmentStatus = useMemo(() => {
-    const grouped = new Map<string, number>();
-    filteredAppointments.forEach((appointment) => {
-      const status = (appointment.status || 'scheduled').toLowerCase();
-      grouped.set(status, (grouped.get(status) ?? 0) + 1);
-    });
-    return [...grouped.entries()]
-      .map(([status, count]) => ({ count, status }))
-      .sort((left, right) => right.count - left.count);
-  }, [filteredAppointments]);
 
   const cashFlowTrend = useMemo<CashFlowPoint[]>(() => {
     const buckets = new Map<string, CashFlowPoint>();
@@ -1182,6 +1763,113 @@ export default function ReportsPage(): JSX.Element {
     return [...grouped.values()].sort((left, right) => right.amount - left.amount);
   }, [filteredPayments]);
 
+  const revenueByTreatmentRows = useMemo(() => {
+    return treatmentVolume.map((row) => ({
+      cost: '-',
+      count: row.sessions,
+      discount: formatCurrency(0),
+      gross: formatCurrency(row.revenue),
+      label: row.name,
+      net: formatCurrency(row.revenue),
+      profit: 'Backend locked',
+    }));
+  }, [treatmentVolume]);
+
+  const revenueByDentistRows = useMemo(() => {
+    return dentistProductivity.map((row) => ({
+      cost: '-',
+      count: row.visits,
+      discount: formatCurrency(0),
+      gross: formatCurrency(row.revenue),
+      label: row.dentist,
+      net: formatCurrency(row.revenue),
+      profit: 'Backend locked',
+    }));
+  }, [dentistProductivity]);
+
+  const revenueByPaymentMethodRows = useMemo(() => {
+    return paymentMethodMix.map((row) => ({
+      cost: '-',
+      count: row.count,
+      discount: formatCurrency(0),
+      gross: formatCurrency(row.amount),
+      label: toHumanLabel(row.method),
+      net: formatCurrency(row.amount),
+      profit: 'Backend locked',
+    }));
+  }, [paymentMethodMix]);
+
+  const revenueByPatientRows = useMemo(() => {
+    const grouped = new Map<string, { count: number; discount: number; gross: number; net: number }>();
+    filteredInvoices.forEach((row) => {
+      const key = row.patientId || 'unknown';
+      const current = grouped.get(key) ?? { count: 0, discount: 0, gross: 0, net: 0 };
+      current.count += 1;
+      current.discount = Number((current.discount + row.discount).toFixed(2));
+      current.gross = Number((current.gross + row.total).toFixed(2));
+      current.net = Number((current.net + row.net).toFixed(2));
+      grouped.set(key, current);
+    });
+    return [...grouped.entries()].map(([patientId, row]) => ({
+      cost: '-',
+      count: row.count,
+      discount: formatCurrency(row.discount),
+      gross: formatCurrency(row.gross),
+      label: mergedPatientNameById.get(patientId) || `Patient #${patientId}`,
+      net: formatCurrency(row.net),
+      profit: 'Backend locked',
+    }));
+  }, [filteredInvoices, mergedPatientNameById]);
+
+  const treatmentPerformanceSummary = useMemo(() => {
+    const completedTreatments = filteredVisitTreatments.length;
+    const cancelledTreatments = filteredAppointments.filter((row) => (row.status || '').toLowerCase() === 'cancelled').length;
+    const total = completedTreatments + cancelledTreatments;
+    const successRate = total > 0 ? Number(((completedTreatments / total) * 100).toFixed(1)) : 0;
+    return {
+      avgDurationMinutes: 0,
+      cancelledTreatments,
+      completedTreatments,
+      successRate,
+    };
+  }, [filteredAppointments, filteredVisitTreatments.length]);
+
+  const dentistPerformanceRows = useMemo(() => {
+    const treatmentCountByDentist = new Map<string, number>();
+    filteredVisitTreatments.forEach((row) => {
+      const dentist = row.visit?.dentistName || 'Unknown';
+      treatmentCountByDentist.set(dentist, (treatmentCountByDentist.get(dentist) ?? 0) + 1);
+    });
+
+    const patientsByDentist = new Map<string, Set<string>>();
+    filteredVisits.forEach((row) => {
+      const dentist = row.dentistName || `Dentist #${row.dentistId || '-'}`;
+      const set = patientsByDentist.get(dentist) ?? new Set<string>();
+      set.add(asText(row.patientId));
+      patientsByDentist.set(dentist, set);
+    });
+
+    return dentistProductivity.map((row) => ({
+      commission: Number((row.revenue * 0.1).toFixed(2)),
+      dentist: row.dentist,
+      patientsSeen: patientsByDentist.get(row.dentist)?.size ?? 0,
+      revenue: row.revenue,
+      treatments: treatmentCountByDentist.get(row.dentist) ?? 0,
+    }));
+  }, [dentistProductivity, filteredVisitTreatments, filteredVisits]);
+
+  const implantSuccessRows = useMemo(() => {
+    const rows = filteredImplantSupplierTasks.map((task) => ({
+      brand: 'Implant',
+      failures: parseAvailabilityFromTaskNotes(task.notes, task.status) === 'not_available' ? 1 : 0,
+      patientName: mergedPatientNameById.get(asText(task.patientId)) || `Patient #${asText(task.patientId) || '-'}`,
+      placementDate: task.createdAt,
+      status: parseAvailabilityFromTaskNotes(task.notes, task.status),
+      warrantyTracking: parseAvailabilityFromTaskNotes(task.notes, task.status) === 'done' ? 'Active' : 'Pending',
+    }));
+    return rows;
+  }, [filteredImplantSupplierTasks, mergedPatientNameById]);
+
   const ledgerRows = useMemo(() => {
     const start = parseDate(startDate);
     const startMs = start?.getTime() ?? Number.MIN_SAFE_INTEGER;
@@ -1264,8 +1952,7 @@ export default function ReportsPage(): JSX.Element {
           if (selectedDebtAgingBucket === 'all') return true;
           return toDebtAgingBucket(invoice.date, endDate) === selectedDebtAgingBucket;
         })
-        .sort((left, right) => right.debt - left.debt)
-        .slice(0, 20),
+        .sort((left, right) => right.debt - left.debt),
     [endDate, filteredInvoices, selectedDebtAgingBucket]
   );
 
@@ -1274,7 +1961,9 @@ export default function ReportsPage(): JSX.Element {
     || isLoadingVisits
     || isLoadingInvoices
     || isLoadingVisitTreatments
-    || isLoadingFinanceData;
+    || isLoadingCoreData
+    || isLoadingFinanceData
+    || isLoadingInventoryData;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1303,7 +1992,7 @@ export default function ReportsPage(): JSX.Element {
       paid: kpis.paid,
       rangeEnd: endDate,
       rangeStart: startDate,
-      statusFilter,
+      statusFilter: globalStatusFilter,
       visits: kpis.visits,
     };
 
@@ -1316,7 +2005,7 @@ export default function ReportsPage(): JSX.Element {
     if (reason === 'manual') {
       window.alert('Snapshot captured.');
     }
-  }, [endDate, granularity, kpis, startDate, statusFilter]);
+  }, [endDate, globalStatusFilter, granularity, kpis, startDate]);
 
   useEffect(() => {
     if (snapshotCadence === 'off' || isLoadingAny) return;
@@ -1351,10 +2040,11 @@ export default function ReportsPage(): JSX.Element {
 
   const printCurrentTabTemplate = (): void => {
     const titleByTab = {
+      audit: 'Audit & Compliance Reports',
       clinical: 'Clinical Reports',
-      financial: 'Overview & Financial Reports',
-      operations: 'Operations Reports',
-      overview: 'Overview & Financial Reports',
+      executive: 'Executive Dashboard',
+      financial: 'Financial Reports',
+      inventory: 'Inventory Reports',
     } as const;
 
     const buildLineChart = (
@@ -1503,7 +2193,7 @@ export default function ReportsPage(): JSX.Element {
     const summaryRows = [
       formatRow('Date Range', `${formatFullDate(startDate)} to ${formatFullDate(endDate)}`),
       formatRow('Granularity', toHumanLabel(granularity)),
-      formatRow('Invoice Status Filter', toHumanLabel(statusFilter)),
+      formatRow('Status Filter', toHumanLabel(globalStatusFilter)),
       formatRow('Reporting Currency', 'AFN (Afghani)'),
       formatRow('Billed', formatCurrency(kpis.billed)),
       formatRow('Discount', formatCurrency(kpis.discount)),
@@ -1533,10 +2223,9 @@ export default function ReportsPage(): JSX.Element {
       <div class="bar-wrap"><span>${profitOrLossForPrint >= 0 ? 'Profit' : 'Loss'}</span><div class="bar ${profitOrLossForPrint >= 0 ? 'bg-emerald' : 'bg-red'}"><i style="width:${profitBarWidth}%"></i></div><b>${escapeHtml(formatCurrency(profitOrLossForPrint))}</b></div>
     `;
     const salaryRowsForPrint = salaryRows
-      .filter((row) => inRange(row.paymentDate, startDate, endDate))
-      .slice(0, 50);
-    const paymentMethodRowsForPrint = paymentMethodMix.slice(0, 20);
-    const outstandingInvoicesForPrint = outstandingInvoices.slice(0, 30);
+      .filter((row) => inRange(row.paymentDate, startDate, endDate));
+    const paymentMethodRowsForPrint = paymentMethodMix;
+    const outstandingInvoicesForPrint = outstandingInvoices;
     const thirdCompanyStatusUnpaidRows = thirdCompanyStatusChart.filter((row) => row.unpaid > 0);
     const thirdCompanyStatusCountRows = thirdCompanyStatusChart.filter((row) => row.count > 0);
 
@@ -1546,6 +2235,18 @@ export default function ReportsPage(): JSX.Element {
       <h3>Income Trend</h3>
       <table><thead><tr><th>Bucket</th><th>Income</th><th>Payments</th></tr></thead><tbody>
         ${incomeTrend.map((point) => `<tr><td>${escapeHtml(point.label)}</td><td>${escapeHtml(formatCurrency(point.income))}</td><td>${point.paymentCount}</td></tr>`).join('')}
+      </tbody></table>
+      <h3>Revenue by Treatment Type</h3>
+      <table><thead><tr><th>Treatment</th><th>Sessions</th><th>Revenue</th></tr></thead><tbody>
+        ${treatmentVolume.map((row) => `<tr><td>${escapeHtml(row.name)}</td><td>${row.sessions}</td><td>${escapeHtml(formatCurrency(row.revenue))}</td></tr>`).join('')}
+      </tbody></table>
+      <h3>Revenue by Dentist</h3>
+      <table><thead><tr><th>Dentist</th><th>Visits</th><th>Revenue</th></tr></thead><tbody>
+        ${dentistProductivity.map((row) => `<tr><td>${escapeHtml(row.dentist)}</td><td>${row.visits}</td><td>${escapeHtml(formatCurrency(row.revenue))}</td></tr>`).join('')}
+      </tbody></table>
+      <h3>Implant Placement Trend</h3>
+      <table><thead><tr><th>Month</th><th>Placements</th><th>Revenue</th></tr></thead><tbody>
+        ${implantPlacementTrend.map((row) => `<tr><td>${escapeHtml(row.label)}</td><td>${row.count}</td><td>${escapeHtml(formatCurrency(row.revenue))}</td></tr>`).join('')}
       </tbody></table>
     `;
     const financialBodySection = `
@@ -1573,6 +2274,12 @@ export default function ReportsPage(): JSX.Element {
       <table><thead><tr><th>Category</th><th>Amount</th></tr></thead><tbody>
         ${expenseSummary.byCategory.map((row) => `<tr><td>${escapeHtml(row.category)}</td><td>${escapeHtml(formatCurrency(row.amount))}</td></tr>`).join('')}
       </tbody></table>
+      <h3>Expense Details</h3>
+      ${[...filteredDailyExpenses, ...filteredClinicalExpenses].length === 0
+    ? '<p class="muted">No expense rows in selected range.</p>'
+    : `<table><thead><tr><th>Date</th><th>Type</th><th>Category</th><th>Amount</th></tr></thead><tbody>
+          ${[...filteredDailyExpenses, ...filteredClinicalExpenses].map((row) => `<tr><td>${escapeHtml(formatFullDate(row.expenseDate))}</td><td>${escapeHtml(toHumanLabel(row.expenseType))}</td><td>${escapeHtml(row.category)}</td><td>${escapeHtml(formatCurrency(row.amount))}</td></tr>`).join('')}
+        </tbody></table>`}
       ${buildBarChart(debtAging.map((row) => ({ label: row.bucket, value: row.amount })), '#f97316', 'Receivables Aging Diagram')}
       ${buildGroupedBarChart(cashFlowTrend.map((row) => ({ billed: row.billed, debt: row.debt, label: row.label, paid: row.paid })), `Cash Flow by ${granularity} Diagram`)}
       ${buildBarChart(
@@ -1623,37 +2330,84 @@ export default function ReportsPage(): JSX.Element {
       </tbody></table>
     `;
     let bodySections = '';
-    if (activeTab === 'overview' || activeTab === 'financial') {
+    if (activeTab === 'executive') {
       bodySections = `
-        <h2>Overview</h2>
+        <h2>Executive Dashboard</h2>
         ${overviewBodySection}
-        <h2>Financial</h2>
+      `;
+    }
+    if (activeTab === 'financial') {
+      bodySections = `
+        <h2>Financial Reports</h2>
         ${financialBodySection}
       `;
     }
     if (activeTab === 'clinical') {
       bodySections = `
+        <h3>Treatment Performance</h3>
+        <table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>
+          <tr><td>Completed Treatments</td><td>${treatmentPerformanceSummary.completedTreatments}</td></tr>
+          <tr><td>Cancelled Treatments</td><td>${treatmentPerformanceSummary.cancelledTreatments}</td></tr>
+          <tr><td>Average Duration</td><td>${treatmentPerformanceSummary.avgDurationMinutes > 0 ? `${treatmentPerformanceSummary.avgDurationMinutes}m` : 'N/A'}</td></tr>
+          <tr><td>Success Rate</td><td>${treatmentPerformanceSummary.successRate}%</td></tr>
+        </tbody></table>
         <h3>Treatment Volume</h3>
         <table><thead><tr><th>Treatment</th><th>Sessions</th><th>Revenue</th></tr></thead><tbody>
           ${treatmentVolume.map((row) => `<tr><td>${escapeHtml(row.name)}</td><td>${row.sessions}</td><td>${escapeHtml(formatCurrency(row.revenue))}</td></tr>`).join('')}
         </tbody></table>
+        <h3>Dentist Performance</h3>
+        <table><thead><tr><th>Dentist</th><th>Patients Seen</th><th>Revenue</th><th>Treatments</th><th>Commission</th></tr></thead><tbody>
+          ${dentistPerformanceRows.map((row) => `<tr><td>${escapeHtml(row.dentist)}</td><td>${row.patientsSeen}</td><td>${escapeHtml(formatCurrency(row.revenue))}</td><td>${row.treatments}</td><td>${escapeHtml(formatCurrency(row.commission))}</td></tr>`).join('')}
+        </tbody></table>
+        <h3>Implant Success Report</h3>
+        <table><thead><tr><th>Patient</th><th>Brand</th><th>Placement Date</th><th>Failures</th><th>Warranty</th></tr></thead><tbody>
+          ${implantSuccessRows.map((row) => `<tr><td>${escapeHtml(row.patientName)}</td><td>${escapeHtml(row.brand)}</td><td>${escapeHtml(formatFullDate(row.placementDate))}</td><td>${row.failures}</td><td>${escapeHtml(row.warrantyTracking)}</td></tr>`).join('')}
+        </tbody></table>
       `;
     }
-    if (activeTab === 'operations') {
+    if (activeTab === 'inventory') {
       bodySections = `
-        <h3>Dentist Productivity</h3>
-        <table><thead><tr><th>Dentist</th><th>Visits</th><th>Revenue</th></tr></thead><tbody>
-          ${dentistProductivity.map((row) => `<tr><td>${escapeHtml(row.dentist)}</td><td>${row.visits}</td><td>${escapeHtml(formatCurrency(row.revenue))}</td></tr>`).join('')}
+        <h3>Stock Status</h3>
+        <table><thead><tr><th>Item</th><th>In Stock</th><th>Min</th><th>Expiry</th><th>Status</th></tr></thead><tbody>
+          ${stockStatusRows.map((row) => `<tr><td>${escapeHtml(row.itemName)}</td><td>${row.quantity}</td><td>${row.minStock}</td><td>${escapeHtml(formatFullDate(row.expiryDate))}</td><td>${escapeHtml(row.status)}</td></tr>`).join('')}
+        </tbody></table>
+        <h3>Material Usage Per Treatment</h3>
+        <table><thead><tr><th>Treatment</th><th>Sessions</th><th>Total Cost</th><th>Avg Cost</th></tr></thead><tbody>
+          ${materialUsagePerTreatment.map((row) => `<tr><td>${escapeHtml(row.treatment)}</td><td>${row.sessions}</td><td>${escapeHtml(formatCurrency(row.totalCost))}</td><td>${escapeHtml(formatCurrency(row.avgCost))}</td></tr>`).join('')}
+        </tbody></table>
+        <h3>Implant Inventory</h3>
+        <table><thead><tr><th>Item</th><th>Batch / Serial</th><th>Qty</th><th>Supplier</th><th>Entry Date</th><th>Expiry</th></tr></thead><tbody>
+          ${implantInventoryRows.map((row) => `<tr><td>${escapeHtml(row.itemName)}</td><td>${escapeHtml(row.lotNumber || '-')}</td><td>${row.quantity}</td><td>${escapeHtml(row.supplier || '-')}</td><td>${escapeHtml(formatFullDate(row.entryDate))}</td><td>${escapeHtml(formatFullDate(row.expiryDate))}</td></tr>`).join('')}
+        </tbody></table>
+      `;
+    }
+    if (activeTab === 'audit') {
+      bodySections = `
+        <h3>Financial Modification Log</h3>
+        <table><thead><tr><th>Entity</th><th>Action</th><th>Changed By</th><th>Timestamp</th><th>Before</th><th>After</th></tr></thead><tbody>
+          ${financialModificationLogRows.map((row) => `<tr><td>${escapeHtml(row.entity)}</td><td>${escapeHtml(row.action)}</td><td>${escapeHtml(row.changedBy)}</td><td>${escapeHtml(formatDateTime(row.timestamp))}</td><td>${escapeHtml(row.beforeValue)}</td><td>${escapeHtml(row.afterValue)}</td></tr>`).join('')}
+        </tbody></table>
+        <h3>Access Logs</h3>
+        <table><thead><tr><th>Action</th><th>User</th><th>Range</th><th>Timestamp</th></tr></thead><tbody>
+          ${accessLogRows.map((row) => `<tr><td>${escapeHtml(row.action)}</td><td>${escapeHtml(row.user)}</td><td>${escapeHtml(row.range)}</td><td>${escapeHtml(formatDateTime(row.generatedAt))}</td></tr>`).join('')}
+        </tbody></table>
+        <h3>Snapshots</h3>
+        <table><thead><tr><th>Generated</th><th>Range</th><th>Billed</th><th>Paid</th><th>Debt</th></tr></thead><tbody>
+          ${snapshotRecords.map((row) => `<tr><td>${escapeHtml(formatDateTime(row.generatedAt))}</td><td>${escapeHtml(`${formatFullDate(row.rangeStart)} to ${formatFullDate(row.rangeEnd)}`)}</td><td>${escapeHtml(formatCurrency(row.billed))}</td><td>${escapeHtml(formatCurrency(row.paid))}</td><td>${escapeHtml(formatCurrency(row.debt))}</td></tr>`).join('')}
         </tbody></table>
       `;
     }
 
     const printHtml = `<!doctype html><html><head><meta charset="utf-8"/><title>${escapeHtml(titleByTab[activeTab])}</title><style>
+      @page{margin:18mm}
       body{font-family:Arial,sans-serif;padding:20px;color:#0f172a}
       h1,h2,h3{margin:0 0 8px}
       table{width:100%;border-collapse:collapse;margin:8px 0}
       th,td{border:1px solid #d1d5db;padding:6px;text-align:left;font-size:12px}
       th{background:#f1f5f9}
+      .report-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+      .logo-box{border:1px dashed #94a3b8;border-radius:8px;padding:8px 12px;font-size:11px;color:#64748b}
+      .meta-line{font-size:12px;color:#334155;margin:2px 0}
       .bar-wrap{display:grid;grid-template-columns:220px 1fr 160px;gap:10px;align-items:center;margin:8px 0;font-size:12px}
       .bar{height:10px;border-radius:999px;background:#e2e8f0;overflow:hidden}
       .bar i{display:block;height:100%}
@@ -1673,6 +2427,8 @@ export default function ReportsPage(): JSX.Element {
       .bg-orange i{background:#f97316}
       .bg-emerald i{background:#16a34a}
       .bg-red i{background:#dc2626}
+      .page-footer{position:fixed;right:0;bottom:0;font-size:10px;color:#64748b}
+      .page-footer::after{content:"Page " counter(page)}
       @media print{
         body,th,td{
           -webkit-print-color-adjust:exact !important;
@@ -1682,11 +2438,19 @@ export default function ReportsPage(): JSX.Element {
         .type-payment td{background:#ecfdf5 !important}
       }
     </style></head><body>
-      <h1>${escapeHtml(titleByTab[activeTab])}</h1>
-      <p>Generated at: ${escapeHtml(formatDateTime(new Date().toISOString()))}</p>
+      <div class="report-head">
+        <div class="logo-box">Clinic Logo</div>
+        <div>
+          <h1>${escapeHtml(titleByTab[activeTab])}</h1>
+          <p class="meta-line">Generated at: ${escapeHtml(formatDateTime(new Date().toISOString()))}</p>
+          <p class="meta-line">Generated by: Current User</p>
+          <p class="meta-line">Filters: Date ${escapeHtml(formatFullDate(startDate))} to ${escapeHtml(formatFullDate(endDate))} | Dentist ${escapeHtml(selectedDentistFilter)} | Treatment ${escapeHtml(selectedTreatmentFilter)} | Payment ${escapeHtml(toHumanLabel(selectedPaymentMethodFilter))} | Patient ${escapeHtml(selectedPatientFilter)} | Status ${escapeHtml(toHumanLabel(globalStatusFilter))}</p>
+        </div>
+      </div>
       <h3>Summary</h3>
       <table><tbody>${summaryRows}</tbody></table>
       ${bodySections}
+      <div class="page-footer"></div>
     </body></html>`;
 
     const iframe = document.createElement('iframe');
@@ -1726,6 +2490,992 @@ export default function ReportsPage(): JSX.Element {
     frameDocument.close();
   };
 
+  const handleGlobalExport = (): void => {
+    if (exportFormat === 'pdf') {
+      printCurrentTabTemplate();
+      return;
+    }
+
+    const parseTaggedText = (notes: string | undefined, key: string): string => {
+      if (!notes) return '';
+      const match = notes.match(new RegExp(`\\[${key}:([^\\]]+)\\]`, 'i'));
+      return match?.[1]?.trim() ?? '';
+    };
+    const parseTaggedNumber = (notes: string | undefined, key: string): number => {
+      const value = parseTaggedText(notes, key);
+      return parseAmount(value);
+    };
+    const parseTaggedDate = (notes: string | undefined, key: string): string => {
+      const raw = parseTaggedText(notes, key);
+      const parsed = parseDate(raw);
+      return parsed ? formatFullDate(raw) : '-';
+    };
+
+    const patientPhoneById = new Map<string, string>();
+    typedPatients.forEach((patient) => {
+      const record = patient as unknown as Record<string, unknown>;
+      const phone = asText(
+        record.phoneNumber
+        ?? record.phone_number
+        ?? record.mobile
+        ?? record.mobileNumber
+        ?? record.mobile_number
+        ?? record.contactNumber
+        ?? record.contact_number
+      );
+      patientPhoneById.set(String(patient.id), phone || '-');
+    });
+
+    const invoiceMetaById = new Map<string, { createdBy: string; taxAmount: number }>();
+    invoiceRows.forEach((row) => {
+      const invoiceId = asText(row.id);
+      if (!invoiceId) return;
+      invoiceMetaById.set(invoiceId, {
+        createdBy: asText(row.createdBy ?? row.created_by) || 'System',
+        taxAmount: parseAmount(row.taxAmount ?? row.tax_amount ?? row.vatAmount ?? row.vat_amount ?? 0),
+      });
+    });
+
+    const paymentInfoByInvoiceId = new Map<string, { lastPaymentDate: string; methods: Set<string> }>();
+    const exportEndTs = parseDate(endDate)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+    parsedData.allPayments.forEach((payment) => {
+      const paymentTs = parseDate(payment.date)?.getTime() ?? Number.MIN_SAFE_INTEGER;
+      if (paymentTs > exportEndTs) return;
+      const current = paymentInfoByInvoiceId.get(payment.invoiceId) ?? { lastPaymentDate: '', methods: new Set<string>() };
+      current.methods.add(toHumanLabel(payment.method || 'cash'));
+      if (!current.lastPaymentDate || paymentTs > (parseDate(current.lastPaymentDate)?.getTime() ?? Number.MIN_SAFE_INTEGER)) {
+        current.lastPaymentDate = payment.date;
+      }
+      paymentInfoByInvoiceId.set(payment.invoiceId, current);
+    });
+
+    if (csvExportType === 'financial_revenue') {
+      const treatmentSummaryByVisitId = new Map<string, {
+        categories: Set<string>;
+        ids: Set<string>;
+        materialCost: number;
+        names: Set<string>;
+        quantity: number;
+      }>();
+      filteredVisitTreatments.forEach((row) => {
+        const visitId = asText(row.visitId);
+        if (!visitId) return;
+        const summary = treatmentSummaryByVisitId.get(visitId) ?? {
+          categories: new Set<string>(),
+          ids: new Set<string>(),
+          materialCost: 0,
+          names: new Set<string>(),
+          quantity: 0,
+        };
+        summary.quantity += 1;
+        summary.ids.add(asText(row.treatmentId) || '-');
+        summary.names.add(row.treatment?.name || `Treatment ${row.treatmentId}`);
+        const category = asText((row.treatment as unknown as Record<string, unknown> | undefined)?.category);
+        summary.categories.add(category || 'General');
+        summary.materialCost = Number((
+          summary.materialCost
+          + parseAmount((row as unknown as Record<string, unknown>).materialCost ?? (row as unknown as Record<string, unknown>).material_cost ?? 0)
+        ).toFixed(2));
+        treatmentSummaryByVisitId.set(visitId, summary);
+      });
+
+      const rows = filteredInvoices.map((invoice) => {
+        const visit = visitById.get(invoice.visitId);
+        const treatmentSummary = treatmentSummaryByVisitId.get(invoice.visitId);
+        const paymentInfo = paymentInfoByInvoiceId.get(invoice.id);
+        const invoiceMeta = invoiceMetaById.get(invoice.id);
+        const taxAmount = invoiceMeta?.taxAmount ?? 0;
+        const dentistCommission = Number((invoice.net * 0.1).toFixed(2));
+        const clinicShare = Number((invoice.net - dentistCommission).toFixed(2));
+        return {
+          'Invoice ID': invoice.id,
+          'Invoice Date': formatFullDate(invoice.date),
+          'Patient ID': invoice.patientId || '-',
+          'Patient Name': mergedPatientNameById.get(invoice.patientId) || `Patient #${invoice.patientId || '-'}`,
+          'Treatment ID': treatmentSummary ? [...treatmentSummary.ids].join(' | ') : '-',
+          'Treatment Name': treatmentSummary ? [...treatmentSummary.names].join(' | ') : '-',
+          Dentist: asText(visit?.dentistName) || `Dentist #${asText(visit?.dentistId) || '-'}`,
+          'Treatment Category': treatmentSummary ? [...treatmentSummary.categories].join(' | ') : '-',
+          Quantity: treatmentSummary?.quantity ?? 1,
+          'Gross Amount': formatCsvAmount(invoice.total),
+          'Discount Amount': formatCsvAmount(invoice.discount),
+          'Tax Amount': formatCsvAmount(taxAmount),
+          'Net Amount': formatCsvAmount(invoice.net),
+          'Material Cost': formatCsvAmount(treatmentSummary?.materialCost ?? 0),
+          'Clinic Share': formatCsvAmount(clinicShare),
+          'Dentist Commission': formatCsvAmount(dentistCommission),
+          'Payment Status': toHumanLabel(invoice.status),
+          'Payment Method': paymentInfo ? [...paymentInfo.methods].join(' | ') : '-',
+          'Created By': invoiceMeta?.createdBy || 'System',
+        };
+      });
+
+      downloadCsv(`financial-revenue-${startDate}-to-${endDate}.csv`, rows.length > 0 ? rows : [{
+        'Invoice ID': 'No data',
+        'Invoice Date': '-',
+        'Patient ID': '-',
+        'Patient Name': '-',
+        'Treatment ID': '-',
+        'Treatment Name': '-',
+        Dentist: '-',
+        'Treatment Category': '-',
+        Quantity: '-',
+        'Gross Amount': '-',
+        'Discount Amount': '-',
+        'Tax Amount': '-',
+        'Net Amount': '-',
+        'Material Cost': '-',
+        'Clinic Share': '-',
+        'Dentist Commission': '-',
+        'Payment Status': '-',
+        'Payment Method': '-',
+        'Created By': '-',
+      }]);
+      return;
+    }
+
+    if (csvExportType === 'financial_outstanding') {
+      const rows = outstandingInvoices.map((invoice) => {
+        const visit = visitById.get(invoice.visitId);
+        const paymentInfo = paymentInfoByInvoiceId.get(invoice.id);
+        const ageDays = Math.max(0, Math.floor(((parseDate(endDate)?.getTime() ?? 0) - (parseDate(invoice.date)?.getTime() ?? 0)) / MS_PER_DAY));
+        const bucket = toDebtAgingBucket(invoice.date, endDate);
+        return {
+          'Patient ID': invoice.patientId || '-',
+          'Patient Name': mergedPatientNameById.get(invoice.patientId) || `Patient #${invoice.patientId || '-'}`,
+          'Invoice ID': invoice.id,
+          'Invoice Date': formatFullDate(invoice.date),
+          'Total Amount': formatCsvAmount(invoice.net),
+          'Total Paid': formatCsvAmount(invoice.paid),
+          'Remaining Balance': formatCsvAmount(invoice.debt),
+          'Days Overdue': ageDays,
+          '0-30 Days': formatCsvAmount(bucket === '0-30 days' ? invoice.debt : 0),
+          '31-60 Days': formatCsvAmount(bucket === '31-60 days' ? invoice.debt : 0),
+          '61-90 Days': formatCsvAmount(bucket === '61-90 days' ? invoice.debt : 0),
+          '90+ Days': formatCsvAmount(bucket === '90+ days' ? invoice.debt : 0),
+          'Contact Number': patientPhoneById.get(invoice.patientId) || '-',
+          'Last Payment Date': paymentInfo?.lastPaymentDate ? formatFullDate(paymentInfo.lastPaymentDate) : '-',
+          'Responsible Dentist': asText(visit?.dentistName) || `Dentist #${asText(visit?.dentistId) || '-'}`,
+        };
+      });
+
+      downloadCsv(`financial-outstanding-${startDate}-to-${endDate}.csv`, rows.length > 0 ? rows : [{
+        'Patient ID': 'No data',
+        'Patient Name': '-',
+        'Invoice ID': '-',
+        'Invoice Date': '-',
+        'Total Amount': '-',
+        'Total Paid': '-',
+        'Remaining Balance': '-',
+        'Days Overdue': '-',
+        '0-30 Days': '-',
+        '31-60 Days': '-',
+        '61-90 Days': '-',
+        '90+ Days': '-',
+        'Contact Number': '-',
+        'Last Payment Date': '-',
+        'Responsible Dentist': '-',
+      }]);
+      return;
+    }
+
+    if (csvExportType === 'financial_daily_safe') {
+      const transactions = safeRows
+        .filter((row) => inRange(row.transactionDate, startDate, endDate))
+        .sort((left, right) => {
+          const leftTs = parseDate(left.transactionDate)?.getTime() ?? 0;
+          const rightTs = parseDate(right.transactionDate)?.getTime() ?? 0;
+          if (leftTs !== rightTs) return leftTs - rightTs;
+          return left.id.localeCompare(right.id, undefined, { numeric: true, sensitivity: 'base' });
+        });
+
+      let runningBalance = dailyFinancialSummary.openingBalance;
+      const rows = transactions.map((row) => {
+        const delta = row.direction === 'in' ? row.amount : -row.amount;
+        runningBalance = Number((runningBalance + delta).toFixed(2));
+        return {
+          'Transaction ID': row.id,
+          'Transaction Date': formatFullDate(row.transactionDate),
+          'Type (IN/OUT)': row.direction === 'in' ? 'IN' : 'OUT',
+          Source: toHumanLabel(row.entryType || 'manual'),
+          'Reference ID': row.id,
+          Description: row.notes || '-',
+          Amount: formatCsvAmount(row.amount),
+          'Handled By': row.pickedByStaffName || row.pickedByStaffId || '-',
+          'Opening Balance': formatCsvAmount(dailyFinancialSummary.openingBalance),
+          'Running Balance': formatCsvAmount(runningBalance),
+          'Closing Balance': formatCsvAmount(dailyFinancialSummary.closingBalance),
+          Variance: formatCsvAmount(dailyFinancialSummary.variance),
+        };
+      });
+
+      downloadCsv(`daily-safe-${startDate}-to-${endDate}.csv`, rows.length > 0 ? rows : [{
+        'Transaction ID': 'No data',
+        'Transaction Date': '-',
+        'Type (IN/OUT)': '-',
+        Source: '-',
+        'Reference ID': '-',
+        Description: '-',
+        Amount: '-',
+        'Handled By': '-',
+        'Opening Balance': formatCsvAmount(dailyFinancialSummary.openingBalance),
+        'Running Balance': formatCsvAmount(dailyFinancialSummary.openingBalance),
+        'Closing Balance': formatCsvAmount(dailyFinancialSummary.closingBalance),
+        Variance: formatCsvAmount(dailyFinancialSummary.variance),
+      }]);
+      return;
+    }
+
+    if (csvExportType === 'financial_implant_installment') {
+      const taskById = new Map<string, ImplantSupplierTaskLike>();
+      filteredImplantSupplierTasks.forEach((task) => {
+        taskById.set(asText(task.id), task);
+      });
+      const rows = thirdCompanySummary.rows.map((row) => {
+        const task = taskById.get(asText(row.taskId));
+        const depositPaid = parseTaggedNumber(task?.notes, 'deposit_paid');
+        const installmentAmount = parseTaggedNumber(task?.notes, 'installment_amount');
+        const totalPaid = row.supplierPaid;
+        return {
+          'Implant ID': asText(row.taskId) || '-',
+          'Patient Name': mergedPatientNameById.get(row.patientId) || `Patient #${row.patientId || '-'}`,
+          'Implant Brand': parseTaggedText(task?.notes, 'implant_brand') || 'Implant',
+          'Serial Number': parseTaggedText(task?.notes, 'serial_number') || '-',
+          'Placement Date': formatFullDate(row.createdAt),
+          'Total Cost': formatCsvAmount(row.supplierTotal),
+          'Deposit Paid': formatCsvAmount(depositPaid > 0 ? depositPaid : Math.min(totalPaid, row.supplierTotal)),
+          'Installment Amount': formatCsvAmount(installmentAmount > 0 ? installmentAmount : 0),
+          'Total Paid': formatCsvAmount(totalPaid),
+          'Remaining Balance': formatCsvAmount(row.supplierRemaining),
+          'Next Due Date': parseTaggedDate(task?.notes, 'next_due_date'),
+          'Payment Status': row.supplierRemaining > 0 ? 'Pending' : 'Paid',
+          'Warranty Expiry': parseTaggedDate(task?.notes, 'warranty_expiry'),
+          Surgeon: parseTaggedText(task?.notes, 'surgeon') || '-',
+        };
+      });
+
+      downloadCsv(`implant-installments-${startDate}-to-${endDate}.csv`, rows.length > 0 ? rows : [{
+        'Implant ID': 'No data',
+        'Patient Name': '-',
+        'Implant Brand': '-',
+        'Serial Number': '-',
+        'Placement Date': '-',
+        'Total Cost': '-',
+        'Deposit Paid': '-',
+        'Installment Amount': '-',
+        'Total Paid': '-',
+        'Remaining Balance': '-',
+        'Next Due Date': '-',
+        'Payment Status': '-',
+        'Warranty Expiry': '-',
+        Surgeon: '-',
+      }]);
+      return;
+    }
+
+    if (csvExportType === 'clinical_treatment') {
+      const grouped = new Map<string, {
+        completionDate: string;
+        dentist: string;
+        diagnosis: string;
+        materialCost: number;
+        notes: string;
+        outcome: string;
+        patientId: string;
+        procedureType: string;
+        sessions: number;
+        startDate: string;
+        status: string;
+        totalCost: number;
+        treatmentId: string;
+      }>();
+
+      filteredVisitTreatments.forEach((row) => {
+        const visit = visitById.get(asText(row.visitId));
+        const patientId = asText(visit?.patientId);
+        const treatmentId = asText(row.treatmentId) || '-';
+        const dentist = asText(visit?.dentistName) || `Dentist #${asText(visit?.dentistId) || '-'}`;
+        const visitDate = asText(row.visit?.visitDate) || asText(visit?.visitDate) || asText(row.createdAt);
+        const status = toHumanLabel(asText((visit as unknown as Record<string, unknown> | undefined)?.status) || 'completed');
+        const diagnosis = asText((visit as unknown as Record<string, unknown> | undefined)?.diagnosis) || '-';
+        const procedureType = asText((row.treatment as unknown as Record<string, unknown> | undefined)?.category) || 'General';
+        const treatmentNotes = asText((row as unknown as Record<string, unknown>).notes);
+        const materialCost = parseAmount(
+          (row as unknown as Record<string, unknown>).materialCost
+          ?? (row as unknown as Record<string, unknown>).material_cost
+          ?? 0
+        );
+        const key = `${patientId}|${treatmentId}|${dentist}`;
+        const current = grouped.get(key) ?? {
+          completionDate: visitDate,
+          dentist,
+          diagnosis,
+          materialCost: 0,
+          notes: treatmentNotes || '-',
+          outcome: status.toLowerCase() === 'completed' ? 'Successful' : '-',
+          patientId,
+          procedureType,
+          sessions: 0,
+          startDate: visitDate,
+          status,
+          totalCost: 0,
+          treatmentId,
+        };
+
+        const currentStart = parseDate(current.startDate)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+        const currentEnd = parseDate(current.completionDate)?.getTime() ?? Number.MIN_SAFE_INTEGER;
+        const rowDate = parseDate(visitDate)?.getTime() ?? Number.MIN_SAFE_INTEGER;
+        if (rowDate < currentStart) current.startDate = visitDate;
+        if (rowDate > currentEnd) current.completionDate = visitDate;
+
+        current.sessions += 1;
+        current.totalCost = Number((current.totalCost + parseAmount(row.price)).toFixed(2));
+        current.materialCost = Number((current.materialCost + materialCost).toFixed(2));
+        grouped.set(key, current);
+      });
+
+      const rows = [...grouped.values()].map((row) => ({
+        'Treatment ID': row.treatmentId,
+        'Patient Name': mergedPatientNameById.get(row.patientId) || `Patient #${row.patientId || '-'}`,
+        Dentist: row.dentist,
+        Diagnosis: row.diagnosis,
+        'Procedure Type': row.procedureType,
+        'Start Date': formatFullDate(row.startDate),
+        'Completion Date': formatFullDate(row.completionDate),
+        'Number of Sessions': row.sessions,
+        'Treatment Status': row.status,
+        'Total Cost': formatCsvAmount(row.totalCost),
+        'Material Used Cost': formatCsvAmount(row.materialCost),
+        Outcome: row.outcome,
+        'Notes (Optional)': row.notes,
+      }));
+
+      downloadCsv(`clinical-treatment-${startDate}-to-${endDate}.csv`, rows.length > 0 ? rows : [{
+        'Treatment ID': 'No data',
+        'Patient Name': '-',
+        Dentist: '-',
+        Diagnosis: '-',
+        'Procedure Type': '-',
+        'Start Date': '-',
+        'Completion Date': '-',
+        'Number of Sessions': '-',
+        'Treatment Status': '-',
+        'Total Cost': '-',
+        'Material Used Cost': '-',
+        Outcome: '-',
+        'Notes (Optional)': '-',
+      }]);
+      return;
+    }
+
+    if (csvExportType === 'inventory_stock') {
+      const rows = stockStatusRows.map((row) => ({
+        'Item ID': row.id || '-',
+        'Item Name': row.itemName,
+        Category: toHumanLabel(row.category),
+        Supplier: row.supplier || '-',
+        'Purchase Price': formatCsvAmount(row.unitCost),
+        'Selling Price': formatCsvAmount(row.sellingPrice),
+        'Current Stock': row.quantity,
+        'Minimum Level': row.minStock,
+        'Expiry Date': formatFullDate(row.expiryDate),
+        'Batch Number': row.lotNumber || '-',
+        'Last Updated': formatFullDate(row.updatedAt || row.entryDate),
+        'Stock Status': row.status,
+      }));
+
+      downloadCsv(`inventory-stock-${startDate}-to-${endDate}.csv`, rows.length > 0 ? rows : [{
+        'Item ID': 'No data',
+        'Item Name': '-',
+        Category: '-',
+        Supplier: '-',
+        'Purchase Price': '-',
+        'Selling Price': '-',
+        'Current Stock': '-',
+        'Minimum Level': '-',
+        'Expiry Date': '-',
+        'Batch Number': '-',
+        'Last Updated': '-',
+        'Stock Status': '-',
+      }]);
+      return;
+    }
+
+    if (csvExportType === 'audit_log') {
+      const rows: Array<Record<string, string | number>> = [];
+      let logCounter = 1;
+
+      financialModificationLogRows.forEach((row) => {
+        rows.push({
+          'Log ID': logCounter++,
+          User: row.changedBy || 'System',
+          Role: '-',
+          'Action Type': row.action,
+          Module: row.entity.toLowerCase().includes('invoice') ? 'Financial' : 'Safe',
+          'Record ID': row.entity,
+          'Old Value': row.beforeValue,
+          'New Value': row.afterValue,
+          'IP Address': '-',
+          Timestamp: formatDateTime(row.timestamp),
+        });
+      });
+
+      accessLogRows.forEach((row) => {
+        rows.push({
+          'Log ID': logCounter++,
+          User: row.user,
+          Role: '-',
+          'Action Type': row.action,
+          Module: 'Reports',
+          'Record ID': row.range,
+          'Old Value': '-',
+          'New Value': '-',
+          'IP Address': '-',
+          Timestamp: formatDateTime(row.generatedAt),
+        });
+      });
+
+      downloadCsv(`audit-log-${startDate}-to-${endDate}.csv`, rows.length > 0 ? rows : [{
+        'Log ID': 'No data',
+        User: '-',
+        Role: '-',
+        'Action Type': '-',
+        Module: '-',
+        'Record ID': '-',
+        'Old Value': '-',
+        'New Value': '-',
+        'IP Address': '-',
+        Timestamp: '-',
+      }]);
+      return;
+    }
+
+    if (csvExportType === 'executive_summary') {
+      const executiveRows = [
+        { Metric: 'Total Revenue', Value: formatCsvAmount(kpis.paid) },
+        { Metric: 'Net Profit', Value: formatCsvAmount(profitOrLoss) },
+        { Metric: 'Total Expenses', Value: formatCsvAmount(kpis.expenses) },
+        { Metric: 'Outstanding Payments', Value: formatCsvAmount(kpis.debt) },
+        { Metric: 'New Patients', Value: String(newPatientsCount) },
+        { Metric: 'Implant Revenue', Value: formatCsvAmount(implantRevenue) },
+        { Metric: 'Cash In Safe', Value: formatCsvAmount(cashInSafe) },
+        { Metric: 'Bank Balance', Value: formatCsvAmount(bankBalance) },
+        { Metric: 'Treatment Acceptance Rate', Value: `${treatmentAcceptanceRate}%` },
+        { Metric: 'Chair Utilization Rate', Value: `${chairUtilizationRate}%` },
+      ];
+      downloadCsv(`executive-summary-${startDate}-to-${endDate}.csv`, executiveRows);
+      return;
+    }
+
+    const reportName = `${toHumanLabel(activeTab)} Report`;
+    const exportRows: Array<Record<string, string | number>> = [];
+    const addRow = (row: Partial<{
+      Amount: string | number;
+      Balance: string | number;
+      Date: string;
+      Dentist: string;
+      Name: string;
+      Notes: string;
+      Paid: string | number;
+      Patient: string;
+      PaymentMethod: string;
+      Quantity: string | number;
+      Report: string;
+      Section: string;
+      Status: string;
+      Subsection: string;
+      Treatment: string;
+    }>): void => {
+      exportRows.push({
+        Amount: '',
+        Balance: '',
+        Date: '',
+        Dentist: '',
+        Name: '',
+        Notes: '',
+        Paid: '',
+        Patient: '',
+        PaymentMethod: '',
+        Quantity: '',
+        Report: reportName,
+        Section: '',
+        Status: '',
+        Subsection: '',
+        Treatment: '',
+        ...row,
+      });
+    };
+
+    const selectedDentistLabel = selectedDentistFilter === 'all' ? 'All Dentists' : selectedDentistFilter;
+    const selectedTreatmentLabel = selectedTreatmentFilter === 'all' ? 'All Treatments' : selectedTreatmentFilter;
+    const selectedPaymentLabel = selectedPaymentMethodFilter === 'all' ? 'All Payment Methods' : toHumanLabel(selectedPaymentMethodFilter);
+    const selectedPatientLabel = selectedPatientFilter === 'all' ? 'All Patients' : (mergedPatientNameById.get(selectedPatientFilter) || `Patient #${selectedPatientFilter}`);
+
+    addRow({
+      Name: 'Report Name',
+      Notes: reportName,
+      Section: 'Report Info',
+      Subsection: 'Meta',
+    });
+    addRow({
+      Date: `${formatFullDate(startDate)} to ${formatFullDate(endDate)}`,
+      Name: 'Date Range',
+      Section: 'Report Info',
+      Subsection: 'Meta',
+    });
+    addRow({
+      Name: 'Generated By',
+      Notes: 'Current User',
+      Section: 'Report Info',
+      Subsection: 'Meta',
+    });
+    addRow({
+      Date: formatDateTime(new Date().toISOString()),
+      Name: 'Generated At',
+      Section: 'Report Info',
+      Subsection: 'Meta',
+    });
+    addRow({
+      Name: 'Dentist Filter',
+      Notes: selectedDentistLabel,
+      Section: 'Report Filters',
+      Subsection: 'Global Filters',
+    });
+    addRow({
+      Name: 'Treatment Filter',
+      Notes: selectedTreatmentLabel,
+      Section: 'Report Filters',
+      Subsection: 'Global Filters',
+    });
+    addRow({
+      Name: 'Payment Method Filter',
+      Notes: selectedPaymentLabel,
+      Section: 'Report Filters',
+      Subsection: 'Global Filters',
+    });
+    addRow({
+      Name: 'Patient Filter',
+      Notes: selectedPatientLabel,
+      Section: 'Report Filters',
+      Subsection: 'Global Filters',
+    });
+    addRow({
+      Name: 'Status Filter',
+      Notes: toHumanLabel(globalStatusFilter),
+      Section: 'Report Filters',
+      Subsection: 'Global Filters',
+    });
+    addRow({
+      Name: 'Granularity',
+      Notes: toHumanLabel(granularity),
+      Section: 'Report Filters',
+      Subsection: 'Global Filters',
+    });
+
+    if (activeTab === 'executive') {
+      addRow({
+        Amount: formatCsvAmount(kpis.paid),
+        Name: 'Total Revenue',
+        Section: 'Executive',
+        Subsection: 'KPI',
+      });
+      addRow({
+        Amount: formatCsvAmount(profitOrLoss),
+        Name: 'Net Profit',
+        Section: 'Executive',
+        Subsection: 'KPI',
+      });
+      addRow({
+        Amount: formatCsvAmount(kpis.expenses),
+        Name: 'Total Expenses',
+        Section: 'Executive',
+        Subsection: 'KPI',
+      });
+      addRow({
+        Amount: formatCsvAmount(kpis.debt),
+        Name: 'Outstanding',
+        Section: 'Executive',
+        Subsection: 'KPI',
+      });
+      addRow({
+        Name: 'New Patients',
+        Quantity: newPatientsCount,
+        Section: 'Executive',
+        Subsection: 'KPI',
+      });
+      addRow({
+        Amount: formatCsvAmount(implantRevenue),
+        Name: 'Implant Revenue',
+        Section: 'Executive',
+        Subsection: 'KPI',
+      });
+      addRow({
+        Amount: formatCsvAmount(cashInSafe),
+        Name: 'Cash In Safe',
+        Section: 'Executive',
+        Subsection: 'KPI',
+      });
+      addRow({
+        Amount: formatCsvAmount(bankBalance),
+        Name: 'Bank Balance',
+        Section: 'Executive',
+        Subsection: 'KPI',
+      });
+      addRow({
+        Name: 'Treatment Acceptance Rate',
+        Notes: `${treatmentAcceptanceRate}%`,
+        Section: 'Executive',
+        Subsection: 'KPI',
+      });
+      addRow({
+        Name: 'Chair Utilization Rate',
+        Notes: `${chairUtilizationRate}%`,
+        Section: 'Executive',
+        Subsection: 'KPI',
+      });
+
+      executiveRevenueTrendMonthly.forEach((row) => {
+        addRow({
+          Amount: formatCsvAmount(row.amount),
+          Date: row.label,
+          Name: 'Revenue Trend',
+          Section: 'Executive',
+          Subsection: 'Revenue Trend Monthly',
+        });
+      });
+      treatmentVolume.forEach((row) => {
+        addRow({
+          Amount: formatCsvAmount(row.revenue),
+          Name: row.name,
+          Quantity: row.sessions,
+          Section: 'Executive',
+          Subsection: 'Revenue by Treatment',
+          Treatment: row.name,
+        });
+      });
+      dentistProductivity.forEach((row) => {
+        addRow({
+          Amount: formatCsvAmount(row.revenue),
+          Dentist: row.dentist,
+          Name: 'Dentist Revenue',
+          Quantity: row.visits,
+          Section: 'Executive',
+          Subsection: 'Revenue by Dentist',
+        });
+      });
+      implantPlacementTrend.forEach((row) => {
+        addRow({
+          Amount: formatCsvAmount(row.revenue),
+          Date: row.label,
+          Name: 'Implant Placement',
+          Quantity: row.count,
+          Section: 'Executive',
+          Subsection: 'Implant Placement Trend',
+          Treatment: 'Implant',
+        });
+      });
+      expenseSummary.byCategory.forEach((row) => {
+        addRow({
+          Amount: formatCsvAmount(row.amount),
+          Name: row.category,
+          Notes: 'Expense Category',
+          Section: 'Executive',
+          Subsection: 'Expense Breakdown',
+        });
+      });
+    }
+
+    if (activeTab === 'financial') {
+      addRow({
+        Amount: formatCsvAmount(dailyFinancialSummary.openingBalance),
+        Name: 'Daily Financial Summary',
+        Notes: `Cash In: ${formatCsvAmount(dailyFinancialSummary.totalCashIn)} | Cash Out: ${formatCsvAmount(dailyFinancialSummary.totalCashOut)} | Closing: ${formatCsvAmount(dailyFinancialSummary.closingBalance)}`,
+        Paid: formatCsvAmount(dailyFinancialSummary.totalCashIn),
+        Balance: formatCsvAmount(dailyFinancialSummary.closingBalance),
+        Section: 'Financial',
+        Subsection: 'Daily Financial',
+      });
+      addRow({
+        Amount: formatCsvAmount(dailyFinancialSummary.physicalBalance),
+        Balance: formatCsvAmount(dailyFinancialSummary.variance),
+        Name: 'Physical Balance / Variance',
+        Section: 'Financial',
+        Subsection: 'Daily Financial',
+      });
+
+      revenueByTreatmentRows.forEach((row) => {
+        addRow({
+          Amount: formatCsvAmount(parseAmount(row.gross)),
+          Balance: formatCsvAmount(parseAmount(row.net)),
+          Name: 'Revenue by Treatment',
+          Notes: `Discount: ${formatCsvAmount(parseAmount(row.discount))} | Cost: ${row.cost} | Profit: ${row.profit}`,
+          Paid: formatCsvAmount(parseAmount(row.discount)),
+          Quantity: row.count,
+          Section: 'Financial',
+          Subsection: 'Revenue By Treatment',
+          Treatment: row.label,
+        });
+      });
+      revenueByDentistRows.forEach((row) => {
+        addRow({
+          Amount: formatCsvAmount(parseAmount(row.gross)),
+          Balance: formatCsvAmount(parseAmount(row.net)),
+          Dentist: row.label,
+          Name: 'Revenue by Dentist',
+          Notes: `Discount: ${formatCsvAmount(parseAmount(row.discount))} | Cost: ${row.cost} | Profit: ${row.profit}`,
+          Paid: formatCsvAmount(parseAmount(row.discount)),
+          Quantity: row.count,
+          Section: 'Financial',
+          Subsection: 'Revenue By Dentist',
+        });
+      });
+      revenueByPaymentMethodRows.forEach((row) => {
+        addRow({
+          Amount: formatCsvAmount(parseAmount(row.gross)),
+          Balance: formatCsvAmount(parseAmount(row.net)),
+          Name: 'Revenue by Payment Method',
+          Notes: `Discount: ${formatCsvAmount(parseAmount(row.discount))} | Cost: ${row.cost} | Profit: ${row.profit}`,
+          Paid: formatCsvAmount(parseAmount(row.discount)),
+          PaymentMethod: row.label,
+          Quantity: row.count,
+          Section: 'Financial',
+          Subsection: 'Revenue By Payment Method',
+        });
+      });
+      revenueByPatientRows.forEach((row) => {
+        addRow({
+          Amount: formatCsvAmount(parseAmount(row.gross)),
+          Balance: formatCsvAmount(parseAmount(row.net)),
+          Name: 'Revenue by Patient',
+          Notes: `Discount: ${formatCsvAmount(parseAmount(row.discount))} | Cost: ${row.cost} | Profit: ${row.profit}`,
+          Paid: formatCsvAmount(parseAmount(row.discount)),
+          Patient: row.label,
+          Quantity: row.count,
+          Section: 'Financial',
+          Subsection: 'Revenue By Patient',
+        });
+      });
+
+      outstandingInvoices.forEach((invoice) => {
+        const agingBucket = toDebtAgingBucket(invoice.date, endDate) || '-';
+        addRow({
+          Amount: formatCsvAmount(invoice.net),
+          Balance: formatCsvAmount(invoice.debt),
+          Date: formatFullDate(invoice.date),
+          Name: `Invoice #${invoice.id}`,
+          Paid: formatCsvAmount(invoice.paid),
+          Patient: mergedPatientNameById.get(invoice.patientId) || `Patient #${invoice.patientId || '-'}`,
+          Section: 'Financial',
+          Status: agingBucket,
+          Subsection: 'Outstanding Aging',
+        });
+      });
+
+      thirdCompanyUnpaidRows.forEach((row) => {
+        addRow({
+          Amount: formatCsvAmount(row.supplierTotal),
+          Balance: formatCsvAmount(row.supplierRemaining),
+          Name: row.toothNumber || 'Implant',
+          Notes: 'Next Due: Pending',
+          Paid: formatCsvAmount(row.supplierPaid),
+          Patient: mergedPatientNameById.get(row.patientId) || `Patient #${row.patientId || '-'}`,
+          Section: 'Financial',
+          Subsection: 'Implant Installment',
+          Treatment: 'Implant',
+        });
+      });
+
+      [...filteredDailyExpenses, ...filteredClinicalExpenses].forEach((row) => {
+        addRow({
+          Amount: formatCsvAmount(row.amount),
+          Date: formatFullDate(row.expenseDate),
+          Name: row.category,
+          Notes: `Type: ${toHumanLabel(row.expenseType)}`,
+          Section: 'Financial',
+          Subsection: 'Expense Report',
+        });
+      });
+      safeRows.filter((row) => inRange(row.transactionDate, startDate, endDate)).forEach((row) => {
+        addRow({
+          Amount: formatCsvAmount(row.amount),
+          Date: formatFullDate(row.transactionDate),
+          Name: toHumanLabel(row.entryType),
+          Notes: row.notes || '-',
+          Patient: '-',
+          PaymentMethod: toHumanLabel(row.entryType),
+          Dentist: row.pickedByStaffName || row.pickedByStaffId || '-',
+          Section: 'Financial',
+          Status: toHumanLabel(row.direction),
+          Subsection: 'Safe Transactions',
+        });
+      });
+      salaryRows.filter((row) => inRange(row.paymentDate, startDate, endDate)).forEach((row) => {
+        addRow({
+          Amount: formatCsvAmount(row.netAmount),
+          Date: formatFullDate(row.paymentDate),
+          Name: 'Salary Payment',
+          Notes: `Staff: ${row.staffName || row.staffId}`,
+          Section: 'Financial',
+          Status: toHumanLabel(row.status),
+          Subsection: 'Salary Payments',
+        });
+      });
+      ledgerRowsFilteredByPatient.forEach((row) => {
+        addRow({
+          Amount: formatCsvAmount(row.debit),
+          Balance: formatCsvAmount(row.balance),
+          Date: formatFullDate(row.date),
+          Name: `Invoice #${row.invoiceId}`,
+          Notes: `Method: ${toHumanLabel(row.method)}`,
+          Paid: formatCsvAmount(row.credit),
+          Patient: mergedPatientNameById.get(row.patientId) || `Patient #${row.patientId || '-'}`,
+          PaymentMethod: toHumanLabel(row.method),
+          Section: 'Financial',
+          Status: toHumanLabel(row.type),
+          Subsection: 'Receivables Ledger',
+        });
+      });
+    }
+
+    if (activeTab === 'clinical') {
+      addRow({
+        Name: 'Completed Treatments',
+        Notes: `${treatmentPerformanceSummary.successRate}% success`,
+        Quantity: treatmentPerformanceSummary.completedTreatments,
+        Section: 'Clinical',
+        Subsection: 'Treatment Performance',
+      });
+      addRow({
+        Name: 'Cancelled Treatments',
+        Quantity: treatmentPerformanceSummary.cancelledTreatments,
+        Section: 'Clinical',
+        Subsection: 'Treatment Performance',
+      });
+      treatmentVolume.forEach((row) => {
+        addRow({
+          Amount: formatCsvAmount(row.revenue),
+          Name: row.name,
+          Quantity: row.sessions,
+          Section: 'Clinical',
+          Subsection: 'Treatment Volume',
+          Treatment: row.name,
+        });
+      });
+      dentistPerformanceRows.forEach((row) => {
+        addRow({
+          Amount: formatCsvAmount(row.revenue),
+          Dentist: row.dentist,
+          Name: 'Dentist Performance',
+          Notes: `Patients Seen: ${row.patientsSeen} | Commission: ${formatCsvAmount(row.commission)}`,
+          Quantity: row.treatments,
+          Section: 'Clinical',
+          Subsection: 'Dentist Performance',
+        });
+      });
+      implantSuccessRows.forEach((row) => {
+        addRow({
+          Date: formatFullDate(row.placementDate),
+          Name: 'Implant Success',
+          Notes: row.warrantyTracking,
+          Patient: row.patientName,
+          Quantity: row.failures,
+          Section: 'Clinical',
+          Status: toHumanLabel(row.status),
+          Subsection: 'Implant Success',
+          Treatment: row.brand,
+        });
+      });
+    }
+
+    if (activeTab === 'inventory') {
+      stockStatusRows.forEach((row) => {
+        addRow({
+          Date: formatFullDate(row.expiryDate),
+          Name: row.itemName,
+          Notes: `Min Level: ${row.minStock} | Unit: ${row.unit}`,
+          Quantity: row.quantity,
+          Section: 'Inventory',
+          Status: row.status,
+          Subsection: 'Stock Status',
+        });
+      });
+      materialUsagePerTreatment.forEach((row) => {
+        addRow({
+          Amount: formatCsvAmount(row.totalCost),
+          Name: row.treatment,
+          Notes: `Average Cost per Session: ${formatCsvAmount(row.avgCost)}`,
+          Quantity: row.sessions,
+          Section: 'Inventory',
+          Subsection: 'Material Usage Per Treatment',
+          Treatment: row.treatment,
+        });
+      });
+      implantInventoryRows.forEach((row) => {
+        addRow({
+          Date: formatFullDate(row.entryDate),
+          Name: row.itemName,
+          Notes: `Lot/Serial: ${row.lotNumber || '-'} | Expiry: ${formatFullDate(row.expiryDate)}`,
+          Patient: '-',
+          Dentist: '-',
+          PaymentMethod: '-',
+          Quantity: row.quantity,
+          Status: row.supplier || '-',
+          Section: 'Inventory',
+          Subsection: 'Implant Inventory',
+          Treatment: 'Implant',
+        });
+      });
+    }
+
+    if (activeTab === 'audit') {
+      financialModificationLogRows.forEach((row) => {
+        addRow({
+          Date: formatDateTime(row.timestamp),
+          Name: row.entity,
+          Notes: `Before: ${row.beforeValue} | After: ${row.afterValue}`,
+          Dentist: row.changedBy,
+          Section: 'Audit',
+          Status: row.action,
+          Subsection: 'Financial Modification Log',
+        });
+      });
+      accessLogRows.forEach((row) => {
+        addRow({
+          Date: formatDateTime(row.generatedAt),
+          Name: row.action,
+          Notes: row.range,
+          Dentist: row.user,
+          Section: 'Audit',
+          Subsection: 'Access Logs',
+        });
+      });
+      snapshotRecords.forEach((row) => {
+        addRow({
+          Amount: formatCsvAmount(row.billed),
+          Balance: formatCsvAmount(row.debt),
+          Date: formatDateTime(row.generatedAt),
+          Name: 'Snapshot',
+          Notes: `${formatFullDate(row.rangeStart)} to ${formatFullDate(row.rangeEnd)} | Collection: ${row.collectionRate}%`,
+          Paid: formatCsvAmount(row.paid),
+          Section: 'Audit',
+          Subsection: 'Snapshots',
+        });
+      });
+    }
+
+    if (exportRows.length === 0) {
+      addRow({
+        Name: 'Info',
+        Notes: 'No records in selected range',
+        Section: 'Report Info',
+        Subsection: 'Meta',
+      });
+    }
+
+    const extension = 'csv';
+    downloadCsv(`reports-${activeTab}-${startDate}-to-${endDate}.${extension}`, exportRows);
+  };
+
   return (
     <>
       <Header
@@ -1745,7 +3495,7 @@ export default function ReportsPage(): JSX.Element {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="grid gap-2 md:grid-cols-4">
+              <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-8">
                 <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
                 <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
                 <select
@@ -1758,15 +3508,54 @@ export default function ReportsPage(): JSX.Element {
                   <option value="year">{tReportsPage('granularity.year')}</option>
                 </select>
                 <select
-                  value={statusFilter}
-                  onChange={(event) => setStatusFilter(event.target.value as InvoiceStatusFilter)}
+                  value={selectedDentistFilter}
+                  onChange={(event) => setSelectedDentistFilter(event.target.value)}
                   className="h-10 rounded-md border border-input bg-background px-3 text-sm"
                 >
-                  <option value="all">{tReportsPage('status.all')}</option>
-                  <option value="unpaid">{tReportsPage('status.unpaid')}</option>
-                  <option value="partially_paid">{tReportsPage('status.partiallyPaid')}</option>
-                  <option value="paid">{tReportsPage('status.paid')}</option>
-                  <option value="cancelled">{tReportsPage('status.cancelled')}</option>
+                  <option value="all">All Dentists</option>
+                  {dentistFilterOptions.map((dentist) => (
+                    <option key={`dentist-filter-${dentist}`} value={dentist}>{dentist}</option>
+                  ))}
+                </select>
+                <select
+                  value={selectedTreatmentFilter}
+                  onChange={(event) => setSelectedTreatmentFilter(event.target.value)}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="all">All Treatments</option>
+                  {treatmentFilterOptions.map((treatment) => (
+                    <option key={`treatment-filter-${treatment}`} value={treatment}>{treatment}</option>
+                  ))}
+                </select>
+                <select
+                  value={selectedPaymentMethodFilter}
+                  onChange={(event) => setSelectedPaymentMethodFilter(event.target.value)}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="all">All Payment Methods</option>
+                  {paymentMethodFilterOptions.map((method) => (
+                    <option key={`payment-filter-${method}`} value={method}>{toHumanLabel(method)}</option>
+                  ))}
+                </select>
+                <select
+                  value={selectedPatientFilter}
+                  onChange={(event) => setSelectedPatientFilter(event.target.value)}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="all">All Patients</option>
+                  {patientFilterOptions.map((patient) => (
+                    <option key={`patient-filter-${patient.id}`} value={patient.id}>{patient.name}</option>
+                  ))}
+                </select>
+                <select
+                  value={globalStatusFilter}
+                  onChange={(event) => setGlobalStatusFilter(event.target.value as ReportStatusFilter)}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="all">All Status</option>
+                  <option value="completed">Completed</option>
+                  <option value="pending">Pending</option>
+                  <option value="cancelled">Cancelled</option>
                 </select>
               </div>
               <div className="grid gap-3 rounded-md border border-border/70 bg-muted/20 p-3 md:grid-cols-4">
@@ -1792,15 +3581,26 @@ export default function ReportsPage(): JSX.Element {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    printCurrentTabTemplate();
-                  }}
+                <select
+                  value={exportFormat}
+                  onChange={(event) => setExportFormat(event.target.value as ReportExportFormat)}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
                 >
-                  {tReportsPage('actions.print')}
-                </Button>
+                  <option value="pdf">PDF</option>
+                  <option value="csv">CSV</option>
+                </select>
+                {exportFormat === 'csv' ? (
+                  <select
+                    value={csvExportType}
+                    onChange={(event) => setCsvExportType(event.target.value as CsvExportType)}
+                    className="h-10 min-w-[230px] rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    {csvExportOptions.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                ) : null}
+                <Button type="button" variant="outline" onClick={handleGlobalExport}>Export</Button>
                 <Button
                   type="button"
                   variant="outline"
@@ -1808,10 +3608,10 @@ export default function ReportsPage(): JSX.Element {
                     downloadCsv(
                       `profit-loss-${startDate}-to-${endDate}.csv`,
                       profitLossTrend.map((row) => ({
-                        'Income (AFN)': formatCurrency(row.income),
-                        'Outcome (AFN)': formatCurrency(row.outcome),
+                        Income: formatCsvAmount(row.income),
+                        Outcome: formatCsvAmount(row.outcome),
                         Period: row.label,
-                        'Profit/Loss (AFN)': formatCurrency(row.profit),
+                        'Profit/Loss': formatCsvAmount(row.profit),
                         Result: row.profit >= 0 ? 'Profit' : 'Loss',
                       }))
                     );
@@ -1841,20 +3641,20 @@ export default function ReportsPage(): JSX.Element {
                     downloadCsv(
                       `financial-report-${startDate}-to-${endDate}.csv`,
                       filteredInvoices.map((invoice) => ({
-                        'Currency': invoice.currency,
-                        'Discount (AFN)': formatCurrency(invoice.discount),
-                        'Entered Discount (AFN)': formatCurrency(invoice.discountInput),
-                        'Entered Net (AFN)': formatCurrency(invoice.netInput),
-                        'Entered Total (AFN)': formatCurrency(invoice.totalInput),
+                        Currency: invoice.currency,
+                        Discount: formatCsvAmount(invoice.discount),
+                        'Entered Discount': formatCsvAmount(invoice.discountInput),
+                        'Entered Net': formatCsvAmount(invoice.netInput),
+                        'Entered Total': formatCsvAmount(invoice.totalInput),
                         'Exchange Rate': Number(invoice.exchangeRate).toFixed(6),
                         'Invoice #': invoice.id,
                         'Invoice Date': formatFullDate(invoice.date),
-                        'Net Total (AFN)': formatCurrency(invoice.net),
-                        'Outstanding Debt (AFN)': formatCurrency(invoice.debt),
-                        'Paid Amount (AFN)': formatCurrency(invoice.paid),
-                        'Patient': mergedPatientNameById.get(invoice.patientId) || `Patient #${invoice.patientId || '-'}`,
-                        'Status': toHumanLabel(invoice.status),
-                        'Total Amount (AFN)': formatCurrency(invoice.total),
+                        'Net Total': formatCsvAmount(invoice.net),
+                        'Outstanding Debt': formatCsvAmount(invoice.debt),
+                        'Paid Amount': formatCsvAmount(invoice.paid),
+                        Patient: mergedPatientNameById.get(invoice.patientId) || `Patient #${invoice.patientId || '-'}`,
+                        Status: toHumanLabel(invoice.status),
+                        'Total Amount': formatCsvAmount(invoice.total),
                       }))
                     );
                   }}
@@ -1868,7 +3668,7 @@ export default function ReportsPage(): JSX.Element {
                     downloadCsv(
                       `income-trend-${startDate}-to-${endDate}.csv`,
                       incomeTrend.map((point) => ({
-                        'Income (AFN)': formatCurrency(point.income),
+                        Income: formatCsvAmount(point.income),
                         'Number of Payments': point.paymentCount,
                         Period: point.label,
                       }))
@@ -1883,25 +3683,25 @@ export default function ReportsPage(): JSX.Element {
                   onClick={() => {
                     const rows = [
                       {
-                        'Balance (AFN)': formatCurrency(ledgerRows.openingBalance),
-                        'Credit (AFN)': '-',
-                        'Date': formatFullDate(startDate),
-                        'Debit (AFN)': '-',
-                        'Description': 'Opening Balance',
+                        Balance: formatCsvAmount(ledgerRows.openingBalance),
+                        Credit: '-',
+                        Date: formatFullDate(startDate),
+                        Debit: '-',
+                        Description: 'Opening Balance',
                         'Entry Type': 'Opening',
                         'Invoice #': '-',
-                        'Patient': selectedPatientName,
+                        Patient: selectedPatientName,
                         'Payment Method': '-',
                       },
                       ...ledgerRows.inRangeEntries.map((entry) => ({
-                        'Balance (AFN)': formatCurrency(entry.balance),
-                        'Credit (AFN)': entry.credit > 0 ? formatCurrency(entry.credit) : '-',
-                        'Date': formatFullDate(entry.date),
-                        'Debit (AFN)': entry.debit > 0 ? formatCurrency(entry.debit) : '-',
-                        'Description': entry.label,
+                        Balance: formatCsvAmount(entry.balance),
+                        Credit: entry.credit > 0 ? formatCsvAmount(entry.credit) : '-',
+                        Date: formatFullDate(entry.date),
+                        Debit: entry.debit > 0 ? formatCsvAmount(entry.debit) : '-',
+                        Description: entry.label,
                         'Entry Type': toHumanLabel(entry.type),
                         'Invoice #': entry.invoiceId || '-',
-                        'Patient': mergedPatientNameById.get(entry.patientId) || `Patient #${entry.patientId || '-'}`,
+                        Patient: mergedPatientNameById.get(entry.patientId) || `Patient #${entry.patientId || '-'}`,
                         'Payment Method': toHumanLabel(entry.method || '-'),
                       })),
                     ];
@@ -1917,11 +3717,11 @@ export default function ReportsPage(): JSX.Element {
                     downloadCsv(
                       `expenses-${startDate}-to-${endDate}.csv`,
                       [...filteredDailyExpenses, ...filteredClinicalExpenses].map((row) => ({
-                        'Amount (AFN)': formatCurrency(row.amount),
-                        'Category': row.category,
-                        'Currency': row.currency,
-                        'Date': formatFullDate(row.expenseDate),
-                        'Entered Amount (AFN)': formatCurrency(row.amountInput),
+                        Amount: formatCsvAmount(row.amount),
+                        Category: row.category,
+                        Currency: row.currency,
+                        Date: formatFullDate(row.expenseDate),
+                        'Entered Amount': formatCsvAmount(row.amountInput),
                         'Exchange Rate': row.exchangeRate.toFixed(6),
                         'Expense Type': toHumanLabel(row.expenseType),
                         'Record ID': row.id,
@@ -1938,14 +3738,14 @@ export default function ReportsPage(): JSX.Element {
                     const rows = safeRows
                       .filter((row) => inRange(row.transactionDate, startDate, endDate))
                       .map((row) => ({
-                        'Amount (AFN)': formatCurrency(row.amount),
-                        'Currency': row.currency,
-                        'Date': formatFullDate(row.transactionDate),
-                        'Direction': toHumanLabel(row.direction),
-                        'Entered Amount (AFN)': formatCurrency(row.amountInput),
+                        Amount: formatCsvAmount(row.amount),
+                        Currency: row.currency,
+                        Date: formatFullDate(row.transactionDate),
+                        Direction: toHumanLabel(row.direction),
+                        'Entered Amount': formatCsvAmount(row.amountInput),
                         'Entry Type': toHumanLabel(row.entryType),
                         'Exchange Rate': row.exchangeRate.toFixed(6),
-                        'Notes': row.notes || '-',
+                        Notes: row.notes || '-',
                         'Picked By': row.pickedByStaffName || row.pickedByStaffId || '-',
                       }));
                     downloadCsv(`safe-transactions-${startDate}-to-${endDate}.csv`, rows);
@@ -1960,13 +3760,13 @@ export default function ReportsPage(): JSX.Element {
                     const rows = salaryRows
                       .filter((row) => inRange(row.paymentDate, startDate, endDate))
                       .map((row) => ({
-                        'Currency': row.currency,
-                        'Entered Net (AFN)': formatCurrency(row.netAmountInput),
+                        Currency: row.currency,
+                        'Entered Net': formatCsvAmount(row.netAmountInput),
                         'Exchange Rate': row.exchangeRate.toFixed(6),
-                        'Net Paid (AFN)': formatCurrency(row.netAmount),
+                        'Net Paid': formatCsvAmount(row.netAmount),
                         'Payment Date': formatFullDate(row.paymentDate),
-                        'Staff': row.staffName || row.staffId,
-                        'Status': toHumanLabel(row.status),
+                        Staff: row.staffName || row.staffId,
+                        Status: toHumanLabel(row.status),
                       }));
                     downloadCsv(`salaries-${startDate}-to-${endDate}.csv`, rows);
                   }}
@@ -1980,12 +3780,12 @@ export default function ReportsPage(): JSX.Element {
                     downloadCsv(
                       `third-company-unpaid-${startDate}-to-${endDate}.csv`,
                       thirdCompanyUnpaidRows.map((row) => ({
-                        'Availability': toHumanLabel(row.availability),
-                        'Paid To Supplier (AFN)': formatCurrency(row.supplierPaid),
-                        'Patient': mergedPatientNameById.get(row.patientId) || `Patient #${row.patientId || '-'}`,
-                        'Supplier Total (AFN)': formatCurrency(row.supplierTotal),
-                        'Tooth': row.toothNumber,
-                        'Unpaid To Supplier (AFN)': formatCurrency(row.supplierRemaining),
+                        Availability: toHumanLabel(row.availability),
+                        'Paid To Supplier': formatCsvAmount(row.supplierPaid),
+                        Patient: mergedPatientNameById.get(row.patientId) || `Patient #${row.patientId || '-'}`,
+                        'Supplier Total': formatCsvAmount(row.supplierTotal),
+                        Tooth: row.toothNumber,
+                        'Unpaid To Supplier': formatCsvAmount(row.supplierRemaining),
                       }))
                     );
                   }}
@@ -2047,19 +3847,19 @@ export default function ReportsPage(): JSX.Element {
                       snapshotRecords.map((snapshot) => ({
                         'Active Patients': snapshot.activePatients,
                         'Appointment Completion Rate (%)': `${snapshot.appointmentCompletionRate}%`,
-                        'Appointments': snapshot.appointments,
-                        'Billed (AFN)': formatCurrency(snapshot.billed),
+                        Appointments: snapshot.appointments,
+                        Billed: formatCsvAmount(snapshot.billed),
                         'Collection Rate (%)': `${snapshot.collectionRate}%`,
-                        'Debt (AFN)': formatCurrency(snapshot.debt),
-                        'Discount (AFN)': formatCurrency(snapshot.discount),
+                        Debt: formatCsvAmount(snapshot.debt),
+                        Discount: formatCsvAmount(snapshot.discount),
                         'Generated At': formatDateTime(snapshot.generatedAt),
-                        'Granularity': toHumanLabel(snapshot.granularity),
+                        Granularity: toHumanLabel(snapshot.granularity),
                         'Invoice Status Filter': toHumanLabel(snapshot.statusFilter),
-                        'Net (AFN)': formatCurrency(snapshot.net),
-                        'Paid (AFN)': formatCurrency(snapshot.paid),
+                        Net: formatCsvAmount(snapshot.net),
+                        Paid: formatCsvAmount(snapshot.paid),
                         'Range End': formatFullDate(snapshot.rangeEnd),
                         'Range Start': formatFullDate(snapshot.rangeStart),
-                        'Visits': snapshot.visits,
+                        Visits: snapshot.visits,
                       }))
                     );
                   }}
@@ -2090,64 +3890,85 @@ export default function ReportsPage(): JSX.Element {
 
           <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as typeof activeTab)} className="space-y-3">
             <TabsList>
-              <TabsTrigger value="overview">{tReportsPage('tabs.overview')}</TabsTrigger>
-              <TabsTrigger value="financial">{tReportsPage('tabs.financial')}</TabsTrigger>
+              <TabsTrigger value="executive">Executive Dashboard</TabsTrigger>
+              <TabsTrigger value="financial">Financial Reports</TabsTrigger>
+              <TabsTrigger value="clinical">Clinical Reports</TabsTrigger>
+              <TabsTrigger value="inventory">Inventory Reports</TabsTrigger>
+              <TabsTrigger value="audit">Audit & Compliance</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="overview" className="space-y-4">
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
+            <TabsContent value="executive" className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                 <Card className="border-border/70">
                   <CardContent className="pt-5">
-                    <p className="text-xs text-muted-foreground">Total Patients</p>
-                    <p className="text-2xl font-semibold">{kpis.totalPatients}</p>
-                    <p className="text-xs text-muted-foreground">Active: {kpis.activePatients}</p>
-                  </CardContent>
-                </Card>
-                <Card className="border-border/70">
-                  <CardContent className="pt-5">
-                    <p className="text-xs text-muted-foreground">Visits / Appointments</p>
-                    <p className="text-2xl font-semibold">{kpis.visits} / {kpis.appointments}</p>
-                    <p className="text-xs text-muted-foreground">Completion: {kpis.appointmentCompletionRate}%</p>
-                  </CardContent>
-                </Card>
-                <Card className="border-border/70">
-                  <CardContent className="pt-5">
-                    <p className="text-xs text-muted-foreground">Billed</p>
-                    <p className="text-2xl font-semibold">{formatCurrency(kpis.billed)}</p>
-                    <p className="text-xs text-muted-foreground">Discount: {formatCurrency(kpis.discount)}</p>
-                  </CardContent>
-                </Card>
-                <Card className="border-border/70">
-                  <CardContent className="pt-5">
-                    <p className="text-xs text-muted-foreground">Collected</p>
+                    <p className="text-xs text-muted-foreground">Total Revenue</p>
                     <p className="text-2xl font-semibold">{formatCurrency(kpis.paid)}</p>
                     <p className="text-xs text-muted-foreground">Collection: {kpis.collectionRate}%</p>
                   </CardContent>
                 </Card>
                 <Card className="border-border/70">
                   <CardContent className="pt-5">
-                    <p className="text-xs text-muted-foreground">Outstanding Debt</p>
-                    <p className="text-2xl font-semibold">{formatCurrency(kpis.debt)}</p>
-                    <p className="text-xs text-muted-foreground">Net: {formatCurrency(kpis.net)}</p>
-                  </CardContent>
-                </Card>
-                <Card className="border-border/70">
-                  <CardContent className="pt-5">
-                    <p className="text-xs text-muted-foreground">All Expenses</p>
-                    <p className="text-2xl font-semibold">{formatCurrency(kpis.expenses)}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Safe outflow: {formatCurrency(kpis.safeOut)} | Salaries: {formatCurrency(kpis.salaryPaid)}
+                    <p className="text-xs text-muted-foreground">Net Profit</p>
+                    <p className={`text-2xl font-semibold ${profitOrLoss >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      {formatCurrency(profitOrLoss)}
                     </p>
-                    <p className="text-xs text-muted-foreground">Third-company paid: {formatCurrency(kpis.thirdCompanyPaid)}</p>
-                    <p className="text-xs text-muted-foreground">Net after expenses: {formatCurrency(kpis.netAfterExpenses)}</p>
+                    <p className="text-xs text-muted-foreground">After operational outcome</p>
                   </CardContent>
                 </Card>
                 <Card className="border-border/70">
                   <CardContent className="pt-5">
-                    <p className="text-xs text-muted-foreground">Third-Company Unpaid</p>
-                    <p className="text-2xl font-semibold">{formatCurrency(kpis.thirdCompanyUnpaid)}</p>
-                    <p className="text-xs text-muted-foreground">Supplier total: {formatCurrency(kpis.thirdCompanyTotal)}</p>
-                    <p className="text-xs text-muted-foreground">Unpaid teeth: {kpis.thirdCompanyUnpaidCount}</p>
+                    <p className="text-xs text-muted-foreground">Total Expenses</p>
+                    <p className="text-2xl font-semibold">{formatCurrency(kpis.expenses)}</p>
+                    <p className="text-xs text-muted-foreground">Daily + clinical buys</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/70">
+                  <CardContent className="pt-5">
+                    <p className="text-xs text-muted-foreground">Outstanding Payments</p>
+                    <p className="text-2xl font-semibold">{formatCurrency(kpis.debt)}</p>
+                    <p className="text-xs text-muted-foreground">Pending receivables</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/70">
+                  <CardContent className="pt-5">
+                    <p className="text-xs text-muted-foreground">New Patients</p>
+                    <p className="text-2xl font-semibold">{newPatientsCount}</p>
+                    <p className="text-xs text-muted-foreground">In selected range</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/70">
+                  <CardContent className="pt-5">
+                    <p className="text-xs text-muted-foreground">Implant Revenue</p>
+                    <p className="text-2xl font-semibold">{formatCurrency(implantRevenue)}</p>
+                    <p className="text-xs text-muted-foreground">From implant treatments</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/70">
+                  <CardContent className="pt-5">
+                    <p className="text-xs text-muted-foreground">Cash in Safe</p>
+                    <p className="text-2xl font-semibold">{formatCurrency(cashInSafe)}</p>
+                    <p className="text-xs text-muted-foreground">System balance</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/70">
+                  <CardContent className="pt-5">
+                    <p className="text-xs text-muted-foreground">Bank Balance</p>
+                    <p className="text-2xl font-semibold">{formatCurrency(bankBalance)}</p>
+                    <p className="text-xs text-muted-foreground">Bank/card collections</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/70">
+                  <CardContent className="pt-5">
+                    <p className="text-xs text-muted-foreground">Treatment Acceptance Rate</p>
+                    <p className="text-2xl font-semibold">{treatmentAcceptanceRate}%</p>
+                    <p className="text-xs text-muted-foreground">Visits vs appointments</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/70">
+                  <CardContent className="pt-5">
+                    <p className="text-xs text-muted-foreground">Chair Utilization Rate</p>
+                    <p className="text-2xl font-semibold">{chairUtilizationRate}%</p>
+                    <p className="text-xs text-muted-foreground">Visit density by day</p>
                   </CardContent>
                 </Card>
               </div>
@@ -2248,12 +4069,12 @@ export default function ReportsPage(): JSX.Element {
                 <CardContent>
                   {isLoadingAny ? (
                     <p className="text-sm text-muted-foreground">Loading report data...</p>
-                  ) : incomeTrend.length === 0 ? (
+                  ) : executiveRevenueTrendMonthly.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No income data in selected range.</p>
                   ) : (
                     <div className="h-72">
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={incomeTrend} margin={{ bottom: 8, left: 0, right: 10, top: 8 }}>
+                        <AreaChart data={executiveRevenueTrendMonthly} margin={{ bottom: 8, left: 0, right: 10, top: 8 }}>
                           <defs>
                             <linearGradient id="reportsIncomeGradient" x1="0" x2="0" y1="0" y2="1">
                               <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.42} />
@@ -2272,16 +4093,323 @@ export default function ReportsPage(): JSX.Element {
                             formatter={(value) => [formatCurrency(Number(value ?? 0)), 'Income']}
                             labelFormatter={(label) => `Bucket: ${label}`}
                           />
-                          <Area dataKey="income" fill="url(#reportsIncomeGradient)" stroke="#0ea5e9" strokeWidth={2} />
+                          <Area dataKey="amount" fill="url(#reportsIncomeGradient)" stroke="#0ea5e9" strokeWidth={2} />
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
                   )}
                 </CardContent>
               </Card>
+
+              <div className="grid gap-4 xl:grid-cols-2">
+                <Card className="border-border/70">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">Revenue by Treatment Type</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {treatmentVolume.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No treatment revenue in selected range.</p>
+                    ) : (
+                      <div className="h-64">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={treatmentVolume}>
+                            <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
+                            <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} />
+                            <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={(value) => `AFN ${Number(value).toFixed(0)}`} />
+                            <Tooltip formatter={(value) => [formatCurrency(Number(value ?? 0)), 'Revenue']} />
+                            <Bar dataKey="revenue" fill="#0ea5e9" radius={[8, 8, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card className="border-border/70">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">Revenue by Dentist</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {dentistProductivity.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No dentist revenue in selected range.</p>
+                    ) : (
+                      <div className="h-64">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={dentistProductivity}>
+                            <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
+                            <XAxis dataKey="dentist" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} />
+                            <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={(value) => `AFN ${Number(value).toFixed(0)}`} />
+                            <Tooltip formatter={(value) => [formatCurrency(Number(value ?? 0)), 'Revenue']} />
+                            <Bar dataKey="revenue" fill="#22c55e" radius={[8, 8, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card className="border-border/70">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">Implant Placement Trend</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {implantPlacementTrend.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No implant placements in selected range.</p>
+                    ) : (
+                      <div className="h-64">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={implantPlacementTrend}>
+                            <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
+                            <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} />
+                            <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} />
+                            <Tooltip formatter={(value, name) => [Number(value ?? 0), name === 'count' ? 'Placements' : 'Revenue']} />
+                            <Legend />
+                            <Line dataKey="count" stroke="#6366f1" strokeWidth={2} name="Placements" />
+                            <Line dataKey="revenue" stroke="#f97316" strokeWidth={2} name="Revenue" />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card className="border-border/70">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">Expense Breakdown</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {expenseSummary.byCategory.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No expenses in selected range.</p>
+                    ) : (
+                      <div className="h-64">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={expenseSummary.byCategory}>
+                            <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
+                            <XAxis dataKey="category" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} />
+                            <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={(value) => `AFN ${Number(value).toFixed(0)}`} />
+                            <Tooltip formatter={(value) => [formatCurrency(Number(value ?? 0)), 'Expense']} />
+                            <Bar dataKey="amount" fill="#ef4444" radius={[8, 8, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
             </TabsContent>
 
             <TabsContent value="financial" className="space-y-4">
+              <Card className="border-border/70">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Daily Financial Report</CardTitle>
+                  <CardDescription>Opening, inflow, outflow, and closing safe balance with variance check.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid gap-3 md:grid-cols-5">
+                    <div className="rounded-md border border-border/70 bg-muted/20 p-3">
+                      <p className="text-xs text-muted-foreground">Opening Safe Balance</p>
+                      <p className="text-base font-semibold">{formatCurrency(dailyFinancialSummary.openingBalance)}</p>
+                    </div>
+                    <div className="rounded-md border border-border/70 bg-muted/20 p-3">
+                      <p className="text-xs text-muted-foreground">Total Cash In</p>
+                      <p className="text-base font-semibold text-emerald-700">{formatCurrency(dailyFinancialSummary.totalCashIn)}</p>
+                    </div>
+                    <div className="rounded-md border border-border/70 bg-muted/20 p-3">
+                      <p className="text-xs text-muted-foreground">Total Cash Out</p>
+                      <p className="text-base font-semibold text-rose-700">{formatCurrency(dailyFinancialSummary.totalCashOut)}</p>
+                    </div>
+                    <div className="rounded-md border border-border/70 bg-muted/20 p-3">
+                      <p className="text-xs text-muted-foreground">Closing Balance</p>
+                      <p className="text-base font-semibold">{formatCurrency(dailyFinancialSummary.closingBalance)}</p>
+                    </div>
+                    <div className="rounded-md border border-border/70 bg-muted/20 p-3">
+                      <p className="text-xs text-muted-foreground">Variance (System vs Physical)</p>
+                      <p className={`text-base font-semibold ${dailyFinancialSummary.variance >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                        {formatCurrency(dailyFinancialSummary.variance)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="max-w-sm">
+                    <p className="mb-1 text-xs text-muted-foreground">Physical Safe Balance</p>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={physicalSafeBalanceInput}
+                      onChange={(event) => setPhysicalSafeBalanceInput(event.target.value)}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/70">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Revenue Report</CardTitle>
+                  <CardDescription>Grouped by treatment, dentist, payment method, and patient.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {[
+                    { label: 'By Treatment Type', rows: revenueByTreatmentRows },
+                    { label: 'By Dentist', rows: revenueByDentistRows },
+                    { label: 'By Payment Method', rows: revenueByPaymentMethodRows },
+                    { label: 'By Patient', rows: revenueByPatientRows },
+                  ].map((section) => (
+                    <div key={`revenue-group-${section.label}`} className="space-y-2">
+                      <p className="text-sm font-semibold">{section.label}</p>
+                      {section.rows.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No rows in selected filters.</p>
+                      ) : (
+                        <div className="overflow-x-auto rounded-md border border-border/70">
+                          <table className="min-w-full text-xs">
+                            <thead className="bg-muted/30">
+                              <tr>
+                                <th className="px-2 py-2 text-left font-semibold">Treatment / Group</th>
+                                <th className="px-2 py-2 text-right font-semibold">Count</th>
+                                <th className="px-2 py-2 text-right font-semibold">Gross</th>
+                                <th className="px-2 py-2 text-right font-semibold">Discount</th>
+                                <th className="px-2 py-2 text-right font-semibold">Net</th>
+                                <th className="px-2 py-2 text-right font-semibold">Cost</th>
+                                <th className="px-2 py-2 text-right font-semibold">Profit</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {section.rows.map((row) => (
+                                <tr key={`revenue-row-${section.label}-${row.label}`} className="border-t border-border/70">
+                                  <td className="px-2 py-2">{row.label}</td>
+                                  <td className="px-2 py-2 text-right">{row.count}</td>
+                                  <td className="px-2 py-2 text-right">{row.gross}</td>
+                                  <td className="px-2 py-2 text-right">{row.discount}</td>
+                                  <td className="px-2 py-2 text-right">{row.net}</td>
+                                  <td className="px-2 py-2 text-right">{row.cost}</td>
+                                  <td className="px-2 py-2 text-right">{row.profit}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/70">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Outstanding Report (Aging)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {outstandingInvoices.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No outstanding rows.</p>
+                  ) : (
+                    <div className="overflow-x-auto rounded-md border border-border/70">
+                      <table className="min-w-full text-xs">
+                        <thead className="bg-muted/30">
+                          <tr>
+                            <th className="px-2 py-2 text-left font-semibold">Patient</th>
+                            <th className="px-2 py-2 text-left font-semibold">Invoice</th>
+                            <th className="px-2 py-2 text-right font-semibold">Total</th>
+                            <th className="px-2 py-2 text-right font-semibold">Paid</th>
+                            <th className="px-2 py-2 text-right font-semibold">Remaining</th>
+                            <th className="px-2 py-2 text-right font-semibold">30d</th>
+                            <th className="px-2 py-2 text-right font-semibold">60d</th>
+                            <th className="px-2 py-2 text-right font-semibold">90d+</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {outstandingInvoices.map((invoice) => {
+                            const bucket = toDebtAgingBucket(invoice.date, endDate);
+                            return (
+                              <tr key={`aging-${invoice.id}`} className="border-t border-border/70">
+                                <td className="px-2 py-2">{mergedPatientNameById.get(invoice.patientId) || `Patient #${invoice.patientId || '-'}`}</td>
+                                <td className="px-2 py-2">#{invoice.id}</td>
+                                <td className="px-2 py-2 text-right">{formatCurrency(invoice.net)}</td>
+                                <td className="px-2 py-2 text-right">{formatCurrency(invoice.paid)}</td>
+                                <td className="px-2 py-2 text-right">{formatCurrency(invoice.debt)}</td>
+                                <td className="px-2 py-2 text-right">{bucket === '0-30 days' ? formatCurrency(invoice.debt) : '-'}</td>
+                                <td className="px-2 py-2 text-right">{bucket === '31-60 days' ? formatCurrency(invoice.debt) : '-'}</td>
+                                <td className="px-2 py-2 text-right">{bucket === '61-90 days' || bucket === '90+ days' ? formatCurrency(invoice.debt) : '-'}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/70">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Implant Installment Report</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {thirdCompanyUnpaidRows.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No implant installment rows.</p>
+                  ) : (
+                    <div className="overflow-x-auto rounded-md border border-border/70">
+                      <table className="min-w-full text-xs">
+                        <thead className="bg-muted/30">
+                          <tr>
+                            <th className="px-2 py-2 text-left font-semibold">Patient</th>
+                            <th className="px-2 py-2 text-left font-semibold">Implant Brand</th>
+                            <th className="px-2 py-2 text-right font-semibold">Total</th>
+                            <th className="px-2 py-2 text-right font-semibold">Paid</th>
+                            <th className="px-2 py-2 text-right font-semibold">Remaining</th>
+                            <th className="px-2 py-2 text-left font-semibold">Next Due</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {thirdCompanyUnpaidRows.map((row) => (
+                            <tr key={`implant-installment-${row.taskId}-${row.toothNumber}`} className="border-t border-border/70">
+                              <td className="px-2 py-2">{mergedPatientNameById.get(row.patientId) || `Patient #${row.patientId || '-'}`}</td>
+                              <td className="px-2 py-2">{row.toothNumber || 'Implant'}</td>
+                              <td className="px-2 py-2 text-right">{formatCurrency(row.supplierTotal)}</td>
+                              <td className="px-2 py-2 text-right">{formatCurrency(row.supplierPaid)}</td>
+                              <td className="px-2 py-2 text-right">{formatCurrency(row.supplierRemaining)}</td>
+                              <td className="px-2 py-2">Pending</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/70">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Expense Report (Category / Supplier / Date)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {[...filteredDailyExpenses, ...filteredClinicalExpenses].length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No expense rows in selected range.</p>
+                  ) : (
+                    <div className="overflow-x-auto rounded-md border border-border/70">
+                      <table className="min-w-full text-xs">
+                        <thead className="bg-muted/30">
+                          <tr>
+                            <th className="px-2 py-2 text-left font-semibold">Date</th>
+                            <th className="px-2 py-2 text-left font-semibold">Category</th>
+                            <th className="px-2 py-2 text-left font-semibold">Supplier</th>
+                            <th className="px-2 py-2 text-right font-semibold">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[...filteredDailyExpenses, ...filteredClinicalExpenses].slice(0, 200).map((row) => (
+                            <tr key={`expense-row-${row.id}`} className="border-t border-border/70">
+                              <td className="px-2 py-2">{formatFullDate(row.expenseDate)}</td>
+                              <td className="px-2 py-2">{row.category}</td>
+                              <td className="px-2 py-2">-</td>
+                              <td className="px-2 py-2 text-right">{formatCurrency(row.amount)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
               <Card className="border-border/70">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">Third-Company Implant Liability</CardTitle>
@@ -2732,9 +4860,9 @@ export default function ReportsPage(): JSX.Element {
                       className="h-9 rounded-md border border-input bg-background px-2 text-xs"
                     >
                       <option value="all">All patients</option>
-                      {typedPatients.map((patient) => (
-                        <option key={`ledger-patient-${patient.id}`} value={String(patient.id)}>
-                          {[patient.firstName, patient.lastName].filter(Boolean).join(' ') || patient.patientCode || `Patient #${patient.id}`}
+                      {patientFilterOptions.map((patient) => (
+                        <option key={`ledger-patient-${patient.id}`} value={patient.id}>
+                          {patient.name}
                         </option>
                       ))}
                     </select>
@@ -2833,6 +4961,37 @@ export default function ReportsPage(): JSX.Element {
             </TabsContent>
 
             <TabsContent value="clinical" className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <Card className="border-border/70">
+                  <CardContent className="pt-5">
+                    <p className="text-xs text-muted-foreground">Completed Treatments</p>
+                    <p className="text-2xl font-semibold">{treatmentPerformanceSummary.completedTreatments}</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/70">
+                  <CardContent className="pt-5">
+                    <p className="text-xs text-muted-foreground">Cancelled Treatments</p>
+                    <p className="text-2xl font-semibold">{treatmentPerformanceSummary.cancelledTreatments}</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/70">
+                  <CardContent className="pt-5">
+                    <p className="text-xs text-muted-foreground">Average Duration</p>
+                    <p className="text-2xl font-semibold">
+                      {treatmentPerformanceSummary.avgDurationMinutes > 0
+                        ? `${treatmentPerformanceSummary.avgDurationMinutes}m`
+                        : 'N/A'}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/70">
+                  <CardContent className="pt-5">
+                    <p className="text-xs text-muted-foreground">Success Rate</p>
+                    <p className="text-2xl font-semibold">{treatmentPerformanceSummary.successRate}%</p>
+                  </CardContent>
+                </Card>
+              </div>
+
               <Card className="border-border/70">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">Treatment Volume and Revenue</CardTitle>
@@ -2853,43 +5012,265 @@ export default function ReportsPage(): JSX.Element {
                   )}
                 </CardContent>
               </Card>
-            </TabsContent>
 
-            <TabsContent value="operations" className="space-y-4">
               <Card className="border-border/70">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Appointment Status Distribution</CardTitle>
+                  <CardTitle className="text-base">Dentist Performance</CardTitle>
                 </CardHeader>
-                <CardContent className="flex flex-wrap gap-2">
-                  {appointmentStatus.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No appointments in selected range.</p>
+                <CardContent>
+                  {dentistPerformanceRows.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No dentist performance rows in selected range.</p>
                   ) : (
-                    appointmentStatus.map((item) => (
-                      <Badge key={`appointment-status-${item.status}`} variant="secondary">
-                        {item.status.replaceAll('_', ' ')}: {item.count}
-                      </Badge>
-                    ))
+                    <div className="overflow-x-auto rounded-md border border-border/70">
+                      <table className="min-w-full text-xs">
+                        <thead className="bg-muted/30">
+                          <tr>
+                            <th className="px-2 py-2 text-left font-semibold">Dentist</th>
+                            <th className="px-2 py-2 text-right font-semibold">Patients Seen</th>
+                            <th className="px-2 py-2 text-right font-semibold">Revenue</th>
+                            <th className="px-2 py-2 text-right font-semibold">Treatments</th>
+                            <th className="px-2 py-2 text-right font-semibold">Commission</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dentistPerformanceRows.map((row) => (
+                            <tr key={`dentist-performance-${row.dentist}`} className="border-t border-border/70">
+                              <td className="px-2 py-2">{row.dentist}</td>
+                              <td className="px-2 py-2 text-right">{row.patientsSeen}</td>
+                              <td className="px-2 py-2 text-right">{formatCurrency(row.revenue)}</td>
+                              <td className="px-2 py-2 text-right">{row.treatments}</td>
+                              <td className="px-2 py-2 text-right">{formatCurrency(row.commission)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </CardContent>
               </Card>
 
               <Card className="border-border/70">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Dentist Productivity</CardTitle>
+                  <CardTitle className="text-base">Implant Success Report</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2">
-                  {dentistProductivity.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No dentist activity in selected range.</p>
+                <CardContent>
+                  {implantSuccessRows.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No implant success rows in selected range.</p>
                   ) : (
-                    dentistProductivity.map((item) => (
-                      <div key={`dentist-productivity-${item.dentist}`} className="rounded-md border border-border/70 bg-muted/20 p-2 text-xs">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="font-semibold text-foreground">{item.dentist}</p>
-                          <p className="text-muted-foreground">{item.visits} visits</p>
-                        </div>
-                        <p className="font-semibold text-foreground">Revenue: {formatCurrency(item.revenue)}</p>
-                      </div>
-                    ))
+                    <div className="overflow-x-auto rounded-md border border-border/70">
+                      <table className="min-w-full text-xs">
+                        <thead className="bg-muted/30">
+                          <tr>
+                            <th className="px-2 py-2 text-left font-semibold">Patient</th>
+                            <th className="px-2 py-2 text-left font-semibold">Brand</th>
+                            <th className="px-2 py-2 text-left font-semibold">Placement Date</th>
+                            <th className="px-2 py-2 text-right font-semibold">Failures</th>
+                            <th className="px-2 py-2 text-left font-semibold">Warranty</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {implantSuccessRows.map((row, index) => (
+                            <tr key={`implant-success-${row.patientName}-${index}`} className="border-t border-border/70">
+                              <td className="px-2 py-2">{row.patientName}</td>
+                              <td className="px-2 py-2">{row.brand}</td>
+                              <td className="px-2 py-2">{formatFullDate(row.placementDate)}</td>
+                              <td className="px-2 py-2 text-right">{row.failures}</td>
+                              <td className="px-2 py-2">{row.warrantyTracking}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="inventory" className="space-y-4">
+              <Card className="border-border/70">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Stock Status</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {isLoadingInventoryData ? (
+                    <p className="text-sm text-muted-foreground">Loading inventory...</p>
+                  ) : stockStatusRows.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No inventory rows in selected range.</p>
+                  ) : (
+                    <div className="overflow-x-auto rounded-md border border-border/70">
+                      <table className="min-w-full text-xs">
+                        <thead className="bg-muted/30">
+                          <tr>
+                            <th className="px-2 py-2 text-left font-semibold">Item</th>
+                            <th className="px-2 py-2 text-right font-semibold">In Stock</th>
+                            <th className="px-2 py-2 text-right font-semibold">Min Level</th>
+                            <th className="px-2 py-2 text-left font-semibold">Expiry</th>
+                            <th className="px-2 py-2 text-left font-semibold">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {stockStatusRows.map((row) => (
+                            <tr key={`stock-status-${row.itemName}-${row.entryDate}-${row.lotNumber}`} className="border-t border-border/70">
+                              <td className="px-2 py-2">{row.itemName}</td>
+                              <td className="px-2 py-2 text-right">{row.quantity}</td>
+                              <td className="px-2 py-2 text-right">{row.minStock}</td>
+                              <td className="px-2 py-2">{formatFullDate(row.expiryDate)}</td>
+                              <td className="px-2 py-2">
+                                <Badge variant={row.status === 'In Stock' ? 'secondary' : 'outline'}>{row.status}</Badge>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/70">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Material Usage Per Treatment</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {materialUsagePerTreatment.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No treatment usage data in selected range.</p>
+                  ) : (
+                    <div className="overflow-x-auto rounded-md border border-border/70">
+                      <table className="min-w-full text-xs">
+                        <thead className="bg-muted/30">
+                          <tr>
+                            <th className="px-2 py-2 text-left font-semibold">Treatment</th>
+                            <th className="px-2 py-2 text-right font-semibold">Sessions</th>
+                            <th className="px-2 py-2 text-right font-semibold">Total Cost</th>
+                            <th className="px-2 py-2 text-right font-semibold">Avg Cost / Session</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {materialUsagePerTreatment.map((row) => (
+                            <tr key={`material-usage-${row.treatment}`} className="border-t border-border/70">
+                              <td className="px-2 py-2">{row.treatment}</td>
+                              <td className="px-2 py-2 text-right">{row.sessions}</td>
+                              <td className="px-2 py-2 text-right">{formatCurrency(row.totalCost)}</td>
+                              <td className="px-2 py-2 text-right">{formatCurrency(row.avgCost)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/70">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Implant Inventory</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {implantInventoryRows.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No implant inventory rows in selected range.</p>
+                  ) : (
+                    <div className="overflow-x-auto rounded-md border border-border/70">
+                      <table className="min-w-full text-xs">
+                        <thead className="bg-muted/30">
+                          <tr>
+                            <th className="px-2 py-2 text-left font-semibold">Item</th>
+                            <th className="px-2 py-2 text-left font-semibold">Batch / Serial</th>
+                            <th className="px-2 py-2 text-right font-semibold">Qty</th>
+                            <th className="px-2 py-2 text-left font-semibold">Supplier</th>
+                            <th className="px-2 py-2 text-left font-semibold">Entry Date</th>
+                            <th className="px-2 py-2 text-left font-semibold">Expiry</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {implantInventoryRows.map((row) => (
+                            <tr key={`implant-inventory-${row.itemName}-${row.lotNumber}-${row.entryDate}`} className="border-t border-border/70">
+                              <td className="px-2 py-2">{row.itemName}</td>
+                              <td className="px-2 py-2">{row.lotNumber || '-'}</td>
+                              <td className="px-2 py-2 text-right">{row.quantity}</td>
+                              <td className="px-2 py-2">{row.supplier || '-'}</td>
+                              <td className="px-2 py-2">{formatFullDate(row.entryDate)}</td>
+                              <td className="px-2 py-2">{formatFullDate(row.expiryDate)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="audit" className="space-y-4">
+              <Card className="border-border/70">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Financial Modification Log</CardTitle>
+                  <CardDescription>Who changed financial records, with timestamp and value notes.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {financialModificationLogRows.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No modification logs available from current dataset.</p>
+                  ) : (
+                    <div className="overflow-x-auto rounded-md border border-border/70">
+                      <table className="min-w-full text-xs">
+                        <thead className="bg-muted/30">
+                          <tr>
+                            <th className="px-2 py-2 text-left font-semibold">Entity</th>
+                            <th className="px-2 py-2 text-left font-semibold">Action</th>
+                            <th className="px-2 py-2 text-left font-semibold">Changed By</th>
+                            <th className="px-2 py-2 text-left font-semibold">Timestamp</th>
+                            <th className="px-2 py-2 text-left font-semibold">Before</th>
+                            <th className="px-2 py-2 text-left font-semibold">After</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {financialModificationLogRows.map((row, index) => (
+                            <tr key={`mod-log-${row.entity}-${row.timestamp}-${index}`} className="border-t border-border/70">
+                              <td className="px-2 py-2">{row.entity}</td>
+                              <td className="px-2 py-2">{row.action}</td>
+                              <td className="px-2 py-2">{row.changedBy}</td>
+                              <td className="px-2 py-2">{formatDateTime(row.timestamp)}</td>
+                              <td className="px-2 py-2">{row.beforeValue}</td>
+                              <td className="px-2 py-2">{row.afterValue}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/70">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Access Logs</CardTitle>
+                  <CardDescription>Recent report access and snapshot activity.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {accessLogRows.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No access logs yet.</p>
+                  ) : (
+                    <div className="overflow-x-auto rounded-md border border-border/70">
+                      <table className="min-w-full text-xs">
+                        <thead className="bg-muted/30">
+                          <tr>
+                            <th className="px-2 py-2 text-left font-semibold">Action</th>
+                            <th className="px-2 py-2 text-left font-semibold">User</th>
+                            <th className="px-2 py-2 text-left font-semibold">Range</th>
+                            <th className="px-2 py-2 text-left font-semibold">Timestamp</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {accessLogRows.map((row, index) => (
+                            <tr key={`access-log-${row.generatedAt}-${index}`} className="border-t border-border/70">
+                              <td className="px-2 py-2">{row.action}</td>
+                              <td className="px-2 py-2">{row.user}</td>
+                              <td className="px-2 py-2">{row.range}</td>
+                              <td className="px-2 py-2">{formatDateTime(row.generatedAt)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </CardContent>
               </Card>

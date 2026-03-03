@@ -8,6 +8,7 @@ use App\Modules\DentalManagement\Infrastructure\Http\Controllers\InvoiceControll
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\ExpenseController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\DebtController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\FinancialSettingController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\InventoryItemController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\DentalBackupController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\PatientController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\PatientSessionTaskController;
@@ -65,6 +66,7 @@ Route::middleware(['api', 'auth:sanctum', 'set_locale'])->prefix('api/v1/dental-
     Route::apiResource('payments', PaymentController::class);
     Route::get('/safe-transactions/balance', [SafeTransactionController::class, 'balance']);
     Route::apiResource('safe-transactions', SafeTransactionController::class);
+    Route::apiResource('inventory-items', InventoryItemController::class);
     Route::apiResource('expenses', ExpenseController::class);
     Route::apiResource('salary-payments', SalaryPaymentController::class);
     Route::get('/debts', [DebtController::class, 'index']);

@@ -44,6 +44,10 @@
     "safe": "Safe Ledger",
     "salaries": "Salaries"
   },
+  "inventoryManagement": {
+    "title": "Inventory Management",
+    "inventory": "Inventory"
+  },
   "dentalManagement": {
     "title": "Dental Management",
     "patients": "Patients",

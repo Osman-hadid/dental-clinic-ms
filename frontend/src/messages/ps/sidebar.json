@@ -44,6 +44,10 @@
     "safe": "خوندي لیجر",
     "salaries": "معاشونه"
   },
+  "inventoryManagement": {
+    "title": "Inventory Management",
+    "inventory": "Inventory"
+  },
   "dentalManagement": {
     "title": "د غاښونو مدیریت",
     "patients": "ناروغان",
