@@ -1,4 +1,3 @@
-import { API_ORIGIN } from '@/config/environment';
 import { type ApiResponse } from '@/types/ApiResponse';
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios';
 import Cookies from 'js-cookie';
@@ -6,9 +5,26 @@ import Cookies from 'js-cookie';
 export class AxiosClient {
   private readonly axios: AxiosInstance;
 
-  constructor(baseURL: string = API_ORIGIN) {
+  private static resolveDefaultBaseUrl(): string {
+    if (typeof window === 'undefined') {
+      return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    }
+
+    const { hostname, origin, port, protocol } = window.location;
+    const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1';
+
+    if (isLocalHost && port === '3000') {
+      return `${protocol}//${hostname}:8000`;
+    }
+
+    return origin;
+  }
+
+  constructor(baseURL?: string) {
+    const resolvedBaseUrl = baseURL ?? AxiosClient.resolveDefaultBaseUrl();
+
     this.axios = axios.create({
-      baseURL,
+      baseURL: resolvedBaseUrl,
       headers: { 'Content-Type': 'application/json' },
       withCredentials: true,
     });
