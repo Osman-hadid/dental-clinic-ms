@@ -25,6 +25,10 @@ final class ListVisitTreatmentsRequest extends BaseListRequest
             'treatment',
             'tooth',
             'dentist',
+            'prescription',
+            'prescription.items',
+            'materialItems',
+            'materialItems.inventoryItem',
         ];
     }
 

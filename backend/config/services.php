@@ -45,8 +45,15 @@ return [
     ],
 
     'ai_imaging' => [
-        'provider' => env('AI_IMAGING_PROVIDER', 'dental_disease_detection'),
+        'provider' => env('AI_IMAGING_PROVIDER', 'gemini'),
         'timeout' => (int) env('AI_IMAGING_TIMEOUT', 120),
+        'gemini' => [
+            'api_key' => env('GEMINI_API_KEY', ''),
+            'model' => env('GEMINI_MODEL', 'gemini-2.0-flash'),
+            'endpoint' => env('GEMINI_ENDPOINT', 'https://generativelanguage.googleapis.com/v1beta'),
+            'verify_ssl' => filter_var(env('GEMINI_VERIFY_SSL', true), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? true,
+            'ca_bundle' => env('GEMINI_CA_BUNDLE', ''),
+        ],
         'dental_disease_detection' => [
             'python_bin' => env('DENTAL_DISEASE_DETECTION_PYTHON', 'python'),
             'repo_path' => env('DENTAL_DISEASE_DETECTION_REPO_PATH', base_path('../third_party/Dental_Disease_Detection/project-main')),

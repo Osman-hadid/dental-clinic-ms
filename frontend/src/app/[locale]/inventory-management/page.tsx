@@ -39,6 +39,7 @@ type InventoryFormState = {
   category: InventoryCategory;
   entryDate: string;
   expiryDate: string;
+  hasExpiryDate: boolean;
   itemName: string;
   location: string;
   lotNumber: string;
@@ -111,6 +112,7 @@ const emptyForm = (): InventoryFormState => ({
   category: 'consumable',
   entryDate: toInputDate(new Date()),
   expiryDate: '',
+  hasExpiryDate: false,
   itemName: '',
   location: '',
   lotNumber: '',
@@ -231,6 +233,7 @@ export default function InventoryManagementPage(): JSX.Element {
     if (!name) return setFormError('Item name is required.');
     if (quantity < 0 || minStock < 0 || unitCost < 0) return setFormError('Quantity, minimum stock, and unit cost must be zero or greater.');
     if (form.acquisitionSource === 'purchase' && quantity * unitCost <= 0) return setFormError('For purchased items, quantity and unit cost must be greater than 0.');
+    if (form.hasExpiryDate && !form.expiryDate) return setFormError('Select an expiry date or disable expiry for this item.');
 
     setFormError('');
     setIsSaving(true);
@@ -245,7 +248,7 @@ export default function InventoryManagementPage(): JSX.Element {
       unitCost,
       supplier: form.supplier.trim() || null,
       lotNumber: form.lotNumber.trim() || null,
-      expiryDate: form.expiryDate || null,
+      expiryDate: form.hasExpiryDate ? (form.expiryDate || null) : null,
       location: form.location.trim() || null,
       notes: form.notes.trim() || null,
     };
@@ -278,6 +281,7 @@ export default function InventoryManagementPage(): JSX.Element {
       category: item.category,
       entryDate: item.entryDate || toInputDate(new Date()),
       expiryDate: item.expiryDate,
+      hasExpiryDate: Boolean(item.expiryDate),
       itemName: item.itemName,
       location: item.location,
       lotNumber: item.lotNumber,
@@ -337,7 +341,29 @@ export default function InventoryManagementPage(): JSX.Element {
                 <Input placeholder="Supplier" value={form.supplier} onChange={(e) => setForm((s) => ({ ...s, supplier: e.target.value }))} />
                 <Input placeholder="Location (shelf/room)" value={form.location} onChange={(e) => setForm((s) => ({ ...s, location: e.target.value }))} />
                 <Input placeholder="Lot number" value={form.lotNumber} onChange={(e) => setForm((s) => ({ ...s, lotNumber: e.target.value }))} />
-                <Input type="date" value={form.expiryDate} onChange={(e) => setForm((s) => ({ ...s, expiryDate: e.target.value }))} />
+                <div className="space-y-2">
+                  <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={!form.hasExpiryDate}
+                      onChange={(e) => {
+                        const noExpiry = e.target.checked;
+                        setForm((s) => ({
+                          ...s,
+                          expiryDate: noExpiry ? '' : s.expiryDate,
+                          hasExpiryDate: !noExpiry,
+                        }));
+                      }}
+                    />
+                    No expiry date
+                  </label>
+                  <Input
+                    type="date"
+                    value={form.expiryDate}
+                    disabled={!form.hasExpiryDate}
+                    onChange={(e) => setForm((s) => ({ ...s, expiryDate: e.target.value }))}
+                  />
+                </div>
               </div>
               <textarea value={form.notes} onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))} placeholder="Notes" rows={3} className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none" />
               {formError ? <p className="text-sm text-rose-600">{formError}</p> : null}
@@ -372,7 +398,7 @@ export default function InventoryManagementPage(): JSX.Element {
                           <td className="px-3 py-2">{item.supplier || '-'}</td>
                           <td className="px-3 py-2">{formatMoney(item.unitCost)}</td>
                           <td className="px-3 py-2">{formatMoney(item.totalCost)}</td>
-                          <td className="px-3 py-2">{item.expiryDate || '-'}{isExpiringSoon(item.expiryDate) ? <div className="text-xs text-orange-600">Expiring soon</div> : null}</td>
+                          <td className="px-3 py-2">{item.expiryDate || 'No expiry'}{isExpiringSoon(item.expiryDate) ? <div className="text-xs text-orange-600">Expiring soon</div> : null}</td>
                           <td className="px-3 py-2">{item.location || '-'}</td>
                           <td className="px-3 py-2"><div className="flex gap-2"><Button type="button" size="sm" variant="outline" onClick={() => editItem(item)}>Edit</Button><Button type="button" size="sm" variant="destructive" onClick={() => void deleteItem(item.id)}>Delete</Button></div></td>
                         </tr>

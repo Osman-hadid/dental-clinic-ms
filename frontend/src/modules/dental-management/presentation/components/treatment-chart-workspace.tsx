@@ -1,8 +1,9 @@
 'use client';
 
-import { JSX, useCallback, useMemo, useState } from 'react';
+import { JSX, useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/modules/auth/application/stores/auth-store';
+import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import { type Staff } from '@/modules/dental-management/domain/entities/Staff';
 import { type Tooth } from '@/modules/dental-management/domain/entities/Tooth';
 import { type Treatment } from '@/modules/dental-management/domain/entities/Treatment';
@@ -60,6 +61,35 @@ type TreatmentChartWorkspaceProps = {
   lockVisitSelection?: boolean;
 };
 
+type InventoryMaterialOption = {
+  category: string;
+  id: string;
+  itemName: string;
+  quantity: number;
+  unit: string;
+};
+
+type InventoryPaginatedResponse = {
+  data?: Array<Record<string, unknown>>;
+  meta?: { currentPage?: number; lastPage?: number };
+};
+
+type MaterialSelectionRow = {
+  key: string;
+  inventoryItemId: string;
+  quantity: string;
+};
+
+type PrescriptionFoodTiming = 'before_food' | 'after_food' | 'with_food' | 'anytime';
+
+type PrescriptionSelectionRow = {
+  amount: string;
+  key: string;
+  foodTiming: PrescriptionFoodTiming | '';
+  frequency: string;
+  name: string;
+};
+
 const CONDITIONS: Record<ConditionKey, ConditionMeta> = {
   caries: { color: '#4ade80', label: 'Caries' },
   gingivitis: { color: '#f87171', label: 'Gingivitis' },
@@ -73,6 +103,111 @@ const CONDITIONS: Record<ConditionKey, ConditionMeta> = {
 const UPPER_ARCH = ['18', '17', '16', '15', '14', '13', '12', '11', '21', '22', '23', '24', '25', '26', '27', '28'];
 const LOWER_ARCH = ['48', '47', '46', '45', '44', '43', '42', '41', '31', '32', '33', '34', '35', '36', '37', '38'];
 const ALL_TEETH = [...UPPER_ARCH, ...LOWER_ARCH];
+type ToothVisualType =
+  | 'central_incisor'
+  | 'lateral_incisor'
+  | 'canine'
+  | 'first_premolar'
+  | 'second_premolar'
+  | 'first_molar'
+  | 'second_molar'
+  | 'third_molar';
+type ToothArch = 'maxilla' | 'mandible';
+type ToothDisplayMeta = {
+  fullLabel: string;
+  shortLabel: string;
+  visualType: ToothVisualType;
+};
+type ToothGlyphSpec = {
+  crownPath: string;
+  mandibularRoots: number;
+  maxillaryRoots: number;
+  rootTipY: number;
+  rootWidth: number;
+};
+
+const TOOTH_POSITION_META: Record<number, ToothDisplayMeta> = {
+  1: { fullLabel: 'Central Incisor', shortLabel: 'CI', visualType: 'central_incisor' },
+  2: { fullLabel: 'Lateral Incisor', shortLabel: 'LI', visualType: 'lateral_incisor' },
+  3: { fullLabel: 'Canine', shortLabel: 'C', visualType: 'canine' },
+  4: { fullLabel: 'First Premolar', shortLabel: 'P1', visualType: 'first_premolar' },
+  5: { fullLabel: 'Second Premolar', shortLabel: 'P2', visualType: 'second_premolar' },
+  6: { fullLabel: 'First Molar', shortLabel: 'M1', visualType: 'first_molar' },
+  7: { fullLabel: 'Second Molar', shortLabel: 'M2', visualType: 'second_molar' },
+  8: { fullLabel: 'Third Molar (Wisdom)', shortLabel: 'M3', visualType: 'third_molar' },
+};
+const TOOTH_GLYPH_SPECS: Record<ToothVisualType, ToothGlyphSpec> = {
+  canine: {
+    crownPath: 'M25 36 C22 25 26 18 31 9 C33 6 39 6 41 9 C46 18 50 25 47 36 Z',
+    mandibularRoots: 1,
+    maxillaryRoots: 1,
+    rootTipY: 80,
+    rootWidth: 4.2,
+  },
+  central_incisor: {
+    crownPath: 'M24 35 C20 23 22 14 28 10 C32 7 40 7 44 10 C50 14 52 23 48 35 Z',
+    mandibularRoots: 1,
+    maxillaryRoots: 1,
+    rootTipY: 76,
+    rootWidth: 3.8,
+  },
+  first_molar: {
+    crownPath: 'M15 37 C13 27 18 19 24 15 C29 12 33 13 36 15 C39 12 43 12 48 15 C54 19 59 27 57 37 Z',
+    mandibularRoots: 2,
+    maxillaryRoots: 3,
+    rootTipY: 82,
+    rootWidth: 4.8,
+  },
+  first_premolar: {
+    crownPath: 'M20 36 C18 25 22 16 28 12 C32 10 40 10 44 12 C50 16 54 25 52 36 Z',
+    mandibularRoots: 1,
+    maxillaryRoots: 2,
+    rootTipY: 79,
+    rootWidth: 4.4,
+  },
+  lateral_incisor: {
+    crownPath: 'M25 35 C21 24 23 15 29 11 C33 9 39 9 43 11 C49 15 51 24 47 35 Z',
+    mandibularRoots: 1,
+    maxillaryRoots: 1,
+    rootTipY: 77,
+    rootWidth: 3.9,
+  },
+  second_molar: {
+    crownPath: 'M16 37 C14 28 19 20 25 16 C30 13 34 14 36 16 C38 14 42 13 47 16 C53 20 58 28 56 37 Z',
+    mandibularRoots: 2,
+    maxillaryRoots: 3,
+    rootTipY: 80,
+    rootWidth: 4.7,
+  },
+  second_premolar: {
+    crownPath: 'M19 36 C17 26 22 17 28 13 C33 11 39 11 44 13 C50 17 55 26 53 36 Z',
+    mandibularRoots: 1,
+    maxillaryRoots: 2,
+    rootTipY: 78,
+    rootWidth: 4.3,
+  },
+  third_molar: {
+    crownPath: 'M15 38 C13 30 17 22 24 18 C28 16 31 15 34 17 C37 14 41 14 45 17 C52 20 58 29 57 38 C53 39 49 41 43 42 C39 43 33 43 29 42 C23 41 19 40 15 38 Z',
+    mandibularRoots: 2,
+    maxillaryRoots: 3,
+    rootTipY: 79,
+    rootWidth: 4.5,
+  },
+};
+const PRESCRIPTION_FREQUENCY_OPTIONS = [
+  'Once per day',
+  'Twice per day',
+  'Three times per day',
+  'Every 8 hours',
+  'Every 12 hours',
+  'As needed',
+] as const;
+const PRESCRIPTION_FOOD_TIMING_LABELS: Record<PrescriptionFoodTiming, string> = {
+  after_food: 'After food',
+  anytime: 'Anytime',
+  before_food: 'Before food',
+  with_food: 'With food',
+};
 const CONDITION_CODES: Record<ConditionKey, string> = {
   caries: 'c',
   gingivitis: 'g',
@@ -90,6 +225,184 @@ const isConditionKey = (value: string): value is ConditionKey => {
 };
 
 const isToothNumber = (value: string): boolean => /^[0-9]{2}$/.test(value);
+
+const resolveToothDisplayMeta = (toothNumber: string): ToothDisplayMeta => {
+  const position = Number.parseInt(toothNumber[1] || '', 10);
+  return TOOTH_POSITION_META[position] ?? {
+    fullLabel: 'Tooth',
+    shortLabel: '?',
+    visualType: 'central_incisor',
+  };
+};
+
+const resolveToothQuadrantCode = (toothNumber: string): string => {
+  const quadrant = toothNumber.charAt(0);
+  const position = toothNumber.charAt(1);
+  const prefix = quadrant === '1'
+    ? 'UR'
+    : quadrant === '2'
+      ? 'UL'
+      : quadrant === '3'
+        ? 'LL'
+        : 'LR';
+  return `${prefix}${position}`;
+};
+
+const rootCentersByCount = (count: number): number[] => {
+  if (count <= 1) return [36];
+  if (count === 2) return [30, 42];
+  return [24, 36, 48];
+};
+
+const TOOTH_SURFACE_DETAILS: Record<ToothVisualType, string[]> = {
+  canine: [
+    'M35 12 C35.5 20 35.5 27 35 35',
+  ],
+  central_incisor: [
+    'M31 13 C33 20 33 27 32 34',
+    'M41 13 C39 20 39 27 40 34',
+  ],
+  first_molar: [
+    'M23 21 C28 18 32 18 36 21',
+    'M36 21 C40 18 44 18 49 21',
+    'M28 29 C33 26 39 26 44 29',
+  ],
+  first_premolar: [
+    'M27 20 C31 17 35 17 39 20',
+    'M33 29 C35 27 37 27 39 29',
+  ],
+  lateral_incisor: [
+    'M31 14 C32.5 21 32.5 27 32 34',
+    'M40 14 C38.5 21 38.5 27 39 34',
+  ],
+  second_molar: [
+    'M24 22 C29 19 33 19 36.5 22',
+    'M36.5 22 C40 19 44 19 48 22',
+    'M29 29 C34 27 39 27 43.5 29',
+  ],
+  second_premolar: [
+    'M28 21 C32 18 36 18 40 21',
+    'M33 29 C36 27 39 27 41 29',
+  ],
+  third_molar: [
+    'M22 22 C27 19 31 19 35 22',
+    'M35 22 C39 19 43 19 47 22',
+    'M27 30 C32 28 38 28 43 30',
+  ],
+};
+
+const buildRootPath = (
+  centerX: number,
+  startY: number,
+  tipY: number,
+  rootWidth: number,
+  leftTilt: number,
+  rightTilt: number
+): string => {
+  const controlY = (startY + tipY) / 2;
+  return `M${(centerX - rootWidth).toFixed(2)} ${startY.toFixed(2)} C${(centerX - rootWidth * 1.15 - leftTilt).toFixed(2)} ${controlY.toFixed(2)} ${(centerX - rootWidth * 0.5 - leftTilt).toFixed(2)} ${(tipY - 2).toFixed(2)} ${centerX.toFixed(2)} ${tipY.toFixed(2)} C${(centerX + rootWidth * 0.5 + rightTilt).toFixed(2)} ${(tipY - 2).toFixed(2)} ${(centerX + rootWidth * 1.15 + rightTilt).toFixed(2)} ${controlY.toFixed(2)} ${(centerX + rootWidth).toFixed(2)} ${startY.toFixed(2)} Z`;
+};
+
+const ToothGlyph = ({
+  arch,
+  isActive,
+  visualType,
+}: {
+  arch: ToothArch;
+  isActive: boolean;
+  visualType: ToothVisualType;
+}): JSX.Element => {
+  const uid = useId().replace(/:/g, '-');
+  const spec = TOOTH_GLYPH_SPECS[visualType];
+  const rootCount = arch === 'maxilla' ? spec.maxillaryRoots : spec.mandibularRoots;
+  const rootCenters = rootCentersByCount(rootCount);
+  const crownDetailPaths = TOOTH_SURFACE_DETAILS[visualType];
+  const crownGradientId = `${uid}-crown`;
+  const rootGradientId = `${uid}-root`;
+  const glossGradientId = `${uid}-gloss`;
+  const strokeColor = isActive ? '#e5e7eb' : '#c3ccd8';
+  const crownHighlight = '#ffffff';
+  const crownBase = isActive ? '#f4f6f8' : '#eef1f4';
+  const crownDepth = isActive ? '#d9e0e8' : '#d5dde6';
+  const rootTop = isActive ? '#eef2f6' : '#e5ebf2';
+  const rootBottom = isActive ? '#c7d1dc' : '#c0cad7';
+  const detailColor = isActive ? 'rgba(255,255,255,0.56)' : 'rgba(100,116,139,0.3)';
+  const shadowColor = isActive ? 'rgba(88, 28, 135, 0.42)' : 'rgba(15, 23, 42, 0.22)';
+
+  return (
+    <svg viewBox="0 0 72 88" className="h-16 w-16" aria-hidden="true">
+      <defs>
+        <linearGradient id={crownGradientId} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor={crownHighlight} />
+          <stop offset="55%" stopColor={crownBase} />
+          <stop offset="100%" stopColor={crownDepth} />
+        </linearGradient>
+        <linearGradient id={rootGradientId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={rootTop} />
+          <stop offset="100%" stopColor={rootBottom} />
+        </linearGradient>
+        <radialGradient id={glossGradientId} cx="34%" cy="22%" r="55%">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.78)" />
+          <stop offset="60%" stopColor="rgba(255,255,255,0.16)" />
+          <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+        </radialGradient>
+      </defs>
+      <path
+        d={spec.crownPath}
+        fill={`url(#${crownGradientId})`}
+        stroke={strokeColor}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={1.7}
+        style={{ filter: `drop-shadow(0 2px 3px ${shadowColor})` }}
+      />
+      <path
+        d={spec.crownPath}
+        fill={`url(#${glossGradientId})`}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M22 34 C28 32 44 32 50 34"
+        fill="none"
+        stroke="rgba(148,163,184,0.35)"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={1}
+      />
+      {crownDetailPaths.map((detailPath, index) => (
+        <path
+          key={`${visualType}-detail-${index}`}
+          d={detailPath}
+          fill="none"
+          stroke={detailColor}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.1}
+        />
+      ))}
+      {rootCenters.map((centerX, index) => (
+        <path
+          key={`${visualType}-${arch}-root-${index}`}
+          d={buildRootPath(
+            centerX,
+            35,
+            spec.rootTipY + (rootCount === 3 && index === 1 ? 3 : 0),
+            spec.rootWidth,
+            rootCount === 3 && index === 0 ? 1.6 : 0.6,
+            rootCount === 3 && index === rootCount - 1 ? 1.6 : 0.6
+          )}
+          fill={`url(#${rootGradientId})`}
+          stroke={strokeColor}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.8}
+          style={{ filter: `drop-shadow(0 1px 2px ${shadowColor})` }}
+        />
+      ))}
+    </svg>
+  );
+};
 
 const parseConditionToken = (value?: string): ConditionKey | null => {
   if (!value) {
@@ -137,6 +450,29 @@ const parseToothNumbersFromValue = (value?: string): string[] => {
     .filter(isToothNumber);
 
   return Array.from(new Set(numbers));
+};
+
+const parseImageChargeFromNotes = (value?: string): string => {
+  if (!value) {
+    return '-';
+  }
+
+  const imageRequiredMatch = value.match(/\[image:([01])\]/i);
+  if (!imageRequiredMatch || imageRequiredMatch[1] !== '1') {
+    return '-';
+  }
+
+  const imagePriceMatch = value.match(/\[imagePrice:([0-9]+(?:\.[0-9]+)?)\]/i);
+  if (!imagePriceMatch) {
+    return 'Required';
+  }
+
+  const parsed = Number(imagePriceMatch[1]);
+  if (!Number.isFinite(parsed)) {
+    return 'Required';
+  }
+
+  return `${parsed.toFixed(2)} AFN`;
 };
 
 const parseToothConditionMapFromNotes = (value?: string): Record<string, ConditionKey> => {
@@ -226,6 +562,18 @@ const parseCurrency = (value: string): number => {
 
 const roundCurrency = (value: number): number => Math.round(value * 100) / 100;
 
+const asText = (value: unknown): string => {
+  if (typeof value === 'number') return String(value).trim();
+  if (typeof value === 'string') return value.trim();
+  return '';
+};
+
+const asNumber = (value: unknown): number => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const parsed = Number(asText(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 const hexToRgba = (hex: string, alpha: number): string => {
   const normalized = hex.replace('#', '');
   const bigint = Number.parseInt(normalized, 16);
@@ -234,6 +582,92 @@ const hexToRgba = (hex: string, alpha: number): string => {
   const blue = bigint & 255;
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 };
+
+const createMaterialSelectionRow = (): MaterialSelectionRow => ({
+  inventoryItemId: '',
+  key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  quantity: '1',
+});
+
+const createPrescriptionSelectionRow = (): PrescriptionSelectionRow => ({
+  amount: '',
+  foodTiming: '',
+  frequency: '',
+  key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  name: '',
+});
+
+const formatPrescriptionSummary = (
+  prescription?: Partial<{
+    amount: string;
+    content: string;
+    foodTiming: string;
+    frequency: string;
+    items: Array<{
+      amount?: string;
+      foodTiming?: string;
+      frequency?: string;
+      name?: string;
+    }>;
+    name: string;
+  }>
+): string => {
+  if (!prescription) return '-';
+
+  const formatSingle = (source: Partial<{
+    amount: string;
+    foodTiming: string;
+    frequency: string;
+    name: string;
+  }>): string => {
+    const name = source.name?.trim() || '';
+    const amount = source.amount?.trim() || '';
+    const frequency = source.frequency?.trim() || '';
+    const foodTimingRaw = source.foodTiming?.trim() || '';
+    const foodTiming = (foodTimingRaw in PRESCRIPTION_FOOD_TIMING_LABELS
+      ? PRESCRIPTION_FOOD_TIMING_LABELS[foodTimingRaw as PrescriptionFoodTiming]
+      : foodTimingRaw);
+
+    if (!name && !amount && !frequency && !foodTiming) {
+      return '';
+    }
+
+    const dose = amount;
+    const parts = [
+      name ? (dose ? `${name} (${dose})` : name) : dose,
+      frequency,
+      foodTiming,
+    ].filter(Boolean);
+
+    return parts.join(', ');
+  };
+
+  if (Array.isArray(prescription.items) && prescription.items.length > 0) {
+    const rows = prescription.items
+      .map((item) => formatSingle(item))
+      .filter(Boolean);
+    if (rows.length > 0) {
+      return rows.join('; ');
+    }
+  }
+
+  const single = formatSingle({
+    amount: prescription.amount,
+    foodTiming: prescription.foodTiming,
+    frequency: prescription.frequency,
+    name: prescription.name,
+  });
+  if (single !== '') {
+    return single;
+  }
+
+  if (single === '') {
+    return prescription.content?.trim() || '-';
+  }
+  return '-';
+};
+
+const inventoryApiClient = new AxiosClient();
 
 export const TreatmentChartWorkspace = ({
   hidePatientVisitSelectors = false,
@@ -263,8 +697,11 @@ export const TreatmentChartWorkspace = ({
   const [price, setPrice] = useState<string>('');
   const [requiresImage, setRequiresImage] = useState<boolean>(false);
   const [imagePrice, setImagePrice] = useState<string>('');
-  const [material, setMaterial] = useState<string>('');
+  const [materialSelections, setMaterialSelections] = useState<MaterialSelectionRow[]>([]);
+  const [inventoryMaterials, setInventoryMaterials] = useState<InventoryMaterialOption[]>([]);
+  const [isLoadingInventoryMaterials, setIsLoadingInventoryMaterials] = useState<boolean>(false);
   const [notes, setNotes] = useState<string>('');
+  const [prescriptionSelections, setPrescriptionSelections] = useState<PrescriptionSelectionRow[]>([]);
   const [conditionOverrides, setConditionOverrides] = useState<Record<string, ConditionKey | null>>({});
 
   const { entities: patients } = usePatientList(1, 100);
@@ -282,13 +719,17 @@ export const TreatmentChartWorkspace = ({
     100,
     '',
     [],
-    ['treatment', 'tooth', 'dentist'],
+    ['treatment', 'tooth', 'dentist', 'prescription', 'prescription.items', 'materialItems'],
     visitTreatmentFilters
   );
 
   const { entities: treatments } = useTreatmentList(1, 100, '', [], [], { enabled: ['1'] });
   const { entities: teeth } = useToothList(1, 100);
   const { entities: staff } = useStaffList(1, 100, authenticatedEmail, ['email'], [], { enabled: ['1'] });
+  const inventoryMaterialsById = useMemo(
+    () => new Map(inventoryMaterials.map((item) => [item.id, item])),
+    [inventoryMaterials]
+  );
 
   const typedVisitTreatments = visitTreatments as VisitTreatmentWithRelations[];
   const selectedPatient = useMemo(
@@ -434,6 +875,36 @@ export const TreatmentChartWorkspace = ({
 
     return mapped;
   }, [resolveRowTeeth]);
+  const resolveRowMaterialSummary = useCallback((row: VisitTreatmentWithRelations): string => {
+    const directMaterial = row.material?.trim();
+    if (directMaterial) {
+      return directMaterial;
+    }
+
+    if (!Array.isArray(row.materialItems) || row.materialItems.length === 0) {
+      return '-';
+    }
+
+    const parts = row.materialItems
+      .map((item) => {
+        const itemNameFromRow = 'itemName' in item ? item.itemName : undefined;
+        const itemName = typeof itemNameFromRow === 'string' && itemNameFromRow.trim() !== ''
+          ? itemNameFromRow.trim()
+          : `Item #${item.inventoryItemId ?? '-'}`;
+        const quantityUsed = 'quantityUsed' in item ? item.quantityUsed : undefined;
+        const quantityFromPayload = 'quantity' in item ? item.quantity : undefined;
+        const quantity = typeof quantityUsed === 'number'
+          ? quantityUsed
+          : Number(quantityFromPayload ?? 0);
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+          return itemName;
+        }
+        return `${itemName} x${quantity}`;
+      })
+      .filter(Boolean);
+
+    return parts.length > 0 ? parts.join(', ') : '-';
+  }, []);
 
   const baseConditions = useMemo(() => {
     const result: Record<string, ConditionKey | null> = {};
@@ -485,13 +956,21 @@ export const TreatmentChartWorkspace = ({
     !createVisitTreatment.isPending;
 
   const doctorName = useMemo(() => {
-    const fullName = [authenticatedUser?.firstName, authenticatedUser?.lastName]
-      .map((item) => item?.trim())
-      .filter(Boolean)
-      .join(' ');
+    const visitDentistName = selectedVisit?.dentistName?.trim() || '';
+    if (visitDentistName) {
+      return visitDentistName;
+    }
 
-    return fullName || authenticatedUser?.email || 'Authenticated user';
-  }, [authenticatedUser?.email, authenticatedUser?.firstName, authenticatedUser?.lastName]);
+    const mappedStaffName = authenticatedDentist?.fullName?.trim() || '';
+    if (mappedStaffName) {
+      return mappedStaffName;
+    }
+
+    return 'Unassigned doctor';
+  }, [
+    authenticatedDentist?.fullName,
+    selectedVisit?.dentistName,
+  ]);
   const patientName = useMemo(() => {
     if (!selectedPatient) {
       return selectedPatientId ? `Patient #${selectedPatientId}` : 'N/A';
@@ -499,6 +978,35 @@ export const TreatmentChartWorkspace = ({
 
     return [selectedPatient.firstName, selectedPatient.lastName].filter(Boolean).join(' ') || `Patient #${selectedPatient.id}`;
   }, [selectedPatient, selectedPatientId]);
+  const materialSummary = useMemo(() => {
+    const parts = materialSelections
+      .map((selection) => {
+        const inventoryItemId = selection.inventoryItemId.trim();
+        if (!inventoryItemId) return '';
+
+        const quantity = Number.parseInt(selection.quantity.trim(), 10);
+        if (!Number.isFinite(quantity) || quantity <= 0) return '';
+
+        const item = inventoryMaterialsById.get(inventoryItemId);
+        const itemName = item?.itemName || `Item #${inventoryItemId}`;
+        return `${itemName} x${quantity}`;
+      })
+      .filter(Boolean);
+
+    return parts.join(', ');
+  }, [inventoryMaterialsById, materialSelections]);
+  const prescriptionDraftSummary = useMemo(() => {
+    const items = prescriptionSelections
+      .map((item) => ({
+        amount: item.amount.trim(),
+        foodTiming: item.foodTiming || undefined,
+        frequency: item.frequency.trim(),
+        name: item.name.trim(),
+      }))
+      .filter((item) => item.name || item.amount || item.frequency || item.foodTiming);
+
+    return formatPrescriptionSummary({ items });
+  }, [prescriptionSelections]);
 
   const handlePatientChange = (value: string): void => {
     if (lockPatientSelection) {
@@ -523,6 +1031,98 @@ export const TreatmentChartWorkspace = ({
 
     setPrice(defaultPrice.toFixed(2));
   };
+
+  const addMaterialSelection = (): void => {
+    setMaterialSelections((previous) => [...previous, createMaterialSelectionRow()]);
+  };
+
+  const updateMaterialSelection = (
+    key: string,
+    patch: Partial<Pick<MaterialSelectionRow, 'inventoryItemId' | 'quantity'>>
+  ): void => {
+    setMaterialSelections((previous) =>
+      previous.map((selection) => (selection.key === key ? { ...selection, ...patch } : selection))
+    );
+  };
+
+  const removeMaterialSelection = (key: string): void => {
+    setMaterialSelections((previous) => previous.filter((selection) => selection.key !== key));
+  };
+
+  const addPrescriptionSelection = (): void => {
+    setPrescriptionSelections((previous) => [...previous, createPrescriptionSelectionRow()]);
+  };
+
+  const updatePrescriptionSelection = (
+    key: string,
+    patch: Partial<Omit<PrescriptionSelectionRow, 'key'>>
+  ): void => {
+    setPrescriptionSelections((previous) =>
+      previous.map((selection) => (selection.key === key ? { ...selection, ...patch } : selection))
+    );
+  };
+
+  const removePrescriptionSelection = (key: string): void => {
+    setPrescriptionSelections((previous) => previous.filter((selection) => selection.key !== key));
+  };
+
+  const fetchInventoryMaterials = useCallback(async (): Promise<void> => {
+    setIsLoadingInventoryMaterials(true);
+
+    try {
+      const allRows: Array<Record<string, unknown>> = [];
+      let page = 1;
+
+      while (true) {
+        const response = await inventoryApiClient.get<InventoryPaginatedResponse>(
+          '/api/v1/dental-management/inventory-items',
+          {
+            params: { page, perPage: 100, sortBy: 'entryDate', sortDirection: 'desc' },
+          }
+        );
+
+        if (!response.success) {
+          throw new Error(response.error?.message || 'Failed to fetch inventory materials.');
+        }
+
+        const payload = response.data;
+        const rows = Array.isArray(payload?.data) ? payload.data : [];
+        allRows.push(...rows);
+
+        const currentPage = Number(payload?.meta?.currentPage ?? page);
+        const lastPage = Number(payload?.meta?.lastPage ?? currentPage);
+        if (rows.length === 0 || currentPage >= lastPage) break;
+        page += 1;
+      }
+
+      const uniqueMaterials = new Map<string, InventoryMaterialOption>();
+      for (const row of allRows) {
+        const id = asText(row.id);
+        const itemName = asText(row.itemName ?? row.item_name);
+        if (!id || !itemName) continue;
+
+        uniqueMaterials.set(id, {
+          category: asText(row.category),
+          id,
+          itemName,
+          quantity: asNumber(row.quantity),
+          unit: asText(row.unit) || 'unit',
+        });
+      }
+
+      const materials = Array.from(uniqueMaterials.values())
+        .sort((left, right) => left.itemName.localeCompare(right.itemName, undefined, { sensitivity: 'base' }));
+      setInventoryMaterials(materials);
+    } catch {
+      toast.error('Failed to load inventory materials.');
+    } finally {
+      setIsLoadingInventoryMaterials(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchInventoryMaterials();
+  }, [fetchInventoryMaterials]);
 
   const paintTooth = (toothNumber: string): void => {
     setSelectedToothNumber(toothNumber);
@@ -564,6 +1164,56 @@ export const TreatmentChartWorkspace = ({
       return;
     }
 
+    const normalizedMaterialItemsMap = new Map<string, { inventoryItemId: string; quantity: number }>();
+    for (const selection of materialSelections) {
+      const inventoryItemId = selection.inventoryItemId.trim();
+      const quantityRaw = selection.quantity.trim();
+      if (!inventoryItemId && !quantityRaw) {
+        continue;
+      }
+      if (!inventoryItemId) {
+        toast.error('Select an inventory item for each material row.');
+        return;
+      }
+
+      const quantity = Number.parseInt(quantityRaw, 10);
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        toast.error('Material quantity must be a positive whole number.');
+        return;
+      }
+
+      const previous = normalizedMaterialItemsMap.get(inventoryItemId);
+      normalizedMaterialItemsMap.set(inventoryItemId, {
+        inventoryItemId,
+        quantity: (previous?.quantity ?? 0) + quantity,
+      });
+    }
+
+    const materialItemsPayload = Array.from(normalizedMaterialItemsMap.values());
+    const materialSummaryForPayload = materialItemsPayload
+      .map((item) => {
+        const option = inventoryMaterialsById.get(item.inventoryItemId);
+        const itemName = option?.itemName || `Item #${item.inventoryItemId}`;
+        return `${itemName} x${item.quantity}`;
+      })
+      .join(', ');
+
+    const normalizedPrescriptionItems = prescriptionSelections
+      .map((item) => ({
+        amount: item.amount.trim(),
+        foodTiming: item.foodTiming,
+        frequency: item.frequency.trim(),
+        name: item.name.trim(),
+      }))
+      .filter((item) => item.name || item.amount || item.frequency || item.foodTiming);
+
+    for (const item of normalizedPrescriptionItems) {
+      if (!item.name || !item.amount || !item.frequency || !item.foodTiming) {
+        toast.error('Complete all fields for each prescription item.');
+        return;
+      }
+    }
+
     const targets = paintedTeeth.length > 0
       ? paintedTeeth
       : [{ condition: (toothConditions[selectedToothNumber] ?? activeCondition), toothNumber: selectedToothNumber }];
@@ -586,20 +1236,36 @@ export const TreatmentChartWorkspace = ({
     const targetTooth = uniqueTargets.length === 1 ? toothByNumber.get(primaryToothNumber) : undefined;
 
     const payload: Omit<VisitTreatment, 'id' | 'createdAt' | 'updatedAt'> = {
-      material: material.trim(),
       notes: combinedNote,
       price: rawPriceAmount.toFixed(2),
       toothNumber: uniqueTargets.map((target) => target.toothNumber).join(','),
       treatmentId: selectedTreatmentId,
       visitId: visitIdForSave,
     };
+    if (materialSummaryForPayload) {
+      payload.material = materialSummaryForPayload;
+    }
+    if (materialItemsPayload.length > 0) {
+      payload.materialItems = materialItemsPayload;
+    }
+    if (normalizedPrescriptionItems.length > 0) {
+      payload.prescription = {
+        items: normalizedPrescriptionItems.map((item) => ({
+          amount: item.amount,
+          foodTiming: item.foodTiming as PrescriptionFoodTiming,
+          frequency: item.frequency,
+          name: item.name,
+        })),
+      };
+    }
 
     if (targetTooth) {
       payload.toothId = String(targetTooth.id);
     }
 
-    if (authenticatedDentist) {
-      payload.dentistId = String(authenticatedDentist.id);
+    const dentistIdForPayload = selectedVisit?.dentistId?.trim() || (authenticatedDentist ? String(authenticatedDentist.id) : '');
+    if (dentistIdForPayload) {
+      payload.dentistId = dentistIdForPayload;
     }
 
     const response = await createVisitTreatment.mutateAsync(payload);
@@ -614,9 +1280,11 @@ export const TreatmentChartWorkspace = ({
 
     setConditionOverrides({});
     setNotes('');
-    setMaterial('');
+    setMaterialSelections([]);
+    setPrescriptionSelections([]);
     setRequiresImage(false);
     setImagePrice('');
+    void fetchInventoryMaterials();
 
     const shouldStartBillingFlow =
       hidePatientVisitSelectors && lockPatientSelection && lockVisitSelection;
@@ -668,13 +1336,14 @@ export const TreatmentChartWorkspace = ({
         .map((toothNumber) => {
           const condition = toothConditions[toothNumber];
           const conditionLabel = condition ? CONDITIONS[condition].label : 'Healthy';
+          const toothMeta = resolveToothDisplayMeta(toothNumber);
           const color = condition ? CONDITIONS[condition].color : '#ffffff';
           const backgroundColor = condition ? hexToRgba(color, 0.28) : '#ffffff';
 
           return `
             <td class="tooth-cell" style="background:${backgroundColor};border-color:${condition ? color : '#d1d5db'};">
               <div style="font-weight:700;font-size:12px;">${toothNumber}</div>
-              <div style="font-size:10px;color:#374151;">${escapeHtml(conditionLabel)}</div>
+              <div style="font-size:10px;color:#374151;">${escapeHtml(toothMeta.shortLabel)} | ${escapeHtml(conditionLabel)}</div>
             </td>
           `;
         })
@@ -702,7 +1371,15 @@ export const TreatmentChartWorkspace = ({
         const conditionColor = condition ? CONDITIONS[condition].color : '#d1d5db';
         const conditionChipBackground = condition ? hexToRgba(conditionColor, 0.2) : '#ffffff';
         const cleanedNotes = stripMetadataPrefixes(row.notes);
+        const materialSummary = resolveRowMaterialSummary(row);
+        const prescriptionContent = formatPrescriptionSummary(row.prescription);
         const visit = visitById.get(String(row.visitId));
+        const dentistLabel =
+          row.dentist
+            ? asText(row.dentist.fullName)
+            : '';
+        const resolvedDentist = dentistLabel || asText(visit?.dentistName) || doctorName;
+        const imageCharge = parseImageChargeFromNotes(row.notes);
         const visitLabel = visit
           ? (visit.tag
               ? `${visit.tag} (${visit.visitDate})`
@@ -718,9 +1395,12 @@ export const TreatmentChartWorkspace = ({
                 ${escapeHtml(conditionLabel)}
               </span>
             </td>
-            <td>${escapeHtml(row.material || '-')}</td>
+            <td>${escapeHtml(materialSummary)}</td>
+            <td>${escapeHtml(resolvedDentist || '-')}</td>
+            <td>${escapeHtml(imageCharge)}</td>
             <td>${escapeHtml(row.price || '-')}</td>
             <td>${escapeHtml(cleanedNotes || '-')}</td>
+            <td>${escapeHtml(prescriptionContent)}</td>
             <td>${escapeHtml(visitLabel)}</td>
           </tr>
         `;
@@ -833,8 +1513,11 @@ export const TreatmentChartWorkspace = ({
           <th>Treatment</th>
           <th>Condition</th>
           <th>Material</th>
+          <th>Dentist</th>
+          <th>Image Charge</th>
           <th>Price</th>
           <th>Note</th>
+          <th>Prescription</th>
           <th>Visit</th>
         </tr>
       </thead>
@@ -1043,15 +1726,72 @@ export const TreatmentChartWorkspace = ({
               />
             </div>
 
-            <div className="space-y-2">
-              <Label>Material (manual)</Label>
-              <Input
-                value={material}
-                onChange={(event) => {
-                  setMaterial(event.target.value);
-                }}
-                placeholder="e.g. Composite resin"
-              />
+            <div className="space-y-2 md:col-span-2 lg:col-span-3">
+              <div className="flex items-center justify-between gap-2">
+                <Label>Materials (Inventory)</Label>
+                <Button type="button" size="sm" variant="outline" onClick={addMaterialSelection}>
+                  Add Material
+                </Button>
+              </div>
+
+              {materialSelections.length === 0 ? (
+                <p className="rounded-md border border-dashed border-border/70 px-3 py-2 text-xs text-muted-foreground">
+                  No material selected.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {materialSelections.map((selection) => (
+                    <div key={selection.key} className="grid gap-2 sm:grid-cols-[1fr_140px_auto]">
+                      <Select
+                        value={selection.inventoryItemId || '__none__'}
+                        onValueChange={(value) => {
+                          updateMaterialSelection(selection.key, {
+                            inventoryItemId: value === '__none__' ? '' : value,
+                          });
+                        }}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue
+                            placeholder={isLoadingInventoryMaterials ? 'Loading materials...' : 'Select material'}
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Select material</SelectItem>
+                          {inventoryMaterials.map((item) => (
+                            <SelectItem key={item.id} value={item.id}>
+                              {`${item.itemName} (${item.quantity} ${item.unit})`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={selection.quantity}
+                        onChange={(event) => {
+                          updateMaterialSelection(selection.key, { quantity: event.target.value });
+                        }}
+                        placeholder="Qty"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          removeMaterialSelection(selection.key);
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <p className="text-[11px] text-muted-foreground">
+                {materialSummary
+                  ? `Selected: ${materialSummary}`
+                  : 'Selected materials will be deducted from inventory after saving this treatment.'}
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -1065,6 +1805,98 @@ export const TreatmentChartWorkspace = ({
                 placeholder="Enter treatment note"
                 className="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 flex min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none"
               />
+            </div>
+
+            <div className="space-y-2 md:col-span-2 lg:col-span-3">
+              <div className="flex items-center justify-between gap-2">
+                <Label>Prescription</Label>
+                <Button type="button" size="sm" variant="outline" onClick={addPrescriptionSelection}>
+                  Add Medicine
+                </Button>
+              </div>
+
+              {prescriptionSelections.length === 0 ? (
+                <p className="rounded-md border border-dashed border-border/70 px-3 py-2 text-xs text-muted-foreground">
+                  No prescription items added.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {prescriptionSelections.map((selection) => (
+                    <div key={selection.key} className="rounded-md border border-border/70 p-3">
+                      <div className="mb-2 grid gap-2 md:grid-cols-2">
+                        <Input
+                          value={selection.name}
+                          onChange={(event) => {
+                            updatePrescriptionSelection(selection.key, { name: event.target.value });
+                          }}
+                          placeholder="Medicine name"
+                        />
+                        <Input
+                          value={selection.amount}
+                          onChange={(event) => {
+                            updatePrescriptionSelection(selection.key, { amount: event.target.value });
+                          }}
+                          placeholder="Amount (e.g. 2)"
+                        />
+                      </div>
+                      <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
+                        <Select
+                          value={selection.frequency || '__none__'}
+                          onValueChange={(value) => {
+                            updatePrescriptionSelection(selection.key, {
+                              frequency: value === '__none__' ? '' : value,
+                            });
+                          }}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Frequency" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Select frequency</SelectItem>
+                            {PRESCRIPTION_FREQUENCY_OPTIONS.map((frequency) => (
+                              <SelectItem key={frequency} value={frequency}>
+                                {frequency}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Select
+                          value={selection.foodTiming || '__none__'}
+                          onValueChange={(value) => {
+                            updatePrescriptionSelection(selection.key, {
+                              foodTiming: value === '__none__' ? '' : (value as PrescriptionFoodTiming),
+                            });
+                          }}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Food timing" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Select food timing</SelectItem>
+                            {(Object.keys(PRESCRIPTION_FOOD_TIMING_LABELS) as PrescriptionFoodTiming[]).map((timing) => (
+                              <SelectItem key={timing} value={timing}>
+                                {PRESCRIPTION_FOOD_TIMING_LABELS[timing]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            removePrescriptionSelection(selection.key);
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                Saved with this visit treatment and shown in patient records.
+              </p>
             </div>
           </div>
 
@@ -1100,10 +1932,13 @@ export const TreatmentChartWorkspace = ({
 
           <div className="rounded-xl border bg-muted/30 p-4">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Maxilla</p>
-            <div className="grid grid-cols-8 gap-2 sm:grid-cols-16">
+            <div className="grid grid-cols-4 gap-2 sm:grid-cols-8 xl:grid-cols-16">
               {UPPER_ARCH.map((toothNumber) => {
                 const condition = toothConditions[toothNumber];
                 const isSelected = selectedToothNumber === toothNumber;
+                const toothMeta = resolveToothDisplayMeta(toothNumber);
+                const toothCode = resolveToothQuadrantCode(toothNumber);
+                const conditionColor = condition ? CONDITIONS[condition].color : '#d1d5db';
 
                 return (
                   <button
@@ -1113,18 +1948,36 @@ export const TreatmentChartWorkspace = ({
                       paintTooth(toothNumber);
                     }}
                     className={cn(
-                      'relative h-12 min-w-0 rounded-lg border text-[10px] font-medium transition hover:scale-[1.03] active:scale-[0.98]',
+                      'relative flex h-28 min-w-0 flex-col items-center justify-between overflow-visible rounded-[20px] rounded-br-none border px-1.5 py-2 text-[10px] font-semibold transition hover:scale-[1.03] active:scale-[0.98]',
                       isSelected ? 'ring-2 ring-offset-1' : ''
                     )}
                     style={{
-                      backgroundColor: condition ? `${CONDITIONS[condition].color}33` : '#FFFFFF',
-                      borderColor: condition ? CONDITIONS[condition].color : '#d4d4d8',
-                      boxShadow: isSelected ? `0 0 0 2px ${condition ? CONDITIONS[condition].color : '#94a3b8'}` : 'none',
-                      color: '#1f2937',
+                      background: isSelected
+                        ? 'linear-gradient(180deg, #7c3aed 0%, #9333ea 100%)'
+                        : condition
+                          ? `linear-gradient(180deg, ${hexToRgba(conditionColor, 0.16)} 0%, #f8fafc 100%)`
+                          : '#f8fafc',
+                      borderColor: isSelected ? '#7c3aed' : condition ? hexToRgba(conditionColor, 0.65) : '#e5e7eb',
+                      boxShadow: isSelected
+                        ? '0 14px 26px rgba(124,58,237,0.28)'
+                        : '0 8px 16px rgba(15,23,42,0.06)',
+                      color: isSelected ? '#ffffff' : '#1f2937',
                     }}
-                    aria-label={`Tooth ${toothNumber}`}
+                    aria-label={`Tooth ${toothNumber} ${toothMeta.fullLabel}`}
+                    title={`${toothCode} - ${toothMeta.fullLabel}`}
                   >
-                    <span className="absolute left-1 top-1 text-[9px] leading-none">{toothNumber}</span>
+                    <span className={cn('text-sm leading-none', isSelected ? 'text-white' : 'text-slate-500')}>
+                      {toothCode}
+                    </span>
+                    <ToothGlyph
+                      arch="maxilla"
+                      isActive={isSelected}
+                      visualType={toothMeta.visualType}
+                    />
+                    <span
+                      className="absolute -bottom-2 left-1/2 block size-5 -translate-x-1/2 rounded-full border-2 border-white"
+                      style={{ backgroundColor: conditionColor }}
+                    />
                   </button>
                 );
               })}
@@ -1133,10 +1986,13 @@ export const TreatmentChartWorkspace = ({
 
           <div className="rounded-xl border bg-muted/30 p-4">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Mandible</p>
-            <div className="grid grid-cols-8 gap-2 sm:grid-cols-16">
+            <div className="grid grid-cols-4 gap-2 sm:grid-cols-8 xl:grid-cols-16">
               {LOWER_ARCH.map((toothNumber) => {
                 const condition = toothConditions[toothNumber];
                 const isSelected = selectedToothNumber === toothNumber;
+                const toothMeta = resolveToothDisplayMeta(toothNumber);
+                const toothCode = resolveToothQuadrantCode(toothNumber);
+                const conditionColor = condition ? CONDITIONS[condition].color : '#d1d5db';
 
                 return (
                   <button
@@ -1146,18 +2002,36 @@ export const TreatmentChartWorkspace = ({
                       paintTooth(toothNumber);
                     }}
                     className={cn(
-                      'relative h-12 min-w-0 rounded-lg border text-[10px] font-medium transition hover:scale-[1.03] active:scale-[0.98]',
+                      'relative flex h-28 min-w-0 flex-col items-center justify-between overflow-visible rounded-[20px] rounded-br-none border px-1.5 py-2 text-[10px] font-semibold transition hover:scale-[1.03] active:scale-[0.98]',
                       isSelected ? 'ring-2 ring-offset-1' : ''
                     )}
                     style={{
-                      backgroundColor: condition ? `${CONDITIONS[condition].color}33` : '#FFFFFF',
-                      borderColor: condition ? CONDITIONS[condition].color : '#d4d4d8',
-                      boxShadow: isSelected ? `0 0 0 2px ${condition ? CONDITIONS[condition].color : '#94a3b8'}` : 'none',
-                      color: '#1f2937',
+                      background: isSelected
+                        ? 'linear-gradient(180deg, #7c3aed 0%, #9333ea 100%)'
+                        : condition
+                          ? `linear-gradient(180deg, ${hexToRgba(conditionColor, 0.16)} 0%, #f8fafc 100%)`
+                          : '#f8fafc',
+                      borderColor: isSelected ? '#7c3aed' : condition ? hexToRgba(conditionColor, 0.65) : '#e5e7eb',
+                      boxShadow: isSelected
+                        ? '0 14px 26px rgba(124,58,237,0.28)'
+                        : '0 8px 16px rgba(15,23,42,0.06)',
+                      color: isSelected ? '#ffffff' : '#1f2937',
                     }}
-                    aria-label={`Tooth ${toothNumber}`}
+                    aria-label={`Tooth ${toothNumber} ${toothMeta.fullLabel}`}
+                    title={`${toothCode} - ${toothMeta.fullLabel}`}
                   >
-                    <span className="absolute left-1 top-1 text-[9px] leading-none">{toothNumber}</span>
+                    <span className={cn('text-sm leading-none', isSelected ? 'text-white' : 'text-slate-500')}>
+                      {toothCode}
+                    </span>
+                    <ToothGlyph
+                      arch="mandible"
+                      isActive={isSelected}
+                      visualType={toothMeta.visualType}
+                    />
+                    <span
+                      className="absolute -bottom-2 left-1/2 block size-5 -translate-x-1/2 rounded-full border-2 border-white"
+                      style={{ backgroundColor: conditionColor }}
+                    />
                   </button>
                 );
               })}
@@ -1212,7 +2086,7 @@ export const TreatmentChartWorkspace = ({
       <Card className="py-4">
         <CardHeader className="px-4">
           <CardTitle>Selected</CardTitle>
-          <CardDescription>Patient context, authenticated doctor, and selected tooth details from patient records.</CardDescription>
+          <CardDescription>Patient context, assigned doctor, and selected tooth details from patient records.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 px-4">
           <div className="rounded-lg border bg-background p-4">
@@ -1265,11 +2139,17 @@ export const TreatmentChartWorkspace = ({
             </div>
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Material</span>
-              <span className="font-medium">{material || '-'}</span>
+              <span className="font-medium">{materialSummary || '-'}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Treatment</span>
               <span className="font-medium">{selectedTreatment?.name || '-'}</span>
+            </div>
+            <div className="pt-1">
+              <p className="text-muted-foreground">Prescription</p>
+              <p className="mt-1 rounded-md border border-border/70 bg-muted/30 p-2 text-xs text-foreground">
+                {prescriptionDraftSummary}
+              </p>
             </div>
           </div>
 
@@ -1337,8 +2217,11 @@ export const TreatmentChartWorkspace = ({
                           <Badge variant="outline">Unspecified</Badge>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground">Material: {row.material || '-'}</p>
+                      <p className="text-xs text-muted-foreground">Material: {resolveRowMaterialSummary(row)}</p>
                       <p className="text-xs text-muted-foreground">Note: {cleanedNotes || '-'}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Prescription: {formatPrescriptionSummary(row.prescription)}
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         Visit: {visit
                           ? (visit.tag
@@ -1356,12 +2239,14 @@ export const TreatmentChartWorkspace = ({
           <div className="rounded-lg border bg-background p-4 text-sm">
             <p className="mb-2 flex items-center gap-2 font-medium">
               <Stethoscope className="size-4" />
-              Authenticated Doctor Mapping
+              Doctor Mapping
             </p>
             <p className="text-xs text-muted-foreground">
-              {authenticatedDentist
-                ? `Linked staff record: #${authenticatedDentist.id}`
-                : 'No linked staff by email. Create a staff record with the same email as the logged-in user.'}
+              {selectedVisit?.dentistName
+                ? `Using visit doctor: ${selectedVisit.dentistName}`
+                : authenticatedDentist
+                  ? `Using linked staff record: #${authenticatedDentist.id}`
+                  : 'No visit doctor or linked staff record found.'}
             </p>
           </div>
         </CardContent>

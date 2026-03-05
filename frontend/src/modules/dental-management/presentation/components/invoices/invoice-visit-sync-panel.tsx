@@ -282,19 +282,9 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
       }),
     [linkedVisitIds, visitPreview]
   );
-  const hasVisits = unpaidVisits.length > 0;
-
   const selectedVisitSet = useMemo(
     () => new Set(selectedVisitIds.map((id) => String(id))),
     [selectedVisitIds]
-  );
-  const selectableVisitSet = useMemo(
-    () => new Set(unpaidVisits.map((visit) => String(visit.id))),
-    [unpaidVisits]
-  );
-  const selectedVisits = useMemo(
-    () => unpaidVisits.filter((visit) => selectedVisitSet.has(String(visit.id))),
-    [selectedVisitSet, unpaidVisits]
   );
 
   const visitTreatmentFilters = useMemo(
@@ -346,6 +336,23 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
 
     return summaryMap;
   }, [visitPreviewIds, visitTreatments]);
+  const billableUnpaidVisits = useMemo(
+    () =>
+      unpaidVisits.filter((visit) => {
+        const amount = visitAmountsById.get(String(visit.id))?.inputTotal ?? 0;
+        return amount > 0;
+      }),
+    [unpaidVisits, visitAmountsById]
+  );
+  const hasVisits = billableUnpaidVisits.length > 0;
+  const selectableVisitSet = useMemo(
+    () => new Set(billableUnpaidVisits.map((visit) => String(visit.id))),
+    [billableUnpaidVisits]
+  );
+  const selectedVisits = useMemo(
+    () => billableUnpaidVisits.filter((visit) => selectedVisitSet.has(String(visit.id))),
+    [billableUnpaidVisits, selectedVisitSet]
+  );
 
   const combinedTotal = useMemo(() => {
     return selectedVisits.reduce((sum, visit) => {
@@ -403,7 +410,7 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
         return previous;
       }
 
-      const allowedVisitIds = new Set(unpaidVisits.map((visit) => String(visit.id)));
+      const allowedVisitIds = new Set(billableUnpaidVisits.map((visit) => String(visit.id)));
       const next = previous.filter((id) => allowedVisitIds.has(String(id)));
       const isUnchanged =
         next.length === previous.length &&
@@ -411,7 +418,7 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
 
       return isUnchanged ? previous : next;
     });
-  }, [unpaidVisits]);
+  }, [billableUnpaidVisits]);
 
   useEffect(() => {
     if (isNetAmountEdited) {
@@ -610,8 +617,8 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
             <div className="space-y-2">
               <p className="text-sm font-semibold">{t('config.sync.unpaidVisits')}</p>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {unpaidVisits.length > 0 ? (
-                  unpaidVisits.map((visit) => {
+                {billableUnpaidVisits.length > 0 ? (
+                  billableUnpaidVisits.map((visit) => {
                     const visitId = String(visit.id);
                     const isSelected = selectedVisitSet.has(visitId);
                     const visitAmountSummary = visitAmountsById.get(visitId);

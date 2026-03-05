@@ -23,6 +23,7 @@ import {
   ArrowLeft,
   CalendarDays,
   ClipboardCheck,
+  FileText,
   HeartPulse,
   Printer,
   Sparkles,
@@ -106,6 +107,20 @@ type IncomeTrendPoint = {
   label: string;
   monthKey: string;
 };
+
+type PatientPrescriptionRecord = {
+  content: string;
+  createdAt: string;
+  diagnosisNotes: string;
+  dentistName: string;
+  id: string;
+  treatmentName: string;
+  visitDate: string;
+  visitId: string;
+  visitLabel: string;
+};
+
+type PrescriptionFoodTiming = 'before_food' | 'after_food' | 'with_food' | 'anytime';
 
 const CONDITIONS: Record<ConditionKey, ConditionMeta> = {
   caries: { color: '#4ade80', label: 'Caries' },
@@ -280,6 +295,80 @@ const formatDisplayDate = (value?: string): string => {
   return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(parsed);
 };
 
+const PRESCRIPTION_FOOD_TIMING_LABELS: Record<PrescriptionFoodTiming, string> = {
+  after_food: 'After food',
+  anytime: 'Anytime',
+  before_food: 'Before food',
+  with_food: 'With food',
+};
+
+const formatPrescriptionSummary = (
+  prescription?: Partial<{
+    amount: string;
+    content: string;
+    foodTiming: string;
+    frequency: string;
+    items: Array<{
+      amount?: string;
+      foodTiming?: string;
+      frequency?: string;
+      name?: string;
+    }>;
+    name: string;
+  }>
+): string => {
+  if (!prescription) return '-';
+
+  const formatSingle = (source: Partial<{
+    amount: string;
+    foodTiming: string;
+    frequency: string;
+    name: string;
+  }>): string => {
+    const name = source.name?.trim() || '';
+    const amount = source.amount?.trim() || '';
+    const frequency = source.frequency?.trim() || '';
+    const foodTimingRaw = source.foodTiming?.trim() || '';
+    const foodTiming = (foodTimingRaw in PRESCRIPTION_FOOD_TIMING_LABELS
+      ? PRESCRIPTION_FOOD_TIMING_LABELS[foodTimingRaw as PrescriptionFoodTiming]
+      : foodTimingRaw);
+
+    if (!name && !amount && !frequency && !foodTiming) {
+      return '';
+    }
+
+    const dose = amount;
+    const parts = [
+      name ? (dose ? `${name} (${dose})` : name) : dose,
+      frequency,
+      foodTiming,
+    ].filter(Boolean);
+
+    return parts.join(', ');
+  };
+
+  if (Array.isArray(prescription.items) && prescription.items.length > 0) {
+    const rows = prescription.items
+      .map((item) => formatSingle(item))
+      .filter(Boolean);
+    if (rows.length > 0) {
+      return rows.join('; ');
+    }
+  }
+
+  const single = formatSingle({
+    amount: prescription.amount,
+    foodTiming: prescription.foodTiming,
+    frequency: prescription.frequency,
+    name: prescription.name,
+  });
+  if (single !== '') {
+    return single;
+  }
+
+  return prescription.content?.trim() || '-';
+};
+
 const toMonthKey = (value?: string): string | null => {
   if (!value) return null;
   const parsed = new Date(value);
@@ -387,10 +476,11 @@ export default function PatientProfilePage(): JSX.Element {
     MAX_PER_PAGE,
     '',
     [],
-    ['tooth', 'treatment', 'visit'],
+    ['tooth', 'treatment', 'visit', 'prescription', 'prescription.items'],
     visitTreatmentFilters
   );
   const typedVisitTreatments = visitTreatments as VisitTreatmentWithRelations[];
+  const visitById = useMemo(() => new Map(visits.map((visit) => [String(visit.id), visit])), [visits]);
   const visitOrderIndexById = useMemo(() => {
     const sortedVisits = visits.slice().sort((left, right) => {
       const leftDate = new Date(left.visitDate || '').getTime();
@@ -517,6 +607,54 @@ export default function PatientProfilePage(): JSX.Element {
         .sort((a, b) => new Date(b.visitDate || '').getTime() - new Date(a.visitDate || '').getTime()),
     [visits]
   );
+  const prescriptionRecords = useMemo<PatientPrescriptionRecord[]>(() => {
+    const records = typedVisitTreatments
+      .map<PatientPrescriptionRecord | null>((row) => {
+        const content = formatPrescriptionSummary(row.prescription);
+        if (!content || content === '-') {
+          return null;
+        }
+
+        const visit = visitById.get(String(row.visitId));
+        const visitLabel = visit
+          ? (visit.tag
+              ? `${visit.tag} (${visit.visitDate || '-'})`
+              : `Visit ${visit.id} (${visit.visitDate || '-'})`)
+          : `Visit ${row.visitId}`;
+        const treatmentName = row.treatment?.name || `Treatment ${row.treatmentId}`;
+
+        return {
+          content,
+          createdAt: row.prescription?.createdAt || row.createdAt || '',
+          diagnosisNotes: asText(visit?.diagnosisNotes),
+          dentistName: asText(visit?.dentistName || visit?.dentistId),
+          id: String(row.prescription?.id ?? row.id),
+          treatmentName,
+          visitDate: visit?.visitDate || '',
+          visitId: String(row.visitId ?? ''),
+          visitLabel,
+        };
+      })
+      .filter((record): record is PatientPrescriptionRecord => record !== null);
+
+    records.sort((left, right) => {
+      const leftVisitDate = new Date(left.visitDate || '').getTime();
+      const rightVisitDate = new Date(right.visitDate || '').getTime();
+      if (!Number.isNaN(leftVisitDate) && !Number.isNaN(rightVisitDate) && leftVisitDate !== rightVisitDate) {
+        return rightVisitDate - leftVisitDate;
+      }
+
+      const leftCreatedAt = new Date(left.createdAt || '').getTime();
+      const rightCreatedAt = new Date(right.createdAt || '').getTime();
+      if (!Number.isNaN(leftCreatedAt) && !Number.isNaN(rightCreatedAt) && leftCreatedAt !== rightCreatedAt) {
+        return rightCreatedAt - leftCreatedAt;
+      }
+
+      return right.id.localeCompare(left.id, undefined, { numeric: true, sensitivity: 'base' });
+    });
+
+    return records;
+  }, [typedVisitTreatments, visitById]);
   const paymentSummaries = useMemo<InvoicePaymentSummary[]>(() => {
     const summaries: InvoicePaymentSummary[] = [];
 
@@ -760,6 +898,425 @@ export default function PatientProfilePage(): JSX.Element {
     }
   };
 
+  const handlePrintPrescriptionRecord = (): void => {
+    if (!patient) {
+      toast.error('Patient data is not ready yet.');
+      return;
+    }
+
+    if (prescriptionRecords.length === 0) {
+      toast.error('No prescriptions to export.');
+      return;
+    }
+
+    const splitPrescriptionItems = (content: string): string[] => {
+      const normalized = content
+        .replaceAll('\n', ';')
+        .split(';')
+        .map((item) => item.trim())
+        .filter(Boolean);
+
+      return normalized.length > 0 ? normalized : [content.trim()];
+    };
+
+    const clinicName = 'Dental Clinic';
+    const clinicAddress = patient.address?.trim() || 'Address not provided';
+    const clinicPhone = patient.contactNumber?.trim() || '-';
+    const appLogoUrl = `${window.location.origin}/logo2.png`;
+    const printedOnLabel = formatDisplayDate(new Date().toISOString());
+
+    const sheetMarkup = prescriptionRecords
+      .map((record, index) => {
+        const diagnosisLabel = record.diagnosisNotes || record.treatmentName || '-';
+        const doctorLabel = record.dentistName || '-';
+        const visitDateLabel = formatDisplayDate(record.visitDate);
+        const prescriptionItems = splitPrescriptionItems(record.content);
+        const prescriptionList = prescriptionItems
+          .map((item) => `<li>${escapeHtml(item)}</li>`)
+          .join('');
+        const pageBreakClass = index < prescriptionRecords.length - 1 ? 'sheet-break' : '';
+
+        return `
+  <section class="sheet ${pageBreakClass}">
+    <div class="card">
+      <header class="card-header">
+        <div class="header-band">
+          <div class="header-copy">
+            <p class="doctor-name">${escapeHtml(doctorLabel)}</p>
+            <p class="doctor-qualification">DENTAL CARE</p>
+          </div>
+          <div class="header-icon">
+            <img src="${escapeHtml(appLogoUrl)}" alt="App logo" class="header-logo" />
+          </div>
+        </div>
+      </header>
+
+      <section class="meta">
+        <div class="meta-row">
+          <span class="meta-label">Patient Name:</span>
+          <span class="meta-value">${escapeHtml(fullName)}</span>
+          <span class="meta-label">Date:</span>
+          <span class="meta-value meta-short">${escapeHtml(visitDateLabel)}</span>
+        </div>
+        <div class="meta-row meta-row-triplet">
+          <div class="meta-field">
+            <span class="meta-label">Age:</span>
+            <span class="meta-value meta-short">${escapeHtml(patientAge === null ? '-' : String(patientAge))}</span>
+          </div>
+          <div class="meta-field">
+            <span class="meta-label">Gender:</span>
+            <span class="meta-value meta-short">${escapeHtml(patient.gender || '-')}</span>
+          </div>
+          <div class="meta-field">
+            <span class="meta-label">Weight:</span>
+            <span class="meta-value meta-short">-</span>
+          </div>
+        </div>
+        <div class="meta-row meta-diagnosis">
+          <span class="meta-label">Diagnosis:</span>
+          <span class="meta-value">${escapeHtml(diagnosisLabel)}</span>
+        </div>
+      </section>
+
+      <section class="rx-body">
+        <p class="rx-mark">Rx</p>
+        <ol class="rx-list">${prescriptionList}</ol>
+      </section>
+
+      <section class="signature-wrap">
+        <div class="signature-line"></div>
+        <p class="signature-text">Signature</p>
+      </section>
+
+      <footer class="card-footer">
+        <p class="clinic-name">${escapeHtml(clinicName)}</p>
+        <p class="clinic-info">${escapeHtml(clinicAddress)}</p>
+        <p class="clinic-info">${escapeHtml(clinicPhone)}</p>
+      </footer>
+    </div>
+    <p class="print-timestamp">Printed on ${escapeHtml(printedOnLabel)}</p>
+  </section>`;
+      })
+      .join('');
+
+    const html = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Patient Prescriptions</title>
+  <style>
+    @page { size: A4; margin: 0; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #ffffff;
+      color: #1f455c;
+    }
+    .sheet {
+      position: relative;
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      overflow: hidden;
+      background: #ffffff;
+    }
+    .sheet-break { page-break-after: always; }
+    .card {
+      position: relative;
+      width: 100%;
+      min-height: 297mm;
+      margin: 0;
+      background: #ffffff;
+      box-shadow: none;
+      display: flex;
+      flex-direction: column;
+      z-index: 1;
+    }
+    .card-header {
+      background: #f7fbfb;
+      border-bottom: 1px solid #deeaee;
+    }
+    .header-band {
+      min-height: 40mm;
+      background: linear-gradient(180deg, #69d5d2 0%, #1faeb3 100%);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10mm 0 11mm;
+      overflow: hidden;
+    }
+    .header-band::before,
+    .header-band::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      width: 15mm;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.24);
+      transform: skewX(-22deg);
+      right: 39mm;
+    }
+    .header-band::after {
+      right: 30mm;
+      background: rgba(255, 255, 255, 0.12);
+    }
+    .header-copy {
+      position: relative;
+      z-index: 1;
+      color: #f8ffff;
+      max-width: 95mm;
+    }
+    .doctor-name {
+      margin: 0;
+      font-size: 40px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: capitalize;
+    }
+    .doctor-qualification {
+      margin: 2px 0 0;
+      font-size: 11px;
+      letter-spacing: 0.42em;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .header-icon {
+      position: relative;
+      z-index: 1;
+      width: 24mm;
+      height: 24mm;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #4ec8c7 0%, #79d7d8 100%);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+    }
+    .header-logo {
+      width: 80%;
+      height: 80%;
+      object-fit: contain;
+      object-position: center;
+      display: block;
+      filter: brightness(0) invert(1);
+    }
+    .meta {
+      padding: 9mm 10mm 5mm;
+      display: grid;
+      gap: 4mm;
+      color: #2f566b;
+    }
+    .meta-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto 32mm;
+      gap: 1.2mm;
+      align-items: end;
+    }
+    .meta-row-triplet {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      column-gap: 3.5mm;
+    }
+    .meta-field {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      column-gap: 0.6mm;
+      align-items: end;
+    }
+    .meta-row-triplet .meta-label {
+      padding-right: 0;
+    }
+    .meta-row-triplet .meta-value {
+      min-width: 0;
+    }
+    .meta-row-triplet .meta-short {
+      text-align: left;
+    }
+    .meta-diagnosis {
+      grid-template-columns: auto 1fr;
+    }
+    .meta-label {
+      font-size: 20px;
+      font-weight: 600;
+      color: #254f67;
+      white-space: nowrap;
+      padding-right: 0.4mm;
+    }
+    .meta-value {
+      border-bottom: 1px solid #6c8da0;
+      min-height: 0mm;
+      font-size: 20px;
+      line-height: 1.35;
+      padding: 0 0 1mm;
+      color: #12364f;
+      overflow-wrap: anywhere;
+    }
+    .meta-short {
+      text-align: center;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .rx-body {
+      flex: 1;
+      padding: 10mm;
+      border-top: 1px solid #eef4f5;
+      display: flex;
+      flex-direction: column;
+      gap: 5mm;
+    }
+    .rx-mark {
+      margin: 0;
+      font-size: 56px;
+      line-height: 0.9;
+      font-weight: 700;
+      color: #1e4f73;
+      letter-spacing: -0.05em;
+    }
+    .rx-list {
+      margin: 0;
+      padding-left: 7mm;
+      display: grid;
+      gap: 3.2mm;
+      color: #234d64;
+    }
+    .rx-list li {
+      font-size: 20px;
+      line-height: 1.55;
+      border-bottom: 1px dashed rgba(36, 108, 140, 0.28);
+      padding-bottom: 1.8mm;
+    }
+    .signature-wrap {
+      margin-top: auto;
+      width: 48mm;
+      margin-left: auto;
+      margin-right: 10mm;
+      text-align: center;
+      color: #1f5066;
+      padding-bottom: 8mm;
+    }
+    .signature-line {
+      border-bottom: 1px solid #5f8296;
+      margin-bottom: 2mm;
+    }
+    .signature-text {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+    }
+    .card-footer {
+      min-height: 13mm;
+      margin-top: auto;
+      border-top: 1px solid #d6e4e8;
+      display: grid;
+      grid-template-columns: 1fr 1.1fr 0.9fr;
+      align-items: center;
+      padding: 0 10mm;
+      gap: 4mm;
+      font-size: 12px;
+      color: #2d5469;
+      background: linear-gradient(100deg, #f6fbfc 0%, #eef7f9 64%, #d8d8d8 65%, #cccccc 100%);
+    }
+    .clinic-name {
+      margin: 0;
+      font-size: 15px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+    .clinic-info {
+      margin: 0;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+    .print-timestamp {
+      position: absolute;
+      bottom: 8mm;
+      right: 30mm;
+      margin: 0;
+      font-size: 11px;
+      color: rgba(20, 44, 57, 0.65);
+      z-index: 2;
+    }
+    @media print {
+      body { background: #fff; }
+      .sheet {
+        margin: 0;
+        padding: 0;
+      }
+      .card { box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  ${sheetMarkup}
+</body>
+</html>`;
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.style.visibility = 'hidden';
+    document.body.appendChild(iframe);
+
+    const iframeDocument = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!iframeDocument) {
+      document.body.removeChild(iframe);
+      toast.error('Unable to prepare print document.');
+      return;
+    }
+
+    iframeDocument.open();
+    iframeDocument.write(html);
+    iframeDocument.close();
+
+    let didPrint = false;
+    const printAndCleanup = (): void => {
+      if (didPrint) return;
+      didPrint = true;
+
+      const frameWindow = iframe.contentWindow;
+      if (!frameWindow) {
+        document.body.removeChild(iframe);
+        toast.error('Unable to print right now.');
+        return;
+      }
+
+      frameWindow.focus();
+      frameWindow.print();
+
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+      }, 1000);
+    };
+
+    iframe.onload = () => {
+      printAndCleanup();
+    };
+
+    setTimeout(() => {
+      if (document.body.contains(iframe)) {
+        printAndCleanup();
+      }
+    }, 150);
+  };
+
   const handlePrintPatientRecord = (): void => {
     if (!patient) {
       toast.error('Patient data is not ready yet.');
@@ -930,6 +1487,7 @@ export default function PatientProfilePage(): JSX.Element {
                 ? CONDITIONS[uniqueConditions[0]].label
                 : `Multiple (${uniqueConditions.map((key) => CONDITIONS[key].label).join(', ')})`;
           const cleanedNotes = stripMetadataPrefixes(row.notes);
+          const prescriptionContent = formatPrescriptionSummary(row.prescription);
 
           return `
             <tr>
@@ -939,11 +1497,12 @@ export default function PatientProfilePage(): JSX.Element {
               <td>${escapeHtml(row.material || '-')}</td>
               <td>${escapeHtml(row.price || '-')}</td>
               <td>${escapeHtml(cleanedNotes || '-')}</td>
+              <td>${escapeHtml(prescriptionContent)}</td>
             </tr>
           `;
         })
         .join('')
-      : '<tr><td colspan="6">No treatments recorded for the latest visit.</td></tr>';
+      : '<tr><td colspan="7">No treatments recorded for the latest visit.</td></tr>';
 
     const latestTreatment = orderedPrintSourceTreatments[orderedPrintSourceTreatments.length - 1] ?? null;
     const latestTeeth = latestTreatment ? resolveRowTeeth(latestTreatment) : [];
@@ -1063,6 +1622,7 @@ export default function PatientProfilePage(): JSX.Element {
           <th>Material</th>
           <th>Price</th>
           <th>Note</th>
+          <th>Prescription</th>
         </tr>
       </thead>
       <tbody>${latestVisitTreatmentRows}</tbody>
@@ -1186,6 +1746,15 @@ export default function PatientProfilePage(): JSX.Element {
             >
               <Printer className="me-2 size-4" />
               Print Patient Record
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="border-border bg-card text-foreground hover:bg-accent hover:text-accent-foreground"
+              onClick={handlePrintPrescriptionRecord}
+            >
+              <Printer className="me-2 size-4" />
+              Print Prescriptions
             </Button>
           </div>
 
@@ -1701,6 +2270,31 @@ export default function PatientProfilePage(): JSX.Element {
               <Card className="border-border bg-card text-card-foreground">
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center justify-between text-base">
+                    <span>Prescriptions</span>
+                    <FileText className="size-4 text-primary" />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {prescriptionRecords.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No prescriptions recorded yet.</p>
+                  ) : (
+                    prescriptionRecords.map((record) => (
+                      <div key={`prescription-${record.id}`} className="rounded-lg border border-border bg-background p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-sm font-semibold text-foreground">{record.treatmentName}</p>
+                          <p className="text-xs text-muted-foreground">{formatDisplayDate(record.visitDate)}</p>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{record.visitLabel}</p>
+                        <p className="mt-1 whitespace-pre-wrap text-xs text-foreground">{record.content}</p>
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-border bg-card text-card-foreground">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center justify-between text-base">
                     <span>Details</span>
                     <UserRound className="size-4 text-primary" />
                   </CardTitle>
@@ -1713,6 +2307,7 @@ export default function PatientProfilePage(): JSX.Element {
                   <p>Status: <span className="text-foreground">{patient?.status || '-'}</span></p>
                   <p>Visit Count: <span className="text-foreground">{visits.length}</span></p>
                   <p>Treatments: <span className="text-foreground">{typedVisitTreatments.length}</span></p>
+                  <p>Prescriptions: <span className="text-foreground">{prescriptionRecords.length}</span></p>
                   <p className="md:col-span-2">Remarks: <span className="text-foreground">{patient?.remarks || '-'}</span></p>
                 </CardContent>
               </Card>

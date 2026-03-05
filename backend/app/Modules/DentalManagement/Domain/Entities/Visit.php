@@ -79,6 +79,11 @@ final class Visit extends Model
         return $this->hasMany(VisitTreatment::class);
     }
 
+    public function prescriptions(): HasMany
+    {
+        return $this->hasMany(Prescription::class);
+    }
+
     public function invoices(): HasMany
     {
         return $this->hasMany(Invoice::class);
@@ -86,6 +91,6 @@ final class Visit extends Model
 
     public function hasRelatedRecords(): bool
     {
-        return $this->visitTreatments()->exists() || $this->invoices()->exists();
+        return $this->visitTreatments()->exists() || $this->prescriptions()->exists() || $this->invoices()->exists();
     }
 }

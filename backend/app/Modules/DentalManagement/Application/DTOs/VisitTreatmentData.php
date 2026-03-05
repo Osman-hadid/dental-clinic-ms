@@ -19,6 +19,8 @@ final readonly class VisitTreatmentData
         public string $price,
         public ?string $material,
         public ?string $notes,
+        public ?array $materialItems,
+        public ?array $prescription,
         public ?int $createdBy,
         public ?int $updatedBy,
         public ?int $deletedBy,
@@ -37,6 +39,12 @@ final readonly class VisitTreatmentData
             price: $data['price'] ?? null,
             material: $data['material'] ?? null,
             notes: $data['notes'] ?? null,
+            materialItems: isset($data['materialItems']) && is_array($data['materialItems'])
+                ? $data['materialItems']
+                : null,
+            prescription: isset($data['prescription']) && is_array($data['prescription'])
+                ? $data['prescription']
+                : null,
             createdBy: $ids['createdBy'] ?? null,
             updatedBy: $ids['updatedBy'] ?? null,
             deletedBy: $ids['deletedBy'] ?? null,
@@ -54,6 +62,8 @@ final readonly class VisitTreatmentData
             'price' => $this->price,
             'material' => $this->material,
             'notes' => $this->notes,
+            'material_items' => $this->materialItems,
+            'prescription' => $this->prescription,
             'created_by' => $this->createdBy,
             'updated_by' => $this->updatedBy,
             'deleted_by' => $this->deletedBy,

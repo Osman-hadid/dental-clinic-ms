@@ -188,10 +188,28 @@ export const EntityTable = <TData extends User>({
     const visitReference =
       asText(visit.tag ?? visit.name) || `#${asText(entity.visitId ?? entity.visit_id) || '-'}`;
     const notes = asText(entity.notes) || '-';
+    const sourceVisitIdsRaw = entity.sourceVisitIds ?? entity.source_visit_ids;
+    const sourceVisitIds = Array.isArray(sourceVisitIdsRaw)
+      ? sourceVisitIdsRaw.map((value: unknown) => asText(value)).filter(Boolean)
+      : [];
+    const linkedVisits = sourceVisitIds.length > 0
+      ? sourceVisitIds.map((value) => `#${value}`).join(', ')
+      : visitReference;
 
-    const totalAmount = formatAmount(entity.totalAmount ?? entity.total_amount);
-    const discountAmount = formatAmount(entity.discount);
-    const netAmount = formatAmount(entity.netAmount ?? entity.net_amount);
+    const totalAmountValue = asNumber(entity.totalAmount ?? entity.total_amount);
+    const discountAmountValue = asNumber(entity.discount);
+    const netAmountValue = asNumber(entity.netAmount ?? entity.net_amount);
+    const payments = Array.isArray(entity.payments) ? entity.payments as Array<Record<string, unknown>> : [];
+    const paidAmountValue = payments.reduce((sum, payment) => (
+      sum + asNumber(payment.amount ?? payment.amountInput ?? payment.amount_input)
+    ), 0);
+    const remainingAmountValue = Math.max(0, netAmountValue - paidAmountValue);
+
+    const totalAmount = totalAmountValue.toFixed(2);
+    const discountAmount = discountAmountValue.toFixed(2);
+    const netAmount = netAmountValue.toFixed(2);
+    const paidAmount = paidAmountValue.toFixed(2);
+    const remainingAmount = remainingAmountValue.toFixed(2);
 
     const html = `
       <!doctype html>
@@ -351,6 +369,7 @@ export const EntityTable = <TData extends User>({
                 <article class="card">
                   <h3>Invoice Details</h3>
                   <p><strong>Visit:</strong> ${escapeHtml(visitReference)}</p>
+                  <p><strong>Linked Visits:</strong> ${escapeHtml(linkedVisits)}</p>
                   <p><strong>Visit ID:</strong> ${escapeHtml(asText(entity.visitId ?? entity.visit_id) || '-')}</p>
                   <p><strong>Patient ID:</strong> ${escapeHtml(asText(entity.patientId ?? entity.patient_id) || '-')}</p>
                 </article>
@@ -365,8 +384,24 @@ export const EntityTable = <TData extends User>({
                 </thead>
                 <tbody>
                   <tr>
-                    <td>Dental visit charge (${escapeHtml(visitReference)})</td>
-                    <td class="amount">$${escapeHtml(totalAmount)}</td>
+                    <td>Gross Amount</td>
+                    <td class="amount">${escapeHtml(totalAmount)} AFN</td>
+                  </tr>
+                  <tr>
+                    <td>Discount</td>
+                    <td class="amount">${escapeHtml(discountAmount)} AFN</td>
+                  </tr>
+                  <tr>
+                    <td>Net Amount</td>
+                    <td class="amount">${escapeHtml(netAmount)} AFN</td>
+                  </tr>
+                  <tr>
+                    <td>Paid Amount</td>
+                    <td class="amount">${escapeHtml(paidAmount)} AFN</td>
+                  </tr>
+                  <tr>
+                    <td>Remaining Debt</td>
+                    <td class="amount">${escapeHtml(remainingAmount)} AFN</td>
                   </tr>
                 </tbody>
               </table>
@@ -374,15 +409,23 @@ export const EntityTable = <TData extends User>({
               <aside class="summary">
                 <div class="summary-row">
                   <span>Total Amount</span>
-                  <span>$${escapeHtml(totalAmount)}</span>
+                  <span>${escapeHtml(totalAmount)} AFN</span>
                 </div>
                 <div class="summary-row">
                   <span>Discount</span>
-                  <span>$${escapeHtml(discountAmount)}</span>
+                  <span>${escapeHtml(discountAmount)} AFN</span>
                 </div>
                 <div class="summary-row total">
                   <span>Net Amount</span>
-                  <span>$${escapeHtml(netAmount)}</span>
+                  <span>${escapeHtml(netAmount)} AFN</span>
+                </div>
+                <div class="summary-row">
+                  <span>Paid</span>
+                  <span>${escapeHtml(paidAmount)} AFN</span>
+                </div>
+                <div class="summary-row">
+                  <span>Remaining</span>
+                  <span>${escapeHtml(remainingAmount)} AFN</span>
                 </div>
               </aside>
 

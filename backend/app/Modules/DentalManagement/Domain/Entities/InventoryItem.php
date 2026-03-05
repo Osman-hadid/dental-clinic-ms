@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\DentalManagement\Domain\Entities;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
@@ -58,5 +59,9 @@ final class InventoryItem extends Model
             ->useLogName(class_basename($this))
             ->setDescriptionForEvent(fn (string $eventName): string => "InventoryItem {$eventName}");
     }
-}
 
+    public function visitTreatmentMaterials(): HasMany
+    {
+        return $this->hasMany(VisitTreatmentMaterial::class);
+    }
+}

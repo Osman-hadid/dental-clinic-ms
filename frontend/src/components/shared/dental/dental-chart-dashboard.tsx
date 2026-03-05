@@ -1,6 +1,6 @@
 'use client';
 
-import { type CSSProperties, JSX, useMemo, useState } from 'react';
+import { JSX, useMemo, useState, type CSSProperties } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -21,12 +21,19 @@ import {
   type ChartConfig,
 } from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utilities';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   DEFAULT_AFN_PER_USD,
-  formatCurrency as formatMoneyByCurrency,
   formatDualFromUsd,
+  formatCurrency as formatMoneyByCurrency,
 } from '@/lib/currency-utils';
+import { cn } from '@/lib/utilities';
 import {
   Activity,
   ArrowDownLeft,
@@ -35,7 +42,6 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
-  ClipboardList,
   Clock3,
   Search,
   Stethoscope,
@@ -57,13 +63,6 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 
 type EventType = 'appointment' | 'visit';
 type ImplantAvailabilityStatus = 'not_available' | 'in_purchase' | 'available' | 'done';
@@ -243,7 +242,8 @@ const parseMoney = (value: unknown): number => {
 
 const roundCurrency = (value: number): number => Math.round(value * 100) / 100;
 
-const formatCurrency = (value: number): string => formatMoneyByCurrency(roundCurrency(value), 'AFN');
+const formatCurrency = (value: number): string =>
+  formatMoneyByCurrency(roundCurrency(value), 'AFN');
 
 const toDateKey = (date: Date): string => {
   const year = date.getFullYear();
@@ -252,7 +252,8 @@ const toDateKey = (date: Date): string => {
   return `${year}-${month}-${day}`;
 };
 
-const startOfDay = (date: Date): Date => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+const startOfDay = (date: Date): Date =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate());
 const startOfMonth = (date: Date): Date => new Date(date.getFullYear(), date.getMonth(), 1);
 
 const parseDateOnly = (value: unknown): Date | null => {
@@ -266,14 +267,14 @@ const parseDateOnly = (value: unknown): Date | null => {
   const day = Number(dayPart);
 
   if (
-    Number.isInteger(year)
-    && Number.isInteger(month)
-    && Number.isInteger(day)
-    && year > 1900
-    && month >= 1
-    && month <= 12
-    && day >= 1
-    && day <= 31
+    Number.isInteger(year) &&
+    Number.isInteger(month) &&
+    Number.isInteger(day) &&
+    year > 1900 &&
+    month >= 1 &&
+    month <= 12 &&
+    day >= 1 &&
+    day <= 31
   ) {
     return new Date(year, month - 1, day);
   }
@@ -305,24 +306,35 @@ const parseDateTime = (dateValue: unknown, timeValue: unknown): Date | null => {
   const time = parseTimeParts(timeValue);
   if (!time) return date;
 
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), time.hour, time.minute, 0, 0);
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    time.hour,
+    time.minute,
+    0,
+    0
+  );
 };
 
-const formatMonth = (date: Date): string => new Intl.DateTimeFormat('en-US', {
-  month: 'long',
-  year: 'numeric',
-}).format(date);
+const formatMonth = (date: Date): string =>
+  new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
 
-const formatDayHeading = (date: Date): string => new Intl.DateTimeFormat('en-US', {
-  day: 'numeric',
-  month: 'short',
-  weekday: 'long',
-}).format(date);
+const formatDayHeading = (date: Date): string =>
+  new Intl.DateTimeFormat('en-US', {
+    day: 'numeric',
+    month: 'short',
+    weekday: 'long',
+  }).format(date);
 
-const formatClock = (date: Date): string => new Intl.DateTimeFormat('en-US', {
-  hour: 'numeric',
-  minute: '2-digit',
-}).format(date);
+const formatClock = (date: Date): string =>
+  new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
 
 const buildNameFromRelation = (value: unknown): string => {
   if (!value || typeof value !== 'object') return '';
@@ -333,10 +345,7 @@ const buildNameFromRelation = (value: unknown): string => {
   const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
   if (fullName) return fullName;
 
-  return asText(relation.fullName)
-    || asText(relation.full_name)
-    || asText(relation.name)
-    || '';
+  return asText(relation.fullName) || asText(relation.full_name) || asText(relation.name) || '';
 };
 
 const extractFirstVisitId = (value: unknown): string | number | null => {
@@ -367,7 +376,8 @@ const extractFirstVisitId = (value: unknown): string | number | null => {
   return null;
 };
 
-const normalizeStatus = (status: string): string => status.trim().toLowerCase().replace(/\s+/g, '_');
+const normalizeStatus = (status: string): string =>
+  status.trim().toLowerCase().replace(/\s+/g, '_');
 const isCompletedStatus = (status: string): boolean => {
   const normalized = normalizeStatus(status);
   return normalized === 'completed' || normalized === 'done';
@@ -381,12 +391,19 @@ const CALENDAR_STATUS_THEME: Record<CalendarStatusBucket, CalendarStatusTheme> =
   scheduled: { badge: '#2563eb', cell: '#bfdbfe' },
 };
 
-const CALENDAR_BUCKET_ORDER: CalendarStatusBucket[] = ['cancelled', 'in_progress', 'scheduled', 'completed', 'other'];
+const CALENDAR_BUCKET_ORDER: CalendarStatusBucket[] = [
+  'cancelled',
+  'in_progress',
+  'scheduled',
+  'completed',
+  'other',
+];
 
 const toCalendarStatusBucket = (status: string): CalendarStatusBucket => {
   const normalized = normalizeStatus(status);
 
-  if (normalized === 'cancelled' || normalized === 'canceled' || normalized === 'rejected') return 'cancelled';
+  if (normalized === 'cancelled' || normalized === 'canceled' || normalized === 'rejected')
+    return 'cancelled';
   if (normalized === 'in_progress' || normalized === 'ongoing') return 'in_progress';
   if (normalized === 'scheduled' || normalized === 'confirmed') return 'scheduled';
   if (normalized === 'completed' || normalized === 'done') return 'completed';
@@ -460,16 +477,20 @@ const calendarCellTheme = (events: ScheduleEvent[]): CalendarCellTheme => {
   }
 
   const step = 100 / uniqueBuckets.length;
-  const gradientStops = uniqueBuckets.map((bucket, index) => {
-    const start = (index * step).toFixed(2);
-    const end = ((index + 1) * step).toFixed(2);
-    return `${CALENDAR_STATUS_THEME[bucket].cell} ${start}% ${end}%`;
-  }).join(', ');
-  const badgeStops = uniqueBuckets.map((bucket, index) => {
-    const start = (index * step).toFixed(2);
-    const end = ((index + 1) * step).toFixed(2);
-    return `${CALENDAR_STATUS_THEME[bucket].badge} ${start}% ${end}%`;
-  }).join(', ');
+  const gradientStops = uniqueBuckets
+    .map((bucket, index) => {
+      const start = (index * step).toFixed(2);
+      const end = ((index + 1) * step).toFixed(2);
+      return `${CALENDAR_STATUS_THEME[bucket].cell} ${start}% ${end}%`;
+    })
+    .join(', ');
+  const badgeStops = uniqueBuckets
+    .map((bucket, index) => {
+      const start = (index * step).toFixed(2);
+      const end = ((index + 1) * step).toFixed(2);
+      return `${CALENDAR_STATUS_THEME[bucket].badge} ${start}% ${end}%`;
+    })
+    .join(', ');
 
   return {
     badgeClass: 'text-white',
@@ -483,21 +504,164 @@ const toSearchBlob = (event: ScheduleEvent): string => {
   return `${event.patientName} ${event.dentistName} ${event.tag} ${event.status} ${event.note} ${event.title}`.toLowerCase();
 };
 
-const ToothIllustration = (): JSX.Element => {
+type ToothSectionKey = 'buccal' | 'distal' | 'lingual' | 'mesial' | 'occlusal' | 'root';
+
+type ToothSectionMeta = {
+  description: string;
+  fill: string;
+  label: string;
+  path: string;
+};
+
+const TOOTH_SECTION_META: Record<ToothSectionKey, ToothSectionMeta> = {
+  buccal: {
+    description: 'Outer cheek-facing wall. Check plaque and smoothness.',
+    fill: '#dbe3ec',
+    label: 'Buccal',
+    path: 'M99 93 C111 99 149 99 161 93 C163 124 157 151 147 180 C136 212 127 234 121 252 C107 230 97 210 87 180 C77 151 71 124 73 93 Z',
+  },
+  distal: {
+    description: 'Back side of the tooth next to posterior neighbor contact.',
+    fill: '#cfd8e3',
+    label: 'Distal',
+    path: 'M164 90 C174 111 179 136 180 160 C180 181 177 203 172 225 C163 206 153 184 146 158 C142 140 140 118 140 101 C149 99 157 96 164 90 Z',
+  },
+  lingual: {
+    description: 'Inner tongue-side wall. Review contour and restorations.',
+    fill: '#c8d1dc',
+    label: 'Lingual',
+    path: 'M99 108 C111 114 149 114 161 108 C160 134 155 158 147 181 C138 206 130 228 121 245 C112 228 104 206 95 181 C87 158 82 134 81 108 C87 112 93 114 99 108 Z',
+  },
+  mesial: {
+    description: 'Front side next to anterior neighbor contact area.',
+    fill: '#dae2eb',
+    label: 'Mesial',
+    path: 'M70 90 C63 96 55 105 49 117 C41 133 37 149 37 168 C37 192 43 217 52 242 C61 222 69 203 77 175 C83 154 87 128 89 102 C81 99 74 96 70 90 Z',
+  },
+  occlusal: {
+    description: 'Top biting surface with pits and fissures.',
+    fill: '#eef2f7',
+    label: 'Occlusal',
+    path: 'M77 78 C87 57 101 47 117 44 C129 42 145 45 157 53 C165 58 171 67 174 79 C162 90 148 95 129 96 C108 95 92 90 77 78 Z',
+  },
+  root: {
+    description: 'Root complex and apical area for periodontal review.',
+    fill: '#b6c1cf',
+    label: 'Root',
+    path: 'M88 177 C97 205 108 229 121 251 C134 229 145 205 154 177 C149 205 147 229 147 253 C147 270 138 286 128 301 C118 286 109 270 109 253 C109 229 105 205 88 177 Z',
+  },
+};
+
+const TOOTH_SECTION_ORDER: ToothSectionKey[] = ['occlusal', 'buccal', 'lingual', 'mesial', 'distal', 'root'];
+
+const ToothSurfaceInspector = (): JSX.Element => {
+  const [hoveredSection, setHoveredSection] = useState<ToothSectionKey | null>(null);
+  const activeSection = hoveredSection ? TOOTH_SECTION_META[hoveredSection] : TOOTH_SECTION_META.occlusal;
+
   return (
-    <div className="relative isolate overflow-hidden rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/15 via-background to-primary/5 p-4">
-      <div className="pointer-events-none absolute -right-8 -top-10 size-32 rounded-full bg-primary/20 blur-2xl" />
-      <div className="pointer-events-none absolute -bottom-8 -left-8 size-24 rounded-full bg-accent/40 blur-2xl" />
-      <p className="text-left text-lg font-semibold text-primary">Daily Overview</p>
-      <div className="relative z-10 mx-auto h-44 w-full max-w-[260px]">
-        <Image
-          src="/tooth.png"
-          alt="Tooth illustration"
-          fill
-          sizes="260px"
-          className="object-contain"
-          priority
-        />
+    <div className="relative isolate overflow-hidden rounded-2xl border border-violet-200/80 bg-gradient-to-br from-violet-50 via-background to-purple-50 p-3 shadow-sm">
+      <div className="pointer-events-none absolute -right-10 -top-10 size-28 rounded-full bg-violet-200/45 blur-2xl" />
+      <div className="pointer-events-none absolute -bottom-10 -left-10 size-24 rounded-full bg-purple-200/45 blur-2xl" />
+
+      <div className="relative z-10">
+        <div className="mb-2.5 flex items-center justify-between gap-2">
+          <div>
+            <p className="flex items-center gap-1.5 text-base font-semibold text-foreground">
+              <Stethoscope className="size-4 text-primary" />
+              Tooth Surface Explorer
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              Hover each section to inspect
+            </p>
+          </div>
+          <span className="rounded-full border border-violet-300 bg-violet-100 px-2 py-1 text-[11px] font-semibold text-violet-800">
+            LR6
+          </span>
+        </div>
+
+        <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
+          <div className="rounded-xl border border-violet-200 bg-white/90 p-2.5">
+            <svg
+              viewBox="0 0 220 320"
+              className="mx-auto h-56 w-full max-w-[220px]"
+              onMouseLeave={() => {
+                setHoveredSection(null);
+              }}
+              aria-label="Interactive segmented tooth"
+              role="img"
+            >
+              <defs>
+                <linearGradient id="dashboard-tooth-body" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#f8fafc" />
+                  <stop offset="50%" stopColor="#e2e8f0" />
+                  <stop offset="100%" stopColor="#cbd5e1" />
+                </linearGradient>
+              </defs>
+              <path
+                d="M110 24 C146 24 171 52 174 92 C177 129 169 162 158 194 C148 222 140 246 131 268 C126 281 120 292 110 305 C100 292 94 281 89 268 C80 246 72 222 62 194 C51 162 43 129 46 92 C49 52 74 24 110 24 Z"
+                fill="url(#dashboard-tooth-body)"
+                stroke="#94a3b8"
+                strokeWidth="2"
+              />
+              {TOOTH_SECTION_ORDER.map((key) => {
+                const section = TOOTH_SECTION_META[key];
+                const isActive = hoveredSection === key;
+                return (
+                  <path
+                    key={key}
+                    d={section.path}
+                    fill={isActive ? '#8b5cf6' : section.fill}
+                    stroke={isActive ? '#7c3aed' : '#94a3b8'}
+                    strokeWidth={isActive ? 2.2 : 1.5}
+                    style={{ cursor: 'pointer', transition: 'fill 140ms ease, stroke 140ms ease' }}
+                    onMouseEnter={() => {
+                      setHoveredSection(key);
+                    }}
+                    onFocus={() => {
+                      setHoveredSection(key);
+                    }}
+                    tabIndex={0}
+                  />
+                );
+              })}
+            </svg>
+          </div>
+
+          <div className="space-y-1.5">
+            {TOOTH_SECTION_ORDER.map((key) => {
+              const section = TOOTH_SECTION_META[key];
+              const isActive = hoveredSection === key;
+
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onMouseEnter={() => {
+                    setHoveredSection(key);
+                  }}
+                  onFocus={() => {
+                    setHoveredSection(key);
+                  }}
+                  className={cn(
+                    'flex w-full items-center justify-between rounded-lg border px-2.5 py-1.5 text-left text-xs transition',
+                    isActive
+                      ? 'border-violet-400 bg-violet-100 text-violet-900'
+                      : 'border-border bg-background text-muted-foreground hover:border-violet-300 hover:bg-violet-50'
+                  )}
+                >
+                  <span>{section.label}</span>
+                  <span className="size-2 rounded-full bg-current/60" />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="mt-2.5 rounded-lg border border-violet-200 bg-white/85 p-2.5">
+          <p className="text-xs font-semibold text-foreground">{activeSection.label}</p>
+          <p className="mt-1 text-[11px] text-muted-foreground">{activeSection.description}</p>
+        </div>
+
       </div>
     </div>
   );
@@ -527,7 +691,10 @@ export const DentalChartDashboard = ({
   const patientNameById = useMemo(() => {
     const map = new Map<string, string>();
     patients.forEach((patient) => {
-      const fullName = [asText(patient.firstName), asText(patient.lastName)].filter(Boolean).join(' ').trim();
+      const fullName = [asText(patient.firstName), asText(patient.lastName)]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
       const fallback = fullName || asText(patient.patientCode) || `Patient #${patient.id}`;
       map.set(String(patient.id), fallback);
     });
@@ -538,7 +705,11 @@ export const DentalChartDashboard = ({
     const map = new Map<string, string | number>();
     visits.forEach((visit) => {
       const appointmentId = visit.appointmentId;
-      if (appointmentId !== undefined && appointmentId !== null && !map.has(String(appointmentId))) {
+      if (
+        appointmentId !== undefined &&
+        appointmentId !== null &&
+        !map.has(String(appointmentId))
+      ) {
         map.set(String(appointmentId), visit.id);
       }
     });
@@ -552,14 +723,16 @@ export const DentalChartDashboard = ({
       const dateTime = parseDateTime(appointment.appointmentDate, appointment.startTime);
       if (!dateTime) return;
 
-      const patientName = asText(appointment.patientName)
-        || buildNameFromRelation(appointment.patient)
-        || patientNameById.get(String(appointment.patientId ?? ''))
-        || `Patient #${appointment.patientId ?? appointment.id}`;
+      const patientName =
+        asText(appointment.patientName) ||
+        buildNameFromRelation(appointment.patient) ||
+        patientNameById.get(String(appointment.patientId ?? '')) ||
+        `Patient #${appointment.patientId ?? appointment.id}`;
 
-      const dentistName = asText(appointment.dentistName)
-        || buildNameFromRelation(appointment.dentist)
-        || `Dentist #${appointment.dentistId ?? '-'}`;
+      const dentistName =
+        asText(appointment.dentistName) ||
+        buildNameFromRelation(appointment.dentist) ||
+        `Dentist #${appointment.dentistId ?? '-'}`;
 
       events.push({
         date: dateTime,
@@ -567,9 +740,9 @@ export const DentalChartDashboard = ({
         dentistName,
         key: `appointment-${appointment.id}-${index}`,
         linkedVisitId:
-          extractFirstVisitId(appointment.visits)
-          ?? visitIdByAppointmentId.get(String(appointment.id))
-          ?? null,
+          extractFirstVisitId(appointment.visits) ??
+          visitIdByAppointmentId.get(String(appointment.id)) ??
+          null,
         note: asText(appointment.notes),
         patientId: appointment.patientId,
         patientName,
@@ -588,22 +761,24 @@ export const DentalChartDashboard = ({
     const events: ScheduleEvent[] = [];
 
     visits.forEach((visit, index) => {
-      const fallbackTime = visit.appointment
-        && typeof visit.appointment === 'object'
-        ? (visit.appointment as Record<string, unknown>).startTime
-        : '';
+      const fallbackTime =
+        visit.appointment && typeof visit.appointment === 'object'
+          ? (visit.appointment as Record<string, unknown>).startTime
+          : '';
 
       const dateTime = parseDateTime(visit.visitDate, fallbackTime);
       if (!dateTime) return;
 
-      const patientName = asText(visit.patientName)
-        || buildNameFromRelation(visit.patient)
-        || patientNameById.get(String(visit.patientId ?? ''))
-        || `Patient #${visit.patientId ?? visit.id}`;
+      const patientName =
+        asText(visit.patientName) ||
+        buildNameFromRelation(visit.patient) ||
+        patientNameById.get(String(visit.patientId ?? '')) ||
+        `Patient #${visit.patientId ?? visit.id}`;
 
-      const dentistName = asText(visit.dentistName)
-        || buildNameFromRelation(visit.dentist)
-        || `Dentist #${visit.dentistId ?? '-'}`;
+      const dentistName =
+        asText(visit.dentistName) ||
+        buildNameFromRelation(visit.dentist) ||
+        `Dentist #${visit.dentistId ?? '-'}`;
 
       events.push({
         date: dateTime,
@@ -651,7 +826,9 @@ export const DentalChartDashboard = ({
   const selectedDateKey = useMemo(() => toDateKey(selectedDate), [selectedDate]);
 
   const selectedDateEvents = useMemo(() => {
-    return (eventsByDate.get(selectedDateKey) ?? []).slice().sort((a, b) => a.date.getTime() - b.date.getTime());
+    return (eventsByDate.get(selectedDateKey) ?? [])
+      .slice()
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
   }, [eventsByDate, selectedDateKey]);
 
   const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -663,7 +840,9 @@ export const DentalChartDashboard = ({
 
   const selectedEvent = useMemo(() => {
     if (manualSelectedEventKey) {
-      const matched = filteredSelectedDateEvents.find((event) => event.key === manualSelectedEventKey);
+      const matched = filteredSelectedDateEvents.find(
+        (event) => event.key === manualSelectedEventKey
+      );
       if (matched) return matched;
     }
     return filteredSelectedDateEvents[0] ?? null;
@@ -680,21 +859,24 @@ export const DentalChartDashboard = ({
   }, [todayEvents]);
 
   const appointmentCount = appointmentEvents.length;
-  const completedAppointmentCount = appointmentEvents.filter((event) => event.status.toLowerCase() === 'completed').length;
-  const cancelledAppointmentCount = appointmentEvents.filter((event) => event.status.toLowerCase() === 'cancelled').length;
+  const completedAppointmentCount = appointmentEvents.filter(
+    (event) => event.status.toLowerCase() === 'completed'
+  ).length;
+  const cancelledAppointmentCount = appointmentEvents.filter(
+    (event) => event.status.toLowerCase() === 'cancelled'
+  ).length;
   const scheduledAppointmentCount = Math.max(
     appointmentCount - completedAppointmentCount - cancelledAppointmentCount,
     0
   );
-  const completionRate = appointmentCount > 0
-    ? Math.round((completedAppointmentCount / appointmentCount) * 100)
-    : 0;
+  const completionRate =
+    appointmentCount > 0 ? Math.round((completedAppointmentCount / appointmentCount) * 100) : 0;
 
   const newPatients = useMemo(() => {
     return patients.filter((patient) => {
       const createdAt = parseDateOnly(patient.createdAt);
       if (!createdAt) return false;
-      return (today.getTime() - createdAt.getTime()) <= (30 * MS_IN_DAY);
+      return today.getTime() - createdAt.getTime() <= 30 * MS_IN_DAY;
     }).length;
   }, [patients, today]);
 
@@ -770,16 +952,20 @@ export const DentalChartDashboard = ({
     };
   }, [appointmentEvents, invoices, payments, visitEvents]);
   const revenueAreaData = revenueAreaSeries.data;
-  const revenueAreaChartConfig = useMemo(() => ({
-    billed: {
-      color: 'var(--chart-1)',
-      label: revenueAreaSeries.source === 'financial' ? 'Billed' : 'Appointments',
-    },
-    paid: {
-      color: 'var(--chart-2)',
-      label: revenueAreaSeries.source === 'financial' ? 'Paid' : 'Visits',
-    },
-  }) satisfies ChartConfig, [revenueAreaSeries.source]);
+  const revenueAreaChartConfig = useMemo(
+    () =>
+      ({
+        billed: {
+          color: 'var(--chart-1)',
+          label: revenueAreaSeries.source === 'financial' ? 'Billed' : 'Appointments',
+        },
+        paid: {
+          color: 'var(--chart-2)',
+          label: revenueAreaSeries.source === 'financial' ? 'Paid' : 'Visits',
+        },
+      }) satisfies ChartConfig,
+    [revenueAreaSeries.source]
+  );
   const revenueAreaDescription = useMemo(() => {
     if (revenueAreaSeries.source === 'financial') {
       return 'Showing total billed and paid for the selected range';
@@ -809,11 +995,14 @@ export const DentalChartDashboard = ({
       return !Number.isNaN(date.getTime()) && date >= startDate;
     });
   }, [revenueAreaData, revenueTimeRange]);
-  const appointmentMixData = useMemo(() => ([
-    { name: 'Scheduled', value: scheduledAppointmentCount },
-    { name: 'Completed', value: completedAppointmentCount },
-    { name: 'Cancelled', value: cancelledAppointmentCount },
-  ]), [scheduledAppointmentCount, completedAppointmentCount, cancelledAppointmentCount]);
+  const appointmentMixData = useMemo(
+    () => [
+      { name: 'Scheduled', value: scheduledAppointmentCount },
+      { name: 'Completed', value: completedAppointmentCount },
+      { name: 'Cancelled', value: cancelledAppointmentCount },
+    ],
+    [scheduledAppointmentCount, completedAppointmentCount, cancelledAppointmentCount]
+  );
   const safeTransactions = useMemo(
     () => safeSummary?.transactions ?? [],
     [safeSummary?.transactions]
@@ -859,7 +1048,8 @@ export const DentalChartDashboard = ({
     const grouped = new Map<string, number>();
     safeTransactions.forEach((entry) => {
       if (normalizeStatus(asText(entry.direction)) !== 'out') return;
-      const person = asText(entry.pickedByStaffName) || `Staff #${asText(entry.pickedByStaffId) || '-'}`;
+      const person =
+        asText(entry.pickedByStaffName) || `Staff #${asText(entry.pickedByStaffId) || '-'}`;
       grouped.set(person, roundCurrency((grouped.get(person) ?? 0) + parseMoney(entry.amount)));
     });
 
@@ -871,7 +1061,9 @@ export const DentalChartDashboard = ({
   const recentSafeTransactions = useMemo(() => {
     return safeTransactions
       .slice()
-      .sort((left, right) => asText(right.transactionDate).localeCompare(asText(left.transactionDate)))
+      .sort((left, right) =>
+        asText(right.transactionDate).localeCompare(asText(left.transactionDate))
+      )
       .slice(0, 6);
   }, [safeTransactions]);
 
@@ -919,7 +1111,9 @@ export const DentalChartDashboard = ({
 
   const selectedEventStatus = statusTheme(selectedEvent?.status ?? 'scheduled');
   const debtOutstanding = useMemo(() => {
-    const activeInvoices = invoices.filter((invoice) => normalizeStatus(asText(invoice.status || '')) !== 'cancelled');
+    const activeInvoices = invoices.filter(
+      (invoice) => normalizeStatus(asText(invoice.status || '')) !== 'cancelled'
+    );
     const paidByInvoiceId = new Map<string, number>();
 
     payments.forEach((payment) => {
@@ -931,14 +1125,16 @@ export const DentalChartDashboard = ({
       );
     });
 
-    return roundCurrency(activeInvoices.reduce((sum, invoice) => {
-      const invoiceId = String(invoice.id);
-      const netAmount = parseMoney(invoice.netAmount);
-      const paidAmount = paidByInvoiceId.get(invoiceId) ?? 0;
-      const isPaidStatus = normalizeStatus(asText(invoice.status || '')) === 'paid';
-      const effectivePaid = paidAmount > 0 ? paidAmount : isPaidStatus ? netAmount : 0;
-      return sum + Math.max(0, netAmount - effectivePaid);
-    }, 0));
+    return roundCurrency(
+      activeInvoices.reduce((sum, invoice) => {
+        const invoiceId = String(invoice.id);
+        const netAmount = parseMoney(invoice.netAmount);
+        const paidAmount = paidByInvoiceId.get(invoiceId) ?? 0;
+        const isPaidStatus = normalizeStatus(asText(invoice.status || '')) === 'paid';
+        const effectivePaid = paidAmount > 0 ? paidAmount : isPaidStatus ? netAmount : 0;
+        return sum + Math.max(0, netAmount - effectivePaid);
+      }, 0)
+    );
   }, [invoices, payments]);
   const safeMoneyForRing = Math.max(0, roundCurrency(safeBalance));
   const supplierUnpaids = Math.max(0, roundCurrency(implantSupplierData.totalUnpaid));
@@ -963,11 +1159,12 @@ export const DentalChartDashboard = ({
     };
   }, [debtOutstanding, safeMoneyForRing, supplierUnpaids]);
   const safeRadialChartData = useMemo(
-    () => [
-      { category: 'inSafe', value: safeMoneyForRing, fill: 'var(--color-inSafe)' },
-      { category: 'debts', value: debtOutstanding, fill: 'var(--color-debts)' },
-      { category: 'unpaids', value: supplierUnpaids, fill: 'var(--color-unpaids)' },
-    ].filter((entry) => entry.value > 0),
+    () =>
+      [
+        { category: 'inSafe', value: safeMoneyForRing, fill: 'var(--color-inSafe)' },
+        { category: 'debts', value: debtOutstanding, fill: 'var(--color-debts)' },
+        { category: 'unpaids', value: supplierUnpaids, fill: 'var(--color-unpaids)' },
+      ].filter((entry) => entry.value > 0),
     [debtOutstanding, safeMoneyForRing, supplierUnpaids]
   );
   const hasSafeRadialChartData = safeRadialChartData.length > 0;
@@ -978,7 +1175,9 @@ export const DentalChartDashboard = ({
     if (isCompletedStatus(selectedEvent.status)) {
       if (selectedEvent.patientId !== null && selectedEvent.patientId !== undefined) {
         const encodedPatientId = encodeURIComponent(String(selectedEvent.patientId));
-        router.push(`/${locale}/dental-management/patients/patient-profile?patientId=${encodedPatientId}`);
+        router.push(
+          `/${locale}/dental-management/patients/patient-profile?patientId=${encodedPatientId}`
+        );
         return;
       }
 
@@ -1031,7 +1230,9 @@ export const DentalChartDashboard = ({
               <section className="grid gap-4 rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/20 via-background to-background p-5 lg:grid-cols-[1.25fr_0.95fr]">
                 <div>
                   <p className="text-sm text-muted-foreground">Good morning, Doctor</p>
-                  <h3 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Today&apos;s Patient Visits</h3>
+                  <h3 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
+                    Today&apos;s Patient Visits
+                  </h3>
                   <div className="mt-3 flex flex-wrap items-end gap-2">
                     <span className="text-5xl font-bold leading-none">{todayVisits}</span>
                     <span className="pb-1 text-sm text-muted-foreground">patients</span>
@@ -1044,11 +1245,15 @@ export const DentalChartDashboard = ({
                     </div>
                     <div className="rounded-xl border border-violet-300 bg-violet-50/80 p-3">
                       <p className="text-xs text-violet-700">Returning Patients</p>
-                      <p className="mt-1 text-2xl font-semibold text-violet-900">{returningPatients}</p>
+                      <p className="mt-1 text-2xl font-semibold text-violet-900">
+                        {returningPatients}
+                      </p>
                     </div>
                     <div className="rounded-xl border border-emerald-300 bg-emerald-50/80 p-3">
                       <p className="text-xs text-emerald-700">Appointments Today</p>
-                      <p className="mt-1 text-2xl font-semibold text-emerald-900">{todayAppointments}</p>
+                      <p className="mt-1 text-2xl font-semibold text-emerald-900">
+                        {todayAppointments}
+                      </p>
                     </div>
                   </div>
 
@@ -1086,18 +1291,22 @@ export const DentalChartDashboard = ({
                   </div>
                 </div>
 
-                <ToothIllustration />
+                <ToothSurfaceInspector />
               </section>
 
               <section className="grid gap-3 lg:grid-cols-[1fr_1fr]">
                 <div className="rounded-2xl border bg-background p-4">
                   <div className="mb-3 flex items-center justify-between">
                     <h4 className="font-semibold">Patient List</h4>
-                    <span className="text-xs text-muted-foreground">{formatDayHeading(selectedDate)}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {formatDayHeading(selectedDate)}
+                    </span>
                   </div>
                   <div className="space-y-2">
                     {isLoading ? (
-                      <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">Loading schedule...</p>
+                      <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                        Loading schedule...
+                      </p>
                     ) : filteredSelectedDateEvents.length === 0 ? (
                       <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
                         No visits or appointments for this date.
@@ -1123,10 +1332,17 @@ export const DentalChartDashboard = ({
                           >
                             <div>
                               <p className="text-sm font-semibold">{event.patientName}</p>
-                              <p className="text-xs text-muted-foreground">{event.title} - {event.tag}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {event.title} - {event.tag}
+                              </p>
                             </div>
                             <div className="flex items-center gap-2">
-                              <span className={cn('rounded-md border px-2 py-0.5 text-[10px] font-semibold capitalize', theme.chip)}>
+                              <span
+                                className={cn(
+                                  'rounded-md border px-2 py-0.5 text-[10px] font-semibold capitalize',
+                                  theme.chip
+                                )}
+                              >
                                 {event.status}
                               </span>
                               <span className="rounded-lg border bg-background px-2 py-1 text-[11px] font-medium text-foreground">
@@ -1161,7 +1377,9 @@ export const DentalChartDashboard = ({
                         )}
                       >
                         <p className="text-base font-semibold">{selectedEvent.patientName}</p>
-                        <p className="text-xs text-muted-foreground">{selectedEvent.title} - {selectedEvent.tag}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {selectedEvent.title} - {selectedEvent.tag}
+                        </p>
                       </button>
                       <div className="grid gap-2">
                         <button
@@ -1210,7 +1428,9 @@ export const DentalChartDashboard = ({
                           onClick={openTreatmentChartFromSelection}
                           className="mt-1 bg-primary text-primary-foreground hover:bg-accent hover:text-accent-foreground"
                         >
-                          {isCompletedStatus(selectedEvent.status) ? 'Open Patient Profile' : 'Open Treatment Chart'}
+                          {isCompletedStatus(selectedEvent.status)
+                            ? 'Open Patient Profile'
+                            : 'Open Treatment Chart'}
                         </Button>
                       </div>
                     </div>
@@ -1235,7 +1455,11 @@ export const DentalChartDashboard = ({
                         config={safeRadialChartConfig}
                         className="mx-auto aspect-square max-h-[250px]"
                       >
-                        <RadialBarChart data={safeRadialChartData} innerRadius={30} outerRadius={100}>
+                        <RadialBarChart
+                          data={safeRadialChartData}
+                          innerRadius={30}
+                          outerRadius={100}
+                        >
                           <ChartTooltip
                             cursor={false}
                             content={<ChartTooltipContent hideLabel nameKey="category" />}
@@ -1252,14 +1476,15 @@ export const DentalChartDashboard = ({
                   </CardContent>
                   <CardFooter className="flex-col gap-2 text-sm">
                     <div className="flex items-center gap-2 leading-none font-medium">
-                      Safe share {Math.round(ringBreakdown.safePercent)}% <TrendingUp className="h-4 w-4" />
+                      Safe share {Math.round(ringBreakdown.safePercent)}%{' '}
+                      <TrendingUp className="h-4 w-4" />
                     </div>
                     <div className="leading-none text-muted-foreground">
-                      Safe {formatDualCurrency(safeBalance)} | Debts {formatCurrency(debtOutstanding)} | Unpaids {formatCurrency(supplierUnpaids)}
+                      Safe {formatDualCurrency(safeBalance)} | Debts{' '}
+                      {formatCurrency(debtOutstanding)} | Unpaids {formatCurrency(supplierUnpaids)}
                     </div>
                   </CardFooter>
                 </Card>
-
               </section>
 
               <section className="rounded-2xl border bg-background p-4">
@@ -1269,10 +1494,22 @@ export const DentalChartDashboard = ({
                     <p className="text-xs text-muted-foreground">{formatMonth(currentMonth)}</p>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button type="button" variant="ghost" size="icon" className="size-8" onClick={goToPreviousMonth}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-8"
+                      onClick={goToPreviousMonth}
+                    >
                       <ChevronLeft className="size-4" />
                     </Button>
-                    <Button type="button" variant="ghost" size="icon" className="size-8" onClick={goToNextMonth}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-8"
+                      onClick={goToNextMonth}
+                    >
                       <ChevronRight className="size-4" />
                     </Button>
                   </div>
@@ -1319,7 +1556,9 @@ export const DentalChartDashboard = ({
                           <span
                             className={cn(
                               'absolute right-1 top-1 inline-flex min-w-4 justify-center rounded-full px-1 text-[10px] leading-4',
-                              isSelected ? 'bg-primary-foreground/90 text-primary' : cellTheme.badgeClass
+                              isSelected
+                                ? 'bg-primary-foreground/90 text-primary'
+                                : cellTheme.badgeClass
                             )}
                             style={!isSelected ? cellTheme.badgeStyle : undefined}
                           >
@@ -1335,7 +1574,9 @@ export const DentalChartDashboard = ({
               <section className="rounded-2xl border bg-background p-4">
                 <div className="mb-3 flex items-center justify-between">
                   <p className="font-semibold">Upcoming</p>
-                  <span className="text-xs text-muted-foreground">{upcomingEvents.length} records</span>
+                  <span className="text-xs text-muted-foreground">
+                    {upcomingEvents.length} records
+                  </span>
                 </div>
 
                 <div className="space-y-2">
@@ -1351,7 +1592,12 @@ export const DentalChartDashboard = ({
                         <div key={event.key} className={cn('rounded-xl border p-3', theme.row)}>
                           <div className="mb-1 flex items-center justify-between gap-2">
                             <p className="text-sm font-semibold">{event.patientName}</p>
-                            <span className={cn('rounded-md border px-2 py-0.5 text-[10px] font-semibold capitalize', theme.chip)}>
+                            <span
+                              className={cn(
+                                'rounded-md border px-2 py-0.5 text-[10px] font-semibold capitalize',
+                                theme.chip
+                              )}
+                            >
                               {event.status}
                             </span>
                           </div>
@@ -1372,382 +1618,394 @@ export const DentalChartDashboard = ({
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="rounded-2xl border border-border/80 bg-gradient-to-br from-blue-50 via-background to-cyan-50 pt-0">
-          <CardHeader className="flex items-center gap-2 space-y-0 border-b py-5 sm:flex-row">
-            <div className="grid flex-1 gap-1">
-              <CardTitle>Area Chart - Interactive</CardTitle>
-              <CardDescription>{revenueAreaDescription}</CardDescription>
-            </div>
-            <Select value={revenueTimeRange} onValueChange={(value) => {
-              if (value === '7d' || value === '30d' || value === '90d') {
-                setRevenueTimeRange(value);
-              }
-            }}
-            >
-              <SelectTrigger
-                className="hidden w-[160px] rounded-lg sm:ml-auto sm:flex"
-                aria-label="Select revenue range"
+      <section className="space-y-2">
+        <div className="px-1">
+          <p className="text-sm font-semibold">Performance Snapshot</p>
+          <p className="text-xs text-muted-foreground">Quick operational health indicators</p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-4">
+          <Card className="rounded-2xl border">
+            <CardContent className="p-4">
+              <div className="mb-2 flex items-center gap-2">
+                <Activity className="size-4 text-primary" />
+                <p className="text-sm font-semibold">Visit Performance</p>
+              </div>
+              <p className="text-3xl font-semibold">{completionRate}%</p>
+              <p className="text-xs text-muted-foreground">Completed appointments ratio</p>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border">
+            <CardContent className="p-4">
+              <div className="mb-2 flex items-center gap-2">
+                <CalendarDays className="size-4 text-primary" />
+                <p className="text-sm font-semibold">Calendar Coverage</p>
+              </div>
+              <p className="text-3xl font-semibold">{eventCountByDate.size}</p>
+              <p className="text-xs text-muted-foreground">Days with any scheduled record</p>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border">
+            <CardContent className="p-4">
+              <div className="mb-2 flex items-center gap-2">
+                <UsersRound className="size-4 text-primary" />
+                <p className="text-sm font-semibold">Patient Pool</p>
+              </div>
+              <p className="text-3xl font-semibold">{patients.length}</p>
+              <p className="text-xs text-muted-foreground">Registered patients in current feed</p>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border">
+            <CardContent className="p-4">
+              <div className="mb-2 flex items-center gap-2">
+                <Building2 className="size-4 text-primary" />
+                <p className="text-sm font-semibold">Supplier Unpaid</p>
+              </div>
+              <p className="text-3xl font-semibold">
+                {formatDualCurrency(implantSupplierData.totalUnpaid)}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {implantSupplierData.unpaidCount} implant teeth still unpaid
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      <section className="space-y-2">
+        <div className="px-1">
+          <p className="text-sm font-semibold">Analytics</p>
+          <p className="text-xs text-muted-foreground">
+            Appointments, revenue, and supplier trends
+          </p>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Card className="rounded-2xl border border-border/80 bg-gradient-to-br from-blue-50 via-background to-cyan-50 pt-0">
+            <CardHeader className="flex items-center gap-2 space-y-0 border-b py-5 sm:flex-row">
+              <div className="grid flex-1 gap-1">
+                <CardTitle>Area Chart - Interactive</CardTitle>
+                <CardDescription>{revenueAreaDescription}</CardDescription>
+              </div>
+              <Select
+                value={revenueTimeRange}
+                onValueChange={(value) => {
+                  if (value === '7d' || value === '30d' || value === '90d') {
+                    setRevenueTimeRange(value);
+                  }
+                }}
               >
-                <SelectValue placeholder="Last 3 months" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl">
-                <SelectItem value="90d" className="rounded-lg">
-                  Last 3 months
-                </SelectItem>
-                <SelectItem value="30d" className="rounded-lg">
-                  Last 30 days
-                </SelectItem>
-                <SelectItem value="7d" className="rounded-lg">
-                  Last 7 days
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </CardHeader>
-          <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
-            {filteredRevenueAreaData.length === 0 ? (
-              <div className="grid h-[250px] place-items-center rounded-xl border border-dashed text-sm text-muted-foreground">
-                No chart data available yet.
-              </div>
-            ) : (
-              <ChartContainer
-                config={revenueAreaChartConfig}
-                className="aspect-auto h-[250px] w-full"
-              >
-                <AreaChart data={filteredRevenueAreaData}>
-                  <defs>
-                    <linearGradient id="fillBilled" x1="0" y1="0" x2="0" y2="1">
-                      <stop
-                        offset="5%"
-                        stopColor="var(--color-billed)"
-                        stopOpacity={0.8}
-                      />
-                      <stop
-                        offset="95%"
-                        stopColor="var(--color-billed)"
-                        stopOpacity={0.1}
-                      />
-                    </linearGradient>
-                    <linearGradient id="fillPaid" x1="0" y1="0" x2="0" y2="1">
-                      <stop
-                        offset="5%"
-                        stopColor="var(--color-paid)"
-                        stopOpacity={0.8}
-                      />
-                      <stop
-                        offset="95%"
-                        stopColor="var(--color-paid)"
-                        stopOpacity={0.1}
-                      />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid vertical={false} />
-                  <XAxis
-                    dataKey="date"
-                    tickLine={false}
-                    axisLine={false}
-                    tickMargin={8}
-                    minTickGap={32}
-                    tickFormatter={(value) => {
-                      const date = new Date(value);
-                      return date.toLocaleDateString('en-US', {
-                        day: 'numeric',
-                        month: 'short',
-                      });
-                    }}
-                  />
-                  <ChartTooltip
-                    cursor={false}
-                    content={(
-                      <ChartTooltipContent
-                        indicator="dot"
-                        labelFormatter={(value) => {
-                          return new Date(String(value)).toLocaleDateString('en-US', {
-                            day: 'numeric',
-                            month: 'short',
-                          });
-                        }}
-                      />
-                    )}
-                  />
-                  <Area
-                    dataKey="paid"
-                    type="natural"
-                    fill="url(#fillPaid)"
-                    stroke="var(--color-paid)"
-                    stackId="a"
-                  />
-                  <Area
-                    dataKey="billed"
-                    type="natural"
-                    fill="url(#fillBilled)"
-                    stroke="var(--color-billed)"
-                    stackId="a"
-                  />
-                  <ChartLegend content={<ChartLegendContent />} />
-                </AreaChart>
-              </ChartContainer>
-            )}
-          </CardContent>
-        </Card>
+                <SelectTrigger
+                  className="hidden w-[160px] rounded-lg sm:ml-auto sm:flex"
+                  aria-label="Select revenue range"
+                >
+                  <SelectValue placeholder="Last 3 months" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  <SelectItem value="90d" className="rounded-lg">
+                    Last 3 months
+                  </SelectItem>
+                  <SelectItem value="30d" className="rounded-lg">
+                    Last 30 days
+                  </SelectItem>
+                  <SelectItem value="7d" className="rounded-lg">
+                    Last 7 days
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </CardHeader>
+            <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
+              {filteredRevenueAreaData.length === 0 ? (
+                <div className="grid h-[250px] place-items-center rounded-xl border border-dashed text-sm text-muted-foreground">
+                  No chart data available yet.
+                </div>
+              ) : (
+                <ChartContainer
+                  config={revenueAreaChartConfig}
+                  className="aspect-auto h-[250px] w-full"
+                >
+                  <AreaChart data={filteredRevenueAreaData}>
+                    <defs>
+                      <linearGradient id="fillBilled" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="var(--color-billed)" stopOpacity={0.8} />
+                        <stop offset="95%" stopColor="var(--color-billed)" stopOpacity={0.1} />
+                      </linearGradient>
+                      <linearGradient id="fillPaid" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="var(--color-paid)" stopOpacity={0.8} />
+                        <stop offset="95%" stopColor="var(--color-paid)" stopOpacity={0.1} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid vertical={false} />
+                    <XAxis
+                      dataKey="date"
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={8}
+                      minTickGap={32}
+                      tickFormatter={(value) => {
+                        const date = new Date(value);
+                        return date.toLocaleDateString('en-US', {
+                          day: 'numeric',
+                          month: 'short',
+                        });
+                      }}
+                    />
+                    <ChartTooltip
+                      cursor={false}
+                      content={
+                        <ChartTooltipContent
+                          indicator="dot"
+                          labelFormatter={(value) => {
+                            return new Date(String(value)).toLocaleDateString('en-US', {
+                              day: 'numeric',
+                              month: 'short',
+                            });
+                          }}
+                        />
+                      }
+                    />
+                    <Area
+                      dataKey="paid"
+                      type="natural"
+                      fill="url(#fillPaid)"
+                      stroke="var(--color-paid)"
+                      stackId="a"
+                    />
+                    <Area
+                      dataKey="billed"
+                      type="natural"
+                      fill="url(#fillBilled)"
+                      stroke="var(--color-billed)"
+                      stackId="a"
+                    />
+                    <ChartLegend content={<ChartLegendContent />} />
+                  </AreaChart>
+                </ChartContainer>
+              )}
+            </CardContent>
+          </Card>
 
-        <Card className="rounded-2xl border border-border/80 bg-gradient-to-br from-orange-50 via-background to-emerald-50">
-          <CardContent className="p-4">
-            <div className="mb-3">
-              <p className="text-sm font-semibold">Appointment Mix</p>
-              <p className="text-xs text-muted-foreground">Current appointment distribution</p>
-            </div>
-            <div className="h-52">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={appointmentMixData}>
-                  <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
-                  <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} />
-                  <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} width={60} />
-                  <Tooltip />
-                  <Bar dataKey="value" fill="#0ea5e9" radius={[10, 10, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
+          <Card className="rounded-2xl border border-border/80 bg-gradient-to-br from-orange-50 via-background to-emerald-50">
+            <CardContent className="p-4">
+              <div className="mb-3">
+                <p className="text-sm font-semibold">Appointment Mix</p>
+                <p className="text-xs text-muted-foreground">Current appointment distribution</p>
+              </div>
+              <div className="h-52">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={appointmentMixData}>
+                    <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fill: '#64748b', fontSize: 11 }}
+                      tickLine={false}
+                    />
+                    <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} width={60} />
+                    <Tooltip />
+                    <Bar dataKey="value" fill="#0ea5e9" radius={[10, 10, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card className="rounded-2xl border border-border/80 bg-gradient-to-br from-sky-50 via-background to-blue-50">
-          <CardContent className="p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold">Third-Company Liability</p>
-                <p className="text-xs text-muted-foreground">Implant supplier paid vs unpaid</p>
+          <Card className="rounded-2xl border border-border/80 bg-gradient-to-br from-sky-50 via-background to-blue-50">
+            <CardContent className="p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold">Third-Company Liability</p>
+                  <p className="text-xs text-muted-foreground">Implant supplier paid vs unpaid</p>
+                </div>
+                <Building2 className="size-5 text-blue-700" />
               </div>
-              <Building2 className="size-5 text-blue-700" />
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="rounded-xl border border-blue-200 bg-blue-100/70 p-3">
-                <p className="text-xs text-blue-900">Total Supplier Cost</p>
-                <p className="text-sm font-semibold text-blue-900">{formatDualCurrency(implantSupplierData.totalSupplierCost)}</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="rounded-xl border border-blue-200 bg-blue-100/70 p-3">
+                  <p className="text-xs text-blue-900">Total Supplier Cost</p>
+                  <p className="text-sm font-semibold text-blue-900">
+                    {formatDualCurrency(implantSupplierData.totalSupplierCost)}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-emerald-200 bg-emerald-100/70 p-3">
+                  <p className="text-xs text-emerald-900">Paid to Supplier</p>
+                  <p className="text-sm font-semibold text-emerald-900">
+                    {formatDualCurrency(implantSupplierData.totalPaid)}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-orange-200 bg-orange-100/70 p-3">
+                  <p className="text-xs text-orange-900">Unpaid to Supplier</p>
+                  <p className="text-sm font-semibold text-orange-900">
+                    {formatDualCurrency(implantSupplierData.totalUnpaid)}
+                  </p>
+                </div>
+                <div className="rounded-xl border bg-white/90 p-3">
+                  <p className="text-xs text-muted-foreground">Unpaid Teeth</p>
+                  <p className="text-sm font-semibold text-foreground">
+                    {implantSupplierData.unpaidCount} / {implantSupplierData.implantCount}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Paid ratio: {implantSupplierData.paidRatio}%
+                  </p>
+                </div>
               </div>
-              <div className="rounded-xl border border-emerald-200 bg-emerald-100/70 p-3">
-                <p className="text-xs text-emerald-900">Paid to Supplier</p>
-                <p className="text-sm font-semibold text-emerald-900">{formatDualCurrency(implantSupplierData.totalPaid)}</p>
+              <div className="mt-3 h-36">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={implantAvailabilityChart}>
+                    <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fill: '#64748b', fontSize: 10 }}
+                      tickLine={false}
+                    />
+                    <YAxis tick={{ fill: '#64748b', fontSize: 10 }} tickLine={false} width={70} />
+                    <Tooltip formatter={(value) => formatDualCurrency(Number(value ?? 0))} />
+                    <Bar dataKey="unpaid" fill="#f97316" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-              <div className="rounded-xl border border-orange-200 bg-orange-100/70 p-3">
-                <p className="text-xs text-orange-900">Unpaid to Supplier</p>
-                <p className="text-sm font-semibold text-orange-900">{formatDualCurrency(implantSupplierData.totalUnpaid)}</p>
-              </div>
-              <div className="rounded-xl border bg-white/90 p-3">
-                <p className="text-xs text-muted-foreground">Unpaid Teeth</p>
-                <p className="text-sm font-semibold text-foreground">
-                  {implantSupplierData.unpaidCount} / {implantSupplierData.implantCount}
-                </p>
-                <p className="text-xs text-muted-foreground">Paid ratio: {implantSupplierData.paidRatio}%</p>
-              </div>
-            </div>
-            <div className="mt-3 h-36">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={implantAvailabilityChart}>
-                  <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
-                  <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 10 }} tickLine={false} />
-                  <YAxis tick={{ fill: '#64748b', fontSize: 10 }} tickLine={false} width={70} />
-                  <Tooltip formatter={(value) => formatDualCurrency(Number(value ?? 0))} />
-                  <Bar dataKey="unpaid" fill="#f97316" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
 
-      <section className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-        <Card className="rounded-2xl border border-border/80 bg-gradient-to-br from-emerald-50 via-background to-cyan-50">
-          <CardContent className="p-4">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold">Safe Overview</p>
-                <p className="text-xs text-muted-foreground">All income and outflow summary</p>
+      <section className="space-y-2">
+        <div className="px-1">
+          <p className="text-sm font-semibold">Finance & Cashflow</p>
+          <p className="text-xs text-muted-foreground">
+            Safe transactions and supplier liabilities
+          </p>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+          <Card className="rounded-2xl border border-border/80 bg-gradient-to-br from-emerald-50 via-background to-cyan-50">
+            <CardContent className="p-4">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold">Safe Overview</p>
+                  <p className="text-xs text-muted-foreground">All income and outflow summary</p>
+                </div>
+                <Vault className="size-5 text-emerald-700" />
               </div>
-              <Vault className="size-5 text-emerald-700" />
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-xl border bg-white/90 p-3">
-                <p className="text-xs text-muted-foreground">Current Balance</p>
-                <p className="text-lg font-semibold">{formatDualCurrency(safeBalance)}</p>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border bg-white/90 p-3">
+                  <p className="text-xs text-muted-foreground">Current Balance</p>
+                  <p className="text-lg font-semibold">{formatDualCurrency(safeBalance)}</p>
+                </div>
+                <div className="rounded-xl border border-emerald-200 bg-emerald-100/70 p-3">
+                  <p className="text-xs text-emerald-900">Total In</p>
+                  <p className="text-lg font-semibold text-emerald-900">
+                    {formatDualCurrency(safeTotalIn)}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-orange-200 bg-orange-100/70 p-3">
+                  <p className="text-xs text-orange-900">Total Out</p>
+                  <p className="text-lg font-semibold text-orange-900">
+                    {formatDualCurrency(safeTotalOut)}
+                  </p>
+                </div>
               </div>
-              <div className="rounded-xl border border-emerald-200 bg-emerald-100/70 p-3">
-                <p className="text-xs text-emerald-900">Total In</p>
-                <p className="text-lg font-semibold text-emerald-900">{formatDualCurrency(safeTotalIn)}</p>
-              </div>
-              <div className="rounded-xl border border-orange-200 bg-orange-100/70 p-3">
-                <p className="text-xs text-orange-900">Total Out</p>
-                <p className="text-lg font-semibold text-orange-900">{formatDualCurrency(safeTotalOut)}</p>
-              </div>
-            </div>
 
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <div className="rounded-lg border bg-white/90 p-3">
-                <p className="mb-1 text-xs font-medium text-muted-foreground">Top Safe Pickups</p>
-                {topSafePickups.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No outflow by staff yet.</p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div className="rounded-lg border bg-white/90 p-3">
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">Top Safe Pickups</p>
+                  {topSafePickups.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No outflow by staff yet.</p>
+                  ) : (
+                    topSafePickups.map((row) => (
+                      <div
+                        key={`safe-pickup-${row.name}`}
+                        className="flex items-center justify-between text-xs"
+                      >
+                        <span className="truncate text-muted-foreground">{row.name}</span>
+                        <span className="font-semibold">{formatDualCurrency(row.amount)}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="rounded-lg border bg-white/90 p-3">
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">Net Position</p>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="inline-flex items-center gap-1 text-emerald-700">
+                      <ArrowDownLeft className="size-3.5" />
+                      Inflow
+                    </span>
+                    <span className="font-semibold">{formatDualCurrency(safeTotalIn)}</span>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between text-xs">
+                    <span className="inline-flex items-center gap-1 text-orange-700">
+                      <ArrowUpRight className="size-3.5" />
+                      Outflow
+                    </span>
+                    <span className="font-semibold">{formatDualCurrency(safeTotalOut)}</span>
+                  </div>
+                  <div className="mt-2 border-t border-border/70 pt-2 text-xs">
+                    <div className="flex items-center justify-between text-muted-foreground">
+                      <span>Supplier unpaid</span>
+                      <span className="font-semibold text-orange-700">
+                        {formatDualCurrency(implantSupplierData.totalUnpaid)}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between text-muted-foreground">
+                      <span>Supplier paid</span>
+                      <span className="font-semibold text-emerald-700">
+                        {formatDualCurrency(implantSupplierData.totalPaid)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border border-border/80 bg-gradient-to-br from-slate-50 via-background to-slate-100">
+            <CardContent className="p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-sm font-semibold">Recent Safe Activity</p>
+                <span className="text-xs text-muted-foreground">
+                  {recentSafeTransactions.length} entries
+                </span>
+              </div>
+              <div className="space-y-2">
+                {recentSafeTransactions.length === 0 ? (
+                  <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                    No safe transactions yet.
+                  </p>
                 ) : (
-                  topSafePickups.map((row) => (
-                    <div key={`safe-pickup-${row.name}`} className="flex items-center justify-between text-xs">
-                      <span className="truncate text-muted-foreground">{row.name}</span>
-                      <span className="font-semibold">{formatDualCurrency(row.amount)}</span>
+                  recentSafeTransactions.map((entry) => (
+                    <div key={entry.id} className="rounded-xl border bg-white/90 p-3 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold capitalize">
+                          {entry.entryType.replaceAll('_', ' ')}
+                        </span>
+                        <span
+                          className={cn(
+                            'rounded-full px-2 py-0.5 font-semibold',
+                            normalizeStatus(entry.direction) === 'in'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-orange-100 text-orange-800'
+                          )}
+                        >
+                          {entry.direction.toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between text-muted-foreground">
+                        <span>{entry.transactionDate || '-'}</span>
+                        <span className="font-semibold text-foreground">
+                          {formatDualCurrency(entry.amount)}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-muted-foreground">
+                        {entry.pickedByStaffName
+                          ? `By: ${entry.pickedByStaffName}`
+                          : entry.notes || '-'}
+                      </p>
                     </div>
                   ))
                 )}
               </div>
-              <div className="rounded-lg border bg-white/90 p-3">
-                <p className="mb-1 text-xs font-medium text-muted-foreground">Net Position</p>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="inline-flex items-center gap-1 text-emerald-700">
-                    <ArrowDownLeft className="size-3.5" />
-                    Inflow
-                  </span>
-                  <span className="font-semibold">{formatDualCurrency(safeTotalIn)}</span>
-                </div>
-                <div className="mt-1 flex items-center justify-between text-xs">
-                  <span className="inline-flex items-center gap-1 text-orange-700">
-                    <ArrowUpRight className="size-3.5" />
-                    Outflow
-                  </span>
-                  <span className="font-semibold">{formatDualCurrency(safeTotalOut)}</span>
-                </div>
-                <div className="mt-2 border-t border-border/70 pt-2 text-xs">
-                  <div className="flex items-center justify-between text-muted-foreground">
-                    <span>Supplier unpaid</span>
-                    <span className="font-semibold text-orange-700">{formatDualCurrency(implantSupplierData.totalUnpaid)}</span>
-                  </div>
-                  <div className="mt-1 flex items-center justify-between text-muted-foreground">
-                    <span>Supplier paid</span>
-                    <span className="font-semibold text-emerald-700">{formatDualCurrency(implantSupplierData.totalPaid)}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl border border-border/80 bg-gradient-to-br from-slate-50 via-background to-slate-100">
-          <CardContent className="p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-sm font-semibold">Recent Safe Activity</p>
-              <span className="text-xs text-muted-foreground">{recentSafeTransactions.length} entries</span>
-            </div>
-            <div className="space-y-2">
-              {recentSafeTransactions.length === 0 ? (
-                <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-                  No safe transactions yet.
-                </p>
-              ) : (
-                recentSafeTransactions.map((entry) => (
-                  <div key={entry.id} className="rounded-xl border bg-white/90 p-3 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold capitalize">{entry.entryType.replaceAll('_', ' ')}</span>
-                      <span className={cn(
-                        'rounded-full px-2 py-0.5 font-semibold',
-                        normalizeStatus(entry.direction) === 'in'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-orange-100 text-orange-800'
-                      )}
-                      >
-                        {entry.direction.toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="mt-1 flex items-center justify-between text-muted-foreground">
-                      <span>{entry.transactionDate || '-'}</span>
-                      <span className="font-semibold text-foreground">{formatDualCurrency(entry.amount)}</span>
-                    </div>
-                    <p className="mt-1 text-muted-foreground">
-                      {entry.pickedByStaffName ? `By: ${entry.pickedByStaffName}` : entry.notes || '-'}
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       </section>
-
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="rounded-2xl border">
-          <CardContent className="p-4">
-            <div className="mb-2 flex items-center gap-2">
-              <Activity className="size-4 text-primary" />
-              <p className="text-sm font-semibold">Visit Performance</p>
-            </div>
-            <p className="text-3xl font-semibold">{completionRate}%</p>
-            <p className="text-xs text-muted-foreground">Completed appointments ratio</p>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl border">
-          <CardContent className="p-4">
-            <div className="mb-2 flex items-center gap-2">
-              <CalendarDays className="size-4 text-primary" />
-              <p className="text-sm font-semibold">Calendar Coverage</p>
-            </div>
-            <p className="text-3xl font-semibold">{eventCountByDate.size}</p>
-            <p className="text-xs text-muted-foreground">Days with any scheduled record</p>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl border">
-          <CardContent className="p-4">
-            <div className="mb-2 flex items-center gap-2">
-              <UsersRound className="size-4 text-primary" />
-              <p className="text-sm font-semibold">Patient Pool</p>
-            </div>
-            <p className="text-3xl font-semibold">{patients.length}</p>
-            <p className="text-xs text-muted-foreground">Registered patients in current feed</p>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl border">
-          <CardContent className="p-4">
-            <div className="mb-2 flex items-center gap-2">
-              <Building2 className="size-4 text-primary" />
-              <p className="text-sm font-semibold">Supplier Unpaid</p>
-            </div>
-            <p className="text-3xl font-semibold">{formatDualCurrency(implantSupplierData.totalUnpaid)}</p>
-            <p className="text-xs text-muted-foreground">
-              {implantSupplierData.unpaidCount} implant teeth still unpaid
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="rounded-2xl border">
-        <CardContent className="grid gap-4 p-4 md:grid-cols-4">
-          <div className="rounded-xl border bg-background p-3">
-            <div className="mb-1 flex items-center gap-1 text-xs text-muted-foreground">
-              <ClipboardList className="size-3.5" />
-              Appointments
-            </div>
-            <p className="text-xl font-semibold">{appointmentCount}</p>
-          </div>
-          <div className="rounded-xl border bg-background p-3">
-            <div className="mb-1 flex items-center gap-1 text-xs text-muted-foreground">
-              <Clock3 className="size-3.5" />
-              Scheduled
-            </div>
-            <p className="text-xl font-semibold">{scheduledAppointmentCount}</p>
-          </div>
-          <div className="rounded-xl border bg-background p-3">
-            <div className="mb-1 flex items-center gap-1 text-xs text-muted-foreground">
-              <Activity className="size-3.5" />
-              Completed
-            </div>
-            <p className="text-xl font-semibold">{completedAppointmentCount}</p>
-          </div>
-          <div className="rounded-xl border bg-background p-3">
-            <div className="mb-1 flex items-center gap-1 text-xs text-muted-foreground">
-              <CalendarDays className="size-3.5" />
-              Cancelled
-            </div>
-            <p className="text-xl font-semibold">{cancelledAppointmentCount}</p>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 };
-

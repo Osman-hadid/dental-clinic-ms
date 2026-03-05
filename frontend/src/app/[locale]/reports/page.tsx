@@ -235,6 +235,25 @@ type InventoryReportRow = {
   updatedAt: string;
 };
 
+type InventoryUsageReportRow = {
+  inventoryItemId: string;
+  itemName: string;
+  patientId: string;
+  patientName: string;
+  quantityUsed: number;
+  treatmentName: string;
+  unit: string;
+  usedOn: string;
+  visitLabel: string;
+};
+
+type VisitTreatmentReportRow = VisitTreatment & {
+  materialItems?: Array<Record<string, unknown>>;
+  prescription?: VisitTreatment['prescription'];
+  treatment?: { category?: string; name?: string };
+  visit?: { dentistName?: string; visitDate?: string };
+};
+
 type FinancialModificationLogRow = {
   action: string;
   afterValue: string;
@@ -349,6 +368,65 @@ const escapeHtml = (value: unknown): string => {
     .replaceAll("'", '&#039;');
 };
 
+const PRESCRIPTION_FOOD_TIMING_LABELS: Record<'after_food' | 'anytime' | 'before_food' | 'with_food', string> = {
+  after_food: 'After food',
+  anytime: 'Anytime',
+  before_food: 'Before food',
+  with_food: 'With food',
+};
+
+const formatPrescriptionSummary = (prescription?: VisitTreatment['prescription']): string => {
+  if (!prescription) return '-';
+
+  const formatSingle = (source: Partial<{
+    amount: string;
+    foodTiming: string;
+    frequency: string;
+    name: string;
+  }>): string => {
+    const name = asText(source.name);
+    const amount = asText(source.amount);
+    const frequency = asText(source.frequency);
+    const foodTimingKey = asText(source.foodTiming) as keyof typeof PRESCRIPTION_FOOD_TIMING_LABELS;
+    const foodTiming = PRESCRIPTION_FOOD_TIMING_LABELS[foodTimingKey] ?? asText(source.foodTiming);
+
+    if (!name && !amount && !frequency && !foodTiming) {
+      return '';
+    }
+
+    const dose = amount;
+    const parts = [
+      name ? (dose ? `${name} (${dose})` : name) : dose,
+      frequency,
+      foodTiming,
+    ].filter(Boolean);
+
+    return parts.join(', ');
+  };
+
+  if (Array.isArray(prescription.items) && prescription.items.length > 0) {
+    const rows = prescription.items
+      .map((item) => formatSingle(item))
+      .filter(Boolean);
+    if (rows.length > 0) {
+      return rows.join('; ');
+    }
+  }
+
+  const single = formatSingle({
+    amount: prescription.amount,
+    foodTiming: prescription.foodTiming,
+    frequency: prescription.frequency,
+    name: prescription.name,
+  });
+
+  if (single !== '') {
+    return single;
+  }
+
+  return asText(prescription.content) || '-';
+};
+
 const toBucket = (date: Date, granularity: ReportGranularity): { key: string; label: string; sort: number } => {
   if (granularity === 'month') {
     const year = date.getFullYear();
@@ -421,6 +499,25 @@ const inRange = (value: string, startDate: string, endDate: string): boolean => 
   return parsed.getTime() >= start.getTime() && parsed.getTime() <= end.getTime() + MS_PER_DAY - 1;
 };
 
+const isImplantTreatmentRow = (row: Pick<VisitTreatmentReportRow, 'notes' | 'treatment'>): boolean => {
+  const treatmentName = asText(row.treatment?.name).toLowerCase();
+  if (treatmentName.includes('implant')) {
+    return true;
+  }
+
+  const treatmentCategory = asText(row.treatment?.category).toLowerCase();
+  if (treatmentCategory.includes('implant')) {
+    return true;
+  }
+
+  const notes = asText(row.notes).toLowerCase();
+  if (notes.includes('[condition:implant]')) {
+    return true;
+  }
+
+  return /\bimplant\b/.test(notes);
+};
+
 const isImplantAvailabilityStatus = (value: string): value is ImplantAvailabilityStatus => (
   value === 'not_available' || value === 'in_purchase' || value === 'available' || value === 'done'
 );
@@ -428,6 +525,14 @@ const isImplantAvailabilityStatus = (value: string): value is ImplantAvailabilit
 const isDebtAgingBucket = (value: string): value is DebtAgingBucket => (
   DEBT_AGING_BUCKETS.includes(value as DebtAgingBucket)
 );
+
+const allocateRevenueCost = (amount: number, totalOutcome: number, referenceNet: number): number => {
+  if (amount <= 0 || totalOutcome <= 0 || referenceNet <= 0) {
+    return 0;
+  }
+
+  return Number(((amount * totalOutcome) / referenceNet).toFixed(2));
+};
 
 const toDebtAgingBucket = (invoiceDate: string, endDate: string): DebtAgingBucket | null => {
   const end = parseDate(endDate);
@@ -481,21 +586,34 @@ const fetchPatientSessionTasks = async (patientIds: string[]): Promise<ImplantSu
     const batch = patientIds.slice(index, index + batchSize);
     const batchResponses = await Promise.all(
       batch.map(async (patientId) => {
-        const response = await apiClient.get<Array<Record<string, unknown>>>(
-          `/api/v1/dental-management/patients/${patientId}/session-tasks`
-        );
-        if (!response.success || !Array.isArray(response.data)) {
+        try {
+          const response = await apiClient.get<Array<Record<string, unknown>> | { data?: Array<Record<string, unknown>> }>(
+            `/api/v1/dental-management/patients/${patientId}/session-tasks`
+          );
+          if (!response.success) {
+            return [] as ImplantSupplierTaskLike[];
+          }
+
+          const payload = response.data;
+          const tasks = Array.isArray(payload)
+            ? payload
+            : (Array.isArray(payload?.data) ? payload.data : []);
+          if (tasks.length === 0) {
+            return [] as ImplantSupplierTaskLike[];
+          }
+
+          return tasks.map((task) => ({
+            createdAt: asText(task.createdAt ?? task.created_at),
+            id: asText(task.id),
+            notes: asText(task.notes),
+            patientId: asText(task.patientId ?? task.patient_id) || patientId,
+            status: asText(task.status),
+            title: asText(task.title),
+            updatedAt: asText(task.updatedAt ?? task.updated_at),
+          }));
+        } catch {
           return [] as ImplantSupplierTaskLike[];
         }
-
-        return response.data.map((task) => ({
-          createdAt: asText(task.createdAt ?? task.created_at),
-          id: asText(task.id),
-          notes: asText(task.notes),
-          patientId,
-          status: asText(task.status),
-          title: asText(task.title),
-        }));
       })
     );
 
@@ -566,10 +684,7 @@ export default function ReportsPage(): JSX.Element {
   const [allAppointmentsRows, setAllAppointmentsRows] = useState<Appointment[]>([]);
   const [allVisitsRows, setAllVisitsRows] = useState<Visit[]>([]);
   const [allInvoiceRows, setAllInvoiceRows] = useState<Array<Record<string, unknown>>>([]);
-  const [allVisitTreatmentRows, setAllVisitTreatmentRows] = useState<Array<VisitTreatment & {
-    treatment?: { name?: string };
-    visit?: { dentistName?: string; visitDate?: string };
-  }>>([]);
+  const [allVisitTreatmentRows, setAllVisitTreatmentRows] = useState<VisitTreatmentReportRow[]>([]);
   const [allPatientNameRows, setAllPatientNameRows] = useState<Record<string, string>>({});
   const [isLoadingCoreData, setIsLoadingCoreData] = useState(false);
   const [isLoadingFinanceData, setIsLoadingFinanceData] = useState(false);
@@ -637,7 +752,7 @@ export default function ReportsPage(): JSX.Element {
     MAX_PER_PAGE,
     '',
     [],
-    ['treatment', 'visit'],
+    ['treatment', 'visit', 'materialItems', 'prescription', 'prescription.items'],
     {}
   );
 
@@ -657,10 +772,7 @@ export default function ReportsPage(): JSX.Element {
     () => (
       allVisitTreatmentRows.length > 0
         ? allVisitTreatmentRows
-        : (visitTreatments as Array<VisitTreatment & {
-          treatment?: { name?: string };
-          visit?: { dentistName?: string; visitDate?: string };
-        }>)
+        : (visitTreatments as VisitTreatmentReportRow[])
     ),
     [allVisitTreatmentRows, visitTreatments]
   );
@@ -710,7 +822,7 @@ export default function ReportsPage(): JSX.Element {
           sortDirection: 'desc',
         }),
         fetchAllRows('/api/v1/dental-management/visit-treatments', {
-          include: ['treatment', 'visit'],
+          include: ['treatment', 'visit', 'materialItems', 'prescription', 'prescription.items'],
           sortBy: 'createdAt',
           sortDirection: 'desc',
         }),
@@ -720,10 +832,7 @@ export default function ReportsPage(): JSX.Element {
       setAllAppointmentsRows(appointmentItems as Appointment[]);
       setAllVisitsRows(visitItems as Visit[]);
       setAllInvoiceRows(invoiceItems);
-      setAllVisitTreatmentRows(visitTreatmentItems as Array<VisitTreatment & {
-        treatment?: { name?: string };
-        visit?: { dentistName?: string; visitDate?: string };
-      }>);
+      setAllVisitTreatmentRows(visitTreatmentItems as VisitTreatmentReportRow[]);
     } finally {
       setIsLoadingCoreData(false);
     }
@@ -934,10 +1043,10 @@ export default function ReportsPage(): JSX.Element {
   const filteredImplantSupplierTasks = useMemo(
     () =>
       implantSupplierTasks.filter((task) => {
-        const createdAt = asText(task.createdAt);
+        const taskDate = asText(task.updatedAt) || asText(task.createdAt);
         const availability = parseAvailabilityFromTaskNotes(task.notes, task.status);
-        if (!createdAt) return true;
-        if (!inRange(createdAt, startDate, endDate)) return false;
+        if (!taskDate) return true;
+        if (!inRange(taskDate, startDate, endDate)) return false;
         if (selectedPatientFilter !== 'all' && asText(task.patientId) !== selectedPatientFilter) return false;
         if (globalStatusFilter !== 'all') {
           const mappedStatus: ReportStatusFilter = availability === 'done' ? 'completed' : 'pending';
@@ -972,6 +1081,12 @@ export default function ReportsPage(): JSX.Element {
       : thirdCompanySummary.unpaidRows.filter((row) => row.availability === selectedThirdCompanyAvailability);
     return rows;
   }, [selectedThirdCompanyAvailability, thirdCompanySummary.unpaidRows]);
+  const thirdCompanyInstallmentRows = useMemo(() => {
+    const rows = selectedThirdCompanyAvailability === 'all'
+      ? thirdCompanySummary.rows
+      : thirdCompanySummary.rows.filter((row) => row.availability === selectedThirdCompanyAvailability);
+    return rows;
+  }, [selectedThirdCompanyAvailability, thirdCompanySummary.rows]);
 
   const parsedData = useMemo(() => {
     const allPayments: ParsedPayment[] = [];
@@ -1408,6 +1523,11 @@ export default function ReportsPage(): JSX.Element {
     () => inventoryRows.filter((row) => inRange(row.entryDate, startDate, endDate)),
     [endDate, inventoryRows, startDate]
   );
+  const inventoryRowsById = useMemo(
+    () => new Map(inventoryRows.map((row) => [row.id, row])),
+    [inventoryRows]
+  );
+  const totalInventoryItemsInDatabase = inventoryRows.length;
 
   const stockStatusRows = useMemo(() => {
     return inventoryRowsInRange.map((row) => {
@@ -1441,6 +1561,77 @@ export default function ReportsPage(): JSX.Element {
       }))
       .sort((left, right) => right.totalCost - left.totalCost);
   }, [filteredVisitTreatments]);
+  const inventoryUsageRows = useMemo<InventoryUsageReportRow[]>(() => {
+    const rows: InventoryUsageReportRow[] = [];
+
+    filteredVisitTreatments.forEach((row) => {
+      const treatmentName = row.treatment?.name || `Treatment ${row.treatmentId}`;
+      const visitId = asText(row.visitId);
+      const visit = visitById.get(visitId);
+      const patientId = asText(visit?.patientId);
+      const patientName = mergedPatientNameById.get(patientId) || (patientId ? `Patient #${patientId}` : 'Unknown');
+      const usedOn = asText(row.visit?.visitDate) || asText(visit?.visitDate) || asText(row.createdAt);
+      const visitLabel = visit ? (visit.tag || `Visit #${visit.id}`) : (visitId ? `Visit #${visitId}` : '-');
+
+      const materialItems = Array.isArray(row.materialItems) ? row.materialItems : [];
+      materialItems.forEach((item) => {
+        const materialItem = item as Record<string, unknown>;
+        const inventoryItemId = asText(materialItem.inventoryItemId ?? materialItem.inventory_item_id);
+        const quantity = parseAmount(materialItem.quantityUsed ?? materialItem.quantity_used ?? materialItem.quantity);
+        if (!inventoryItemId || quantity <= 0) return;
+
+        const inventoryRow = inventoryRowsById.get(inventoryItemId);
+        const itemName = asText(materialItem.itemName ?? materialItem.item_name) || inventoryRow?.itemName || `Item #${inventoryItemId}`;
+        const unit = asText(materialItem.unit) || inventoryRow?.unit || 'unit';
+
+        rows.push({
+          inventoryItemId,
+          itemName,
+          patientId,
+          patientName,
+          quantityUsed: quantity,
+          treatmentName,
+          unit,
+          usedOn,
+          visitLabel,
+        });
+      });
+    });
+
+    return rows.sort((left, right) => {
+      const leftDate = parseDate(left.usedOn)?.getTime() ?? 0;
+      const rightDate = parseDate(right.usedOn)?.getTime() ?? 0;
+      if (leftDate !== rightDate) return rightDate - leftDate;
+      return left.itemName.localeCompare(right.itemName, undefined, { sensitivity: 'base' });
+    });
+  }, [filteredVisitTreatments, inventoryRowsById, mergedPatientNameById, visitById]);
+  const clinicalPrescriptionRows = useMemo(() => {
+    return filteredVisitTreatments
+      .map((row) => {
+        const summary = formatPrescriptionSummary(row.prescription);
+        if (!summary || summary === '-') {
+          return null;
+        }
+
+        const visitId = asText(row.visitId);
+        const visit = visitById.get(visitId);
+        const patientId = asText(visit?.patientId);
+        return {
+          dentist: asText(row.visit?.dentistName) || asText(visit?.dentistName) || '-',
+          patientName: mergedPatientNameById.get(patientId) || (patientId ? `Patient #${patientId}` : 'Unknown'),
+          prescription: summary,
+          treatmentName: row.treatment?.name || `Treatment ${row.treatmentId}`,
+          visitDate: asText(row.visit?.visitDate) || asText(visit?.visitDate) || asText(row.createdAt),
+        };
+      })
+      .filter((row): row is {
+        dentist: string;
+        patientName: string;
+        prescription: string;
+        treatmentName: string;
+        visitDate: string;
+      } => row !== null);
+  }, [filteredVisitTreatments, mergedPatientNameById, visitById]);
 
   const implantInventoryRows = useMemo(
     () => inventoryRowsInRange.filter((row) => row.category.toLowerCase() === 'implant'),
@@ -1450,8 +1641,7 @@ export default function ReportsPage(): JSX.Element {
   const implantPlacementTrend = useMemo(() => {
     const grouped = new Map<string, { count: number; label: string; revenue: number; sort: number }>();
     filteredVisitTreatments.forEach((row) => {
-      const treatmentName = (row.treatment?.name || '').toLowerCase();
-      if (!treatmentName.includes('implant')) return;
+      if (!isImplantTreatmentRow(row)) return;
       const date = parseDate(row.visit?.visitDate || row.createdAt);
       if (!date) return;
       const bucket = toBucket(date, 'month');
@@ -1765,39 +1955,39 @@ export default function ReportsPage(): JSX.Element {
 
   const revenueByTreatmentRows = useMemo(() => {
     return treatmentVolume.map((row) => ({
-      cost: '-',
+      cost: formatCurrency(allocateRevenueCost(row.revenue, totalOutcome, kpis.net)),
       count: row.sessions,
       discount: formatCurrency(0),
       gross: formatCurrency(row.revenue),
       label: row.name,
       net: formatCurrency(row.revenue),
-      profit: 'Backend locked',
+      profit: formatCurrency(Number((row.revenue - allocateRevenueCost(row.revenue, totalOutcome, kpis.net)).toFixed(2))),
     }));
-  }, [treatmentVolume]);
+  }, [kpis.net, totalOutcome, treatmentVolume]);
 
   const revenueByDentistRows = useMemo(() => {
     return dentistProductivity.map((row) => ({
-      cost: '-',
+      cost: formatCurrency(allocateRevenueCost(row.revenue, totalOutcome, kpis.net)),
       count: row.visits,
       discount: formatCurrency(0),
       gross: formatCurrency(row.revenue),
       label: row.dentist,
       net: formatCurrency(row.revenue),
-      profit: 'Backend locked',
+      profit: formatCurrency(Number((row.revenue - allocateRevenueCost(row.revenue, totalOutcome, kpis.net)).toFixed(2))),
     }));
-  }, [dentistProductivity]);
+  }, [dentistProductivity, kpis.net, totalOutcome]);
 
   const revenueByPaymentMethodRows = useMemo(() => {
     return paymentMethodMix.map((row) => ({
-      cost: '-',
+      cost: formatCurrency(allocateRevenueCost(row.amount, totalOutcome, kpis.net)),
       count: row.count,
       discount: formatCurrency(0),
       gross: formatCurrency(row.amount),
       label: toHumanLabel(row.method),
       net: formatCurrency(row.amount),
-      profit: 'Backend locked',
+      profit: formatCurrency(Number((row.amount - allocateRevenueCost(row.amount, totalOutcome, kpis.net)).toFixed(2))),
     }));
-  }, [paymentMethodMix]);
+  }, [kpis.net, paymentMethodMix, totalOutcome]);
 
   const revenueByPatientRows = useMemo(() => {
     const grouped = new Map<string, { count: number; discount: number; gross: number; net: number }>();
@@ -1811,15 +2001,15 @@ export default function ReportsPage(): JSX.Element {
       grouped.set(key, current);
     });
     return [...grouped.entries()].map(([patientId, row]) => ({
-      cost: '-',
+      cost: formatCurrency(allocateRevenueCost(row.net, totalOutcome, kpis.net)),
       count: row.count,
       discount: formatCurrency(row.discount),
       gross: formatCurrency(row.gross),
       label: mergedPatientNameById.get(patientId) || `Patient #${patientId}`,
       net: formatCurrency(row.net),
-      profit: 'Backend locked',
+      profit: formatCurrency(Number((row.net - allocateRevenueCost(row.net, totalOutcome, kpis.net)).toFixed(2))),
     }));
-  }, [filteredInvoices, mergedPatientNameById]);
+  }, [filteredInvoices, kpis.net, mergedPatientNameById, totalOutcome]);
 
   const treatmentPerformanceSummary = useMemo(() => {
     const completedTreatments = filteredVisitTreatments.length;
@@ -2363,10 +2553,21 @@ export default function ReportsPage(): JSX.Element {
         <table><thead><tr><th>Patient</th><th>Brand</th><th>Placement Date</th><th>Failures</th><th>Warranty</th></tr></thead><tbody>
           ${implantSuccessRows.map((row) => `<tr><td>${escapeHtml(row.patientName)}</td><td>${escapeHtml(row.brand)}</td><td>${escapeHtml(formatFullDate(row.placementDate))}</td><td>${row.failures}</td><td>${escapeHtml(row.warrantyTracking)}</td></tr>`).join('')}
         </tbody></table>
+        <h3>Prescriptions</h3>
+        <table><thead><tr><th>Date</th><th>Patient</th><th>Treatment</th><th>Dentist</th><th>Prescription</th></tr></thead><tbody>
+          ${clinicalPrescriptionRows.length === 0
+    ? '<tr><td colspan="5">No prescription data in selected range.</td></tr>'
+    : clinicalPrescriptionRows.map((row) => `<tr><td>${escapeHtml(formatFullDate(row.visitDate))}</td><td>${escapeHtml(row.patientName)}</td><td>${escapeHtml(row.treatmentName)}</td><td>${escapeHtml(row.dentist)}</td><td>${escapeHtml(row.prescription)}</td></tr>`).join('')}
+        </tbody></table>
       `;
     }
     if (activeTab === 'inventory') {
       bodySections = `
+        <h3>Inventory Summary</h3>
+        <table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>
+          <tr><td>Total Items in Database</td><td>${totalInventoryItemsInDatabase}</td></tr>
+          <tr><td>Total Usage Rows (Selected Range)</td><td>${inventoryUsageRows.length}</td></tr>
+        </tbody></table>
         <h3>Stock Status</h3>
         <table><thead><tr><th>Item</th><th>In Stock</th><th>Min</th><th>Expiry</th><th>Status</th></tr></thead><tbody>
           ${stockStatusRows.map((row) => `<tr><td>${escapeHtml(row.itemName)}</td><td>${row.quantity}</td><td>${row.minStock}</td><td>${escapeHtml(formatFullDate(row.expiryDate))}</td><td>${escapeHtml(row.status)}</td></tr>`).join('')}
@@ -2378,6 +2579,12 @@ export default function ReportsPage(): JSX.Element {
         <h3>Implant Inventory</h3>
         <table><thead><tr><th>Item</th><th>Batch / Serial</th><th>Qty</th><th>Supplier</th><th>Entry Date</th><th>Expiry</th></tr></thead><tbody>
           ${implantInventoryRows.map((row) => `<tr><td>${escapeHtml(row.itemName)}</td><td>${escapeHtml(row.lotNumber || '-')}</td><td>${row.quantity}</td><td>${escapeHtml(row.supplier || '-')}</td><td>${escapeHtml(formatFullDate(row.entryDate))}</td><td>${escapeHtml(formatFullDate(row.expiryDate))}</td></tr>`).join('')}
+        </tbody></table>
+        <h3>Inventory Usage by Patient</h3>
+        <table><thead><tr><th>Date</th><th>Item</th><th>Qty Used</th><th>Patient</th><th>Treatment</th><th>Visit</th></tr></thead><tbody>
+          ${inventoryUsageRows.length === 0
+    ? '<tr><td colspan="6">No inventory usage data in selected range.</td></tr>'
+    : inventoryUsageRows.map((row) => `<tr><td>${escapeHtml(formatFullDate(row.usedOn))}</td><td>${escapeHtml(row.itemName)}</td><td>${escapeHtml(`${row.quantityUsed} ${row.unit}`)}</td><td>${escapeHtml(row.patientName)}</td><td>${escapeHtml(row.treatmentName)}</td><td>${escapeHtml(row.visitLabel)}</td></tr>`).join('')}
         </tbody></table>
       `;
     }
@@ -2782,6 +2989,7 @@ export default function ReportsPage(): JSX.Element {
         notes: string;
         outcome: string;
         patientId: string;
+        prescriptions: Set<string>;
         procedureType: string;
         sessions: number;
         startDate: string;
@@ -2800,6 +3008,7 @@ export default function ReportsPage(): JSX.Element {
         const diagnosis = asText((visit as unknown as Record<string, unknown> | undefined)?.diagnosis) || '-';
         const procedureType = asText((row.treatment as unknown as Record<string, unknown> | undefined)?.category) || 'General';
         const treatmentNotes = asText((row as unknown as Record<string, unknown>).notes);
+        const prescription = formatPrescriptionSummary(row.prescription);
         const materialCost = parseAmount(
           (row as unknown as Record<string, unknown>).materialCost
           ?? (row as unknown as Record<string, unknown>).material_cost
@@ -2814,6 +3023,7 @@ export default function ReportsPage(): JSX.Element {
           notes: treatmentNotes || '-',
           outcome: status.toLowerCase() === 'completed' ? 'Successful' : '-',
           patientId,
+          prescriptions: new Set<string>(),
           procedureType,
           sessions: 0,
           startDate: visitDate,
@@ -2831,6 +3041,9 @@ export default function ReportsPage(): JSX.Element {
         current.sessions += 1;
         current.totalCost = Number((current.totalCost + parseAmount(row.price)).toFixed(2));
         current.materialCost = Number((current.materialCost + materialCost).toFixed(2));
+        if (prescription && prescription !== '-') {
+          current.prescriptions.add(prescription);
+        }
         grouped.set(key, current);
       });
 
@@ -2846,6 +3059,7 @@ export default function ReportsPage(): JSX.Element {
         'Treatment Status': row.status,
         'Total Cost': formatCsvAmount(row.totalCost),
         'Material Used Cost': formatCsvAmount(row.materialCost),
+        Prescription: row.prescriptions.size > 0 ? [...row.prescriptions].join(' | ') : '-',
         Outcome: row.outcome,
         'Notes (Optional)': row.notes,
       }));
@@ -2862,6 +3076,7 @@ export default function ReportsPage(): JSX.Element {
         'Treatment Status': '-',
         'Total Cost': '-',
         'Material Used Cost': '-',
+        Prescription: '-',
         Outcome: '-',
         'Notes (Optional)': '-',
       }]);
@@ -2869,20 +3084,61 @@ export default function ReportsPage(): JSX.Element {
     }
 
     if (csvExportType === 'inventory_stock') {
-      const rows = stockStatusRows.map((row) => ({
-        'Item ID': row.id || '-',
-        'Item Name': row.itemName,
-        Category: toHumanLabel(row.category),
-        Supplier: row.supplier || '-',
-        'Purchase Price': formatCsvAmount(row.unitCost),
-        'Selling Price': formatCsvAmount(row.sellingPrice),
-        'Current Stock': row.quantity,
-        'Minimum Level': row.minStock,
-        'Expiry Date': formatFullDate(row.expiryDate),
-        'Batch Number': row.lotNumber || '-',
-        'Last Updated': formatFullDate(row.updatedAt || row.entryDate),
-        'Stock Status': row.status,
-      }));
+      const usageByItemId = new Map<string, InventoryUsageReportRow[]>();
+      inventoryUsageRows.forEach((row) => {
+        const list = usageByItemId.get(row.inventoryItemId) ?? [];
+        list.push(row);
+        usageByItemId.set(row.inventoryItemId, list);
+      });
+
+      const rows: Array<Record<string, string | number>> = [];
+      stockStatusRows.forEach((row) => {
+        const usageRows = usageByItemId.get(row.id) ?? [];
+        if (usageRows.length === 0) {
+          rows.push({
+            'Item ID': row.id || '-',
+            'Item Name': row.itemName,
+            Category: toHumanLabel(row.category),
+            Supplier: row.supplier || '-',
+            'Purchase Price': formatCsvAmount(row.unitCost),
+            'Selling Price': formatCsvAmount(row.sellingPrice),
+            'Current Stock': row.quantity,
+            'Minimum Level': row.minStock,
+            'Expiry Date': formatFullDate(row.expiryDate),
+            'Batch Number': row.lotNumber || '-',
+            'Last Updated': formatFullDate(row.updatedAt || row.entryDate),
+            'Stock Status': row.status,
+            'Usage Date': '-',
+            'Usage Qty': 0,
+            'Used For Treatment': '-',
+            'Used For Patient': '-',
+            'Visit': '-',
+          });
+          return;
+        }
+
+        usageRows.forEach((usage) => {
+          rows.push({
+            'Item ID': row.id || '-',
+            'Item Name': row.itemName,
+            Category: toHumanLabel(row.category),
+            Supplier: row.supplier || '-',
+            'Purchase Price': formatCsvAmount(row.unitCost),
+            'Selling Price': formatCsvAmount(row.sellingPrice),
+            'Current Stock': row.quantity,
+            'Minimum Level': row.minStock,
+            'Expiry Date': formatFullDate(row.expiryDate),
+            'Batch Number': row.lotNumber || '-',
+            'Last Updated': formatFullDate(row.updatedAt || row.entryDate),
+            'Stock Status': row.status,
+            'Usage Date': formatFullDate(usage.usedOn),
+            'Usage Qty': `${usage.quantityUsed} ${usage.unit}`,
+            'Used For Treatment': usage.treatmentName,
+            'Used For Patient': usage.patientName,
+            Visit: usage.visitLabel,
+          });
+        });
+      });
 
       downloadCsv(`inventory-stock-${startDate}-to-${endDate}.csv`, rows.length > 0 ? rows : [{
         'Item ID': 'No data',
@@ -2897,6 +3153,11 @@ export default function ReportsPage(): JSX.Element {
         'Batch Number': '-',
         'Last Updated': '-',
         'Stock Status': '-',
+        'Usage Date': '-',
+        'Usage Qty': '-',
+        'Used For Treatment': '-',
+        'Used For Patient': '-',
+        Visit: '-',
       }]);
       return;
     }
@@ -3388,6 +3649,13 @@ export default function ReportsPage(): JSX.Element {
     }
 
     if (activeTab === 'inventory') {
+      addRow({
+        Name: 'Inventory Summary',
+        Notes: `Total Items in Database: ${totalInventoryItemsInDatabase} | Usage Rows in Range: ${inventoryUsageRows.length}`,
+        Quantity: totalInventoryItemsInDatabase,
+        Section: 'Inventory',
+        Subsection: 'Summary',
+      });
       stockStatusRows.forEach((row) => {
         addRow({
           Date: formatFullDate(row.expiryDate),
@@ -3423,6 +3691,18 @@ export default function ReportsPage(): JSX.Element {
           Section: 'Inventory',
           Subsection: 'Implant Inventory',
           Treatment: 'Implant',
+        });
+      });
+      inventoryUsageRows.forEach((row) => {
+        addRow({
+          Date: formatFullDate(row.usedOn),
+          Name: row.itemName,
+          Notes: `Visit: ${row.visitLabel} | Qty Used: ${row.quantityUsed} ${row.unit}`,
+          Patient: row.patientName,
+          Quantity: row.quantityUsed,
+          Section: 'Inventory',
+          Subsection: 'Usage by Patient',
+          Treatment: row.treatmentName,
         });
       });
     }
@@ -4343,7 +4623,7 @@ export default function ReportsPage(): JSX.Element {
                   <CardTitle className="text-base">Implant Installment Report</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {thirdCompanyUnpaidRows.length === 0 ? (
+                  {thirdCompanyInstallmentRows.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No implant installment rows.</p>
                   ) : (
                     <div className="overflow-x-auto rounded-md border border-border/70">
@@ -4352,6 +4632,7 @@ export default function ReportsPage(): JSX.Element {
                           <tr>
                             <th className="px-2 py-2 text-left font-semibold">Patient</th>
                             <th className="px-2 py-2 text-left font-semibold">Implant Brand</th>
+                            <th className="px-2 py-2 text-left font-semibold">Status</th>
                             <th className="px-2 py-2 text-right font-semibold">Total</th>
                             <th className="px-2 py-2 text-right font-semibold">Paid</th>
                             <th className="px-2 py-2 text-right font-semibold">Remaining</th>
@@ -4359,14 +4640,15 @@ export default function ReportsPage(): JSX.Element {
                           </tr>
                         </thead>
                         <tbody>
-                          {thirdCompanyUnpaidRows.map((row) => (
+                          {thirdCompanyInstallmentRows.map((row) => (
                             <tr key={`implant-installment-${row.taskId}-${row.toothNumber}`} className="border-t border-border/70">
                               <td className="px-2 py-2">{mergedPatientNameById.get(row.patientId) || `Patient #${row.patientId || '-'}`}</td>
                               <td className="px-2 py-2">{row.toothNumber || 'Implant'}</td>
+                              <td className="px-2 py-2">{toHumanLabel(row.availability)}</td>
                               <td className="px-2 py-2 text-right">{formatCurrency(row.supplierTotal)}</td>
                               <td className="px-2 py-2 text-right">{formatCurrency(row.supplierPaid)}</td>
                               <td className="px-2 py-2 text-right">{formatCurrency(row.supplierRemaining)}</td>
-                              <td className="px-2 py-2">Pending</td>
+                              <td className="px-2 py-2">{row.supplierRemaining > 0 ? 'Pending' : 'Cleared'}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -4461,56 +4743,63 @@ export default function ReportsPage(): JSX.Element {
                       </>
                     ) : null}
                   </div>
-                  {thirdCompanyStatusChart.every((item) => item.unpaid <= 0) ? (
-                    <p className="text-sm text-muted-foreground">No unpaid third-company amount right now.</p>
+                  {thirdCompanySummary.implantCount === 0 ? (
+                    <p className="text-sm text-muted-foreground">No third-company implant rows in selected range.</p>
                   ) : (
-                    <div className="h-64">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={thirdCompanyStatusChart}>
-                          <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
-                          <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} />
-                          <YAxis
-                            yAxisId="amount"
-                            tick={{ fill: '#64748b', fontSize: 11 }}
-                            tickFormatter={(value) => `AFN ${Number(value).toFixed(0)}`}
-                            tickLine={false}
-                            width={70}
-                          />
-                          <YAxis
-                            yAxisId="count"
-                            orientation="right"
-                            tick={{ fill: '#64748b', fontSize: 11 }}
-                            tickFormatter={(value) => Number(value).toFixed(0)}
-                            tickLine={false}
-                            width={52}
-                          />
-                          <Tooltip
-                            formatter={(value, name) => {
-                              if (name === 'Implant Teeth') {
-                                return [`${Number(value ?? 0).toFixed(0)}`, 'Implant Teeth'];
-                              }
-                              return [formatCurrency(Number(value ?? 0)), 'Unpaid'];
-                            }}
-                            labelFormatter={(label) => `Status: ${label}`}
-                          />
-                          <Legend />
-                          <Bar
-                            yAxisId="amount"
-                            dataKey="unpaid"
-                            fill="#f97316"
-                            name="Unpaid"
-                            onClick={handleThirdCompanyStatusBarClick}
-                          />
-                          <Bar
-                            yAxisId="count"
-                            dataKey="count"
-                            fill="#0ea5e9"
-                            name="Implant Teeth"
-                            onClick={handleThirdCompanyStatusBarClick}
-                          />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
+                    <>
+                      {thirdCompanyStatusChart.every((item) => item.unpaid <= 0) ? (
+                        <p className="text-xs text-muted-foreground">
+                          All supplier balances are cleared. Unpaid amount is currently zero.
+                        </p>
+                      ) : null}
+                      <div className="h-64">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={thirdCompanyStatusChart}>
+                            <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
+                            <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} />
+                            <YAxis
+                              yAxisId="amount"
+                              tick={{ fill: '#64748b', fontSize: 11 }}
+                              tickFormatter={(value) => `AFN ${Number(value).toFixed(0)}`}
+                              tickLine={false}
+                              width={70}
+                            />
+                            <YAxis
+                              yAxisId="count"
+                              orientation="right"
+                              tick={{ fill: '#64748b', fontSize: 11 }}
+                              tickFormatter={(value) => Number(value).toFixed(0)}
+                              tickLine={false}
+                              width={52}
+                            />
+                            <Tooltip
+                              formatter={(value, name) => {
+                                if (name === 'Implant Teeth') {
+                                  return [`${Number(value ?? 0).toFixed(0)}`, 'Implant Teeth'];
+                                }
+                                return [formatCurrency(Number(value ?? 0)), 'Unpaid'];
+                              }}
+                              labelFormatter={(label) => `Status: ${label}`}
+                            />
+                            <Legend />
+                            <Bar
+                              yAxisId="amount"
+                              dataKey="unpaid"
+                              fill="#f97316"
+                              name="Unpaid"
+                              onClick={handleThirdCompanyStatusBarClick}
+                            />
+                            <Bar
+                              yAxisId="count"
+                              dataKey="count"
+                              fill="#0ea5e9"
+                              name="Implant Teeth"
+                              onClick={handleThirdCompanyStatusBarClick}
+                            />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </>
                   )}
                 </CardContent>
               </Card>
@@ -5090,6 +5379,9 @@ export default function ReportsPage(): JSX.Element {
               <Card className="border-border/70">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">Stock Status</CardTitle>
+                  <CardDescription>
+                    Total items in database: {totalInventoryItemsInDatabase}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   {isLoadingInventoryData ? (
@@ -5152,6 +5444,50 @@ export default function ReportsPage(): JSX.Element {
                               <td className="px-2 py-2 text-right">{row.sessions}</td>
                               <td className="px-2 py-2 text-right">{formatCurrency(row.totalCost)}</td>
                               <td className="px-2 py-2 text-right">{formatCurrency(row.avgCost)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/70">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Inventory Usage by Patient</CardTitle>
+                  <CardDescription>
+                    Which inventory item was used, for what treatment, and for which patient.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {inventoryUsageRows.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No inventory usage records in selected range.</p>
+                  ) : (
+                    <div className="overflow-x-auto rounded-md border border-border/70">
+                      <table className="min-w-full text-xs">
+                        <thead className="bg-muted/30">
+                          <tr>
+                            <th className="px-2 py-2 text-left font-semibold">Date</th>
+                            <th className="px-2 py-2 text-left font-semibold">Item</th>
+                            <th className="px-2 py-2 text-right font-semibold">Qty Used</th>
+                            <th className="px-2 py-2 text-left font-semibold">Patient</th>
+                            <th className="px-2 py-2 text-left font-semibold">Treatment</th>
+                            <th className="px-2 py-2 text-left font-semibold">Visit</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {inventoryUsageRows.map((row, index) => (
+                            <tr
+                              key={`inventory-usage-${row.inventoryItemId}-${row.patientId}-${row.visitLabel}-${index}`}
+                              className="border-t border-border/70"
+                            >
+                              <td className="px-2 py-2">{formatFullDate(row.usedOn)}</td>
+                              <td className="px-2 py-2">{row.itemName}</td>
+                              <td className="px-2 py-2 text-right">{row.quantityUsed} {row.unit}</td>
+                              <td className="px-2 py-2">{row.patientName}</td>
+                              <td className="px-2 py-2">{row.treatmentName}</td>
+                              <td className="px-2 py-2">{row.visitLabel}</td>
                             </tr>
                           ))}
                         </tbody>

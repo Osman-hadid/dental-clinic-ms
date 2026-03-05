@@ -27,7 +27,6 @@ import {
   HandCoins,
   HeartPulse,
   House,
-  IdCard,
   KeyRound,
   LucideIcon,
   Receipt,
@@ -73,7 +72,6 @@ const staticNavItems: SidebarItem[] = [
     items: [
       { key: 'patients', url: '/dental-management/patients' },
       { key: 'staff', url: '/dental-management/staff' },
-      { key: 'staffProfiles', url: '/dental-management/staff-profiles' },
       { key: 'appointments', url: '/dental-management/appointments' },
       { key: 'visits', url: '/dental-management/visits' },
       { key: 'teeth', url: '/dental-management/teeth' },
@@ -109,7 +107,13 @@ const staticNavItems: SidebarItem[] = [
   },
   {
     icon: Archive,
-    items: [{ key: 'backups', permission: 'dental-management.backups.view', url: '/dental-management/backups' }],
+    items: [
+      {
+        key: 'backups',
+        permission: 'dental-management.backups.view',
+        url: '/dental-management/backups',
+      },
+    ],
     key: 'backupManagement',
     url: '/dental-management/backups',
   },
@@ -154,7 +158,6 @@ const sidebarSubItemIcons: Record<string, LucideIcon> = {
   safe: Shield,
   salaries: BadgeDollarSign,
   staff: Users,
-  staffProfiles: IdCard,
   teeth: Smile,
   treatments: Stethoscope,
   users: Users,

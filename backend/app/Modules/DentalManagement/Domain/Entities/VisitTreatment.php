@@ -6,6 +6,8 @@ namespace App\Modules\DentalManagement\Domain\Entities;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
@@ -76,5 +78,20 @@ final class VisitTreatment extends Model
     public function dentist(): BelongsTo
     {
         return $this->belongsTo(Staff::class, 'dentist_id');
+    }
+
+    public function prescription(): HasOne
+    {
+        return $this->hasOne(Prescription::class);
+    }
+
+    public function materialItems(): HasMany
+    {
+        return $this->hasMany(VisitTreatmentMaterial::class);
+    }
+
+    public function hasRelatedRecords(): bool
+    {
+        return $this->prescription()->exists() || $this->materialItems()->exists();
     }
 }

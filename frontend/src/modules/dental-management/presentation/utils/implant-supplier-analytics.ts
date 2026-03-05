@@ -9,6 +9,7 @@ export type ImplantSupplierTaskLike = {
   patientId?: number | string;
   status?: SessionTaskStatus;
   title?: string;
+  updatedAt?: string;
 };
 
 export type ImplantSupplierRow = {
