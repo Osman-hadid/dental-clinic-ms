@@ -1,0 +1,70 @@
+{
+  "config": {
+    "title": "Patient Questions",
+    "entity": "Patient Question",
+    "table": {
+      "add": "Add Patient Question",
+      "create": "Create Patient Question",
+      "edit": "Edit Patient Question",
+      "update": "Update Patient Question"
+    },
+    "form": {
+      "questionText": {
+        "label": "Question",
+        "validation": {
+          "required": "Question is required",
+          "maxLength": "Question must be 5000 characters or less"
+        }
+      },
+      "answerType": {
+        "label": "Answer Type",
+        "validation": {
+          "in": "Answer type must be one of the allowed values"
+        },
+        "options": {
+          "text": "Short Text",
+          "textarea": "Paragraph",
+          "number": "Number",
+          "yes_no": "Yes / No",
+          "date": "Date"
+        }
+      },
+      "helpText": {
+        "label": "Help Text",
+        "validation": {
+          "maxLength": "Help text must be 5000 characters or less"
+        }
+      },
+      "sortOrder": {
+        "label": "Sort Order"
+      },
+      "isRequired": {
+        "label": "Required",
+        "options": {
+          "required": "Required",
+          "optional": "Optional"
+        }
+      },
+      "isActive": {
+        "label": "Active",
+        "options": {
+          "active": "Active",
+          "inactive": "Inactive"
+        }
+      }
+    },
+    "repository": {
+      "createFailed": "Failed to create patient question",
+      "fetchFailed": "Failed to fetch patient question",
+      "updateFailed": "Failed to update patient question",
+      "deleteFailed": "Failed to delete patient question",
+      "fetchManyFailed": "Failed to fetch patient questions",
+      "fetchManySuccess": "Patient questions fetched successfully"
+    },
+    "presentation": {
+      "createSuccess": "Patient question created successfully",
+      "updateSuccess": "Patient question updated successfully",
+      "deleteSuccess": "Patient question deleted successfully"
+    }
+  }
+}

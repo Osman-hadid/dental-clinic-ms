@@ -21,7 +21,10 @@ final class ListPatientsRequest extends BaseListRequest
 
     protected static function allowedRelations(): array
     {
-        return [];
+        return [
+            'questionnaireResponses',
+            'questionnaireResponses.question',
+        ];
     }
 
     protected static function filters(): array

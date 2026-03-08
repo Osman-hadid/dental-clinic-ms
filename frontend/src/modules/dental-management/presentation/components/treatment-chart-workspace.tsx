@@ -4,6 +4,7 @@ import { JSX, useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/modules/auth/application/stores/auth-store';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
+import { fetchAllRows } from '@/modules/common/infrastructure/api/fetch-all-rows';
 import { type Staff } from '@/modules/dental-management/domain/entities/Staff';
 import { type Tooth } from '@/modules/dental-management/domain/entities/Tooth';
 import { type Treatment } from '@/modules/dental-management/domain/entities/Treatment';
@@ -67,11 +68,6 @@ type InventoryMaterialOption = {
   itemName: string;
   quantity: number;
   unit: string;
-};
-
-type InventoryPaginatedResponse = {
-  data?: Array<Record<string, unknown>>;
-  meta?: { currentPage?: number; lastPage?: number };
 };
 
 type MaterialSelectionRow = {
@@ -1070,30 +1066,11 @@ export const TreatmentChartWorkspace = ({
     setIsLoadingInventoryMaterials(true);
 
     try {
-      const allRows: Array<Record<string, unknown>> = [];
-      let page = 1;
-
-      while (true) {
-        const response = await inventoryApiClient.get<InventoryPaginatedResponse>(
-          '/api/v1/dental-management/inventory-items',
-          {
-            params: { page, perPage: 100, sortBy: 'entryDate', sortDirection: 'desc' },
-          }
-        );
-
-        if (!response.success) {
-          throw new Error(response.error?.message || 'Failed to fetch inventory materials.');
-        }
-
-        const payload = response.data;
-        const rows = Array.isArray(payload?.data) ? payload.data : [];
-        allRows.push(...rows);
-
-        const currentPage = Number(payload?.meta?.currentPage ?? page);
-        const lastPage = Number(payload?.meta?.lastPage ?? currentPage);
-        if (rows.length === 0 || currentPage >= lastPage) break;
-        page += 1;
-      }
+      const allRows = await fetchAllRows(
+        inventoryApiClient,
+        '/api/v1/dental-management/inventory-items',
+        { sortBy: 'entryDate', sortDirection: 'desc' }
+      );
 
       const uniqueMaterials = new Map<string, InventoryMaterialOption>();
       for (const row of allRows) {

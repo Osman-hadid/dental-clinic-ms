@@ -7,6 +7,7 @@ import { Header } from '@/components/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import { type Tooth } from '@/modules/dental-management/domain/entities/Tooth';
 import { type Treatment } from '@/modules/dental-management/domain/entities/Treatment';
@@ -295,6 +296,17 @@ const formatDisplayDate = (value?: string): string => {
   return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(parsed);
 };
 
+const formatQuestionnaireAnswer = (value?: string): string => {
+  const normalized = asText(value);
+  if (!normalized) return 'Not answered';
+
+  const lowered = normalized.toLowerCase();
+  if (lowered === 'yes') return 'Yes';
+  if (lowered === 'no') return 'No';
+
+  return normalized;
+};
+
 const PRESCRIPTION_FOOD_TIMING_LABELS: Record<PrescriptionFoodTiming, string> = {
   after_food: 'After food',
   anytime: 'Anytime',
@@ -438,6 +450,7 @@ export default function PatientProfilePage(): JSX.Element {
 
   const { data: patientResponse, isFetching: isLoadingPatient } = useGetPatient(patientId || '', {
     enabled: !!patientId,
+    relations: ['questionnaireResponses.question'],
   });
   const patient = patientResponse?.data ?? null;
 
@@ -535,6 +548,41 @@ export default function PatientProfilePage(): JSX.Element {
   }, [patient]);
 
   const patientAge = useMemo(() => ageFromDate(patient?.dateOfBirth), [patient?.dateOfBirth]);
+  const questionnaireResponses = useMemo(
+    () =>
+      (patient?.questionnaireResponses ?? [])
+        .slice()
+        .sort((left, right) => {
+          const leftSort = left.question?.sortOrder ?? Number.MAX_SAFE_INTEGER;
+          const rightSort = right.question?.sortOrder ?? Number.MAX_SAFE_INTEGER;
+          if (leftSort !== rightSort) {
+            return leftSort - rightSort;
+          }
+
+          return String(left.questionId).localeCompare(String(right.questionId), undefined, {
+            numeric: true,
+            sensitivity: 'base',
+          });
+        })
+        .map((response, index) => {
+          const rawAnswer = asText(response.answer);
+          const questionLabel =
+            asText(response.question?.questionText) || `Question ${index + 1}`;
+
+          return {
+            answerLabel: formatQuestionnaireAnswer(response.answer),
+            helpText: asText(response.question?.helpText),
+            id: String(response.id ?? `${response.questionId}-${index}`),
+            isRequired: Boolean(response.question?.isRequired),
+            questionLabel,
+            rawAnswer,
+          };
+        }),
+    [patient?.questionnaireResponses]
+  );
+  const answeredQuestionnaireCount = questionnaireResponses.filter(
+    (response) => response.rawAnswer.length > 0
+  ).length;
 
   const toothConditionMap = useMemo(() => {
     const result: Record<string, ConditionKey | null> = {};
@@ -1323,11 +1371,6 @@ export default function PatientProfilePage(): JSX.Element {
       return;
     }
 
-    if (typedVisitTreatments.length === 0) {
-      toast.error('No recorded treatments to print.');
-      return;
-    }
-
     const printConditionColors: Record<ConditionKey, string> = {
       caries: '#4ade80',
       gingivitis: '#f87171',
@@ -1452,12 +1495,27 @@ export default function PatientProfilePage(): JSX.Element {
         `;
       })
       .join('');
+    const questionnaireRows = questionnaireResponses.length > 0
+      ? questionnaireResponses
+        .map((response, index) => `
+          <tr>
+            <td>${index + 1}</td>
+            <td>${escapeHtml(response.questionLabel)}</td>
+            <td class="answer-cell">${escapeHtml(response.answerLabel)}</td>
+          </tr>
+        `)
+        .join('')
+      : '<tr><td colspan="3">No questionnaire responses were recorded for this patient.</td></tr>';
 
     const renderArchCells = (arch: string[]): string => {
       return arch
         .map((toothNumber) => {
           const condition = printToothConditions[toothNumber];
-          const conditionLabel = condition ? CONDITIONS[condition].label : 'Healthy';
+          const conditionLabel = condition
+            ? CONDITIONS[condition].label
+            : typedVisitTreatments.length === 0
+              ? 'Unmarked'
+              : 'Healthy';
           const color = condition ? printConditionColors[condition] : '#ffffff';
           const backgroundColor = condition ? hexToRgba(color, 0.28) : '#ffffff';
 
@@ -1534,7 +1592,7 @@ export default function PatientProfilePage(): JSX.Element {
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Patient Treatment Record</title>
+  <title>Patient Record</title>
   <style>
     @page { size: auto; margin: 0; }
     html, body {
@@ -1559,10 +1617,45 @@ export default function PatientProfilePage(): JSX.Element {
     .condition-chip { display:inline-block; padding:2px 8px; border:1px solid; border-radius:999px; font-size:11px; font-weight:600; }
     .color-dot { display:inline-block; width:10px; height:10px; border-radius:999px; margin-right:6px; vertical-align:middle; }
     .muted { color: #6b7280; font-size: 12px; }
+    .answer-cell { white-space: pre-wrap; }
+    .summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 10px; }
+    .summary-card { border: 1px solid #dbe4ee; border-radius: 10px; padding: 10px; background: #f8fafc; }
+    .summary-card strong { display: block; margin-top: 4px; font-size: 15px; color: #111827; }
+    .signature-panel {
+      margin-top: 22px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.3fr) minmax(180px, 0.7fr);
+      gap: 18px;
+      align-items: end;
+    }
+    .signature-note {
+      border: 1px solid #dbe4ee;
+      border-radius: 10px;
+      padding: 14px;
+      background: #f8fafc;
+      min-height: 88px;
+    }
+    .signature-note h3 {
+      margin-bottom: 6px;
+      font-size: 15px;
+    }
+    .signature-line-wrap {
+      text-align: center;
+      padding-top: 32px;
+    }
+    .signature-line {
+      border-top: 1px solid #111827;
+      margin-bottom: 6px;
+    }
+    .signature-caption {
+      margin: 3px 0;
+      font-size: 12px;
+      color: #374151;
+    }
   </style>
 </head>
 <body>
-  <h1>Dental Treatment Record</h1>
+  <h1>Patient Dental Record</h1>
   <p class="muted">Printed on ${escapeHtml(now.toLocaleString())}</p>
 
   <div class="section grid">
@@ -1644,6 +1737,48 @@ export default function PatientProfilePage(): JSX.Element {
       <tbody>${noteRows}</tbody>
     </table>`
     : '<p class="muted">No notes were recorded for this patient.</p>'}
+  </div>
+
+  <div class="section">
+    <h2>Patient Questionnaire</h2>
+    <div class="summary-grid">
+      <div class="summary-card">
+        Questions
+        <strong>${questionnaireResponses.length}</strong>
+      </div>
+      <div class="summary-card">
+        Answered
+        <strong>${answeredQuestionnaireCount}</strong>
+      </div>
+      <div class="summary-card">
+        Completion
+        <strong>${questionnaireResponses.length === 0 ? '0%' : `${Math.round((answeredQuestionnaireCount / questionnaireResponses.length) * 100)}%`}</strong>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:56px;">#</th>
+          <th>Question</th>
+          <th>Answer</th>
+        </tr>
+      </thead>
+      <tbody>${questionnaireRows}</tbody>
+    </table>
+  </div>
+
+  <div class="section signature-panel">
+    <div class="signature-note">
+      <h3>Patient Acknowledgement</h3>
+      <p class="muted">
+        I confirm that the questionnaire responses above are correct to the best of my knowledge.
+      </p>
+    </div>
+    <div class="signature-line-wrap">
+      <div class="signature-line"></div>
+      <p class="signature-caption">Patient Signature</p>
+      <p class="signature-caption">Date: __________________</p>
+    </div>
   </div>
 </body>
 </html>`;
@@ -2309,6 +2444,103 @@ export default function PatientProfilePage(): JSX.Element {
                   <p>Treatments: <span className="text-foreground">{typedVisitTreatments.length}</span></p>
                   <p>Prescriptions: <span className="text-foreground">{prescriptionRecords.length}</span></p>
                   <p className="md:col-span-2">Remarks: <span className="text-foreground">{patient?.remarks || '-'}</span></p>
+                </CardContent>
+              </Card>
+
+              <Card className="border-border bg-card text-card-foreground">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center justify-between gap-3 text-base">
+                    <span>Questionnaire</span>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                        {answeredQuestionnaireCount}/{questionnaireResponses.length} answered
+                      </span>
+                      <FileText className="size-4 text-primary" />
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {questionnaireResponses.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No questionnaire responses recorded yet.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/15 p-3 text-xs sm:grid-cols-3">
+                        <p className="text-muted-foreground">
+                          Total Questions
+                          <span className="mt-1 block text-sm font-semibold text-foreground">
+                            {questionnaireResponses.length}
+                          </span>
+                        </p>
+                        <p className="text-muted-foreground">
+                          Answered
+                          <span className="mt-1 block text-sm font-semibold text-foreground">
+                            {answeredQuestionnaireCount}
+                          </span>
+                        </p>
+                        <p className="text-muted-foreground">
+                          Completion
+                          <span className="mt-1 block text-sm font-semibold text-foreground">
+                            {Math.round((answeredQuestionnaireCount / questionnaireResponses.length) * 100)}%
+                          </span>
+                        </p>
+                      </div>
+
+                      <div className="overflow-hidden rounded-xl border border-border/70 bg-background shadow-sm">
+                        <Table>
+                          <TableHeader className="bg-muted/40">
+                            <TableRow className="hover:bg-transparent">
+                              <TableHead className="w-12">#</TableHead>
+                              <TableHead className="min-w-[260px]">Question</TableHead>
+                              <TableHead className="min-w-[220px]">Answer</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {questionnaireResponses.map((response, index) => (
+                              <TableRow key={response.id} className="align-top">
+                                <TableCell className="text-xs text-muted-foreground">
+                                  {String(index + 1).padStart(2, '0')}
+                                </TableCell>
+                                <TableCell className="whitespace-normal">
+                                  <p className="font-medium text-foreground">{response.questionLabel}</p>
+                                  {response.helpText ? (
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                      {response.helpText}
+                                    </p>
+                                  ) : null}
+                                  <span
+                                    className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                                      response.isRequired
+                                        ? 'bg-rose-100 text-rose-700'
+                                        : 'bg-slate-100 text-slate-700'
+                                    }`}
+                                  >
+                                    {response.isRequired ? 'Required' : 'Optional'}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="whitespace-normal">
+                                  {response.rawAnswer ? (
+                                    <p className="whitespace-pre-wrap text-sm text-foreground">
+                                      {response.answerLabel}
+                                    </p>
+                                  ) : (
+                                    <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                                      Not answered
+                                    </span>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+
+                      <p className="text-xs text-muted-foreground">
+                        These answers are included in the printable patient record with a signature section.
+                      </p>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             </div>

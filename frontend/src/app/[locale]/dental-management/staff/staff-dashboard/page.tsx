@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { JSX, useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
@@ -6,16 +6,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Header } from '@/components/header';
 import { Button } from '@/components/ui/button';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
+import { fetchAllRows } from '@/modules/common/infrastructure/api/fetch-all-rows';
 import { useGetStaff } from '@/modules/dental-management/presentation/hooks';
 import { ArrowLeft, Coins, HandCoins, ReceiptText, Users } from 'lucide-react';
-
-type PaginatedRowsResponse = {
-  data?: Array<Record<string, unknown>>;
-  meta?: {
-    currentPage?: number;
-    lastPage?: number;
-  };
-};
 
 type SalaryRow = {
   netAmount: number;
@@ -63,7 +56,6 @@ type StaffFinancialProfile = {
   visitCount: number;
 };
 
-const API_MAX_PER_PAGE = 100;
 const apiClient = new AxiosClient();
 
 const asText = (value: unknown): string => {
@@ -105,38 +97,6 @@ const formatSalaryMonth = (value: string): string => {
   );
 };
 
-const fetchAllRows = async (
-  endpoint: string,
-  params: Record<string, unknown>
-): Promise<Array<Record<string, unknown>>> => {
-  const rows: Array<Record<string, unknown>> = [];
-  let page = 1;
-
-  while (true) {
-    const response = await apiClient.get<PaginatedRowsResponse>(endpoint, {
-      params: {
-        ...params,
-        page,
-        perPage: API_MAX_PER_PAGE,
-      },
-    });
-
-    const payload = response.data;
-    const pageRows = Array.isArray(payload?.data) ? payload.data : [];
-    rows.push(...pageRows);
-
-    const currentPage = Number(payload?.meta?.currentPage ?? page);
-    const lastPage = Number(payload?.meta?.lastPage ?? currentPage);
-    if (pageRows.length === 0 || currentPage >= lastPage) {
-      break;
-    }
-
-    page += 1;
-  }
-
-  return rows;
-};
-
 const createEmptyProfile = (): StaffFinancialProfile => ({
   collectionsAmount: 0,
   debtAmount: 0,
@@ -175,28 +135,45 @@ export default function StaffDashboardPage(): JSX.Element {
 
     setIsLoadingFinance(true);
     try {
-      const [salaryItems, safeItems, visitItems, invoiceItems] = await Promise.all([
-        fetchAllRows('/api/v1/dental-management/salary-payments', {
-          include: ['staff'],
+      const [salaryItems, safeItems, visitItems] = await Promise.all([
+        fetchAllRows(apiClient, '/api/v1/dental-management/salary-payments', {
           sortBy: 'paymentDate',
           sortDirection: 'desc',
+          'filter[staffId]': staffId,
         }),
-        fetchAllRows('/api/v1/dental-management/safe-transactions', {
-          include: ['pickedByStaff'],
+        fetchAllRows(apiClient, '/api/v1/dental-management/safe-transactions', {
           sortBy: 'transactionDate',
           sortDirection: 'desc',
+          'filter[pickedByStaffId]': staffId,
         }),
-        fetchAllRows('/api/v1/dental-management/visits', {
-          include: ['patient', 'dentist'],
+        fetchAllRows(apiClient, '/api/v1/dental-management/visits', {
           sortBy: 'visitDate',
           sortDirection: 'desc',
-        }),
-        fetchAllRows('/api/v1/dental-management/invoices', {
-          include: ['visit', 'payments'],
-          sortBy: 'invoiceDate',
-          sortDirection: 'desc',
+          'filter[dentistId]': staffId,
         }),
       ]);
+
+      const visitIds = Array.from(
+        new Set(
+          visitItems
+            .map((row) => asText(row.id))
+            .filter(Boolean)
+        )
+      );
+      const invoiceBatches = Array.from(
+        { length: Math.ceil(visitIds.length / 50) },
+        (_, index) => visitIds.slice(index * 50, index * 50 + 50)
+      );
+      const invoiceItems = invoiceBatches.length === 0
+        ? []
+        : (await Promise.all(
+          invoiceBatches.map((visitIdBatch) => fetchAllRows(apiClient, '/api/v1/dental-management/invoices', {
+            include: ['payments'],
+            sortBy: 'invoiceDate',
+            sortDirection: 'desc',
+            'filter[visitId]': visitIdBatch,
+          }))
+        )).flat();
 
       setSalaryRows(
         salaryItems.map((row) => ({
@@ -547,3 +524,4 @@ export default function StaffDashboardPage(): JSX.Element {
     </>
   );
 }
+

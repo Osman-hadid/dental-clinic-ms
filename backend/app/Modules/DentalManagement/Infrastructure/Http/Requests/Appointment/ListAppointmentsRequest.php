@@ -32,6 +32,22 @@ final class ListAppointmentsRequest extends BaseListRequest
     protected static function filters(): array
     {
         return [
+            AllowedFilter::callback('dateFrom', static function ($query, $value): void {
+                $resolved = \is_array($value) ? ($value[0] ?? null) : $value;
+                if ($resolved === null || $resolved === '') {
+                    return;
+                }
+
+                $query->where('appointment_date', '>=', (string) $resolved);
+            }),
+            AllowedFilter::callback('dateTo', static function ($query, $value): void {
+                $resolved = \is_array($value) ? ($value[0] ?? null) : $value;
+                if ($resolved === null || $resolved === '') {
+                    return;
+                }
+
+                $query->where('appointment_date', '<=', (string) $resolved);
+            }),
             AllowedFilter::exact('status', 'status', true),
             AllowedFilter::trashed(),
         ];

@@ -3,6 +3,7 @@
 import { FormEvent, JSX, useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Header } from '@/components/header';
+import { LoadingState } from '@/components/shared/loading-state';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,16 +13,9 @@ import {
   parseMoney,
 } from '@/lib/currency-utils';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
+import { fetchAllRows } from '@/modules/common/infrastructure/api/fetch-all-rows';
 import { Wallet } from 'lucide-react';
 import { toast } from 'sonner';
-
-type PaginatedRowsResponse = {
-  data?: Array<Record<string, unknown>>;
-  meta?: {
-    currentPage?: number;
-    lastPage?: number;
-  };
-};
 
 type DebtRow = {
   debtId: string;
@@ -91,36 +85,19 @@ const createDefaultForm = (): SettleFormState => ({
 });
 
 const fetchAllDebtRows = async (): Promise<Array<Record<string, unknown>>> => {
-  const rows: Array<Record<string, unknown>> = [];
-  let page = 1;
-
-  while (true) {
-    const response = await client.get<PaginatedRowsResponse>('/api/v1/dental-management/debts', {
-      params: {
-        filter: {
-          status: ['open'],
-        },
-        include: ['patient'],
-        page,
-        perPage: API_MAX_PER_PAGE,
-        sortBy: 'invoiceDate',
-        sortDirection: 'desc',
+  return fetchAllRows(
+    client,
+    '/api/v1/dental-management/debts',
+    {
+      filter: {
+        status: ['open'],
       },
-    });
-    const payload = response.data;
-    const pageRows = Array.isArray(payload?.data) ? payload.data : [];
-    rows.push(...pageRows);
-
-    const currentPage = Number(payload?.meta?.currentPage ?? page);
-    const lastPage = Number(payload?.meta?.lastPage ?? currentPage);
-    if (pageRows.length === 0 || currentPage >= lastPage) {
-      break;
-    }
-
-    page += 1;
-  }
-
-  return rows;
+      include: ['patient'],
+      sortBy: 'invoiceDate',
+      sortDirection: 'desc',
+    },
+    API_MAX_PER_PAGE
+  );
 };
 
 const normalizeDebtRows = (
@@ -365,9 +342,14 @@ export default function DebtsPage(): JSX.Element {
                 </Button>
               </CardHeader>
               <CardContent>
-                {rows.length === 0 ? (
+                {isLoading ? (
+                  <LoadingState
+                    title={tDebts('loading')}
+                    description="Collecting invoice balances and building the outstanding debt list."
+                  />
+                ) : rows.length === 0 ? (
                   <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-                    {isLoading ? tDebts('loading') : tDebts('noDebts')}
+                    {tDebts('noDebts')}
                   </p>
                 ) : (
                   <div className="overflow-auto rounded-xl border">

@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace App\Modules\DentalManagement\Infrastructure\Http\Requests\Patient;
 
 use App\Modules\Common\Infrastructure\Http\Requests\BaseFormRequest;
+use App\Modules\DentalManagement\Infrastructure\Http\Requests\Patient\Concerns\ValidatesPatientQuestionnaire;
+use Illuminate\Validation\Rule;
 
 final class UpdatePatientRequest extends BaseFormRequest
 {
+    use ValidatesPatientQuestionnaire;
+
     protected array $booleanFields = ['enabled'];
 
     public function authorize(): bool
@@ -39,6 +43,7 @@ final class UpdatePatientRequest extends BaseFormRequest
             'createdBy' => 'nullable|integer',
             'updatedBy' => 'nullable|integer',
             'deletedBy' => 'nullable|integer',
+            ...$this->patientQuestionnaireRules(),
         ];
     }
 }

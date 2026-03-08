@@ -2,19 +2,23 @@
 
 declare(strict_types=1);
 
-use App\Modules\DentalManagement\Infrastructure\Http\Controllers\AppointmentController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\AiImagingController;
-use App\Modules\DentalManagement\Infrastructure\Http\Controllers\InvoiceController;
-use App\Modules\DentalManagement\Infrastructure\Http\Controllers\ExpenseController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\AppointmentController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\DebtController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\DentalBackupController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\ExpenseController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\FinancialSettingController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\InventoryItemController;
-use App\Modules\DentalManagement\Infrastructure\Http\Controllers\DentalBackupController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\InvoiceController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\PatientController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\PatientQuestionController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\PatientSessionTaskController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\PaymentController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\ReportSummaryController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\SafeTransactionController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\SalaryPaymentController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\ShareholderController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\ShareholderTransactionController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\StaffController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\ToothController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\TreatmentController;
@@ -24,9 +28,14 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['api', 'auth:sanctum', 'set_locale'])->prefix('api/v1/dental-management')->group(function (): void {
     Route::post('/ai-imaging/analyze', [AiImagingController::class, 'analyze']);
+    Route::get('/reports/clinical-dataset', [ReportSummaryController::class, 'clinical']);
+    Route::get('/reports/executive-summary', [ReportSummaryController::class, 'executive']);
+    Route::get('/reports/financial-dataset', [ReportSummaryController::class, 'financial']);
     Route::post('/patients/restore/{id}', [PatientController::class, 'restore']);
     Route::delete('/patients/force/{id}', [PatientController::class, 'forceDelete']);
     Route::delete('/patients/bulk', [PatientController::class, 'bulkDelete']);
+    Route::apiResource('patient-questions', PatientQuestionController::class);
+    Route::get('/patient-session-tasks', [PatientSessionTaskController::class, 'list']);
     Route::get('/patients/{patientId}/session-tasks', [PatientSessionTaskController::class, 'index']);
     Route::post('/patients/{patientId}/session-tasks', [PatientSessionTaskController::class, 'store']);
     Route::put('/patients/{patientId}/session-tasks/{taskId}', [PatientSessionTaskController::class, 'update']);
@@ -69,6 +78,8 @@ Route::middleware(['api', 'auth:sanctum', 'set_locale'])->prefix('api/v1/dental-
     Route::apiResource('inventory-items', InventoryItemController::class);
     Route::apiResource('expenses', ExpenseController::class);
     Route::apiResource('salary-payments', SalaryPaymentController::class);
+    Route::apiResource('shareholders', ShareholderController::class);
+    Route::apiResource('shareholder-transactions', ShareholderTransactionController::class);
     Route::get('/debts', [DebtController::class, 'index']);
     Route::post('/debts/{id}/settle', [DebtController::class, 'settle']);
     Route::post('/debts/rebuild', [DebtController::class, 'rebuild']);

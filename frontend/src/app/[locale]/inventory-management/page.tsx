@@ -3,12 +3,14 @@
 import { JSX, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Header } from '@/components/header';
+import { LoadingState } from '@/components/shared/loading-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
+import { fetchAllRows } from '@/modules/common/infrastructure/api/fetch-all-rows';
 import { toast } from 'sonner';
 
 type InventoryCategory = 'consumable' | 'implant' | 'instrument' | 'medicine' | 'other' | 'ppe';
@@ -49,11 +51,6 @@ type InventoryFormState = {
   supplier: string;
   unit: InventoryUnit;
   unitCost: string;
-};
-
-type PaginatedRowsResponse = {
-  data?: Array<Record<string, unknown>>;
-  meta?: { currentPage?: number; lastPage?: number };
 };
 
 const apiClient = new AxiosClient();
@@ -169,35 +166,27 @@ export default function InventoryManagementPage(): JSX.Element {
   const [categoryFilter, setCategoryFilter] = useState<'all' | InventoryCategory>('all');
   const [stockFilter, setStockFilter] = useState<StockFilter>('all');
 
-  const fetchAllRows = useCallback(async (): Promise<Array<Record<string, unknown>>> => {
-    const rows: Array<Record<string, unknown>> = [];
-    let page = 1;
-    while (true) {
-      const response = await apiClient.get<PaginatedRowsResponse>('/api/v1/dental-management/inventory-items', {
-        params: { page, perPage: API_MAX_PER_PAGE, sortBy: 'entryDate', sortDirection: 'desc' },
-      });
-      const payload = response.data;
-      const pageRows = Array.isArray(payload?.data) ? payload.data : [];
-      rows.push(...pageRows);
-      const currentPage = Number(payload?.meta?.currentPage ?? page);
-      const lastPage = Number(payload?.meta?.lastPage ?? currentPage);
-      if (pageRows.length === 0 || currentPage >= lastPage) break;
-      page += 1;
-    }
-    return rows;
-  }, []);
+  const fetchInventoryRows = useCallback(
+    async (): Promise<Array<Record<string, unknown>>> => fetchAllRows(
+      apiClient,
+      '/api/v1/dental-management/inventory-items',
+      { sortBy: 'entryDate', sortDirection: 'desc' },
+      API_MAX_PER_PAGE
+    ),
+    []
+  );
 
   const fetchData = useCallback(async (): Promise<void> => {
     setIsLoading(true);
     try {
-      const rows = await fetchAllRows();
+      const rows = await fetchInventoryRows();
       setItems(rows.map((row) => toInventoryItem(row)));
     } catch (error: unknown) {
       toast.error(extractApiErrorMessage(error, 'Failed to fetch inventory items.'));
     } finally {
       setIsLoading(false);
     }
-  }, [fetchAllRows]);
+  }, [fetchInventoryRows]);
 
   useEffect(() => { void fetchData(); }, [fetchData]);
 
@@ -383,7 +372,7 @@ export default function InventoryManagementPage(): JSX.Element {
                 <table className="w-full min-w-[1200px] text-sm">
                   <thead className="bg-muted/40 text-left"><tr><th className="px-3 py-2">Date</th><th className="px-3 py-2">Name</th><th className="px-3 py-2">Source</th><th className="px-3 py-2">Category</th><th className="px-3 py-2">Qty</th><th className="px-3 py-2">Unit</th><th className="px-3 py-2">Min</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Supplier</th><th className="px-3 py-2">Unit Cost</th><th className="px-3 py-2">Value</th><th className="px-3 py-2">Expiry</th><th className="px-3 py-2">Location</th><th className="px-3 py-2">Actions</th></tr></thead>
                   <tbody>
-                    {isLoading ? <tr><td className="px-3 py-6 text-center text-muted-foreground" colSpan={14}>Loading inventory...</td></tr> : filteredItems.length === 0 ? <tr><td className="px-3 py-6 text-center text-muted-foreground" colSpan={14}>No inventory records found.</td></tr> : filteredItems.map((item) => {
+                    {isLoading ? <tr><td className="px-3 py-4" colSpan={14}><LoadingState compact title="Loading inventory" description="Syncing stock levels, suppliers, and expiry data." /></td></tr> : filteredItems.length === 0 ? <tr><td className="px-3 py-6 text-center text-muted-foreground" colSpan={14}>No inventory records found.</td></tr> : filteredItems.map((item) => {
                       const stockState = getStockState(item);
                       return (
                         <tr key={item.id} className="border-t">

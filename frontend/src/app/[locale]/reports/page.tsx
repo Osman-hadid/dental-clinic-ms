@@ -1,25 +1,23 @@
 'use client';
 
-import { JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import { JSX, useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import { useRouter } from '@/i18n/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { Header } from '@/components/header';
+import { LoadingState } from '@/components/shared/loading-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useAuthStore } from '@/modules/auth/application/stores/auth-store';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
+import { fetchAllRows } from '@/modules/common/infrastructure/api/fetch-all-rows';
+import { parseApiError } from '@/modules/common/utils/http-error-utilities';
 import { type Appointment } from '@/modules/dental-management/domain/entities/Appointment';
 import { type Patient } from '@/modules/dental-management/domain/entities/Patient';
 import { type Visit } from '@/modules/dental-management/domain/entities/Visit';
 import { type VisitTreatment } from '@/modules/dental-management/domain/entities/VisitTreatment';
-import {
-  useAppointmentList,
-  useInvoiceList,
-  usePatientList,
-  useVisitList,
-  useVisitTreatmentList,
-} from '@/modules/dental-management/presentation/hooks';
 import {
   aggregateImplantSupplierBalances,
   type ImplantAvailabilityStatus,
@@ -41,6 +39,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { toast } from 'sonner';
 
 type ReportGranularity = 'day' | 'month' | 'year';
 type InvoiceStatusFilter = 'all' | 'cancelled' | 'paid' | 'partially_paid' | 'unpaid';
@@ -53,6 +52,7 @@ type CsvExportType =
   | 'financial_daily_safe'
   | 'financial_implant_installment'
   | 'financial_outstanding'
+  | 'financial_shareholder'
   | 'financial_revenue'
   | 'inventory_stock';
 
@@ -210,6 +210,28 @@ type SalaryPaymentRow = {
   status: string;
 };
 
+type ShareholderReportRow = {
+  balanceAmount: number;
+  contributedAmount: number;
+  distributedAmount: number;
+  fullName: string;
+  id: string;
+  initialCapitalInput: number;
+  ownershipPercentage: number;
+  status: string;
+};
+
+type ShareholderTransactionReportRow = {
+  amount: number;
+  amountInput: number;
+  id: string;
+  notes: string;
+  shareholderId: string;
+  shareholderName: string;
+  transactionDate: string;
+  transactionType: 'contribution' | 'distribution';
+};
+
 type ThirdCompanyLiabilityStatusPoint = {
   count: number;
   label: string;
@@ -263,19 +285,104 @@ type FinancialModificationLogRow = {
   timestamp: string;
 };
 
-type PaginatedRowsResponse = {
-  data?: Array<Record<string, unknown>>;
-  meta?: {
-    currentPage?: number;
-    lastPage?: number;
-  };
+type ExecutiveSummaryKpis = {
+  activePatients: number;
+  appointmentCompletionRate: number;
+  appointments: number;
+  billed: number;
+  collectionRate: number;
+  debt: number;
+  discount: number;
+  expenses: number;
+  net: number;
+  netAfterExpenses: number;
+  paid: number;
+  safeOut: number;
+  salaryPaid: number;
+  thirdCompanyPaid: number;
+  thirdCompanyTotal: number;
+  thirdCompanyUnpaid: number;
+  thirdCompanyUnpaidCount: number;
+  totalPatients: number;
+  visits: number;
 };
 
-const MAX_PER_PAGE = 100;
+type ExecutiveSummaryResponse = {
+  bankBalance: number;
+  cashInSafe: number;
+  chairUtilizationRate: number;
+  dentistProductivity: DentistProductivityPoint[];
+  expenseSummary: {
+    byCategory: ExpensePoint[];
+    clinical: number;
+    daily: number;
+    total: number;
+  };
+  filterOptions: {
+    dentists: string[];
+    patients: Array<{ id: string; name: string }>;
+    paymentMethods: string[];
+    treatments: string[];
+  };
+  implantPlacementTrend: Array<{ count: number; key: string; label: string; revenue: number }>;
+  implantRevenue: number;
+  kpis: ExecutiveSummaryKpis;
+  newPatientsCount: number;
+  profitLoss: number;
+  profitLossTrend: ProfitLossPoint[];
+  revenueTrendMonthly: Array<{ amount: number; key: string; label: string }>;
+  treatmentAcceptanceRate: number;
+  treatmentVolume: TreatmentVolumePoint[];
+};
+
+type ClinicalDatasetResponse = {
+  appointments: Appointment[];
+  patientNameMap: Record<string, string>;
+  patientSessionTasks: ImplantSupplierTaskLike[];
+  patients: Patient[];
+  visitTreatments: VisitTreatmentReportRow[];
+  visits: Visit[];
+};
+
+type FinancialDatasetResponse = {
+  expenseRows: ExpenseRow[];
+  invoiceRows: Array<Record<string, unknown>>;
+  patientNameMap: Record<string, string>;
+  patientSessionTasks: ImplantSupplierTaskLike[];
+  patients: Patient[];
+  safeRows: SafeTransactionRow[];
+  salaryRows: SalaryPaymentRow[];
+  shareholderRows: ShareholderReportRow[];
+  shareholderTransactionRows: ShareholderTransactionReportRow[];
+  visitTreatmentRows: VisitTreatmentReportRow[];
+  visits: Visit[];
+};
+
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const REPORT_SNAPSHOT_KEY = 'dental_reports_snapshots';
 const REPORT_SCHEDULE_KEY = 'dental_reports_schedule';
 const apiClient = new AxiosClient();
+const EMPTY_APPOINTMENTS: Appointment[] = [];
+const EMPTY_VISITS: Visit[] = [];
+const EMPTY_VISIT_TREATMENTS: VisitTreatmentReportRow[] = [];
+const EMPTY_EXPENSE_ROWS: ExpenseRow[] = [];
+const EMPTY_IMPLANT_TASKS: ImplantSupplierTaskLike[] = [];
+const EMPTY_INVENTORY_ROWS: InventoryReportRow[] = [];
+const EMPTY_FINANCIAL_MODIFICATION_LOG_ROWS: FinancialModificationLogRow[] = [];
+const EMPTY_ACCESS_LOG_ROWS: Array<{ action: string; generatedAt: string; range: string; user: string }> = [];
+const EMPTY_SHAREHOLDER_TRANSACTION_ROWS: ShareholderTransactionReportRow[] = [];
+const EMPTY_PARSED_PAYMENTS: ParsedPayment[] = [];
+const EMPTY_PARSED_INVOICES: ParsedInvoice[] = [];
+const EMPTY_LEDGER_ENTRIES: LedgerEntry[] = [];
+const EMPTY_PARSED_DATA: {
+  allInvoices: ParsedInvoice[];
+  allPayments: ParsedPayment[];
+  ledgerEntries: LedgerEntry[];
+} = {
+  allInvoices: EMPTY_PARSED_INVOICES,
+  allPayments: EMPTY_PARSED_PAYMENTS,
+  ledgerEntries: EMPTY_LEDGER_ENTRIES,
+};
 
 const parseAmount = (value: unknown): number => {
   if (typeof value === 'number') {
@@ -545,92 +652,84 @@ const toDebtAgingBucket = (invoiceDate: string, endDate: string): DebtAgingBucke
   return '90+ days';
 };
 
-const fetchAllRows = async (
-  endpoint: string,
-  params: Record<string, unknown>
-): Promise<Array<Record<string, unknown>>> => {
-  const rows: Array<Record<string, unknown>> = [];
-  let page = 1;
+const fetchExecutiveSummary = async (params: {
+  dentistFilter: string;
+  endDate: string;
+  granularity: ReportGranularity;
+  patientFilter: string;
+  paymentMethodFilter: string;
+  startDate: string;
+  statusFilter: ReportStatusFilter;
+  treatmentFilter: string;
+}): Promise<ExecutiveSummaryResponse | null> => {
+  const queryParams = new URLSearchParams();
+  queryParams.append('startDate', params.startDate);
+  queryParams.append('endDate', params.endDate);
+  queryParams.append('granularity', params.granularity);
+  queryParams.append('statusFilter', params.statusFilter);
+  queryParams.append('dentistFilter', params.dentistFilter);
+  queryParams.append('treatmentFilter', params.treatmentFilter);
+  queryParams.append('paymentMethodFilter', params.paymentMethodFilter);
+  queryParams.append('patientFilter', params.patientFilter);
 
-  while (true) {
-    const response = await apiClient.get<PaginatedRowsResponse>(endpoint, {
-      params: {
-        ...params,
-        page,
-        perPage: MAX_PER_PAGE,
-      },
-    });
-    const payload = response.data;
-    const pageRows = Array.isArray(payload?.data) ? payload.data : [];
-    rows.push(...pageRows);
+  const response = await apiClient.get<ExecutiveSummaryResponse>('/api/v1/dental-management/reports/executive-summary', {
+    params: queryParams,
+  });
 
-    const currentPage = Number(payload?.meta?.currentPage ?? page);
-    const lastPage = Number(payload?.meta?.lastPage ?? currentPage);
-    if (pageRows.length === 0 || currentPage >= lastPage) {
-      break;
-    }
-
-    page += 1;
+  if (!response.success || !response.data) {
+    return null;
   }
 
-  return rows;
+  return response.data;
 };
 
-const fetchPatientSessionTasks = async (patientIds: string[]): Promise<ImplantSupplierTaskLike[]> => {
-  if (patientIds.length === 0) return [];
+const fetchClinicalDataset = async (params: {
+  endDate: string;
+  startDate: string;
+}): Promise<ClinicalDatasetResponse | null> => {
+  const queryParams = new URLSearchParams();
+  queryParams.append('startDate', params.startDate);
+  queryParams.append('endDate', params.endDate);
 
-  const rows: ImplantSupplierTaskLike[] = [];
-  const batchSize = 15;
+  const response = await apiClient.get<ClinicalDatasetResponse>('/api/v1/dental-management/reports/clinical-dataset', {
+    params: queryParams,
+  });
 
-  for (let index = 0; index < patientIds.length; index += batchSize) {
-    const batch = patientIds.slice(index, index + batchSize);
-    const batchResponses = await Promise.all(
-      batch.map(async (patientId) => {
-        try {
-          const response = await apiClient.get<Array<Record<string, unknown>> | { data?: Array<Record<string, unknown>> }>(
-            `/api/v1/dental-management/patients/${patientId}/session-tasks`
-          );
-          if (!response.success) {
-            return [] as ImplantSupplierTaskLike[];
-          }
-
-          const payload = response.data;
-          const tasks = Array.isArray(payload)
-            ? payload
-            : (Array.isArray(payload?.data) ? payload.data : []);
-          if (tasks.length === 0) {
-            return [] as ImplantSupplierTaskLike[];
-          }
-
-          return tasks.map((task) => ({
-            createdAt: asText(task.createdAt ?? task.created_at),
-            id: asText(task.id),
-            notes: asText(task.notes),
-            patientId: asText(task.patientId ?? task.patient_id) || patientId,
-            status: asText(task.status),
-            title: asText(task.title),
-            updatedAt: asText(task.updatedAt ?? task.updated_at),
-          }));
-        } catch {
-          return [] as ImplantSupplierTaskLike[];
-        }
-      })
-    );
-
-    batchResponses.forEach((batchRows) => {
-      rows.push(...batchRows);
-    });
+  if (!response.success || !response.data) {
+    return null;
   }
 
-  return rows;
+  return response.data;
+};
+
+const fetchFinancialDataset = async (params: {
+  endDate: string;
+  startDate: string;
+}): Promise<FinancialDatasetResponse | null> => {
+  const queryParams = new URLSearchParams();
+  queryParams.append('startDate', params.startDate);
+  queryParams.append('endDate', params.endDate);
+
+  const response = await apiClient.get<FinancialDatasetResponse>('/api/v1/dental-management/reports/financial-dataset', {
+    params: queryParams,
+  });
+
+  if (!response.success || !response.data) {
+    return null;
+  }
+
+  return response.data;
 };
 
 // eslint-disable-next-line react/function-component-definition
 export default function ReportsPage(): JSX.Element {
   const locale = useLocale();
+  const router = useRouter();
   const isRtl = locale === 'ps' || locale === 'dr';
   const tSidebar = useTranslations('sidebar');
   const tReportsPage = useTranslations('app.reportsPage');
+  const [, startTransition] = useTransition();
+  const { isSessionChecked, setUser, user } = useAuthStore();
   const ninetyDaysAgo = useMemo(() => {
     const date = new Date();
     date.setDate(date.getDate() - 90);
@@ -678,6 +777,8 @@ export default function ReportsPage(): JSX.Element {
   const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([]);
   const [safeRows, setSafeRows] = useState<SafeTransactionRow[]>([]);
   const [salaryRows, setSalaryRows] = useState<SalaryPaymentRow[]>([]);
+  const [shareholderRows, setShareholderRows] = useState<ShareholderReportRow[]>([]);
+  const [shareholderTransactionRows, setShareholderTransactionRows] = useState<ShareholderTransactionReportRow[]>([]);
   const [implantSupplierTasks, setImplantSupplierTasks] = useState<ImplantSupplierTaskLike[]>([]);
   const [inventoryRows, setInventoryRows] = useState<InventoryReportRow[]>([]);
   const [allPatientsRows, setAllPatientsRows] = useState<Patient[]>([]);
@@ -686,6 +787,11 @@ export default function ReportsPage(): JSX.Element {
   const [allInvoiceRows, setAllInvoiceRows] = useState<Array<Record<string, unknown>>>([]);
   const [allVisitTreatmentRows, setAllVisitTreatmentRows] = useState<VisitTreatmentReportRow[]>([]);
   const [allPatientNameRows, setAllPatientNameRows] = useState<Record<string, string>>({});
+  const [executiveSummary, setExecutiveSummary] = useState<ExecutiveSummaryResponse | null>(null);
+  const [hasLoadedCoreData, setHasLoadedCoreData] = useState(false);
+  const [hasLoadedFinanceData, setHasLoadedFinanceData] = useState(false);
+  const [hasLoadedInventoryData, setHasLoadedInventoryData] = useState(false);
+  const [isLoadingExecutiveSummary, setIsLoadingExecutiveSummary] = useState(false);
   const [isLoadingCoreData, setIsLoadingCoreData] = useState(false);
   const [isLoadingFinanceData, setIsLoadingFinanceData] = useState(false);
   const [isLoadingInventoryData, setIsLoadingInventoryData] = useState(false);
@@ -695,6 +801,7 @@ export default function ReportsPage(): JSX.Element {
         { label: 'Revenue Report', value: 'financial_revenue' },
         { label: 'Outstanding Aging', value: 'financial_outstanding' },
         { label: 'Daily Safe Report', value: 'financial_daily_safe' },
+        { label: 'Shareholder Ledger', value: 'financial_shareholder' },
         { label: 'Implant Installment', value: 'financial_implant_installment' },
       ];
     }
@@ -722,64 +829,11 @@ export default function ReportsPage(): JSX.Element {
     return tReportsPage('granularity.day');
   }, [granularity, tReportsPage]);
 
-  const { entities: patients, isFetching: isLoadingPatients } = usePatientList(1, MAX_PER_PAGE);
-  const { entities: appointments, isFetching: isLoadingAppointments } = useAppointmentList(
-    1,
-    MAX_PER_PAGE,
-    '',
-    [],
-    ['patient', 'dentist'],
-    {}
-  );
-  const { entities: visits, isFetching: isLoadingVisits } = useVisitList(
-    1,
-    MAX_PER_PAGE,
-    '',
-    [],
-    ['patient', 'dentist'],
-    {}
-  );
-  const { entities: invoices, isFetching: isLoadingInvoices } = useInvoiceList(
-    1,
-    MAX_PER_PAGE,
-    '',
-    [],
-    ['patient', 'visit', 'payments'],
-    {}
-  );
-  const { entities: visitTreatments, isFetching: isLoadingVisitTreatments } = useVisitTreatmentList(
-    1,
-    MAX_PER_PAGE,
-    '',
-    [],
-    ['treatment', 'visit', 'materialItems', 'prescription', 'prescription.items'],
-    {}
-  );
-
-  const typedPatients = useMemo(
-    () => (allPatientsRows.length > 0 ? allPatientsRows : (patients as Patient[])),
-    [allPatientsRows, patients]
-  );
-  const typedAppointments = useMemo(
-    () => (allAppointmentsRows.length > 0 ? allAppointmentsRows : (appointments as Appointment[])),
-    [allAppointmentsRows, appointments]
-  );
-  const typedVisits = useMemo(
-    () => (allVisitsRows.length > 0 ? allVisitsRows : (visits as Visit[])),
-    [allVisitsRows, visits]
-  );
-  const typedVisitTreatments = useMemo(
-    () => (
-      allVisitTreatmentRows.length > 0
-        ? allVisitTreatmentRows
-        : (visitTreatments as VisitTreatmentReportRow[])
-    ),
-    [allVisitTreatmentRows, visitTreatments]
-  );
-  const invoiceRows = useMemo(
-    () => (allInvoiceRows.length > 0 ? allInvoiceRows : (invoices as Array<Record<string, unknown>>)),
-    [allInvoiceRows, invoices]
-  );
+  const typedPatients = allPatientsRows;
+  const typedAppointments = allAppointmentsRows;
+  const typedVisits = allVisitsRows;
+  const typedVisitTreatments = allVisitTreatmentRows;
+  const invoiceRows = allInvoiceRows;
   const patientNameById = useMemo(() => {
     const map = new Map<string, string>();
     typedPatients.forEach((patient) => {
@@ -798,155 +852,126 @@ export default function ReportsPage(): JSX.Element {
     return merged;
   }, [allPatientNameRows, patientNameById]);
 
+  useEffect(() => {
+    setHasLoadedCoreData(false);
+    setHasLoadedFinanceData(false);
+    setHasLoadedInventoryData(false);
+  }, [endDate, startDate]);
+
+  const handleReportRequestError = useCallback((error: unknown, fallbackMessage: string): void => {
+    const status = typeof error === 'object' && error !== null && 'response' in error
+      ? (error as { response?: { status?: number } }).response?.status
+      : undefined;
+
+    if (status === 401) {
+      setUser(null);
+      router.replace(`/${locale}/auth/login`);
+      return;
+    }
+
+    toast.error(parseApiError(error).message || fallbackMessage);
+  }, [locale, router, setUser]);
+
+  const fetchExecutiveSummaryData = useCallback(async (): Promise<void> => {
+    if (!isSessionChecked || !user) return;
+
+    setIsLoadingExecutiveSummary(true);
+    try {
+      const summary = await fetchExecutiveSummary({
+        dentistFilter: selectedDentistFilter,
+        endDate,
+        granularity,
+        patientFilter: selectedPatientFilter,
+        paymentMethodFilter: selectedPaymentMethodFilter,
+        startDate,
+        statusFilter: globalStatusFilter,
+        treatmentFilter: selectedTreatmentFilter,
+      });
+      setExecutiveSummary(summary);
+    } catch (error) {
+      setExecutiveSummary(null);
+      handleReportRequestError(error, 'Failed to load executive summary.');
+    } finally {
+      setIsLoadingExecutiveSummary(false);
+    }
+  }, [
+    endDate,
+    globalStatusFilter,
+    granularity,
+    handleReportRequestError,
+    isSessionChecked,
+    selectedDentistFilter,
+    selectedPatientFilter,
+    selectedPaymentMethodFilter,
+    selectedTreatmentFilter,
+    startDate,
+    user,
+  ]);
+
+  useEffect(() => {
+    if (!isSessionChecked || !user) return;
+    void fetchExecutiveSummaryData();
+  }, [fetchExecutiveSummaryData, isSessionChecked, user]);
+
   const fetchCoreData = useCallback(async (): Promise<void> => {
+    if (!isSessionChecked || !user) return;
+
     setIsLoadingCoreData(true);
     try {
-      const [patientsItems, appointmentItems, visitItems, invoiceItems, visitTreatmentItems] = await Promise.all([
-        fetchAllRows('/api/v1/dental-management/patients', {
-          sortBy: 'createdAt',
-          sortDirection: 'desc',
-        }),
-        fetchAllRows('/api/v1/dental-management/appointments', {
-          include: ['patient', 'dentist'],
-          sortBy: 'appointmentDate',
-          sortDirection: 'desc',
-        }),
-        fetchAllRows('/api/v1/dental-management/visits', {
-          include: ['patient', 'dentist'],
-          sortBy: 'visitDate',
-          sortDirection: 'desc',
-        }),
-        fetchAllRows('/api/v1/dental-management/invoices', {
-          include: ['patient', 'visit', 'payments'],
-          sortBy: 'invoiceDate',
-          sortDirection: 'desc',
-        }),
-        fetchAllRows('/api/v1/dental-management/visit-treatments', {
-          include: ['treatment', 'visit', 'materialItems', 'prescription', 'prescription.items'],
-          sortBy: 'createdAt',
-          sortDirection: 'desc',
-        }),
-      ]);
+      const dataset = await fetchClinicalDataset({ endDate, startDate });
+      if (!dataset) {
+        return;
+      }
 
-      setAllPatientsRows(patientsItems as Patient[]);
-      setAllAppointmentsRows(appointmentItems as Appointment[]);
-      setAllVisitsRows(visitItems as Visit[]);
-      setAllInvoiceRows(invoiceItems);
-      setAllVisitTreatmentRows(visitTreatmentItems as VisitTreatmentReportRow[]);
+      setAllPatientsRows(dataset.patients);
+      setAllAppointmentsRows(dataset.appointments);
+      setAllVisitsRows(dataset.visits);
+      setAllVisitTreatmentRows(dataset.visitTreatments);
+      setAllPatientNameRows(dataset.patientNameMap);
+      setImplantSupplierTasks(dataset.patientSessionTasks);
+      setHasLoadedCoreData(true);
+    } catch (error) {
+      handleReportRequestError(error, 'Failed to load clinical report data.');
     } finally {
       setIsLoadingCoreData(false);
     }
-  }, []);
-
-  useEffect(() => {
-    void fetchCoreData();
-  }, [fetchCoreData]);
+  }, [endDate, handleReportRequestError, isSessionChecked, startDate, user]);
 
   const fetchFinanceData = useCallback(async (): Promise<void> => {
+    if (!isSessionChecked || !user) return;
+
     setIsLoadingFinanceData(true);
     try {
-      const [expenseItems, safeItems, salaryItems, patientItems] = await Promise.all([
-        fetchAllRows('/api/v1/dental-management/expenses', {
-          include: ['staff'],
-          sortBy: 'expenseDate',
-          sortDirection: 'desc',
-        }),
-        fetchAllRows('/api/v1/dental-management/safe-transactions', {
-          include: ['pickedByStaff'],
-          sortBy: 'transactionDate',
-          sortDirection: 'desc',
-        }),
-        fetchAllRows('/api/v1/dental-management/salary-payments', {
-          include: ['staff'],
-          sortBy: 'paymentDate',
-          sortDirection: 'desc',
-        }),
-        fetchAllRows('/api/v1/dental-management/patients', {
-          sortBy: 'createdAt',
-          sortDirection: 'desc',
-        }),
-      ]);
+      const dataset = await fetchFinancialDataset({ endDate, startDate });
+      if (!dataset) {
+        return;
+      }
 
-      const patientNameMap: Record<string, string> = {};
-      const patientIds = patientItems
-        .map((row) => {
-          const patientId = asText(row.id);
-          if (!patientId) return '';
-          const firstName = asText(row.firstName ?? row.first_name);
-          const lastName = asText(row.lastName ?? row.last_name);
-          const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
-          patientNameMap[patientId] = fullName || asText(row.patientCode ?? row.patient_code) || `Patient #${patientId}`;
-          return patientId;
-        })
-        .filter(Boolean);
-
-      const sessionTasks = await fetchPatientSessionTasks(patientIds);
-      setImplantSupplierTasks(sessionTasks);
-      setAllPatientNameRows(patientNameMap);
-
-      setExpenseRows(expenseItems.map((row) => ({
-        amount: parseAmount(row.amount),
-        amountInput: parseAmount(row.amountInput ?? row.amount_input ?? row.amount),
-        category: asText(row.category) || 'Other',
-        currency: 'AFN',
-        exchangeRate: parseAmount(row.exchangeRate ?? row.exchange_rate ?? 1) || 1,
-        expenseDate: asText(row.expenseDate ?? row.expense_date),
-        expenseType: asText(row.expenseType ?? row.expense_type) || 'daily',
-        id: asText(row.id),
-      })));
-      setSafeRows(safeItems.map((row) => {
-        const pickedBy = row.pickedByStaff as Record<string, unknown> | undefined;
-        const pickedByName = pickedBy
-          ? [asText(pickedBy.firstName ?? pickedBy.first_name), asText(pickedBy.lastName ?? pickedBy.last_name)]
-            .filter(Boolean)
-            .join(' ')
-          : '';
-        return {
-          amount: parseAmount(row.amount),
-          amountInput: parseAmount(row.amountInput ?? row.amount_input ?? row.amount),
-          currency: 'AFN',
-          direction: asText(row.direction),
-          entryType: asText(row.entryType ?? row.entry_type),
-          exchangeRate: parseAmount(row.exchangeRate ?? row.exchange_rate ?? 1) || 1,
-          id: asText(row.id),
-          notes: asText(row.notes),
-          pickedByStaffId: asText(row.pickedByStaffId ?? row.picked_by_staff_id),
-          pickedByStaffName: pickedByName || asText(pickedBy?.fullName ?? pickedBy?.name),
-          transactionDate: asText(row.transactionDate ?? row.transaction_date),
-        };
-      }));
-      setSalaryRows(salaryItems.map((row) => {
-        const staff = row.staff as Record<string, unknown> | undefined;
-        const staffName = staff
-          ? [asText(staff.firstName ?? staff.first_name), asText(staff.lastName ?? staff.last_name)]
-            .filter(Boolean)
-            .join(' ')
-          : '';
-        return {
-          currency: 'AFN',
-          exchangeRate: parseAmount(row.exchangeRate ?? row.exchange_rate ?? 1) || 1,
-          id: asText(row.id),
-          netAmount: parseAmount(row.netAmount ?? row.net_amount),
-          netAmountInput: parseAmount(row.netAmountInput ?? row.net_amount_input ?? row.netAmount ?? row.net_amount),
-          paymentDate: asText(row.paymentDate ?? row.payment_date),
-          staffId: asText(row.staffId ?? row.staff_id),
-          staffName: staffName || asText(staff?.fullName ?? staff?.name),
-          status: asText(row.status) || 'pending',
-        };
-      }));
+      setImplantSupplierTasks(dataset.patientSessionTasks);
+      setAllPatientsRows(dataset.patients);
+      setAllVisitsRows(dataset.visits);
+      setAllInvoiceRows(dataset.invoiceRows);
+      setAllVisitTreatmentRows(dataset.visitTreatmentRows);
+      setAllPatientNameRows(dataset.patientNameMap);
+      setExpenseRows(dataset.expenseRows);
+      setSafeRows(dataset.safeRows);
+      setSalaryRows(dataset.salaryRows);
+      setShareholderRows(dataset.shareholderRows);
+      setShareholderTransactionRows(dataset.shareholderTransactionRows);
+      setHasLoadedFinanceData(true);
+    } catch (error) {
+      handleReportRequestError(error, 'Failed to load financial report data.');
     } finally {
       setIsLoadingFinanceData(false);
     }
-  }, []);
-
-  useEffect(() => {
-    void fetchFinanceData();
-  }, [fetchFinanceData]);
+  }, [endDate, handleReportRequestError, isSessionChecked, startDate, user]);
 
   const fetchInventoryData = useCallback(async (): Promise<void> => {
+    if (!isSessionChecked || !user) return;
+
     setIsLoadingInventoryData(true);
     try {
-      const items = await fetchAllRows('/api/v1/dental-management/inventory-items', {
+      const items = await fetchAllRows(apiClient, '/api/v1/dental-management/inventory-items', {
         sortBy: 'entryDate',
         sortDirection: 'desc',
       });
@@ -967,22 +992,132 @@ export default function ReportsPage(): JSX.Element {
         unitCost: parseAmount(row.unitCost ?? row.unit_cost),
         updatedAt: asText(row.updatedAt ?? row.updated_at ?? row.entryDate ?? row.entry_date),
       })));
+      setHasLoadedInventoryData(true);
+    } catch (error) {
+      handleReportRequestError(error, 'Failed to load inventory report data.');
     } finally {
       setIsLoadingInventoryData(false);
     }
-  }, []);
+  }, [handleReportRequestError, isSessionChecked, user]);
 
   useEffect(() => {
+    if (!isSessionChecked || !user) return;
+    if (activeTab !== 'clinical' || hasLoadedCoreData) return;
+    void fetchCoreData();
+  }, [activeTab, fetchCoreData, hasLoadedCoreData, isSessionChecked, user]);
+
+  useEffect(() => {
+    if (!isSessionChecked || !user) return;
+    if ((activeTab !== 'financial' && activeTab !== 'audit') || hasLoadedFinanceData) return;
+    void fetchFinanceData();
+  }, [activeTab, fetchFinanceData, hasLoadedFinanceData, isSessionChecked, user]);
+
+  useEffect(() => {
+    if (!isSessionChecked || !user) return;
+    if (activeTab !== 'inventory' || hasLoadedInventoryData) return;
     void fetchInventoryData();
-  }, [fetchInventoryData]);
+  }, [activeTab, fetchInventoryData, hasLoadedInventoryData, isSessionChecked, user]);
+
+  useEffect(() => {
+    if (!isSessionChecked || !user) return;
+    if (activeTab !== 'executive' || isLoadingExecutiveSummary || (hasLoadedFinanceData && hasLoadedCoreData)) return;
+
+    let isCancelled = false;
+
+    const runPrefetch = async (): Promise<void> => {
+      const pendingFetches: Array<Promise<void>> = [];
+
+      if (!hasLoadedFinanceData) {
+        pendingFetches.push(fetchFinanceData());
+      }
+
+      if (!hasLoadedCoreData) {
+        pendingFetches.push(fetchCoreData());
+      }
+
+      if (pendingFetches.length === 0) {
+        return;
+      }
+
+      await Promise.allSettled(pendingFetches);
+    };
+
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      const idleId = window.requestIdleCallback(() => {
+        if (!isCancelled) {
+          void runPrefetch();
+        }
+      }, { timeout: 1500 });
+
+      return () => {
+        isCancelled = true;
+        window.cancelIdleCallback(idleId);
+      };
+    }
+
+    const timeoutId = setTimeout(() => {
+      if (!isCancelled) {
+        void runPrefetch();
+      }
+    }, 300);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [
+    activeTab,
+    fetchCoreData,
+    fetchFinanceData,
+    hasLoadedCoreData,
+    hasLoadedFinanceData,
+    isSessionChecked,
+    isLoadingExecutiveSummary,
+    user,
+  ]);
+
+  const shouldComputeExecutiveFallback = executiveSummary === null && (hasLoadedCoreData || hasLoadedFinanceData);
+  const shouldComputeFinancialDerived = hasLoadedFinanceData && (
+    activeTab === 'financial'
+    || activeTab === 'audit'
+    || showAdvancedControls
+    || shouldComputeExecutiveFallback
+  );
+  const shouldComputeAppointmentDerived = hasLoadedCoreData && (
+    activeTab === 'clinical'
+    || showAdvancedControls
+    || shouldComputeExecutiveFallback
+  );
+  const shouldComputeVisitDerived = (hasLoadedCoreData || hasLoadedFinanceData) && (
+    activeTab === 'clinical'
+    || activeTab === 'financial'
+    || showAdvancedControls
+    || shouldComputeExecutiveFallback
+  );
+  const shouldComputeImplantDerived = (hasLoadedCoreData || hasLoadedFinanceData) && (
+    activeTab === 'clinical'
+    || activeTab === 'financial'
+    || showAdvancedControls
+    || shouldComputeExecutiveFallback
+  );
+  const shouldComputeInventoryDerived = hasLoadedInventoryData && activeTab === 'inventory';
+  const shouldComputeAuditDerived = activeTab === 'audit';
 
   const filteredDailyExpenses = useMemo(
-    () => expenseRows.filter((item) => item.expenseType === 'daily' && inRange(item.expenseDate, startDate, endDate)),
-    [endDate, expenseRows, startDate]
+    () => (
+      shouldComputeFinancialDerived
+        ? expenseRows.filter((item) => item.expenseType === 'daily' && inRange(item.expenseDate, startDate, endDate))
+        : EMPTY_EXPENSE_ROWS
+    ),
+    [endDate, expenseRows, shouldComputeFinancialDerived, startDate]
   );
   const filteredClinicalExpenses = useMemo(
-    () => expenseRows.filter((item) => item.expenseType === 'clinical' && inRange(item.expenseDate, startDate, endDate)),
-    [endDate, expenseRows, startDate]
+    () => (
+      shouldComputeFinancialDerived
+        ? expenseRows.filter((item) => item.expenseType === 'clinical' && inRange(item.expenseDate, startDate, endDate))
+        : EMPTY_EXPENSE_ROWS
+    ),
+    [endDate, expenseRows, shouldComputeFinancialDerived, startDate]
   );
   const expenseSummary = useMemo(() => {
     const daily = Number(
@@ -1016,6 +1151,10 @@ export default function ReportsPage(): JSX.Element {
     };
   }, [filteredClinicalExpenses, filteredDailyExpenses]);
   const safePickups = useMemo(() => {
+    if (!shouldComputeFinancialDerived) {
+      return [];
+    }
+
     const grouped = new Map<string, number>();
     safeRows.forEach((row) => {
       if (row.direction !== 'out') return;
@@ -1027,8 +1166,15 @@ export default function ReportsPage(): JSX.Element {
     return [...grouped.entries()]
       .map(([name, amount]) => ({ amount, name }))
       .sort((left, right) => right.amount - left.amount);
-  }, [endDate, safeRows, startDate]);
+  }, [endDate, safeRows, shouldComputeFinancialDerived, startDate]);
   const salarySummary = useMemo(() => {
+    if (!shouldComputeFinancialDerived) {
+      return {
+        paid: 0,
+        records: 0,
+      };
+    }
+
     const filtered = salaryRows.filter((row) => inRange(row.paymentDate, startDate, endDate));
     const paid = Number(filtered
       .filter((row) => row.status === 'paid' || row.status === 'partial')
@@ -1039,10 +1185,89 @@ export default function ReportsPage(): JSX.Element {
       paid,
       records: filtered.length,
     };
-  }, [endDate, salaryRows, startDate]);
+  }, [endDate, salaryRows, shouldComputeFinancialDerived, startDate]);
+  const shareholderTransactionsInRange = useMemo(
+    () => (
+      shouldComputeFinancialDerived
+        ? shareholderTransactionRows.filter((row) => inRange(row.transactionDate, startDate, endDate))
+        : EMPTY_SHAREHOLDER_TRANSACTION_ROWS
+    ),
+    [endDate, shareholderTransactionRows, shouldComputeFinancialDerived, startDate]
+  );
+  const shareholderFinancialSummary = useMemo(() => {
+    if (!shouldComputeFinancialDerived) {
+      return {
+        activeCount: 0,
+        rangeContributed: 0,
+        rangeDistributed: 0,
+        rangeRows: [],
+        totalBalance: 0,
+        totalContributed: 0,
+        totalDistributed: 0,
+        totalInitial: 0,
+        totalShareholders: 0,
+        topBalances: [],
+        transactionCount: 0,
+      };
+    }
+
+    const totalInitial = Number(shareholderRows.reduce((sum, row) => sum + row.initialCapitalInput, 0).toFixed(2));
+    const totalContributed = Number(shareholderRows.reduce((sum, row) => sum + row.contributedAmount, 0).toFixed(2));
+    const totalDistributed = Number(shareholderRows.reduce((sum, row) => sum + row.distributedAmount, 0).toFixed(2));
+    const totalBalance = Number(shareholderRows.reduce((sum, row) => sum + row.balanceAmount, 0).toFixed(2));
+    const rangeContributed = Number(shareholderTransactionsInRange
+      .filter((row) => row.transactionType === 'contribution')
+      .reduce((sum, row) => sum + row.amountInput, 0)
+      .toFixed(2));
+    const rangeDistributed = Number(shareholderTransactionsInRange
+      .filter((row) => row.transactionType === 'distribution')
+      .reduce((sum, row) => sum + row.amountInput, 0)
+      .toFixed(2));
+
+    const grouped = new Map<string, { contribution: number; distribution: number; name: string }>();
+    shareholderTransactionsInRange.forEach((row) => {
+      const existing = grouped.get(row.shareholderId) ?? { contribution: 0, distribution: 0, name: row.shareholderName || `Shareholder #${row.shareholderId}` };
+      if (row.transactionType === 'contribution') existing.contribution += row.amountInput;
+      else existing.distribution += row.amountInput;
+      grouped.set(row.shareholderId, existing);
+    });
+
+    const rangeRows = [...grouped.entries()]
+      .map(([id, item]) => ({
+        contribution: Number(item.contribution.toFixed(2)),
+        distribution: Number(item.distribution.toFixed(2)),
+        id,
+        name: item.name,
+        net: Number((item.contribution - item.distribution).toFixed(2)),
+      }))
+      .sort((left, right) => right.net - left.net);
+
+    const topBalances = [...shareholderRows]
+      .map((row) => ({ balance: row.balanceAmount, id: row.id, name: row.fullName || `Shareholder #${row.id}` }))
+      .sort((left, right) => right.balance - left.balance)
+      .slice(0, 8);
+
+    return {
+      activeCount: shareholderRows.filter((row) => row.status === 'active').length,
+      rangeContributed,
+      rangeDistributed,
+      rangeRows,
+      totalBalance,
+      totalContributed,
+      totalDistributed,
+      totalInitial,
+      totalShareholders: shareholderRows.length,
+      topBalances,
+      transactionCount: shareholderTransactionsInRange.length,
+    };
+  }, [shareholderRows, shareholderTransactionsInRange, shouldComputeFinancialDerived]);
   const filteredImplantSupplierTasks = useMemo(
-    () =>
-      implantSupplierTasks.filter((task) => {
+    () => {
+      if (!shouldComputeImplantDerived) {
+        return EMPTY_IMPLANT_TASKS;
+      }
+
+      return implantSupplierTasks.filter((task) => {
         const taskDate = asText(task.updatedAt) || asText(task.createdAt);
         const availability = parseAvailabilityFromTaskNotes(task.notes, task.status);
         if (!taskDate) return true;
@@ -1053,8 +1278,9 @@ export default function ReportsPage(): JSX.Element {
           if (mappedStatus !== globalStatusFilter) return false;
         }
         return true;
-      }),
-    [endDate, globalStatusFilter, implantSupplierTasks, selectedPatientFilter, startDate]
+      });
+    },
+    [endDate, globalStatusFilter, implantSupplierTasks, selectedPatientFilter, shouldComputeImplantDerived, startDate]
   );
   const thirdCompanySummary = useMemo(
     () => aggregateImplantSupplierBalances(filteredImplantSupplierTasks),
@@ -1089,6 +1315,10 @@ export default function ReportsPage(): JSX.Element {
   }, [selectedThirdCompanyAvailability, thirdCompanySummary.rows]);
 
   const parsedData = useMemo(() => {
+    if (!shouldComputeFinancialDerived) {
+      return EMPTY_PARSED_DATA;
+    }
+
     const allPayments: ParsedPayment[] = [];
     const allInvoices: ParsedInvoice[] = [];
     const ledgerEvents: Array<Omit<LedgerEntry, 'balance'>> = [];
@@ -1206,7 +1436,11 @@ export default function ReportsPage(): JSX.Element {
     }, []);
 
     return { allInvoices, allPayments, ledgerEntries };
-  }, [invoiceRows]);
+  }, [invoiceRows, shouldComputeFinancialDerived]);
+  const invoiceById = useMemo(
+    () => new Map(parsedData.allInvoices.map((invoice) => [invoice.id, invoice])),
+    [parsedData.allInvoices]
+  );
 
   const visitById = useMemo(() => {
     const map = new Map<string, Visit>();
@@ -1286,7 +1520,7 @@ export default function ReportsPage(): JSX.Element {
         return false;
       }
 
-      const invoice = parsedData.allInvoices.find((row) => row.id === payment.invoiceId);
+      const invoice = invoiceById.get(payment.invoiceId);
       if (!invoice) return false;
 
       if (selectedPatientFilter !== 'all' && invoice.patientId !== selectedPatientFilter) return false;
@@ -1308,8 +1542,8 @@ export default function ReportsPage(): JSX.Element {
   }, [
     endDate,
     globalStatusFilter,
-    parsedData.allInvoices,
     parsedData.allPayments,
+    invoiceById,
     selectedDentistFilter,
     selectedPatientFilter,
     selectedPaymentMethodFilter,
@@ -1320,8 +1554,9 @@ export default function ReportsPage(): JSX.Element {
   ]);
 
   const filteredAppointments = useMemo(
-    () =>
-      typedAppointments.filter((item) => {
+    () => (
+      shouldComputeAppointmentDerived
+        ? typedAppointments.filter((item) => {
         if (!inRange(item.appointmentDate, startDate, endDate)) return false;
         if (selectedPatientFilter !== 'all' && asText(item.patientId) !== selectedPatientFilter) return false;
         if (selectedDentistFilter !== 'all') {
@@ -1331,12 +1566,15 @@ export default function ReportsPage(): JSX.Element {
         }
         if (globalStatusFilter !== 'all' && toReportStatus(item.status || 'pending') !== globalStatusFilter) return false;
         return true;
-      }),
-    [endDate, globalStatusFilter, selectedDentistFilter, selectedPatientFilter, startDate, typedAppointments]
+      })
+        : EMPTY_APPOINTMENTS
+    ),
+    [endDate, globalStatusFilter, selectedDentistFilter, selectedPatientFilter, shouldComputeAppointmentDerived, startDate, typedAppointments]
   );
   const filteredVisits = useMemo(
-    () =>
-      typedVisits.filter((item) => {
+    () => (
+      shouldComputeVisitDerived
+        ? typedVisits.filter((item) => {
         if (!inRange(item.visitDate, startDate, endDate)) return false;
         if (selectedPatientFilter !== 'all' && asText(item.patientId) !== selectedPatientFilter) return false;
         if (selectedDentistFilter !== 'all') {
@@ -1345,30 +1583,36 @@ export default function ReportsPage(): JSX.Element {
           if (dentistId !== selectedDentistFilter && dentistName !== selectedDentistFilter) return false;
         }
         return true;
-      }),
-    [endDate, selectedDentistFilter, selectedPatientFilter, startDate, typedVisits]
+      })
+        : EMPTY_VISITS
+    ),
+    [endDate, selectedDentistFilter, selectedPatientFilter, shouldComputeVisitDerived, startDate, typedVisits]
   );
   const filteredVisitTreatments = useMemo(
-    () =>
-      typedVisitTreatments.filter((item) => {
-        const date = item.visit?.visitDate || item.createdAt;
+    () => (
+      shouldComputeVisitDerived
+        ? typedVisitTreatments.filter((item) => {
+        const visit = visitById.get(asText(item.visitId));
+        const date = asText(item.visit?.visitDate) || asText(visit?.visitDate) || item.createdAt;
         if (!inRange(date, startDate, endDate)) return false;
         if (selectedTreatmentFilter !== 'all') {
           const treatmentName = item.treatment?.name || `Treatment ${item.treatmentId}`;
           if (treatmentName.toLowerCase() !== selectedTreatmentFilter.toLowerCase()) return false;
         }
         if (selectedDentistFilter !== 'all') {
-          const dentistName = asText(item.visit?.dentistName);
-          if (dentistName !== selectedDentistFilter) return false;
+          const itemVisit = item.visit as Record<string, unknown> | undefined;
+          const dentistName = asText(item.visit?.dentistName) || asText(visit?.dentistName);
+          const dentistId = asText(itemVisit?.dentistId ?? itemVisit?.dentist_id) || asText(visit?.dentistId);
+          if (dentistId !== selectedDentistFilter && dentistName !== selectedDentistFilter) return false;
         }
         if (selectedPatientFilter !== 'all') {
-          const visitId = asText(item.visitId);
-          const visit = visitById.get(visitId);
           if (asText(visit?.patientId) !== selectedPatientFilter) return false;
         }
         return true;
-      }),
-    [endDate, selectedDentistFilter, selectedPatientFilter, selectedTreatmentFilter, startDate, typedVisitTreatments, visitById]
+      })
+        : EMPTY_VISIT_TREATMENTS
+    ),
+    [endDate, selectedDentistFilter, selectedPatientFilter, selectedTreatmentFilter, shouldComputeVisitDerived, startDate, typedVisitTreatments, visitById]
   );
 
   const dentistFilterOptions = useMemo(() => {
@@ -1381,8 +1625,13 @@ export default function ReportsPage(): JSX.Element {
       const dentist = asText(item.dentistName) || asText(item.dentistId);
       if (dentist) names.add(dentist);
     });
+    if (names.size === 0) {
+      executiveSummary?.filterOptions.dentists.forEach((dentist) => {
+        if (dentist) names.add(dentist);
+      });
+    }
     return [...names].sort((left, right) => left.localeCompare(right));
-  }, [typedAppointments, typedVisits]);
+  }, [executiveSummary, typedAppointments, typedVisits]);
 
   const treatmentFilterOptions = useMemo(() => {
     const names = new Set<string>();
@@ -1390,22 +1639,35 @@ export default function ReportsPage(): JSX.Element {
       const name = item.treatment?.name || `Treatment ${item.treatmentId}`;
       if (name) names.add(name);
     });
+    if (names.size === 0) {
+      executiveSummary?.filterOptions.treatments.forEach((treatment) => {
+        if (treatment) names.add(treatment);
+      });
+    }
     return [...names].sort((left, right) => left.localeCompare(right));
-  }, [typedVisitTreatments]);
+  }, [executiveSummary, typedVisitTreatments]);
 
   const paymentMethodFilterOptions = useMemo(() => {
     const names = new Set<string>();
     parsedData.allPayments.forEach((item) => {
       if (item.method) names.add(item.method.toLowerCase());
     });
+    if (names.size === 0) {
+      executiveSummary?.filterOptions.paymentMethods.forEach((method) => {
+        if (method) names.add(method.toLowerCase());
+      });
+    }
     return [...names].sort((left, right) => left.localeCompare(right));
-  }, [parsedData.allPayments]);
+  }, [executiveSummary, parsedData.allPayments]);
 
   const patientFilterOptions = useMemo(() => {
-    return [...mergedPatientNameById.entries()]
-      .map(([id, name]) => ({ id, name: name || `Patient #${id}` }))
-      .sort((left, right) => left.name.localeCompare(right.name));
-  }, [mergedPatientNameById]);
+    const rows = [...mergedPatientNameById.entries()]
+      .map(([id, name]) => ({ id, name: name || `Patient #${id}` }));
+    if (rows.length === 0 && executiveSummary) {
+      return [...executiveSummary.filterOptions.patients].sort((left, right) => left.name.localeCompare(right.name));
+    }
+    return rows.sort((left, right) => left.name.localeCompare(right.name));
+  }, [executiveSummary, mergedPatientNameById]);
 
   const kpis = useMemo(() => {
     const billed = Number(filteredInvoices.reduce((sum, invoice) => sum + invoice.total, 0).toFixed(2));
@@ -1482,6 +1744,17 @@ export default function ReportsPage(): JSX.Element {
   );
 
   const dailyFinancialSummary = useMemo(() => {
+    if (!shouldComputeFinancialDerived) {
+      return {
+        closingBalance: 0,
+        openingBalance: 0,
+        physicalBalance: 0,
+        totalCashIn: 0,
+        totalCashOut: 0,
+        variance: 0,
+      };
+    }
+
     const start = parseDate(startDate)?.getTime() ?? Number.MIN_SAFE_INTEGER;
     let opening = 0;
     let cashIn = 0;
@@ -1517,11 +1790,15 @@ export default function ReportsPage(): JSX.Element {
       totalCashOut,
       variance,
     };
-  }, [endDate, physicalSafeBalanceInput, safeRows, startDate]);
+  }, [endDate, physicalSafeBalanceInput, safeRows, shouldComputeFinancialDerived, startDate]);
 
   const inventoryRowsInRange = useMemo(
-    () => inventoryRows.filter((row) => inRange(row.entryDate, startDate, endDate)),
-    [endDate, inventoryRows, startDate]
+    () => (
+      shouldComputeInventoryDerived
+        ? inventoryRows.filter((row) => inRange(row.entryDate, startDate, endDate))
+        : EMPTY_INVENTORY_ROWS
+    ),
+    [endDate, inventoryRows, shouldComputeInventoryDerived, startDate]
   );
   const inventoryRowsById = useMemo(
     () => new Map(inventoryRows.map((row) => [row.id, row])),
@@ -1642,7 +1919,8 @@ export default function ReportsPage(): JSX.Element {
     const grouped = new Map<string, { count: number; label: string; revenue: number; sort: number }>();
     filteredVisitTreatments.forEach((row) => {
       if (!isImplantTreatmentRow(row)) return;
-      const date = parseDate(row.visit?.visitDate || row.createdAt);
+      const visit = visitById.get(asText(row.visitId));
+      const date = parseDate(asText(row.visit?.visitDate) || asText(visit?.visitDate) || row.createdAt);
       if (!date) return;
       const bucket = toBucket(date, 'month');
       const current = grouped.get(bucket.key) ?? { count: 0, label: bucket.label, revenue: 0, sort: bucket.sort };
@@ -1654,7 +1932,7 @@ export default function ReportsPage(): JSX.Element {
       .map(([key, value]) => ({ count: value.count, key, label: value.label, revenue: value.revenue, sort: value.sort }))
       .sort((left, right) => left.sort - right.sort)
       .map((row) => ({ count: row.count, key: row.key, label: row.label, revenue: row.revenue }));
-  }, [filteredVisitTreatments]);
+  }, [filteredVisitTreatments, visitById]);
 
   const executiveRevenueTrendMonthly = useMemo(() => {
     const grouped = new Map<string, { amount: number; label: string; sort: number }>();
@@ -1722,6 +2000,10 @@ export default function ReportsPage(): JSX.Element {
   }, [endDate, filteredVisits.length, startDate]);
 
   const financialModificationLogRows = useMemo<FinancialModificationLogRow[]>(() => {
+    if (!shouldComputeAuditDerived) {
+      return EMPTY_FINANCIAL_MODIFICATION_LOG_ROWS;
+    }
+
     const rows: FinancialModificationLogRow[] = [];
     invoiceRows.forEach((invoice) => {
       const createdAt = asText(invoice.createdAt ?? invoice.created_at);
@@ -1756,16 +2038,20 @@ export default function ReportsPage(): JSX.Element {
         const rightTime = parseDate(right.timestamp)?.getTime() ?? 0;
         return rightTime - leftTime;
       });
-  }, [invoiceRows, safeRows]);
+  }, [invoiceRows, safeRows, shouldComputeAuditDerived]);
 
   const accessLogRows = useMemo(() => {
+    if (!shouldComputeAuditDerived) {
+      return EMPTY_ACCESS_LOG_ROWS;
+    }
+
     return snapshotRecords.map((snapshot) => ({
       action: `Report snapshot (${snapshot.granularity})`,
       generatedAt: snapshot.generatedAt,
       range: `${snapshot.rangeStart} to ${snapshot.rangeEnd}`,
       user: 'Current user',
     }));
-  }, [snapshotRecords]);
+  }, [shouldComputeAuditDerived, snapshotRecords]);
 
   const incomeTrend = useMemo<TrendPoint[]>(() => {
     const buckets = new Map<string, { income: number; label: string; paymentCount: number; sort: number }>();
@@ -1940,6 +2226,21 @@ export default function ReportsPage(): JSX.Element {
       }));
   }, [endDate, filteredClinicalExpenses, filteredDailyExpenses, filteredPayments, granularity, salaryRows, startDate]);
 
+  const displayExpenseSummary = executiveSummary?.expenseSummary ?? expenseSummary;
+  const displayKpis = executiveSummary?.kpis ?? kpis;
+  const displayProfitOrLoss = executiveSummary?.profitLoss ?? profitOrLoss;
+  const displayProfitLossTrend = executiveSummary?.profitLossTrend ?? profitLossTrend;
+  const displayExecutiveRevenueTrendMonthly = executiveSummary?.revenueTrendMonthly ?? executiveRevenueTrendMonthly;
+  const displayTreatmentVolume = executiveSummary?.treatmentVolume ?? treatmentVolume;
+  const displayDentistProductivity = executiveSummary?.dentistProductivity ?? dentistProductivity;
+  const displayImplantPlacementTrend = executiveSummary?.implantPlacementTrend ?? implantPlacementTrend;
+  const displayNewPatientsCount = executiveSummary?.newPatientsCount ?? newPatientsCount;
+  const displayImplantRevenue = executiveSummary?.implantRevenue ?? implantRevenue;
+  const displayCashInSafe = executiveSummary?.cashInSafe ?? cashInSafe;
+  const displayBankBalance = executiveSummary?.bankBalance ?? bankBalance;
+  const displayTreatmentAcceptanceRate = executiveSummary?.treatmentAcceptanceRate ?? treatmentAcceptanceRate;
+  const displayChairUtilizationRate = executiveSummary?.chairUtilizationRate ?? chairUtilizationRate;
+
   const paymentMethodMix = useMemo<PaymentMethodPoint[]>(() => {
     const grouped = new Map<string, PaymentMethodPoint>();
     filteredPayments.forEach((payment) => {
@@ -2025,10 +2326,13 @@ export default function ReportsPage(): JSX.Element {
   }, [filteredAppointments, filteredVisitTreatments.length]);
 
   const dentistPerformanceRows = useMemo(() => {
+    const revenueByDentist = new Map<string, number>();
     const treatmentCountByDentist = new Map<string, number>();
     filteredVisitTreatments.forEach((row) => {
-      const dentist = row.visit?.dentistName || 'Unknown';
+      const visit = visitById.get(asText(row.visitId));
+      const dentist = asText(row.visit?.dentistName) || asText(visit?.dentistName) || `Dentist #${asText(visit?.dentistId) || '-'}`;
       treatmentCountByDentist.set(dentist, (treatmentCountByDentist.get(dentist) ?? 0) + 1);
+      revenueByDentist.set(dentist, Number(((revenueByDentist.get(dentist) ?? 0) + parseAmount(row.price)).toFixed(2)));
     });
 
     const patientsByDentist = new Map<string, Set<string>>();
@@ -2039,14 +2343,19 @@ export default function ReportsPage(): JSX.Element {
       patientsByDentist.set(dentist, set);
     });
 
-    return dentistProductivity.map((row) => ({
-      commission: Number((row.revenue * 0.1).toFixed(2)),
-      dentist: row.dentist,
-      patientsSeen: patientsByDentist.get(row.dentist)?.size ?? 0,
-      revenue: row.revenue,
-      treatments: treatmentCountByDentist.get(row.dentist) ?? 0,
-    }));
-  }, [dentistProductivity, filteredVisitTreatments, filteredVisits]);
+    return [...new Set([...treatmentCountByDentist.keys(), ...patientsByDentist.keys(), ...revenueByDentist.keys()])]
+      .map((dentist) => {
+        const revenue = revenueByDentist.get(dentist) ?? 0;
+        return {
+          commission: Number((revenue * 0.1).toFixed(2)),
+          dentist,
+          patientsSeen: patientsByDentist.get(dentist)?.size ?? 0,
+          revenue,
+          treatments: treatmentCountByDentist.get(dentist) ?? 0,
+        };
+      })
+      .sort((left, right) => right.revenue - left.revenue || right.treatments - left.treatments);
+  }, [filteredVisitTreatments, filteredVisits, visitById]);
 
   const implantSuccessRows = useMemo(() => {
     const rows = filteredImplantSupplierTasks.map((task) => ({
@@ -2146,12 +2455,8 @@ export default function ReportsPage(): JSX.Element {
     [endDate, filteredInvoices, selectedDebtAgingBucket]
   );
 
-  const isLoadingAny = isLoadingPatients
-    || isLoadingAppointments
-    || isLoadingVisits
-    || isLoadingInvoices
-    || isLoadingVisitTreatments
-    || isLoadingCoreData
+  const isLoadingAny = isLoadingCoreData
+    || isLoadingExecutiveSummary
     || isLoadingFinanceData
     || isLoadingInventoryData;
 
@@ -2168,22 +2473,22 @@ export default function ReportsPage(): JSX.Element {
   const captureSnapshot = useCallback((reason: 'manual' | 'scheduled'): void => {
     const now = new Date().toISOString();
     const snapshot: SnapshotRecord = {
-      activePatients: kpis.activePatients,
-      appointmentCompletionRate: kpis.appointmentCompletionRate,
-      appointments: kpis.appointments,
-      billed: kpis.billed,
-      collectionRate: kpis.collectionRate,
-      debt: kpis.debt,
-      discount: kpis.discount,
+      activePatients: displayKpis.activePatients,
+      appointmentCompletionRate: displayKpis.appointmentCompletionRate,
+      appointments: displayKpis.appointments,
+      billed: displayKpis.billed,
+      collectionRate: displayKpis.collectionRate,
+      debt: displayKpis.debt,
+      discount: displayKpis.discount,
       generatedAt: now,
       granularity,
       id: `${now}-${Math.floor(Math.random() * 10000)}`,
-      net: kpis.net,
-      paid: kpis.paid,
+      net: displayKpis.net,
+      paid: displayKpis.paid,
       rangeEnd: endDate,
       rangeStart: startDate,
       statusFilter: globalStatusFilter,
-      visits: kpis.visits,
+      visits: displayKpis.visits,
     };
 
     setSnapshotRecords((previous) => [snapshot, ...previous].slice(0, 60));
@@ -2195,7 +2500,7 @@ export default function ReportsPage(): JSX.Element {
     if (reason === 'manual') {
       window.alert('Snapshot captured.');
     }
-  }, [endDate, globalStatusFilter, granularity, kpis, startDate]);
+  }, [displayKpis, endDate, globalStatusFilter, granularity, startDate]);
 
   useEffect(() => {
     if (snapshotCadence === 'off' || isLoadingAny) return;
@@ -2377,38 +2682,43 @@ export default function ReportsPage(): JSX.Element {
       `;
     };
 
-    const totalOutcomeForPrint = Number((kpis.expenses + kpis.salaryPaid + kpis.thirdCompanyPaid).toFixed(2));
-    const profitOrLossForPrint = Number((kpis.paid - totalOutcomeForPrint).toFixed(2));
+    const totalOutcomeForPrint = Number((displayKpis.expenses + displayKpis.salaryPaid + displayKpis.thirdCompanyPaid).toFixed(2));
+    const profitOrLossForPrint = displayProfitOrLoss;
+    const executiveTrendRowsForPrint = displayExecutiveRevenueTrendMonthly.map((row) => ({
+      income: row.amount,
+      label: row.label,
+      paymentCount: '-',
+    }));
     const formatRow = (label: string, value: string): string => `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`;
     const summaryRows = [
       formatRow('Date Range', `${formatFullDate(startDate)} to ${formatFullDate(endDate)}`),
       formatRow('Granularity', toHumanLabel(granularity)),
       formatRow('Status Filter', toHumanLabel(globalStatusFilter)),
       formatRow('Reporting Currency', 'AFN (Afghani)'),
-      formatRow('Billed', formatCurrency(kpis.billed)),
-      formatRow('Discount', formatCurrency(kpis.discount)),
-      formatRow('Net', formatCurrency(kpis.net)),
-      formatRow('Paid', formatCurrency(kpis.paid)),
-      formatRow('Debt', formatCurrency(kpis.debt)),
-      formatRow('Expenses', formatCurrency(kpis.expenses)),
-      formatRow('Third-Company Paid', formatCurrency(kpis.thirdCompanyPaid)),
-      formatRow('Third-Company Unpaid', formatCurrency(kpis.thirdCompanyUnpaid)),
-      formatRow('Third-Company Supplier Total', formatCurrency(kpis.thirdCompanyTotal)),
-      formatRow('Third-Company Unpaid Teeth', String(kpis.thirdCompanyUnpaidCount)),
-      formatRow('Net After Expenses', formatCurrency(kpis.netAfterExpenses)),
-      formatRow('Safe Outflow', formatCurrency(kpis.safeOut)),
-      formatRow('Salaries Paid', formatCurrency(kpis.salaryPaid)),
-      formatRow('Collection Rate', `${kpis.collectionRate}%`),
+      formatRow('Billed', formatCurrency(displayKpis.billed)),
+      formatRow('Discount', formatCurrency(displayKpis.discount)),
+      formatRow('Net', formatCurrency(displayKpis.net)),
+      formatRow('Paid', formatCurrency(displayKpis.paid)),
+      formatRow('Debt', formatCurrency(displayKpis.debt)),
+      formatRow('Expenses', formatCurrency(displayKpis.expenses)),
+      formatRow('Third-Company Paid', formatCurrency(displayKpis.thirdCompanyPaid)),
+      formatRow('Third-Company Unpaid', formatCurrency(displayKpis.thirdCompanyUnpaid)),
+      formatRow('Third-Company Supplier Total', formatCurrency(displayKpis.thirdCompanyTotal)),
+      formatRow('Third-Company Unpaid Teeth', String(displayKpis.thirdCompanyUnpaidCount)),
+      formatRow('Net After Expenses', formatCurrency(displayKpis.netAfterExpenses)),
+      formatRow('Safe Outflow', formatCurrency(displayKpis.safeOut)),
+      formatRow('Salaries Paid', formatCurrency(displayKpis.salaryPaid)),
+      formatRow('Collection Rate', `${displayKpis.collectionRate}%`),
       formatRow('Profit / Loss', formatCurrency(profitOrLossForPrint)),
     ].join('');
 
-    const maxBar = Math.max(kpis.paid, totalOutcomeForPrint, 1);
-    const paidBarWidth = Math.min(100, (kpis.paid / maxBar) * 100);
+    const maxBar = Math.max(displayKpis.paid, totalOutcomeForPrint, 1);
+    const paidBarWidth = Math.min(100, (displayKpis.paid / maxBar) * 100);
     const outcomeBarWidth = Math.min(100, (totalOutcomeForPrint / maxBar) * 100);
     const profitBarWidth = Math.min(100, (Math.abs(profitOrLossForPrint) / maxBar) * 100);
     const profitLossSection = `
       <h3>Profit / Loss Visual</h3>
-      <div class="bar-wrap"><span>Income (Paid)</span><div class="bar bg-blue"><i style="width:${paidBarWidth}%"></i></div><b>${escapeHtml(formatCurrency(kpis.paid))}</b></div>
+      <div class="bar-wrap"><span>Income (Paid)</span><div class="bar bg-blue"><i style="width:${paidBarWidth}%"></i></div><b>${escapeHtml(formatCurrency(displayKpis.paid))}</b></div>
       <div class="bar-wrap"><span>Outcome (Expenses + Salaries + Third-Company)</span><div class="bar bg-orange"><i style="width:${outcomeBarWidth}%"></i></div><b>${escapeHtml(formatCurrency(totalOutcomeForPrint))}</b></div>
       <div class="bar-wrap"><span>${profitOrLossForPrint >= 0 ? 'Profit' : 'Loss'}</span><div class="bar ${profitOrLossForPrint >= 0 ? 'bg-emerald' : 'bg-red'}"><i style="width:${profitBarWidth}%"></i></div><b>${escapeHtml(formatCurrency(profitOrLossForPrint))}</b></div>
     `;
@@ -2421,22 +2731,22 @@ export default function ReportsPage(): JSX.Element {
 
     const overviewBodySection = `
       ${profitLossSection}
-      ${buildLineChart(incomeTrend.map((point) => ({ label: point.label, value: point.income })), '#0ea5e9', 'Income Trend Diagram')}
+      ${buildLineChart(executiveTrendRowsForPrint.map((point) => ({ label: point.label, value: point.income })), '#0ea5e9', 'Income Trend Diagram')}
       <h3>Income Trend</h3>
       <table><thead><tr><th>Bucket</th><th>Income</th><th>Payments</th></tr></thead><tbody>
-        ${incomeTrend.map((point) => `<tr><td>${escapeHtml(point.label)}</td><td>${escapeHtml(formatCurrency(point.income))}</td><td>${point.paymentCount}</td></tr>`).join('')}
+        ${executiveTrendRowsForPrint.map((point) => `<tr><td>${escapeHtml(point.label)}</td><td>${escapeHtml(formatCurrency(point.income))}</td><td>${point.paymentCount}</td></tr>`).join('')}
       </tbody></table>
       <h3>Revenue by Treatment Type</h3>
       <table><thead><tr><th>Treatment</th><th>Sessions</th><th>Revenue</th></tr></thead><tbody>
-        ${treatmentVolume.map((row) => `<tr><td>${escapeHtml(row.name)}</td><td>${row.sessions}</td><td>${escapeHtml(formatCurrency(row.revenue))}</td></tr>`).join('')}
+        ${displayTreatmentVolume.map((row) => `<tr><td>${escapeHtml(row.name)}</td><td>${row.sessions}</td><td>${escapeHtml(formatCurrency(row.revenue))}</td></tr>`).join('')}
       </tbody></table>
       <h3>Revenue by Dentist</h3>
       <table><thead><tr><th>Dentist</th><th>Visits</th><th>Revenue</th></tr></thead><tbody>
-        ${dentistProductivity.map((row) => `<tr><td>${escapeHtml(row.dentist)}</td><td>${row.visits}</td><td>${escapeHtml(formatCurrency(row.revenue))}</td></tr>`).join('')}
+        ${displayDentistProductivity.map((row) => `<tr><td>${escapeHtml(row.dentist)}</td><td>${row.visits}</td><td>${escapeHtml(formatCurrency(row.revenue))}</td></tr>`).join('')}
       </tbody></table>
       <h3>Implant Placement Trend</h3>
       <table><thead><tr><th>Month</th><th>Placements</th><th>Revenue</th></tr></thead><tbody>
-        ${implantPlacementTrend.map((row) => `<tr><td>${escapeHtml(row.label)}</td><td>${row.count}</td><td>${escapeHtml(formatCurrency(row.revenue))}</td></tr>`).join('')}
+        ${displayImplantPlacementTrend.map((row) => `<tr><td>${escapeHtml(row.label)}</td><td>${row.count}</td><td>${escapeHtml(formatCurrency(row.revenue))}</td></tr>`).join('')}
       </tbody></table>
     `;
     const financialBodySection = `
@@ -2933,6 +3243,31 @@ export default function ReportsPage(): JSX.Element {
       return;
     }
 
+    if (csvExportType === 'financial_shareholder') {
+      const rows = shareholderTransactionsInRange
+        .map((row) => ({
+          'Transaction ID': row.id,
+          Date: formatFullDate(row.transactionDate),
+          Shareholder: row.shareholderName || `Shareholder #${row.shareholderId || '-'}`,
+          Type: row.transactionType,
+          Amount: formatCsvAmount(row.amountInput),
+          'Safe Effect': row.transactionType === 'contribution' ? 'IN' : 'OUT',
+          Notes: row.notes || '-',
+        }))
+        .sort((left, right) => String(left.Date).localeCompare(String(right.Date)));
+
+      downloadCsv(`shareholder-ledger-${startDate}-to-${endDate}.csv`, rows.length > 0 ? rows : [{
+        'Transaction ID': 'No data',
+        Date: '-',
+        Shareholder: '-',
+        Type: '-',
+        Amount: '-',
+        'Safe Effect': '-',
+        Notes: '-',
+      }]);
+      return;
+    }
+
     if (csvExportType === 'financial_implant_installment') {
       const taskById = new Map<string, ImplantSupplierTaskLike>();
       filteredImplantSupplierTasks.forEach((task) => {
@@ -3213,16 +3548,16 @@ export default function ReportsPage(): JSX.Element {
 
     if (csvExportType === 'executive_summary') {
       const executiveRows = [
-        { Metric: 'Total Revenue', Value: formatCsvAmount(kpis.paid) },
-        { Metric: 'Net Profit', Value: formatCsvAmount(profitOrLoss) },
-        { Metric: 'Total Expenses', Value: formatCsvAmount(kpis.expenses) },
-        { Metric: 'Outstanding Payments', Value: formatCsvAmount(kpis.debt) },
-        { Metric: 'New Patients', Value: String(newPatientsCount) },
-        { Metric: 'Implant Revenue', Value: formatCsvAmount(implantRevenue) },
-        { Metric: 'Cash In Safe', Value: formatCsvAmount(cashInSafe) },
-        { Metric: 'Bank Balance', Value: formatCsvAmount(bankBalance) },
-        { Metric: 'Treatment Acceptance Rate', Value: `${treatmentAcceptanceRate}%` },
-        { Metric: 'Chair Utilization Rate', Value: `${chairUtilizationRate}%` },
+        { Metric: 'Total Revenue', Value: formatCsvAmount(displayKpis.paid) },
+        { Metric: 'Net Profit', Value: formatCsvAmount(displayProfitOrLoss) },
+        { Metric: 'Total Expenses', Value: formatCsvAmount(displayKpis.expenses) },
+        { Metric: 'Outstanding Payments', Value: formatCsvAmount(displayKpis.debt) },
+        { Metric: 'New Patients', Value: String(displayNewPatientsCount) },
+        { Metric: 'Implant Revenue', Value: formatCsvAmount(displayImplantRevenue) },
+        { Metric: 'Cash In Safe', Value: formatCsvAmount(displayCashInSafe) },
+        { Metric: 'Bank Balance', Value: formatCsvAmount(displayBankBalance) },
+        { Metric: 'Treatment Acceptance Rate', Value: `${displayTreatmentAcceptanceRate}%` },
+        { Metric: 'Chair Utilization Rate', Value: `${displayChairUtilizationRate}%` },
       ];
       downloadCsv(`executive-summary-${startDate}-to-${endDate}.csv`, executiveRows);
       return;
@@ -3270,7 +3605,11 @@ export default function ReportsPage(): JSX.Element {
     const selectedDentistLabel = selectedDentistFilter === 'all' ? 'All Dentists' : selectedDentistFilter;
     const selectedTreatmentLabel = selectedTreatmentFilter === 'all' ? 'All Treatments' : selectedTreatmentFilter;
     const selectedPaymentLabel = selectedPaymentMethodFilter === 'all' ? 'All Payment Methods' : toHumanLabel(selectedPaymentMethodFilter);
-    const selectedPatientLabel = selectedPatientFilter === 'all' ? 'All Patients' : (mergedPatientNameById.get(selectedPatientFilter) || `Patient #${selectedPatientFilter}`);
+    const selectedPatientLabel = selectedPatientFilter === 'all'
+      ? 'All Patients'
+      : (patientFilterOptions.find((patient) => patient.id === selectedPatientFilter)?.name
+          || mergedPatientNameById.get(selectedPatientFilter)
+          || `Patient #${selectedPatientFilter}`);
 
     addRow({
       Name: 'Report Name',
@@ -3335,67 +3674,67 @@ export default function ReportsPage(): JSX.Element {
 
     if (activeTab === 'executive') {
       addRow({
-        Amount: formatCsvAmount(kpis.paid),
+        Amount: formatCsvAmount(displayKpis.paid),
         Name: 'Total Revenue',
         Section: 'Executive',
         Subsection: 'KPI',
       });
       addRow({
-        Amount: formatCsvAmount(profitOrLoss),
+        Amount: formatCsvAmount(displayProfitOrLoss),
         Name: 'Net Profit',
         Section: 'Executive',
         Subsection: 'KPI',
       });
       addRow({
-        Amount: formatCsvAmount(kpis.expenses),
+        Amount: formatCsvAmount(displayKpis.expenses),
         Name: 'Total Expenses',
         Section: 'Executive',
         Subsection: 'KPI',
       });
       addRow({
-        Amount: formatCsvAmount(kpis.debt),
+        Amount: formatCsvAmount(displayKpis.debt),
         Name: 'Outstanding',
         Section: 'Executive',
         Subsection: 'KPI',
       });
       addRow({
         Name: 'New Patients',
-        Quantity: newPatientsCount,
+        Quantity: displayNewPatientsCount,
         Section: 'Executive',
         Subsection: 'KPI',
       });
       addRow({
-        Amount: formatCsvAmount(implantRevenue),
+        Amount: formatCsvAmount(displayImplantRevenue),
         Name: 'Implant Revenue',
         Section: 'Executive',
         Subsection: 'KPI',
       });
       addRow({
-        Amount: formatCsvAmount(cashInSafe),
+        Amount: formatCsvAmount(displayCashInSafe),
         Name: 'Cash In Safe',
         Section: 'Executive',
         Subsection: 'KPI',
       });
       addRow({
-        Amount: formatCsvAmount(bankBalance),
+        Amount: formatCsvAmount(displayBankBalance),
         Name: 'Bank Balance',
         Section: 'Executive',
         Subsection: 'KPI',
       });
       addRow({
         Name: 'Treatment Acceptance Rate',
-        Notes: `${treatmentAcceptanceRate}%`,
+        Notes: `${displayTreatmentAcceptanceRate}%`,
         Section: 'Executive',
         Subsection: 'KPI',
       });
       addRow({
         Name: 'Chair Utilization Rate',
-        Notes: `${chairUtilizationRate}%`,
+        Notes: `${displayChairUtilizationRate}%`,
         Section: 'Executive',
         Subsection: 'KPI',
       });
 
-      executiveRevenueTrendMonthly.forEach((row) => {
+      displayExecutiveRevenueTrendMonthly.forEach((row) => {
         addRow({
           Amount: formatCsvAmount(row.amount),
           Date: row.label,
@@ -3404,7 +3743,7 @@ export default function ReportsPage(): JSX.Element {
           Subsection: 'Revenue Trend Monthly',
         });
       });
-      treatmentVolume.forEach((row) => {
+      displayTreatmentVolume.forEach((row) => {
         addRow({
           Amount: formatCsvAmount(row.revenue),
           Name: row.name,
@@ -3414,7 +3753,7 @@ export default function ReportsPage(): JSX.Element {
           Treatment: row.name,
         });
       });
-      dentistProductivity.forEach((row) => {
+      displayDentistProductivity.forEach((row) => {
         addRow({
           Amount: formatCsvAmount(row.revenue),
           Dentist: row.dentist,
@@ -3424,7 +3763,7 @@ export default function ReportsPage(): JSX.Element {
           Subsection: 'Revenue by Dentist',
         });
       });
-      implantPlacementTrend.forEach((row) => {
+      displayImplantPlacementTrend.forEach((row) => {
         addRow({
           Amount: formatCsvAmount(row.revenue),
           Date: row.label,
@@ -3841,22 +4180,22 @@ export default function ReportsPage(): JSX.Element {
               <div className="grid gap-3 rounded-md border border-border/70 bg-muted/20 p-3 md:grid-cols-4">
                 <div>
                   <p className="text-xs text-muted-foreground">{tReportsPage('summary.incomePaid')}</p>
-                  <p className="text-lg font-semibold text-emerald-600">{formatCurrency(kpis.paid)}</p>
+                  <p className="text-lg font-semibold text-emerald-600">{formatCurrency(displayKpis.paid)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">{tReportsPage('summary.outcome')}</p>
-                  <p className="text-lg font-semibold text-orange-600">{formatCurrency(totalOutcome)}</p>
+                  <p className="text-lg font-semibold text-orange-600">{formatCurrency(Number((displayKpis.expenses + displayKpis.salaryPaid + displayKpis.thirdCompanyPaid).toFixed(2)))}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">{tReportsPage('summary.profitLoss')}</p>
-                  <p className={`text-lg font-semibold ${profitOrLoss >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                    {formatCurrency(profitOrLoss)}
+                  <p className={`text-lg font-semibold ${displayProfitOrLoss >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {formatCurrency(displayProfitOrLoss)}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Third-Company Unpaid</p>
-                  <p className="text-lg font-semibold text-orange-600">{formatCurrency(kpis.thirdCompanyUnpaid)}</p>
-                  <p className="text-xs text-muted-foreground">{kpis.thirdCompanyUnpaidCount} implant teeth</p>
+                  <p className="text-lg font-semibold text-orange-600">{formatCurrency(displayKpis.thirdCompanyUnpaid)}</p>
+                  <p className="text-xs text-muted-foreground">{displayKpis.thirdCompanyUnpaidCount} implant teeth</p>
                 </div>
               </div>
 
@@ -4168,7 +4507,15 @@ export default function ReportsPage(): JSX.Element {
             </CardContent>
           </Card>
 
-          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as typeof activeTab)} className="space-y-3">
+          <Tabs
+            value={activeTab}
+            onValueChange={(value) => {
+              startTransition(() => {
+                setActiveTab(value as typeof activeTab);
+              });
+            }}
+            className="space-y-3"
+          >
             <TabsList>
               <TabsTrigger value="executive">Executive Dashboard</TabsTrigger>
               <TabsTrigger value="financial">Financial Reports</TabsTrigger>
@@ -4182,15 +4529,15 @@ export default function ReportsPage(): JSX.Element {
                 <Card className="border-border/70">
                   <CardContent className="pt-5">
                     <p className="text-xs text-muted-foreground">Total Revenue</p>
-                    <p className="text-2xl font-semibold">{formatCurrency(kpis.paid)}</p>
-                    <p className="text-xs text-muted-foreground">Collection: {kpis.collectionRate}%</p>
+                    <p className="text-2xl font-semibold">{formatCurrency(displayKpis.paid)}</p>
+                    <p className="text-xs text-muted-foreground">Collection: {displayKpis.collectionRate}%</p>
                   </CardContent>
                 </Card>
                 <Card className="border-border/70">
                   <CardContent className="pt-5">
                     <p className="text-xs text-muted-foreground">Net Profit</p>
-                    <p className={`text-2xl font-semibold ${profitOrLoss >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                      {formatCurrency(profitOrLoss)}
+                    <p className={`text-2xl font-semibold ${displayProfitOrLoss >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      {formatCurrency(displayProfitOrLoss)}
                     </p>
                     <p className="text-xs text-muted-foreground">After operational outcome</p>
                   </CardContent>
@@ -4198,56 +4545,56 @@ export default function ReportsPage(): JSX.Element {
                 <Card className="border-border/70">
                   <CardContent className="pt-5">
                     <p className="text-xs text-muted-foreground">Total Expenses</p>
-                    <p className="text-2xl font-semibold">{formatCurrency(kpis.expenses)}</p>
+                    <p className="text-2xl font-semibold">{formatCurrency(displayKpis.expenses)}</p>
                     <p className="text-xs text-muted-foreground">Daily + clinical buys</p>
                   </CardContent>
                 </Card>
                 <Card className="border-border/70">
                   <CardContent className="pt-5">
                     <p className="text-xs text-muted-foreground">Outstanding Payments</p>
-                    <p className="text-2xl font-semibold">{formatCurrency(kpis.debt)}</p>
+                    <p className="text-2xl font-semibold">{formatCurrency(displayKpis.debt)}</p>
                     <p className="text-xs text-muted-foreground">Pending receivables</p>
                   </CardContent>
                 </Card>
                 <Card className="border-border/70">
                   <CardContent className="pt-5">
                     <p className="text-xs text-muted-foreground">New Patients</p>
-                    <p className="text-2xl font-semibold">{newPatientsCount}</p>
+                    <p className="text-2xl font-semibold">{displayNewPatientsCount}</p>
                     <p className="text-xs text-muted-foreground">In selected range</p>
                   </CardContent>
                 </Card>
                 <Card className="border-border/70">
                   <CardContent className="pt-5">
                     <p className="text-xs text-muted-foreground">Implant Revenue</p>
-                    <p className="text-2xl font-semibold">{formatCurrency(implantRevenue)}</p>
+                    <p className="text-2xl font-semibold">{formatCurrency(displayImplantRevenue)}</p>
                     <p className="text-xs text-muted-foreground">From implant treatments</p>
                   </CardContent>
                 </Card>
                 <Card className="border-border/70">
                   <CardContent className="pt-5">
                     <p className="text-xs text-muted-foreground">Cash in Safe</p>
-                    <p className="text-2xl font-semibold">{formatCurrency(cashInSafe)}</p>
+                    <p className="text-2xl font-semibold">{formatCurrency(displayCashInSafe)}</p>
                     <p className="text-xs text-muted-foreground">System balance</p>
                   </CardContent>
                 </Card>
                 <Card className="border-border/70">
                   <CardContent className="pt-5">
                     <p className="text-xs text-muted-foreground">Bank Balance</p>
-                    <p className="text-2xl font-semibold">{formatCurrency(bankBalance)}</p>
+                    <p className="text-2xl font-semibold">{formatCurrency(displayBankBalance)}</p>
                     <p className="text-xs text-muted-foreground">Bank/card collections</p>
                   </CardContent>
                 </Card>
                 <Card className="border-border/70">
                   <CardContent className="pt-5">
                     <p className="text-xs text-muted-foreground">Treatment Acceptance Rate</p>
-                    <p className="text-2xl font-semibold">{treatmentAcceptanceRate}%</p>
+                    <p className="text-2xl font-semibold">{displayTreatmentAcceptanceRate}%</p>
                     <p className="text-xs text-muted-foreground">Visits vs appointments</p>
                   </CardContent>
                 </Card>
                 <Card className="border-border/70">
                   <CardContent className="pt-5">
                     <p className="text-xs text-muted-foreground">Chair Utilization Rate</p>
-                    <p className="text-2xl font-semibold">{chairUtilizationRate}%</p>
+                    <p className="text-2xl font-semibold">{displayChairUtilizationRate}%</p>
                     <p className="text-xs text-muted-foreground">Visit density by day</p>
                   </CardContent>
                 </Card>
@@ -4262,45 +4609,45 @@ export default function ReportsPage(): JSX.Element {
                   <div className="grid gap-2 md:grid-cols-4">
                     <div className="rounded-md border border-border/70 bg-muted/20 p-2">
                       <p className="text-xs text-muted-foreground">Billed</p>
-                      <p className="text-sm font-semibold text-foreground">{formatCurrency(kpis.billed)}</p>
+                      <p className="text-sm font-semibold text-foreground">{formatCurrency(displayKpis.billed)}</p>
                     </div>
                     <div className="rounded-md border border-border/70 bg-muted/20 p-2">
                       <p className="text-xs text-muted-foreground">Discount</p>
-                      <p className="text-sm font-semibold text-foreground">{formatCurrency(kpis.discount)}</p>
+                      <p className="text-sm font-semibold text-foreground">{formatCurrency(displayKpis.discount)}</p>
                     </div>
                     <div className="rounded-md border border-border/70 bg-muted/20 p-2">
                       <p className="text-xs text-muted-foreground">Collected</p>
-                      <p className="text-sm font-semibold text-foreground">{formatCurrency(kpis.paid)}</p>
+                      <p className="text-sm font-semibold text-foreground">{formatCurrency(displayKpis.paid)}</p>
                     </div>
                     <div className="rounded-md border border-border/70 bg-muted/20 p-2">
                       <p className="text-xs text-muted-foreground">Outstanding</p>
-                      <p className="text-sm font-semibold text-foreground">{formatCurrency(kpis.debt)}</p>
+                      <p className="text-sm font-semibold text-foreground">{formatCurrency(displayKpis.debt)}</p>
                     </div>
                     <div className="rounded-md border border-border/70 bg-muted/20 p-2 md:col-span-2">
                       <p className="text-xs text-muted-foreground">Expenses (Daily + Clinical)</p>
                       <p className="text-sm font-semibold text-foreground">
-                        {formatCurrency(expenseSummary.total)} ({formatCurrency(expenseSummary.daily)} daily / {formatCurrency(expenseSummary.clinical)} clinical)
+                        {formatCurrency(displayExpenseSummary.total)} ({formatCurrency(displayExpenseSummary.daily)} daily / {formatCurrency(displayExpenseSummary.clinical)} clinical)
                       </p>
-                      <p className="text-xs text-muted-foreground">Third-company paid: {formatCurrency(kpis.thirdCompanyPaid)}</p>
-                      <p className="text-xs text-muted-foreground">Operational net cash: {formatCurrency(kpis.netAfterExpenses)}</p>
+                      <p className="text-xs text-muted-foreground">Third-company paid: {formatCurrency(displayKpis.thirdCompanyPaid)}</p>
+                      <p className="text-xs text-muted-foreground">Operational net cash: {formatCurrency(displayKpis.netAfterExpenses)}</p>
                     </div>
                     <div className="rounded-md border border-border/70 bg-muted/20 p-2 md:col-span-2">
                       <p className="text-xs text-muted-foreground">Third-Company Liability</p>
                       <p className="text-sm font-semibold text-foreground">
-                        Unpaid {formatCurrency(kpis.thirdCompanyUnpaid)} / Total {formatCurrency(kpis.thirdCompanyTotal)}
+                        Unpaid {formatCurrency(displayKpis.thirdCompanyUnpaid)} / Total {formatCurrency(displayKpis.thirdCompanyTotal)}
                       </p>
-                      <p className="text-xs text-muted-foreground">Unpaid teeth: {kpis.thirdCompanyUnpaidCount}</p>
+                      <p className="text-xs text-muted-foreground">Unpaid teeth: {displayKpis.thirdCompanyUnpaidCount}</p>
                     </div>
                   </div>
                   <div className="space-y-1">
                     <div className="h-2 rounded-full bg-muted">
                       <div
                         className="h-2 rounded-full bg-emerald-500"
-                        style={{ width: `${kpis.net > 0 ? Math.min(100, (kpis.paid / kpis.net) * 100) : 0}%` }}
+                        style={{ width: `${displayKpis.net > 0 ? Math.min(100, (displayKpis.paid / displayKpis.net) * 100) : 0}%` }}
                       />
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Collection flow progress: {kpis.collectionRate}% of net invoices collected.
+                      Collection flow progress: {displayKpis.collectionRate}% of net invoices collected.
                     </p>
                   </div>
                 </CardContent>
@@ -4314,12 +4661,12 @@ export default function ReportsPage(): JSX.Element {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {profitLossTrend.length === 0 ? (
+                  {displayProfitLossTrend.length === 0 ? (
                     <p className="text-sm text-muted-foreground">{tReportsPage('profitLossChart.empty')}</p>
                   ) : (
                     <div className="h-72">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={profitLossTrend}>
+                        <BarChart data={displayProfitLossTrend}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} />
                           <XAxis dataKey="label" />
                           <YAxis tickFormatter={(value) => `${Number(value).toFixed(0)}`} />
@@ -4331,7 +4678,7 @@ export default function ReportsPage(): JSX.Element {
                           <Bar dataKey="income" fill="#22c55e" name={tReportsPage('summary.incomePaid')} radius={[4, 4, 0, 0]} />
                           <Bar dataKey="outcome" fill="#f97316" name={tReportsPage('summary.outcome')} radius={[4, 4, 0, 0]} />
                           <Bar dataKey="profit" name={tReportsPage('summary.profitLoss')} radius={[4, 4, 0, 0]}>
-                            {profitLossTrend.map((entry) => (
+                            {displayProfitLossTrend.map((entry) => (
                               <Cell key={entry.key} fill={entry.profit >= 0 ? '#16a34a' : '#dc2626'} />
                             ))}
                           </Bar>
@@ -4347,14 +4694,18 @@ export default function ReportsPage(): JSX.Element {
                   <CardTitle className="text-base">Income Trend</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {isLoadingAny ? (
-                    <p className="text-sm text-muted-foreground">Loading report data...</p>
-                  ) : executiveRevenueTrendMonthly.length === 0 ? (
+                  {isLoadingExecutiveSummary ? (
+                    <LoadingState
+                      compact
+                      title="Loading executive report"
+                      description="Preparing revenue trends and summary KPIs."
+                    />
+                  ) : displayExecutiveRevenueTrendMonthly.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No income data in selected range.</p>
                   ) : (
                     <div className="h-72">
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={executiveRevenueTrendMonthly} margin={{ bottom: 8, left: 0, right: 10, top: 8 }}>
+                        <AreaChart data={displayExecutiveRevenueTrendMonthly} margin={{ bottom: 8, left: 0, right: 10, top: 8 }}>
                           <defs>
                             <linearGradient id="reportsIncomeGradient" x1="0" x2="0" y1="0" y2="1">
                               <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.42} />
@@ -4387,12 +4738,12 @@ export default function ReportsPage(): JSX.Element {
                     <CardTitle className="text-base">Revenue by Treatment Type</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {treatmentVolume.length === 0 ? (
+                    {displayTreatmentVolume.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No treatment revenue in selected range.</p>
                     ) : (
                       <div className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={treatmentVolume}>
+                          <BarChart data={displayTreatmentVolume}>
                             <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
                             <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} />
                             <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={(value) => `AFN ${Number(value).toFixed(0)}`} />
@@ -4410,12 +4761,12 @@ export default function ReportsPage(): JSX.Element {
                     <CardTitle className="text-base">Revenue by Dentist</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {dentistProductivity.length === 0 ? (
+                    {displayDentistProductivity.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No dentist revenue in selected range.</p>
                     ) : (
                       <div className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={dentistProductivity}>
+                          <BarChart data={displayDentistProductivity}>
                             <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
                             <XAxis dataKey="dentist" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} />
                             <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={(value) => `AFN ${Number(value).toFixed(0)}`} />
@@ -4433,12 +4784,12 @@ export default function ReportsPage(): JSX.Element {
                     <CardTitle className="text-base">Implant Placement Trend</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {implantPlacementTrend.length === 0 ? (
+                    {displayImplantPlacementTrend.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No implant placements in selected range.</p>
                     ) : (
                       <div className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={implantPlacementTrend}>
+                          <LineChart data={displayImplantPlacementTrend}>
                             <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
                             <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} />
                             <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} />
@@ -4458,12 +4809,12 @@ export default function ReportsPage(): JSX.Element {
                     <CardTitle className="text-base">Expense Breakdown</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {expenseSummary.byCategory.length === 0 ? (
+                    {displayExpenseSummary.byCategory.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No expenses in selected range.</p>
                     ) : (
                       <div className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={expenseSummary.byCategory}>
+                          <BarChart data={displayExpenseSummary.byCategory}>
                             <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
                             <XAxis dataKey="category" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} />
                             <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={(value) => `AFN ${Number(value).toFixed(0)}`} />
@@ -4518,6 +4869,90 @@ export default function ReportsPage(): JSX.Element {
                       value={physicalSafeBalanceInput}
                       onChange={(event) => setPhysicalSafeBalanceInput(event.target.value)}
                     />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/70">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Shareholder Capital Report</CardTitle>
+                  <CardDescription>
+                    Lifetime capital position and selected-range contribution/distribution flow.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid gap-2 md:grid-cols-5">
+                    <div className="rounded-md border border-border/70 bg-muted/20 p-2">
+                      <p className="text-xs text-muted-foreground">Shareholders</p>
+                      <p className="text-sm font-semibold text-foreground">
+                        {shareholderFinancialSummary.activeCount} active / {shareholderFinancialSummary.totalShareholders} total
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-border/70 bg-muted/20 p-2">
+                      <p className="text-xs text-muted-foreground">Initial Capital</p>
+                      <p className="text-sm font-semibold text-foreground">{formatCurrency(shareholderFinancialSummary.totalInitial)}</p>
+                    </div>
+                    <div className="rounded-md border border-border/70 bg-emerald-100/70 p-2">
+                      <p className="text-xs text-emerald-700">Range Contributed</p>
+                      <p className="text-sm font-semibold text-emerald-900">{formatCurrency(shareholderFinancialSummary.rangeContributed)}</p>
+                    </div>
+                    <div className="rounded-md border border-border/70 bg-rose-100/70 p-2">
+                      <p className="text-xs text-rose-700">Range Distributed</p>
+                      <p className="text-sm font-semibold text-rose-900">{formatCurrency(shareholderFinancialSummary.rangeDistributed)}</p>
+                    </div>
+                    <div className="rounded-md border border-border/70 bg-indigo-100/70 p-2">
+                      <p className="text-xs text-indigo-700">Lifetime Balance</p>
+                      <p className="text-sm font-semibold text-indigo-900">{formatCurrency(shareholderFinancialSummary.totalBalance)}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-foreground">
+                        Range Net by Shareholder ({shareholderFinancialSummary.transactionCount} transactions)
+                      </p>
+                      {shareholderFinancialSummary.rangeRows.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No shareholder transactions in selected range.</p>
+                      ) : (
+                        <div className="overflow-x-auto rounded-md border border-border/70">
+                          <table className="min-w-full text-xs">
+                            <thead className="bg-muted/30">
+                              <tr>
+                                <th className="px-2 py-2 text-left font-semibold">Shareholder</th>
+                                <th className="px-2 py-2 text-right font-semibold">Contributed</th>
+                                <th className="px-2 py-2 text-right font-semibold">Distributed</th>
+                                <th className="px-2 py-2 text-right font-semibold">Net</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {shareholderFinancialSummary.rangeRows.slice(0, 12).map((row) => (
+                                <tr key={`shareholder-range-${row.id}`} className="border-t border-border/70">
+                                  <td className="px-2 py-2">{row.name}</td>
+                                  <td className="px-2 py-2 text-right">{formatCurrency(row.contribution)}</td>
+                                  <td className="px-2 py-2 text-right">{formatCurrency(row.distribution)}</td>
+                                  <td className="px-2 py-2 text-right font-semibold">{formatCurrency(row.net)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-foreground">Top Shareholder Balances</p>
+                      {shareholderFinancialSummary.topBalances.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No shareholder balances available.</p>
+                      ) : (
+                        shareholderFinancialSummary.topBalances.map((row) => (
+                          <div key={`shareholder-balance-${row.id}`} className="rounded-md border border-border/70 bg-muted/20 p-2 text-xs">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="font-semibold text-foreground">{row.name}</p>
+                              <p className="font-semibold text-foreground">{formatCurrency(row.balance)}</p>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -5385,7 +5820,11 @@ export default function ReportsPage(): JSX.Element {
                 </CardHeader>
                 <CardContent>
                   {isLoadingInventoryData ? (
-                    <p className="text-sm text-muted-foreground">Loading inventory...</p>
+                    <LoadingState
+                      compact
+                      title="Loading inventory report"
+                      description="Checking stock rows, minimum levels, and expiry details."
+                    />
                   ) : stockStatusRows.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No inventory rows in selected range.</p>
                   ) : (
@@ -5617,3 +6056,4 @@ export default function ReportsPage(): JSX.Element {
     </>
   );
 }
+

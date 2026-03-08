@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace App\Modules\DentalManagement\Domain\Services;
 
 use App\Modules\Common\Application\DTOs\QuerySpecification;
+use App\Modules\DentalManagement\Application\DTOs\PatientData;
 use App\Modules\DentalManagement\Domain\Entities\Patient;
+use App\Modules\DentalManagement\Domain\Entities\PatientQuestion;
 use App\Modules\DentalManagement\Domain\Repositories\PatientRepositoryInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 final readonly class PatientService
@@ -33,18 +36,22 @@ final readonly class PatientService
         );
     }
 
-    public function createPatient(array $data): Patient
+    public function createPatient(PatientData $patientData): Patient
     {
+        $data = $patientData->toArray();
         unset($data['patient_code']);
 
         for ($attempt = 0; $attempt < 5; $attempt++) {
             $data['patient_code'] = $this->generatePatientCode();
 
             try {
-                return tap(
-                    $this->patientRepository->create(data: $data),
-                    fn () => $this->patientRepository->invalidateCache()
-                );
+                return DB::transaction(function () use ($data, $patientData): Patient {
+                    $patient = $this->patientRepository->create(data: $data);
+                    $this->syncQuestionnaireResponses($patient, $patientData->questionnaireResponses);
+                    $this->patientRepository->invalidateCache();
+
+                    return $patient->load(['questionnaireResponses.question']);
+                });
             } catch (QueryException $exception) {
                 if (!$this->isDuplicatePatientCodeException($exception)) {
                     throw $exception;
@@ -55,14 +62,18 @@ final readonly class PatientService
         throw new RuntimeException('Failed to generate a unique patient code.');
     }
 
-    public function updatePatient(int $id, array $data): Patient
+    public function updatePatient(int $id, PatientData $patientData): Patient
     {
+        $data = $patientData->toArray();
         unset($data['patient_code']);
 
-        return tap(
-            $this->patientRepository->update(id: $id, data: $data),
-            fn () => $this->patientRepository->invalidateCache()
-        );
+        return DB::transaction(function () use ($id, $data, $patientData): Patient {
+            $patient = $this->patientRepository->update(id: $id, data: $data);
+            $this->syncQuestionnaireResponses($patient, $patientData->questionnaireResponses);
+            $this->patientRepository->invalidateCache();
+
+            return $patient->load(['questionnaireResponses.question']);
+        });
     }
 
     public function deletePatient(int $id): void
@@ -104,7 +115,7 @@ final readonly class PatientService
     private function generatePatientCode(): string
     {
         $today = now()->format('Y-m-d');
-        $pattern = "/^P#(\\d+)-".preg_quote($today, '/')."$/";
+        $pattern = '/^P#(\\d+)-'.preg_quote($today, '/').'$/';
 
         $maxSequence = Patient::withTrashed()
             ->where('patient_code', 'like', "P#%-{$today}")
@@ -121,7 +132,7 @@ final readonly class PatientService
                 return max($max, (int) $matches[1]);
             }, 0);
 
-        return "P#".($maxSequence + 1)."-{$today}";
+        return 'P#'.($maxSequence + 1)."-{$today}";
     }
 
     private function isDuplicatePatientCodeException(QueryException $exception): bool
@@ -133,5 +144,111 @@ final readonly class PatientService
         $message = strtolower((string) $exception->getMessage());
 
         return str_contains($message, 'patient_code') || str_contains($message, 'patients_patient_code_unique');
+    }
+
+    private function syncQuestionnaireResponses(Patient $patient, array $responses): void
+    {
+        if (!is_array($responses)) {
+            return;
+        }
+
+        $normalizedResponses = collect($responses)
+            ->filter(fn (mixed $response): bool => is_array($response))
+            ->map(function (array $response): ?array {
+                $questionId = $response['questionId'] ?? null;
+                if (!is_numeric($questionId)) {
+                    return null;
+                }
+
+                return [
+                    'patient_question_id' => (int) $questionId,
+                    'answer' => $this->normalizeAnswer($response['answer'] ?? null),
+                ];
+            })
+            ->filter()
+            ->values();
+
+        if ($normalizedResponses->isEmpty()) {
+            if (!PatientQuestion::query()->where('is_active', true)->exists()) {
+                return;
+            }
+
+            $patient->questionnaireResponses()->delete();
+
+            return;
+        }
+
+        $answerTypeByQuestionId = PatientQuestion::query()
+            ->whereIn('id', $normalizedResponses->pluck('patient_question_id')->all())
+            ->pluck('answer_type', 'id');
+
+        $rowsToKeep = $normalizedResponses
+            ->map(function (array $response) use ($answerTypeByQuestionId, $patient): ?array {
+                $answerType = (string) ($answerTypeByQuestionId[$response['patient_question_id']] ?? 'text');
+                $answer = $this->normalizeAnswerForType($response['answer'], $answerType);
+
+                if ($answer === null) {
+                    return null;
+                }
+
+                return [
+                    'patient_id' => $patient->id,
+                    'patient_question_id' => $response['patient_question_id'],
+                    'answer' => $answer,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            })
+            ->filter()
+            ->values();
+
+        $keepIds = $rowsToKeep->pluck('patient_question_id')->all();
+
+        if ($keepIds === []) {
+            $patient->questionnaireResponses()->delete();
+
+            return;
+        }
+
+        $patient->questionnaireResponses()
+            ->whereNotIn('patient_question_id', $keepIds)
+            ->delete();
+
+        DB::table('patient_question_answers')->upsert(
+            $rowsToKeep->all(),
+            ['patient_id', 'patient_question_id'],
+            ['answer', 'updated_at']
+        );
+    }
+
+    private function normalizeAnswer(mixed $answer): ?string
+    {
+        if ($answer === null) {
+            return null;
+        }
+
+        if (is_bool($answer)) {
+            return $answer ? 'yes' : 'no';
+        }
+
+        if (is_scalar($answer)) {
+            $normalized = trim((string) $answer);
+
+            return $normalized === '' ? null : $normalized;
+        }
+
+        return null;
+    }
+
+    private function normalizeAnswerForType(?string $answer, string $answerType): ?string
+    {
+        if ($answer === null) {
+            return null;
+        }
+
+        return match ($answerType) {
+            'yes_no' => in_array(strtolower($answer), ['1', 'true', 'yes'], true) ? 'yes' : 'no',
+            default => $answer,
+        };
     }
 }

@@ -30,6 +30,10 @@ class PatientResource extends JsonResource
             'createdBy' => $this->created_by,
             'updatedBy' => $this->updated_by,
             'deletedBy' => $this->deleted_by,
+            'questionnaireResponses' => $this->whenLoaded(
+                'questionnaireResponses',
+                fn () => PatientQuestionAnswerResource::collection($this->questionnaireResponses)
+            ),
             'appointments' => $this->appointments,
             'visits' => $this->visits,
             'invoices' => $this->invoices,

@@ -14,6 +14,6 @@ final readonly class UpdatePatientUseCase
 
     public function execute(int $id, PatientData $patientData): Patient
     {
-        return $this->patientService->updatePatient(id: $id, data: $patientData->toArray());
+        return $this->patientService->updatePatient(id: $id, patientData: $patientData);
     }
 }

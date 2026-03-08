@@ -5,14 +5,89 @@ declare(strict_types=1);
 namespace App\Modules\DentalManagement\Infrastructure\Http\Controllers;
 
 use App\Modules\Common\Infrastructure\Http\Controllers\BaseApiController;
+use App\Modules\Common\Infrastructure\Resources\PaginatedResource;
 use App\Modules\DentalManagement\Domain\Entities\Patient;
+use App\Modules\DentalManagement\Domain\Entities\PatientSessionTask;
 use App\Modules\DentalManagement\Infrastructure\Http\Requests\PatientSessionTask\StorePatientSessionTaskRequest;
 use App\Modules\DentalManagement\Infrastructure\Http\Requests\PatientSessionTask\UpdatePatientSessionTaskRequest;
 use App\Modules\DentalManagement\Infrastructure\Resources\PatientSessionTaskResource;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 final class PatientSessionTaskController extends BaseApiController
 {
+    public function list(Request $request): JsonResponse
+    {
+        $this->authorize('viewAny', Patient::class);
+
+        $validated = $request->validate([
+            'perPage' => 'nullable|integer|min:1|max:100',
+            'page' => 'nullable|integer|min:1',
+            'sortBy' => 'nullable|in:id,createdAt,updatedAt',
+            'sortDirection' => 'nullable|in:asc,desc',
+            'filter' => 'nullable|array',
+            'filter.patientId' => 'nullable',
+            'filter.patientId.*' => 'integer',
+            'filter.status' => 'nullable|string|max:50',
+            'filter.dateFrom' => 'nullable|date',
+            'filter.dateTo' => 'nullable|date',
+        ]);
+
+        $filters = $validated['filter'] ?? [];
+        $sortBy = match ((string) ($validated['sortBy'] ?? 'createdAt')) {
+            'id' => 'id',
+            'updatedAt' => 'updated_at',
+            default => 'created_at',
+        };
+        $sortDirection = strtolower((string) ($validated['sortDirection'] ?? 'desc')) === 'asc' ? 'asc' : 'desc';
+
+        $query = PatientSessionTask::query();
+
+        $patientIds = $filters['patientId'] ?? null;
+        if ($patientIds !== null) {
+            $resolvedIds = array_values(array_filter(
+                array_map(
+                    static fn ($value): int => (int) $value,
+                    \is_array($patientIds) ? $patientIds : [$patientIds]
+                ),
+                static fn (int $value): bool => $value > 0
+            ));
+
+            if ($resolvedIds !== []) {
+                $query->whereIn('patient_id', $resolvedIds);
+            }
+        }
+
+        $status = trim((string) ($filters['status'] ?? ''));
+        if ($status !== '') {
+            $query->where('status', $status);
+        }
+
+        $dateFrom = trim((string) ($filters['dateFrom'] ?? ''));
+        if ($dateFrom !== '') {
+            $query->where('created_at', '>=', "{$dateFrom} 00:00:00");
+        }
+
+        $dateTo = trim((string) ($filters['dateTo'] ?? ''));
+        if ($dateTo !== '') {
+            $query->where('created_at', '<=', "{$dateTo} 23:59:59");
+        }
+
+        $paginated = $query
+            ->orderBy($sortBy, $sortDirection)
+            ->paginate(
+                (int) ($validated['perPage'] ?? 100),
+                ['*'],
+                'page',
+                (int) ($validated['page'] ?? 1)
+            );
+
+        return $this->successResponse(
+            data: new PaginatedResource($paginated, PatientSessionTaskResource::class),
+            message: __('DentalManagement::messages.session_tasks.fetched')
+        );
+    }
+
     public function index(int $patientId): JsonResponse
     {
         $patient = Patient::query()->findOrFail($patientId);

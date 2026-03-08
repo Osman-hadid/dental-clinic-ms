@@ -3,11 +3,13 @@
 import { FormEvent, JSX, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Header } from '@/components/header';
+import { LoadingState } from '@/components/shared/loading-state';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
+import { fetchAllRows } from '@/modules/common/infrastructure/api/fetch-all-rows';
 import { useStaffList } from '@/modules/dental-management/presentation/hooks';
 import {
   formatCurrency,
@@ -36,14 +38,6 @@ type SafeForm = {
   notes: string;
   pickedByStaffId: string;
   transactionDate: string;
-};
-
-type PaginatedRowsResponse = {
-  data?: Array<Record<string, unknown>>;
-  meta?: {
-    currentPage?: number;
-    lastPage?: number;
-  };
 };
 
 const client = new AxiosClient();
@@ -95,34 +89,16 @@ export default function SafePage(): JSX.Element {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchAllSafeRows = useCallback(async (): Promise<Array<Record<string, unknown>>> => {
-    const rows: Array<Record<string, unknown>> = [];
-    let page = 1;
-
-    while (true) {
-      const response = await client.get<PaginatedRowsResponse>('/api/v1/dental-management/safe-transactions', {
-        params: {
-          include: ['pickedByStaff'],
-          page,
-          perPage: API_MAX_PER_PAGE,
-          sortBy: 'transactionDate',
-          sortDirection: 'desc',
-        },
-      });
-
-      const payload = response.data;
-      const pageRows = Array.isArray(payload?.data) ? payload.data : [];
-      rows.push(...pageRows);
-
-      const currentPage = Number(payload?.meta?.currentPage ?? page);
-      const lastPage = Number(payload?.meta?.lastPage ?? currentPage);
-      if (pageRows.length === 0 || currentPage >= lastPage) {
-        break;
-      }
-
-      page += 1;
-    }
-
-    return rows;
+    return fetchAllRows(
+      client,
+      '/api/v1/dental-management/safe-transactions',
+      {
+        include: ['pickedByStaff'],
+        sortBy: 'transactionDate',
+        sortDirection: 'desc',
+      },
+      API_MAX_PER_PAGE
+    );
   }, []);
 
   const fetchData = useCallback(async (): Promise<void> => {
@@ -134,26 +110,34 @@ export default function SafePage(): JSX.Element {
       ]);
 
       const list = Array.isArray(allRows) ? allRows : [];
-      setRows(list.map((row) => ({
-        amount: Number(row.amountInput ?? row.amount_input ?? row.amount ?? 0),
-        amountInput: Number(row.amountInput ?? row.amount_input ?? row.amount ?? 0),
-        currency: 'AFN',
-        direction: String(row.direction ?? ''),
-        entryType: String(row.entryType ?? row.entry_type ?? ''),
-        id: String(row.id ?? ''),
-        notes: String(row.notes ?? ''),
-        pickedByStaffId: String(row.pickedByStaffId ?? row.picked_by_staff_id ?? ''),
-        pickedByStaffName: (() => {
-          const pickedBy = row.pickedByStaff as Record<string, unknown> | undefined;
-          if (!pickedBy) return '';
-          const fullName = [String(pickedBy.firstName ?? ''), String(pickedBy.lastName ?? '')]
-            .filter(Boolean)
-            .join(' ')
-            .trim();
-          return fullName || String(pickedBy.fullName ?? '');
-        })(),
-        transactionDate: String(row.transactionDate ?? row.transaction_date ?? ''),
-      })));
+      const uniqueRows = new Map<string, SafeRow>();
+
+      list.forEach((row, index) => {
+        const id = String(row.id ?? '').trim() || `safe-row-${index}`;
+
+        uniqueRows.set(id, {
+          amount: Number(row.amountInput ?? row.amount_input ?? row.amount ?? 0),
+          amountInput: Number(row.amountInput ?? row.amount_input ?? row.amount ?? 0),
+          currency: 'AFN',
+          direction: String(row.direction ?? ''),
+          entryType: String(row.entryType ?? row.entry_type ?? ''),
+          id,
+          notes: String(row.notes ?? ''),
+          pickedByStaffId: String(row.pickedByStaffId ?? row.picked_by_staff_id ?? ''),
+          pickedByStaffName: (() => {
+            const pickedBy = row.pickedByStaff as Record<string, unknown> | undefined;
+            if (!pickedBy) return '';
+            const fullName = [String(pickedBy.firstName ?? ''), String(pickedBy.lastName ?? '')]
+              .filter(Boolean)
+              .join(' ')
+              .trim();
+            return fullName || String(pickedBy.fullName ?? '');
+          })(),
+          transactionDate: String(row.transactionDate ?? row.transaction_date ?? ''),
+        });
+      });
+
+      setRows([...uniqueRows.values()]);
       setBalance(Number(balanceResponse.data?.balance ?? 0));
       setTotalIn(Number(balanceResponse.data?.totalIn ?? 0));
       setTotalOut(Number(balanceResponse.data?.totalOut ?? 0));
@@ -346,7 +330,10 @@ export default function SafePage(): JSX.Element {
               </CardHeader>
               <CardContent>
                 {isLoading ? (
-                  <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">Loading safe entries...</p>
+                  <LoadingState
+                    title="Loading safe ledger"
+                    description="Fetching transactions and recalculating the current safe balance."
+                  />
                 ) : sortedRows.length === 0 ? (
                   <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">No safe transactions yet.</p>
                 ) : (

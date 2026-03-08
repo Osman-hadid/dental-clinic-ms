@@ -8,13 +8,14 @@ use App\Models\User;
 use App\Modules\DentalManagement\Domain\Entities\Appointment;
 use App\Modules\DentalManagement\Domain\Entities\Invoice;
 use App\Modules\DentalManagement\Domain\Entities\Patient;
+use App\Modules\DentalManagement\Domain\Entities\PatientQuestion;
 use App\Modules\DentalManagement\Domain\Entities\Payment;
 use App\Modules\DentalManagement\Domain\Entities\SafeTransaction;
 use App\Modules\DentalManagement\Domain\Entities\Staff;
 use App\Modules\DentalManagement\Domain\Entities\Visit;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -239,6 +240,97 @@ final class DentalManagementBusinessRulesTest extends TestCase
         $showResponse = $this->getJson('/api/v1/dental-management/financial-settings/exchange-rate');
         $showResponse->assertOk();
         $showResponse->assertJsonPath('data.afnPerUsd', 82.5);
+    }
+
+    public function test_patient_registration_persists_questionnaire_answers(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $requiredQuestion = PatientQuestion::create([
+            'question_text' => 'Do you have allergies?',
+            'answer_type' => 'yes_no',
+            'is_required' => true,
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+
+        $optionalQuestion = PatientQuestion::create([
+            'question_text' => 'Current medication',
+            'answer_type' => 'textarea',
+            'is_required' => false,
+            'is_active' => true,
+            'sort_order' => 2,
+        ]);
+
+        $response = $this->postJson('/api/v1/dental-management/patients', [
+            'firstName' => 'Mary',
+            'lastName' => 'Doe',
+            'questionnaireResponses' => [
+                [
+                    'questionId' => $requiredQuestion->id,
+                    'answer' => 'yes',
+                ],
+                [
+                    'questionId' => $optionalQuestion->id,
+                    'answer' => 'Vitamin C',
+                ],
+            ],
+        ]);
+
+        $response->assertCreated();
+        $patientId = (int) $response->json('data.id');
+
+        $this->assertDatabaseHas('patient_question_answers', [
+            'patient_id' => $patientId,
+            'patient_question_id' => $requiredQuestion->id,
+            'answer' => 'yes',
+        ]);
+
+        $this->assertDatabaseHas('patient_question_answers', [
+            'patient_id' => $patientId,
+            'patient_question_id' => $optionalQuestion->id,
+            'answer' => 'Vitamin C',
+        ]);
+
+        $response->assertJsonCount(2, 'data.questionnaireResponses');
+    }
+
+    public function test_patient_question_crud_endpoints_work(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $createResponse = $this->postJson('/api/v1/dental-management/patient-questions', [
+            'questionText' => 'Last dental visit date',
+            'answerType' => 'date',
+            'helpText' => 'Ask for the latest visit date.',
+            'isActive' => true,
+            'isRequired' => false,
+            'sortOrder' => 5,
+        ]);
+
+        $createResponse->assertCreated();
+        $questionId = (int) $createResponse->json('data.id');
+
+        $updateResponse = $this->putJson("/api/v1/dental-management/patient-questions/{$questionId}", [
+            'questionText' => 'Last dental checkup date',
+            'answerType' => 'date',
+            'helpText' => 'Use YYYY-MM-DD.',
+            'isActive' => true,
+            'isRequired' => true,
+            'sortOrder' => 3,
+        ]);
+
+        $updateResponse->assertOk();
+        $this->assertDatabaseHas('patient_questions', [
+            'id' => $questionId,
+            'question_text' => 'Last dental checkup date',
+            'is_required' => true,
+            'sort_order' => 3,
+        ]);
+
+        $deleteResponse = $this->deleteJson("/api/v1/dental-management/patient-questions/{$questionId}");
+        $deleteResponse->assertOk();
+        $this->assertSoftDeleted('patient_questions', ['id' => $questionId]);
     }
 
     private function actingAsSuperAdmin(): User

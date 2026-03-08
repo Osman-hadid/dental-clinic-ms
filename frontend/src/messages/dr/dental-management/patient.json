@@ -82,6 +82,20 @@
           "maxLength": "اظهارات باید 255 کاراکتر یا کمتر باشد"
         }
       },
+      "questionnaireResponses": {
+        "label": "Patient Questionnaire",
+        "description": "Fill in the intake answers collected during registration.",
+        "loading": "Loading active questions...",
+        "empty": "No active patient questions are configured yet.",
+        "required": "Required",
+        "answerPlaceholder": "Enter answer",
+        "textareaPlaceholder": "Write the patient's answer",
+        "selectPlaceholder": "Select an answer",
+        "options": {
+          "yes": "Yes",
+          "no": "No"
+        }
+      },
       "createdBy": {
         "label": "ایجاد شده توسط",
         "validation": {

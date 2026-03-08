@@ -88,6 +88,11 @@ final class Patient extends Model
         return $this->hasMany(PatientSessionTask::class);
     }
 
+    public function questionnaireResponses(): HasMany
+    {
+        return $this->hasMany(PatientQuestionAnswer::class);
+    }
+
     public function hasRelatedRecords(): bool
     {
         return $this->appointments()->exists() || $this->visits()->exists() || $this->prescriptions()->exists() || $this->invoices()->exists();

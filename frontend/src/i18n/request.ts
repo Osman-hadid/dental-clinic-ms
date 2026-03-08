@@ -12,6 +12,7 @@ type Messages = {
   permission: Record<string, unknown>;
   module: Record<string, unknown>;
   patient: Record<string, unknown>;
+  patientQuestion: Record<string, unknown>;
   staff: Record<string, unknown>;
   appointment: Record<string, unknown>;
   visit: Record<string, unknown>;
@@ -40,6 +41,8 @@ export default getRequestConfig(async ({ requestLocale }) => {
     sidebar: (await import(`@/messages/${locale}/sidebar.json`)).default,
     user: (await import(`@/messages/${locale}/user-management/user.json`)).default,
     patient: (await import(`@/messages/${locale}/dental-management/patient.json`)).default,
+    patientQuestion: (await import(`@/messages/${locale}/dental-management/patient-question.json`))
+      .default,
     staff: (await import(`@/messages/${locale}/dental-management/staff.json`)).default,
     appointment: (await import(`@/messages/${locale}/dental-management/appointment.json`)).default,
     visit: (await import(`@/messages/${locale}/dental-management/visit.json`)).default,

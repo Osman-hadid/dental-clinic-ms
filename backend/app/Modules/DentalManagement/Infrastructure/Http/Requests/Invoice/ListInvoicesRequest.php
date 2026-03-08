@@ -34,6 +34,22 @@ final class ListInvoicesRequest extends BaseListRequest
     protected static function filters(): array
     {
         return [
+            AllowedFilter::callback('dateFrom', static function ($query, $value): void {
+                $resolved = \is_array($value) ? ($value[0] ?? null) : $value;
+                if ($resolved === null || $resolved === '') {
+                    return;
+                }
+
+                $query->where('invoice_date', '>=', (string) $resolved);
+            }),
+            AllowedFilter::callback('dateTo', static function ($query, $value): void {
+                $resolved = \is_array($value) ? ($value[0] ?? null) : $value;
+                if ($resolved === null || $resolved === '') {
+                    return;
+                }
+
+                $query->where('invoice_date', '<=', (string) $resolved);
+            }),
             AllowedFilter::exact('patientId', 'patient_id', true),
             AllowedFilter::exact('visitId', 'visit_id', true),
             AllowedFilter::exact('status', 'status', true),

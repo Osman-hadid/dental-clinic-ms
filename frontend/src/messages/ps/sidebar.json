@@ -42,7 +42,8 @@
     "dailyExpenses": "ورځني لګښتونه",
     "clinicalExpenses": "کلینیکي پیرود",
     "safe": "خوندي لیجر",
-    "salaries": "معاشونه"
+    "salaries": "معاشونه",
+    "shareholders": "Shareholders"
   },
   "inventoryManagement": {
     "title": "Inventory Management",
@@ -51,7 +52,9 @@
   "dentalManagement": {
     "title": "د غاښونو مدیریت",
     "patients": "ناروغان",
+    "patientQuestions": "Patient Questions",
     "staff": "کارکوونکي",
+    "shareholders": "Shareholders",
     "staffProfiles": "د کارمندانو پروفایلونه",
     "appointments": "ګمارنې",
     "visits": "لیدنه",

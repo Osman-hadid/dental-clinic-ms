@@ -5,7 +5,7 @@ import { type ApiResponse } from '@/types/ApiResponse';
 export class GetPatientUseCase {
   constructor(private readonly patientRepository: PatientRepositoryInterface) {}
 
-  async execute(id: string | number): Promise<ApiResponse<Patient>> {
-    return this.patientRepository.getPatient(id);
+  async execute(id: string | number, relations: string[] = []): Promise<ApiResponse<Patient>> {
+    return this.patientRepository.getPatient(id, relations);
   }
 }

@@ -30,7 +30,8 @@ const normalizeFieldValue = (field: FormField, value: any): any => {
     }
     if (typeof value === 'object') {
       if (typeof value.id === 'string' || typeof value.id === 'number') return String(value.id);
-      if (typeof value.value === 'string' || typeof value.value === 'number') return String(value.value);
+      if (typeof value.value === 'string' || typeof value.value === 'number')
+        return String(value.value);
       return '';
     }
     return String(value);
@@ -41,7 +42,8 @@ const normalizeFieldValue = (field: FormField, value: any): any => {
     return value.map((item) => {
       if (typeof item === 'object' && item !== null) {
         if (typeof item.id === 'string' || typeof item.id === 'number') return String(item.id);
-        if (typeof item.value === 'string' || typeof item.value === 'number') return String(item.value);
+        if (typeof item.value === 'string' || typeof item.value === 'number')
+          return String(item.value);
       }
       return String(item);
     });
@@ -49,6 +51,10 @@ const normalizeFieldValue = (field: FormField, value: any): any => {
 
   if (fieldType === 'checkbox' || fieldType === 'switch') {
     return !!value;
+  }
+
+  if (fieldType === 'custom') {
+    return value;
   }
 
   if (value === null || value === undefined) {
@@ -143,7 +149,10 @@ export const EntityForm = ({
 
   return (
     <FormProvider {...methods}>
-      <form onSubmit={handleSubmit(handleFormSubmit)} className={isSchedulingForm ? 'space-y-4 px-4 pb-4' : 'space-y-4 px-4'}>
+      <form
+        onSubmit={handleSubmit(handleFormSubmit)}
+        className={isSchedulingForm ? 'space-y-4 px-4 pb-4' : 'space-y-4 px-4'}
+      >
         {isSchedulingForm ? (
           <>
             <div className="rounded-xl border bg-muted/30 p-4">
@@ -154,7 +163,9 @@ export const EntityForm = ({
             </div>
 
             <div className="rounded-xl border bg-background p-4">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">People</p>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                People
+              </p>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {peopleFieldNames.map((name) => {
                   const field = fieldByName.get(name);
@@ -167,7 +178,9 @@ export const EntityForm = ({
             </div>
 
             <div className="rounded-xl border bg-background p-4">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Date And Time</p>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Date And Time
+              </p>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {timingFieldNames.map((name) => {
                   const field = fieldByName.get(name);
@@ -181,7 +194,9 @@ export const EntityForm = ({
 
             {noteFieldNames.some((name) => fieldByName.has(name)) ? (
               <div className="rounded-xl border bg-background p-4">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Notes</p>
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Notes
+                </p>
                 <div className="grid gap-4">
                   {noteFieldNames.map((name) => {
                     const field = fieldByName.get(name);
@@ -196,7 +211,9 @@ export const EntityForm = ({
 
             {additionalFields.length > 0 ? (
               <div className="rounded-xl border bg-background p-4">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Additional</p>
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Additional
+                </p>
                 <div className="grid gap-4 md:grid-cols-2">
                   {additionalFields.map((field) => (
                     <EntityFormField key={field.name} field={field} config={config} />

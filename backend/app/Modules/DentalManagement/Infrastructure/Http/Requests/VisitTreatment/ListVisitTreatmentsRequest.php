@@ -35,6 +35,26 @@ final class ListVisitTreatmentsRequest extends BaseListRequest
     protected static function filters(): array
     {
         return [
+            AllowedFilter::callback('dateFrom', static function ($query, $value): void {
+                $resolved = \is_array($value) ? ($value[0] ?? null) : $value;
+                if ($resolved === null || $resolved === '') {
+                    return;
+                }
+
+                $query->whereHas('visit', static function ($visitQuery) use ($resolved): void {
+                    $visitQuery->where('visit_date', '>=', (string) $resolved);
+                });
+            }),
+            AllowedFilter::callback('dateTo', static function ($query, $value): void {
+                $resolved = \is_array($value) ? ($value[0] ?? null) : $value;
+                if ($resolved === null || $resolved === '') {
+                    return;
+                }
+
+                $query->whereHas('visit', static function ($visitQuery) use ($resolved): void {
+                    $visitQuery->where('visit_date', '<=', (string) $resolved);
+                });
+            }),
             AllowedFilter::exact('visitId', 'visit_id', true),
             AllowedFilter::exact('treatmentId', 'treatment_id', true),
             AllowedFilter::exact('toothId', 'tooth_id', true),

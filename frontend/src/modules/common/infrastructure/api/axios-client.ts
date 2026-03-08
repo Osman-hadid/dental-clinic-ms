@@ -4,6 +4,9 @@ import Cookies from 'js-cookie';
 
 export class AxiosClient {
   private readonly axios: AxiosInstance;
+  private static readonly CACHE_TTL_MS = 30_000;
+  private static readonly responseCache = new Map<string, { expiresAt: number; value: unknown }>();
+  private static readonly inflightGets = new Map<string, Promise<unknown>>();
 
   private static resolveDefaultBaseUrl(): string {
     if (typeof window === 'undefined') {
@@ -46,23 +49,78 @@ export class AxiosClient {
     });
   }
 
+  private buildCacheKey(url: string, config?: AxiosRequestConfig): string {
+    return this.axios.getUri({
+      ...config,
+      method: 'get',
+      url,
+    });
+  }
+
+  private static clearExpiredCacheEntries(): void {
+    const now = Date.now();
+    for (const [key, entry] of AxiosClient.responseCache.entries()) {
+      if (entry.expiresAt <= now) {
+        AxiosClient.responseCache.delete(key);
+      }
+    }
+  }
+
+  private static invalidateCache(): void {
+    AxiosClient.responseCache.clear();
+  }
+
   async get<T>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
-    const response = await this.axios.get<ApiResponse<T>>(url, config);
-    return response.data;
+    if (typeof window === 'undefined') {
+      const response = await this.axios.get<ApiResponse<T>>(url, config);
+      return response.data;
+    }
+
+    AxiosClient.clearExpiredCacheEntries();
+
+    const cacheKey = this.buildCacheKey(url, config);
+    const cached = AxiosClient.responseCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.value as ApiResponse<T>;
+    }
+
+    const inflight = AxiosClient.inflightGets.get(cacheKey);
+    if (inflight) {
+      return inflight as Promise<ApiResponse<T>>;
+    }
+
+    const request = this.axios
+      .get<ApiResponse<T>>(url, config)
+      .then((response) => {
+        AxiosClient.responseCache.set(cacheKey, {
+          expiresAt: Date.now() + AxiosClient.CACHE_TTL_MS,
+          value: response.data,
+        });
+        return response.data;
+      })
+      .finally(() => {
+        AxiosClient.inflightGets.delete(cacheKey);
+      });
+
+    AxiosClient.inflightGets.set(cacheKey, request);
+    return request;
   }
 
   async post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
     const response = await this.axios.post<ApiResponse<T>>(url, data, config);
+    AxiosClient.invalidateCache();
     return response.data;
   }
 
   async put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
     const response = await this.axios.put<ApiResponse<T>>(url, data, config);
+    AxiosClient.invalidateCache();
     return response.data;
   }
 
   async delete<T>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
     const response = await this.axios.delete<ApiResponse<T>>(url, config);
+    AxiosClient.invalidateCache();
     return response.data;
   }
 }

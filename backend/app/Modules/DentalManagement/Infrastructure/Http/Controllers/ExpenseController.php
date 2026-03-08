@@ -234,7 +234,7 @@ final class ExpenseController extends BaseApiController
             return;
         }
 
-        $query->whereDate($column, $operator, (string) $resolved);
+        $query->where($column, $operator, (string) $resolved);
     }
 
     private function resolveFilterValue(mixed $value): mixed

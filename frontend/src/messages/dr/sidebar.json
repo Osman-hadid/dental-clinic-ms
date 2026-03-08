@@ -42,7 +42,8 @@
     "dailyExpenses": "هزینه های روزانه",
     "clinicalExpenses": "خریدهای بالینی",
     "safe": "دفتر کل امن",
-    "salaries": "حقوق و دستمزد"
+    "salaries": "حقوق و دستمزد",
+    "shareholders": "Shareholders"
   },
   "inventoryManagement": {
     "title": "Inventory Management",
@@ -51,6 +52,7 @@
   "dentalManagement": {
     "title": "مدیریت دندانپزشکی",
     "patients": "بیماران",
+    "patientQuestions": "Patient Questions",
     "staff": "کارکنان",
     "staffProfiles": "مشخصات کارکنان",
     "appointments": "قرار ملاقات ها",
@@ -63,6 +65,7 @@
     "invoices": "فاکتورها",
     "payments": "پرداخت ها",
     "aiImaging": "تصویربرداری هوش مصنوعی",
-    "aiImagingN8n": "تصویربرداری هوش مصنوعی (n8n)"
+    "aiImagingN8n": "تصویربرداری هوش مصنوعی (n8n)",
+    "shareholders": "Shareholders"
   }
 }

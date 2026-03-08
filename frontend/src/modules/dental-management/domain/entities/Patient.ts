@@ -1,3 +1,5 @@
+import { type PatientQuestionAnswer } from './PatientQuestion';
+
 export type Patient = {
   id: number;
   patientCode: string;
@@ -19,6 +21,7 @@ export type Patient = {
   appointments: string;
   visits: string;
   invoices: string;
+  questionnaireResponses?: PatientQuestionAnswer[];
   createdAt: string;
   updatedAt: string;
 };

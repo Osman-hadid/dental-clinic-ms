@@ -46,7 +46,14 @@ final class SafeTransactionController extends BaseApiController
         $this->applyDateFilter($query, 'transaction_date', $filters['dateFrom'] ?? null, '>=');
         $this->applyDateFilter($query, 'transaction_date', $filters['dateTo'] ?? null, '<=');
 
-        $query->orderBy((string) ($queryData['sortBy'] ?? 'created_at'), (string) ($queryData['sortDirection'] ?? 'desc'));
+        $sortBy = (string) ($queryData['sortBy'] ?? 'created_at');
+        $sortDirection = (string) ($queryData['sortDirection'] ?? 'desc');
+
+        $query->orderBy($sortBy, $sortDirection);
+
+        if ($sortBy !== 'id') {
+            $query->orderBy('id', $sortDirection);
+        }
 
         $paginated = $query->paginate((int) ($queryData['perPage'] ?? 10), ['*'], 'page', (int) ($queryData['page'] ?? 1));
 
@@ -238,7 +245,7 @@ final class SafeTransactionController extends BaseApiController
             return;
         }
 
-        $query->whereDate($column, $operator, (string) $resolved);
+        $query->where($column, $operator, (string) $resolved);
     }
 
     private function resolveFilterValue(mixed $value): mixed

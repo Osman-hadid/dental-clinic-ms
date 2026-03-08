@@ -10,6 +10,11 @@ const sidebarItems: SidebarItem[] = [
         permission: 'dental-management.patients.view',
         url: '/dental-management/patients',
       },
+      {
+        key: 'patientQuestions',
+        permission: 'dental-management.patient-questions.view',
+        url: '/dental-management/patient-questions',
+      },
       { key: 'staff', permission: 'dental-management.staff.view', url: '/dental-management/staff' },
       {
         key: 'appointments',

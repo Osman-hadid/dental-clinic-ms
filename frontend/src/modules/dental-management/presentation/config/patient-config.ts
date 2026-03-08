@@ -1,4 +1,6 @@
+import { createElement } from 'react';
 import { type EntityModuleConfig } from '@/types/EntityModuleConfig';
+import { PatientQuestionnaireField } from '../components/patient-questionnaire-field';
 
 export const patientConfig: EntityModuleConfig = {
   columns: [
@@ -224,18 +226,6 @@ export const patientConfig: EntityModuleConfig = {
       },
     },
     {
-      label: 'config.form.createdBy.label',
-      name: 'createdBy',
-      required: false,
-      type: 'number',
-    },
-    {
-      label: 'config.form.updatedBy.label',
-      name: 'updatedBy',
-      required: false,
-      type: 'number',
-    },
-    {
       label: 'config.form.enabled.label',
       name: 'enabled',
       required: false,
@@ -268,22 +258,12 @@ export const patientConfig: EntityModuleConfig = {
       ],
     },
     {
-      label: 'config.form.appointments.label',
-      name: 'appointments',
+      label: 'config.form.questionnaireResponses.label',
+      name: 'questionnaireResponses',
       required: false,
-      type: 'multiselect',
-    },
-    {
-      label: 'config.form.visits.label',
-      name: 'visits',
-      required: false,
-      type: 'multiselect',
-    },
-    {
-      label: 'config.form.invoices.label',
-      name: 'invoices',
-      required: false,
-      type: 'multiselect',
+      type: 'custom',
+      render: ({ value, onChange }) =>
+        createElement(PatientQuestionnaireField, { value, onChange }),
     },
   ],
   queryKey: 'patients',
@@ -300,7 +280,7 @@ export const patientConfig: EntityModuleConfig = {
   singleQueryKey: 'patient',
   title: 'config.title',
   sortableColumns: ['id', 'patientCode', 'firstName', 'createdAt'],
-  relations: [],
+  relations: ['questionnaireResponses.question'],
   permissions: {
     view: 'dental-management.patients.view',
     create: 'dental-management.patients.create',

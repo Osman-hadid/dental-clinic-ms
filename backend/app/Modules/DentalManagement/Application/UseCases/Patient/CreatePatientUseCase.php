@@ -16,6 +16,6 @@ final readonly class CreatePatientUseCase
 
     public function execute(PatientData $patientData): Patient
     {
-        return $this->patientService->createPatient(data: $patientData->toArray());
+        return $this->patientService->createPatient($patientData);
     }
 }

@@ -3,11 +3,13 @@
 import { FormEvent, JSX, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Header } from '@/components/header';
+import { LoadingState } from '@/components/shared/loading-state';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
+import { fetchAllRows } from '@/modules/common/infrastructure/api/fetch-all-rows';
 import {
   formatCurrency,
   parseMoney,
@@ -30,14 +32,6 @@ type ClinicalExpenseRecord = {
   totalCost: number;
   unitCost: number;
   vendor: string;
-};
-
-type PaginatedRowsResponse = {
-  data?: Array<Record<string, unknown>>;
-  meta?: {
-    currentPage?: number;
-    lastPage?: number;
-  };
 };
 
 type ClinicalExpenseForm = {
@@ -125,33 +119,15 @@ const ClinicalExpensesPage = (): JSX.Element => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchAllExpenses = useCallback(async (): Promise<Array<Record<string, unknown>>> => {
-    const rows: Array<Record<string, unknown>> = [];
-    let page = 1;
-
-    while (true) {
-      const response = await client.get<PaginatedRowsResponse>('/api/v1/dental-management/expenses', {
-        params: {
-          page,
-          perPage: API_MAX_PER_PAGE,
-          sortBy: 'expenseDate',
-          sortDirection: 'desc',
-        },
-      });
-
-      const payload = response.data;
-      const pageRows = Array.isArray(payload?.data) ? payload.data : [];
-      rows.push(...pageRows);
-
-      const currentPage = Number(payload?.meta?.currentPage ?? page);
-      const lastPage = Number(payload?.meta?.lastPage ?? currentPage);
-      if (pageRows.length === 0 || currentPage >= lastPage) {
-        break;
-      }
-
-      page += 1;
-    }
-
-    return rows;
+    return fetchAllRows(
+      client,
+      '/api/v1/dental-management/expenses',
+      {
+        sortBy: 'expenseDate',
+        sortDirection: 'desc',
+      },
+      API_MAX_PER_PAGE
+    );
   }, []);
 
   const fetchExpenses = useCallback(async (): Promise<void> => {
@@ -401,9 +377,10 @@ const ClinicalExpensesPage = (): JSX.Element => {
               </CardHeader>
               <CardContent>
                 {isLoading ? (
-                  <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-                    Loading clinical expense records...
-                  </p>
+                  <LoadingState
+                    title="Loading clinical expenses"
+                    description="Gathering purchase records and category breakdowns."
+                  />
                 ) : sortedRecords.length === 0 ? (
                   <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
                     No clinical buying expenses yet.

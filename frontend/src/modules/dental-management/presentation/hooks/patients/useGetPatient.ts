@@ -7,9 +7,10 @@ import { patientConfig } from '../../config/patient-config';
 
 export const useGetPatient = (
   id: string | number,
-  options: { enabled?: boolean } = {}
+  options: { enabled?: boolean; relations?: string[] } = {}
 ): UseQueryResult<ApiResponse<Patient>, unknown> => {
   const queryClient = useQueryClient();
+  const relations = Array.isArray(options.relations) ? options.relations : [];
 
   return useQuery<ApiResponse<Patient>>({
     enabled:
@@ -24,9 +25,9 @@ export const useGetPatient = (
     queryFn: () => {
       const patientRepository = new PatientRepository();
       const getPatientUseCase = new GetPatientUseCase(patientRepository);
-      return getPatientUseCase.execute(id);
+      return getPatientUseCase.execute(id, relations);
     },
-    queryKey: [patientConfig.singleQueryKey, id],
+    queryKey: [patientConfig.singleQueryKey, id, relations.join(',')],
     refetchOnMount: false,
     refetchOnWindowFocus: false,
     retry: 2,

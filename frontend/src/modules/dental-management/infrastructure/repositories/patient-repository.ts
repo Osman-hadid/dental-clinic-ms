@@ -25,9 +25,16 @@ export class PatientRepository implements PatientRepositoryInterface {
     }
   }
 
-  async getPatient(id: string | number): Promise<ApiResponse<Patient>> {
+  async getPatient(id: string | number, relations: string[] = []): Promise<ApiResponse<Patient>> {
     try {
-      return await this.client.get<Patient>(`/api/v1/dental-management/patients/${id}`);
+      const parameters = new URLSearchParams();
+      for (const relation of relations) {
+        parameters.append('include[]', relation);
+      }
+
+      return await this.client.get<Patient>(`/api/v1/dental-management/patients/${id}`, {
+        params: parameters,
+      });
     } catch (error: unknown) {
       return this.handleError<Patient>(error, 'PATIENT_FETCH_ERROR', 'Failed to fetch patient');
     }

@@ -3,11 +3,13 @@
 import { FormEvent, JSX, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Header } from '@/components/header';
+import { LoadingState } from '@/components/shared/loading-state';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
+import { fetchAllRows } from '@/modules/common/infrastructure/api/fetch-all-rows';
 import { useStaffList } from '@/modules/dental-management/presentation/hooks';
 import {
   formatCurrency,
@@ -38,14 +40,6 @@ type SalaryForm = {
   salaryMonth: string;
   staffId: string;
   status: 'paid' | 'partial' | 'pending';
-};
-
-type PaginatedRowsResponse = {
-  data?: Array<Record<string, unknown>>;
-  meta?: {
-    currentPage?: number;
-    lastPage?: number;
-  };
 };
 
 const client = new AxiosClient();
@@ -124,34 +118,16 @@ export default function SalariesPage(): JSX.Element {
   const salaryMonthOptions = useMemo(() => buildSalaryMonthOptions(24), []);
 
   const fetchAllSalaryRows = useCallback(async (): Promise<Array<Record<string, unknown>>> => {
-    const rows: Array<Record<string, unknown>> = [];
-    let page = 1;
-
-    while (true) {
-      const response = await client.get<PaginatedRowsResponse>('/api/v1/dental-management/salary-payments', {
-        params: {
-          include: ['staff'],
-          page,
-          perPage: API_MAX_PER_PAGE,
-          sortBy: 'paymentDate',
-          sortDirection: 'desc',
-        },
-      });
-
-      const payload = response.data;
-      const pageRows = Array.isArray(payload?.data) ? payload.data : [];
-      rows.push(...pageRows);
-
-      const currentPage = Number(payload?.meta?.currentPage ?? page);
-      const lastPage = Number(payload?.meta?.lastPage ?? currentPage);
-      if (pageRows.length === 0 || currentPage >= lastPage) {
-        break;
-      }
-
-      page += 1;
-    }
-
-    return rows;
+    return fetchAllRows(
+      client,
+      '/api/v1/dental-management/salary-payments',
+      {
+        include: ['staff'],
+        sortBy: 'paymentDate',
+        sortDirection: 'desc',
+      },
+      API_MAX_PER_PAGE
+    );
   }, []);
 
   const fetchData = useCallback(async (): Promise<void> => {
@@ -406,7 +382,10 @@ export default function SalariesPage(): JSX.Element {
               </CardHeader>
               <CardContent>
                 {isLoading ? (
-                  <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">Loading salaries...</p>
+                  <LoadingState
+                    title="Loading salaries"
+                    description="Fetching salary rows and recalculating payment totals."
+                  />
                 ) : rows.length === 0 ? (
                   <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">No salary records yet.</p>
                 ) : (

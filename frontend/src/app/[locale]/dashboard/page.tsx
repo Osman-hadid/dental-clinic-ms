@@ -10,6 +10,7 @@ import {
   DentalChartDashboard,
 } from '@/components/shared/dental/dental-chart-dashboard';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
+import { fetchAllRows } from '@/modules/common/infrastructure/api/fetch-all-rows';
 import { DEFAULT_AFN_PER_USD } from '@/lib/currency-utils';
 import { aggregateImplantSupplierBalances } from '@/modules/dental-management/presentation/utils/implant-supplier-analytics';
 import {
@@ -27,14 +28,6 @@ const TABLE_PER_PAGE = 100;
 const VISIT_RELATIONS = ['appointment', 'patient', 'dentist'];
 const VISIT_SEARCH_FIELDS = ['tag', 'diagnosisNotes'];
 const apiClient = new AxiosClient();
-
-type PaginatedRowsResponse = {
-  data?: Array<Record<string, unknown>>;
-  meta?: {
-    currentPage?: number;
-    lastPage?: number;
-  };
-};
 
 type SessionTaskRow = {
   createdAt?: string;
@@ -59,110 +52,56 @@ const parseAmount = (value: unknown): number => {
 };
 
 const fetchAllSafeRows = async (): Promise<DashboardSafeTransaction[]> => {
-  const rows: DashboardSafeTransaction[] = [];
-  let page = 1;
+  const rows = await fetchAllRows(
+    apiClient,
+    '/api/v1/dental-management/safe-transactions',
+    {
+      include: ['pickedByStaff'],
+      sortBy: 'transactionDate',
+      sortDirection: 'desc',
+    },
+    TABLE_PER_PAGE
+  );
 
-  while (true) {
-    const response = await apiClient.get<PaginatedRowsResponse>('/api/v1/dental-management/safe-transactions', {
-      params: {
-        include: ['pickedByStaff'],
-        page,
-        perPage: TABLE_PER_PAGE,
-        sortBy: 'transactionDate',
-        sortDirection: 'desc',
-      },
-    });
-    const payload = response.data;
-    const pageRows = Array.isArray(payload?.data) ? payload.data : [];
-    rows.push(...pageRows.map((row) => {
-      const pickedBy = row.pickedByStaff as Record<string, unknown> | undefined;
-      const pickedByName = pickedBy
-        ? [asText(pickedBy.firstName ?? pickedBy.first_name), asText(pickedBy.lastName ?? pickedBy.last_name)]
-          .filter(Boolean)
-          .join(' ')
-        : '';
-      return {
-        amount: parseAmount(row.amount),
-        direction: asText(row.direction),
-        entryType: asText(row.entryType ?? row.entry_type),
-        id: asText(row.id),
-        notes: asText(row.notes),
-        pickedByStaffId: asText(row.pickedByStaffId ?? row.picked_by_staff_id),
-        pickedByStaffName: pickedByName || asText(pickedBy?.fullName ?? pickedBy?.name),
-        transactionDate: asText(row.transactionDate ?? row.transaction_date),
-      };
-    }));
-
-    const currentPage = Number(payload?.meta?.currentPage ?? page);
-    const lastPage = Number(payload?.meta?.lastPage ?? currentPage);
-    if (pageRows.length === 0 || currentPage >= lastPage) break;
-    page += 1;
-  }
-
-  return rows;
-};
-
-const fetchAllPatientIds = async (): Promise<string[]> => {
-  const patientIds: string[] = [];
-  let page = 1;
-
-  while (true) {
-    const response = await apiClient.get<PaginatedRowsResponse>('/api/v1/dental-management/patients', {
-      params: {
-        page,
-        perPage: TABLE_PER_PAGE,
-      },
-    });
-    const payload = response.data;
-    const pageRows = Array.isArray(payload?.data) ? payload.data : [];
-    patientIds.push(...pageRows
-      .map((row) => asText(row.id))
-      .filter(Boolean));
-
-    const currentPage = Number(payload?.meta?.currentPage ?? page);
-    const lastPage = Number(payload?.meta?.lastPage ?? currentPage);
-    if (pageRows.length === 0 || currentPage >= lastPage) break;
-    page += 1;
-  }
-
-  return [...new Set(patientIds)];
+  return rows.map((row) => {
+    const pickedBy = row.pickedByStaff as Record<string, unknown> | undefined;
+    const pickedByName = pickedBy
+      ? [asText(pickedBy.firstName ?? pickedBy.first_name), asText(pickedBy.lastName ?? pickedBy.last_name)]
+        .filter(Boolean)
+        .join(' ')
+      : '';
+    return {
+      amount: parseAmount(row.amount),
+      direction: asText(row.direction),
+      entryType: asText(row.entryType ?? row.entry_type),
+      id: asText(row.id),
+      notes: asText(row.notes),
+      pickedByStaffId: asText(row.pickedByStaffId ?? row.picked_by_staff_id),
+      pickedByStaffName: pickedByName || asText(pickedBy?.fullName ?? pickedBy?.name),
+      transactionDate: asText(row.transactionDate ?? row.transaction_date),
+    };
+  });
 };
 
 const fetchImplantSessionTasks = async (): Promise<SessionTaskRow[]> => {
-  const patientIds = await fetchAllPatientIds();
-  if (patientIds.length === 0) return [];
+  const rows = await fetchAllRows(
+    apiClient,
+    '/api/v1/dental-management/patient-session-tasks',
+    {
+      sortBy: 'createdAt',
+      sortDirection: 'desc',
+    },
+    TABLE_PER_PAGE
+  );
 
-  const rows: SessionTaskRow[] = [];
-  const batchSize = 15;
-
-  for (let index = 0; index < patientIds.length; index += batchSize) {
-    const batch = patientIds.slice(index, index + batchSize);
-    const batchResponses = await Promise.all(
-      batch.map(async (patientId) => {
-        const response = await apiClient.get<Array<Record<string, unknown>>>(
-          `/api/v1/dental-management/patients/${patientId}/session-tasks`
-        );
-        if (!response.success || !Array.isArray(response.data)) {
-          return [] as SessionTaskRow[];
-        }
-
-        return response.data.map((task) => ({
-          createdAt: asText(task.createdAt ?? task.created_at),
-          id: asText(task.id),
-          notes: asText(task.notes),
-          patientId,
-          status: asText(task.status),
-          title: asText(task.title),
-        }));
-      })
-    );
-
-    batchResponses.forEach((batchRows) => {
-      rows.push(...batchRows);
-    });
-  }
-
-  return rows;
+  return rows.map((task) => ({
+    createdAt: asText(task.createdAt ?? task.created_at),
+    id: asText(task.id),
+    notes: asText(task.notes),
+    patientId: asText(task.patientId ?? task.patient_id),
+    status: asText(task.status),
+    title: asText(task.title),
+  }));
 };
 
 // eslint-disable-next-line react/function-component-definition

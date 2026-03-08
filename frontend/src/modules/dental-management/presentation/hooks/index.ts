@@ -6,6 +6,12 @@ export { usePatientList } from './patients/usePatientList';
 export { useUpdatePatient } from './patients/useUpdatePatient';
 
 /* eslint-disable */
+export { useCreatePatientQuestion } from './patient-questions/useCreatePatientQuestion';
+export { useDeletePatientQuestion } from './patient-questions/useDeletePatientQuestion';
+export { usePatientQuestionList } from './patient-questions/usePatientQuestionList';
+export { useUpdatePatientQuestion } from './patient-questions/useUpdatePatientQuestion';
+
+/* eslint-disable */
 export { useCreateStaff } from './staff/useCreateStaff';
 export { useDeleteStaff } from './staff/useDeleteStaff';
 export { useGetStaff } from './staff/useGetStaff';
