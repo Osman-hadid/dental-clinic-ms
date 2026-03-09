@@ -11,6 +11,15 @@ class ActivityLog extends Model
 {
     use Prunable;
 
+    protected $table = 'activity_log';
+
+    protected function casts(): array
+    {
+        return [
+            'properties' => 'array',
+        ];
+    }
+
     public function prunable()
     {
         return static::where('created_at', '<', now()->subDays(90));

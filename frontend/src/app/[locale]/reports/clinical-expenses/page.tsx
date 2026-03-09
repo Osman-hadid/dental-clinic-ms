@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, JSX, useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Header } from '@/components/header';
 import { LoadingState } from '@/components/shared/loading-state';
@@ -9,11 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
-import { fetchAllRows } from '@/modules/common/infrastructure/api/fetch-all-rows';
-import {
-  formatCurrency,
-  parseMoney,
-} from '@/lib/currency-utils';
+import { createDefaultReportRange, fetchReport, toInputDate } from '@/modules/dental-management/presentation/reports/report-client';
+import { formatCurrency, parseMoney } from '@/lib/currency-utils';
 import { ShoppingBag, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
@@ -21,17 +18,32 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 type ClinicalExpenseRecord = {
   amountInput: number;
   category: string;
-  createdAt?: string;
-  currency: 'AFN';
-  date: string;
-  expenseType?: string;
-  id: string;
+  createdAt: string;
+  expenseDate: string;
+  id: number;
   itemName: string;
   notes: string;
   quantity: number;
-  totalCost: number;
+  staffName: string;
   unitCost: number;
   vendor: string;
+};
+
+type ClinicalExpenseReportResponse = {
+  breakdown: Array<{ amount: number; category: string }>;
+  history: {
+    data: ClinicalExpenseRecord[];
+    meta: {
+      currentPage: number;
+      lastPage: number;
+      perPage: number;
+      total: number;
+    };
+  };
+  summary: {
+    recordCount: number;
+    totalSpend: number;
+  };
 };
 
 type ClinicalExpenseForm = {
@@ -45,6 +57,7 @@ type ClinicalExpenseForm = {
 };
 
 const categoryOptions = [
+  'all',
   'Dental Accessories',
   'Implants',
   'Chair & Unit',
@@ -55,14 +68,15 @@ const categoryOptions = [
 ];
 const categoryColors = ['#0ea5e9', '#14b8a6', '#22c55e', '#f97316', '#f59e0b', '#6366f1', '#a855f7'];
 
-const toInputDate = (value: Date): string => {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, '0');
-  const day = String(value.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const parseAmount = (value: string): number => parseMoney(value);
+const createDefaultForm = (): ClinicalExpenseForm => ({
+  category: 'Dental Accessories',
+  date: toInputDate(new Date()),
+  itemName: '',
+  notes: '',
+  quantity: '1',
+  unitCost: '',
+  vendor: '',
+});
 
 const extractApiErrorMessage = (error: unknown, fallback: string): string => {
   const response = (error as { response?: { data?: { error?: { code?: string; details?: Record<string, unknown>; message?: string } } } })?.response;
@@ -78,105 +92,51 @@ const extractApiErrorMessage = (error: unknown, fallback: string): string => {
   return payload?.message || fallback;
 };
 
-const createDefaultForm = (): ClinicalExpenseForm => ({
-  category: 'Dental Accessories',
-  date: toInputDate(new Date()),
-  itemName: '',
-  notes: '',
-  quantity: '1',
-  unitCost: '',
-  vendor: '',
-});
-
 const client = new AxiosClient();
-const API_MAX_PER_PAGE = 100;
-const parseNumber = (value: unknown): number => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-const normalizeExpenseRow = (row: Record<string, unknown>): ClinicalExpenseRecord => ({
-  amountInput: parseNumber(row.amountInput ?? row.amount_input ?? row.amount),
-  category: String(row.category ?? 'Other'),
-  createdAt: typeof row.createdAt === 'string' ? row.createdAt : undefined,
-  currency: 'AFN',
-  date: String(row.expenseDate ?? row.date ?? ''),
-  expenseType: typeof row.expenseType === 'string' ? row.expenseType : undefined,
-  id: String(row.id ?? ''),
-  itemName: String(row.title ?? row.itemName ?? ''),
-  notes: String(row.notes ?? ''),
-  quantity: parseNumber(row.quantity) || 1,
-  totalCost: parseNumber(row.amountInput ?? row.amount_input ?? row.amount),
-  unitCost: parseNumber(row.unitCostInput ?? row.unit_cost_input ?? row.unitCost) || parseNumber(row.amountInput ?? row.amount_input ?? row.amount),
-  vendor: String(row.vendor ?? ''),
-});
 
 const ClinicalExpensesPage = (): JSX.Element => {
   const tReports = useTranslations('sidebar.reports');
   const tSidebar = useTranslations('sidebar');
+  const range = createDefaultReportRange(90);
   const [form, setForm] = useState<ClinicalExpenseForm>(() => createDefaultForm());
-  const [records, setRecords] = useState<ClinicalExpenseRecord[]>([]);
+  const [report, setReport] = useState<ClinicalExpenseReportResponse | null>(null);
+  const [startDate, setStartDate] = useState(range.startDate);
+  const [endDate, setEndDate] = useState(range.endDate);
+  const [category, setCategory] = useState('all');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchAllExpenses = useCallback(async (): Promise<Array<Record<string, unknown>>> => {
-    return fetchAllRows(
-      client,
-      '/api/v1/dental-management/expenses',
-      {
-        sortBy: 'expenseDate',
-        sortDirection: 'desc',
-      },
-      API_MAX_PER_PAGE
-    );
-  }, []);
-
-  const fetchExpenses = useCallback(async (): Promise<void> => {
+  const fetchExpenses = useCallback(async (pageNumber = page): Promise<void> => {
     setIsLoading(true);
     try {
-      const allRows = await fetchAllExpenses();
-      const rows = Array.isArray(allRows)
-        ? allRows
-          .map(normalizeExpenseRow)
-          .filter((row) => row.expenseType === 'clinical')
-        : [];
-      setRecords(rows);
+      const data = await fetchReport<ClinicalExpenseReportResponse>('/api/v1/dental-management/reports/clinical-expenses', {
+        category,
+        endDate,
+        page: pageNumber,
+        perPage: 10,
+        search,
+        sortBy: 'expenseDate',
+        sortDirection: 'desc',
+        startDate,
+      });
+      setReport(data);
+      setPage(pageNumber);
     } finally {
       setIsLoading(false);
     }
-  }, [fetchAllExpenses]);
+  }, [category, endDate, page, search, startDate]);
 
   useEffect(() => {
-    void fetchExpenses();
+    void fetchExpenses(1);
   }, [fetchExpenses]);
-
-  const summary = useMemo(() => {
-    const grouped = new Map<string, number>();
-    let total = 0;
-    records.forEach((record) => {
-      total += record.totalCost;
-      const current = grouped.get(record.category) ?? 0;
-      grouped.set(record.category, current + record.totalCost);
-    });
-
-    const byCategory = Array.from(grouped.entries())
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value);
-
-    return { byCategory, total };
-  }, [records]);
-
-  const sortedRecords = useMemo(() => {
-    return [...records].sort((a, b) => {
-      if (a.date !== b.date) return b.date.localeCompare(a.date);
-      return (b.createdAt ?? '').localeCompare(a.createdAt ?? '');
-    });
-  }, [records]);
 
   const handleCreate = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
 
-    const quantity = Math.max(0, parseAmount(form.quantity));
-    const unitCost = Math.max(0, parseAmount(form.unitCost));
+    const quantity = Math.max(0, parseMoney(form.quantity));
+    const unitCost = Math.max(0, parseMoney(form.unitCost));
     const totalCost = quantity * unitCost;
 
     if (!form.itemName.trim() || !form.date || quantity <= 0 || unitCost <= 0) {
@@ -201,7 +161,7 @@ const ClinicalExpensesPage = (): JSX.Element => {
       })
       .then(async () => {
         setForm(createDefaultForm());
-        await fetchExpenses();
+        await fetchExpenses(1);
         toast.success('Clinical expense saved.');
       })
       .catch((error: unknown) => {
@@ -212,11 +172,11 @@ const ClinicalExpensesPage = (): JSX.Element => {
       });
   };
 
-  const removeRecord = (id: string): void => {
+  const removeRecord = (id: number): void => {
     void client
       .delete(`/api/v1/dental-management/expenses/${id}`)
       .then(async () => {
-        await fetchExpenses();
+        await fetchExpenses(page);
         toast.success('Clinical expense deleted.');
       })
       .catch((error: unknown) => {
@@ -246,34 +206,17 @@ const ClinicalExpensesPage = (): JSX.Element => {
                 <form onSubmit={handleCreate} className="grid gap-3 rounded-2xl border bg-background/85 p-4">
                   <div className="grid gap-1.5">
                     <Label htmlFor="item-name">Item Name</Label>
-                    <Input
-                      id="item-name"
-                      value={form.itemName}
-                      onChange={(event) => setForm((prev) => ({ ...prev, itemName: event.target.value }))}
-                      placeholder="Implant screw set"
-                      required
-                    />
+                    <Input id="item-name" value={form.itemName} onChange={(event) => setForm((prev) => ({ ...prev, itemName: event.target.value }))} placeholder="Implant screw set" required />
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-1.5">
                       <Label htmlFor="buy-date">Date</Label>
-                      <Input
-                        id="buy-date"
-                        type="date"
-                        value={form.date}
-                        onChange={(event) => setForm((prev) => ({ ...prev, date: event.target.value }))}
-                        required
-                      />
+                      <Input id="buy-date" type="date" value={form.date} onChange={(event) => setForm((prev) => ({ ...prev, date: event.target.value }))} required />
                     </div>
                     <div className="grid gap-1.5">
                       <Label htmlFor="buy-category">Category</Label>
-                      <select
-                        id="buy-category"
-                        className="h-9 rounded-md border bg-background px-3 text-sm"
-                        value={form.category}
-                        onChange={(event) => setForm((prev) => ({ ...prev, category: event.target.value }))}
-                      >
-                        {categoryOptions.map((option) => (
+                      <select id="buy-category" className="h-9 rounded-md border bg-background px-3 text-sm" value={form.category} onChange={(event) => setForm((prev) => ({ ...prev, category: event.target.value }))}>
+                        {categoryOptions.filter((option) => option !== 'all').map((option) => (
                           <option key={option} value={option}>{option}</option>
                         ))}
                       </select>
@@ -281,142 +224,143 @@ const ClinicalExpensesPage = (): JSX.Element => {
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-1.5">
-                      <Label htmlFor="quantity">Quantity</Label>
-                      <Input
-                        id="quantity"
-                        type="number"
-                        min="1"
-                        step="1"
-                        value={form.quantity}
-                        onChange={(event) => setForm((prev) => ({ ...prev, quantity: event.target.value }))}
-                        required
-                      />
+                      <Label htmlFor="buy-quantity">Quantity</Label>
+                      <Input id="buy-quantity" type="number" min="1" step="1" value={form.quantity} onChange={(event) => setForm((prev) => ({ ...prev, quantity: event.target.value }))} required />
                     </div>
                     <div className="grid gap-1.5">
-                      <Label htmlFor="unit-cost">Unit Cost</Label>
-                      <Input
-                        id="unit-cost"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={form.unitCost}
-                        onChange={(event) => setForm((prev) => ({ ...prev, unitCost: event.target.value }))}
-                        placeholder="0.00"
-                        required
-                      />
+                      <Label htmlFor="buy-unit-cost">Unit Cost</Label>
+                      <Input id="buy-unit-cost" type="number" min="0" step="0.01" value={form.unitCost} onChange={(event) => setForm((prev) => ({ ...prev, unitCost: event.target.value }))} required />
                     </div>
                   </div>
                   <div className="grid gap-1.5">
-                    <Label htmlFor="vendor">Vendor</Label>
-                    <Input
-                      id="vendor"
-                      value={form.vendor}
-                      onChange={(event) => setForm((prev) => ({ ...prev, vendor: event.target.value }))}
-                      placeholder="Supplier / company"
-                    />
+                    <Label htmlFor="buy-vendor">Vendor</Label>
+                    <Input id="buy-vendor" value={form.vendor} onChange={(event) => setForm((prev) => ({ ...prev, vendor: event.target.value }))} placeholder="Supplier or store" />
                   </div>
                   <div className="grid gap-1.5">
                     <Label htmlFor="buy-notes">Notes</Label>
-                    <textarea
-                      id="buy-notes"
-                      className="min-h-20 rounded-md border bg-background px-3 py-2 text-sm"
-                      value={form.notes}
-                      onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))}
-                      placeholder="Optional note"
-                    />
+                    <Input id="buy-notes" value={form.notes} onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))} placeholder="Optional details" />
                   </div>
                   <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? 'Saving...' : 'Add Clinical Expense'}
+                    {isSubmitting ? 'Saving...' : 'Save Clinical Expense'}
                   </Button>
                 </form>
 
                 <div className="grid gap-3">
-                    <div className="rounded-xl border bg-white/90 p-4">
-                      <p className="text-xs text-muted-foreground">Total Clinical Buying Cost</p>
-                      <p className="text-2xl font-semibold">{formatCurrency(summary.total, 'AFN')}</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border bg-background/80 p-4">
+                      <p className="text-xs text-muted-foreground">Spend In Range</p>
+                      <p className="text-2xl font-semibold">{formatCurrency(report?.summary.totalSpend ?? 0, 'AFN')}</p>
                     </div>
-                  <div className="h-64 rounded-2xl border bg-white/90 p-3">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={summary.byCategory}
-                          dataKey="value"
-                          nameKey="name"
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={95}
-                          paddingAngle={2}
-                        >
-                          {summary.byCategory.map((entry, index) => (
-                            <Cell key={entry.name} fill={categoryColors[index % categoryColors.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip formatter={(value) => formatCurrency(Number(value), 'AFN')} />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    <div className="rounded-2xl border bg-background/80 p-4">
+                      <p className="text-xs text-muted-foreground">Records</p>
+                      <p className="text-2xl font-semibold">{report?.summary.recordCount ?? 0}</p>
+                    </div>
                   </div>
-                  <div className="grid gap-2">
-                    {summary.byCategory.slice(0, 4).map((item, index) => (
-                      <div key={item.name} className="flex items-center justify-between rounded-lg border bg-white/90 px-3 py-2 text-sm">
-                        <span className="inline-flex items-center gap-2">
-                          <span className="size-2.5 rounded-full" style={{ backgroundColor: categoryColors[index % categoryColors.length] }} />
-                          {item.name}
-                        </span>
-                        <span className="font-semibold">{formatCurrency(item.value, 'AFN')}</span>
-                      </div>
-                    ))}
+
+                  <div className="grid gap-3 rounded-2xl border bg-background/80 p-4 md:grid-cols-4">
+                    <div className="grid gap-1.5">
+                      <Label>Start Date</Label>
+                      <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label>End Date</Label>
+                      <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label>Category</Label>
+                      <select className="h-9 rounded-md border bg-background px-3 text-sm" value={category} onChange={(event) => setCategory(event.target.value)}>
+                        {categoryOptions.map((option) => (
+                          <option key={option} value={option}>{option === 'all' ? 'All categories' : option}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label>Search</Label>
+                      <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Item, note, vendor..." />
+                    </div>
+                    <div className="md:col-span-4">
+                      <Button type="button" onClick={() => void fetchExpenses(1)}>Apply Filters</Button>
+                    </div>
+                  </div>
+
+                  <div className="h-72 rounded-2xl border bg-background/80 p-3">
+                    {isLoading ? (
+                      <LoadingState compact title="Refreshing report" description="Fetching clinical expense breakdown." />
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={report?.breakdown ?? []} dataKey="amount" nameKey="category" outerRadius={95}>
+                            {(report?.breakdown ?? []).map((entry, index) => (
+                              <Cell key={`${entry.category}-${index}`} fill={categoryColors[index % categoryColors.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(value) => formatCurrency(Number(value), 'AFN')} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    )}
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl border">
+            <Card className="rounded-3xl border">
               <CardHeader>
-                <CardTitle>Clinical Buying History</CardTitle>
+                <CardTitle>Clinical Expense History</CardTitle>
               </CardHeader>
               <CardContent>
-                {isLoading ? (
-                  <LoadingState
-                    title="Loading clinical expenses"
-                    description="Gathering purchase records and category breakdowns."
-                  />
-                ) : sortedRecords.length === 0 ? (
-                  <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-                    No clinical buying expenses yet.
-                  </p>
+                {isLoading && report === null ? (
+                  <LoadingState compact title="Loading history" description="Fetching clinical expense rows." />
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full text-sm">
-                      <thead>
-                        <tr className="border-b text-left text-muted-foreground">
-                          <th className="px-3 py-2">Date</th>
-                          <th className="px-3 py-2">Item</th>
-                          <th className="px-3 py-2">Category</th>
-                          <th className="px-3 py-2">Qty</th>
-                          <th className="px-3 py-2">Unit Cost</th>
-                          <th className="px-3 py-2">Total</th>
-                          <th className="px-3 py-2">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sortedRecords.map((record) => (
-                          <tr key={record.id} className="border-b">
-                            <td className="px-3 py-2">{record.date}</td>
-                            <td className="px-3 py-2">{record.itemName}</td>
-                            <td className="px-3 py-2">{record.category}</td>
-                            <td className="px-3 py-2">{record.quantity}</td>
-                            <td className="px-3 py-2">{formatCurrency(record.unitCost, 'AFN')}</td>
-                            <td className="px-3 py-2 font-semibold">{formatCurrency(record.totalCost, 'AFN')}</td>
-                            <td className="px-3 py-2">
-                              <Button type="button" variant="ghost" size="sm" onClick={() => removeRecord(record.id)}>
-                                <Trash2 className="size-4" />
-                              </Button>
-                            </td>
+                  <div className="space-y-4">
+                    <div className="overflow-x-auto rounded-2xl border">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-muted/30 text-left text-muted-foreground">
+                          <tr>
+                            <th className="px-3 py-2">Date</th>
+                            <th className="px-3 py-2">Item</th>
+                            <th className="px-3 py-2">Category</th>
+                            <th className="px-3 py-2">Quantity</th>
+                            <th className="px-3 py-2">Unit Cost</th>
+                            <th className="px-3 py-2">Vendor</th>
+                            <th className="px-3 py-2">Amount</th>
+                            <th className="px-3 py-2">Action</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {(report?.history.data ?? []).map((record) => (
+                            <tr key={record.id} className="border-t">
+                              <td className="px-3 py-2">{record.expenseDate}</td>
+                              <td className="px-3 py-2 font-medium">{record.itemName}</td>
+                              <td className="px-3 py-2">{record.category}</td>
+                              <td className="px-3 py-2">{record.quantity}</td>
+                              <td className="px-3 py-2">{formatCurrency(record.unitCost, 'AFN')}</td>
+                              <td className="px-3 py-2">{record.vendor || '-'}</td>
+                              <td className="px-3 py-2">{formatCurrency(record.amountInput, 'AFN')}</td>
+                              <td className="px-3 py-2">
+                                <Button type="button" variant="ghost" size="icon" onClick={() => removeRecord(record.id)}>
+                                  <Trash2 className="size-4" />
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <span>{report?.history.meta.total ?? 0} records</span>
+                      <div className="flex items-center gap-2">
+                        <Button type="button" variant="outline" disabled={(report?.history.meta.currentPage ?? 1) <= 1} onClick={() => void fetchExpenses((report?.history.meta.currentPage ?? 1) - 1)}>
+                          Previous
+                        </Button>
+                        <span>
+                          Page {report?.history.meta.currentPage ?? 1} of {report?.history.meta.lastPage ?? 1}
+                        </span>
+                        <Button type="button" variant="outline" disabled={(report?.history.meta.currentPage ?? 1) >= (report?.history.meta.lastPage ?? 1)} onClick={() => void fetchExpenses((report?.history.meta.currentPage ?? 1) + 1)}>
+                          Next
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </CardContent>
@@ -429,4 +373,3 @@ const ClinicalExpensesPage = (): JSX.Element => {
 };
 
 export default ClinicalExpensesPage;
-

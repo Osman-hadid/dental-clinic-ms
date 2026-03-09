@@ -9,25 +9,38 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
-import { fetchAllRows } from '@/modules/common/infrastructure/api/fetch-all-rows';
 import { useStaffList } from '@/modules/dental-management/presentation/hooks';
-import {
-  formatCurrency,
-  parseMoney,
-} from '@/lib/currency-utils';
+import { createDefaultReportRange, fetchReport, toInputDate } from '@/modules/dental-management/presentation/reports/report-client';
+import { formatCurrency, parseMoney } from '@/lib/currency-utils';
 import { ReceiptText, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 type SalaryRow = {
-  currency: 'AFN';
-  id: string;
-  netAmount: number;
+  createdAt: string;
+  id: number;
   netAmountInput: number;
   paymentDate: string;
   salaryMonth: string;
-  staffId: string;
+  staffId: number;
   staffName: string;
   status: string;
+};
+
+type SalaryReportResponse = {
+  rows: {
+    data: SalaryRow[];
+    meta: {
+      currentPage: number;
+      lastPage: number;
+      perPage: number;
+      total: number;
+    };
+  };
+  summary: {
+    paidTotal: number;
+    pendingCount: number;
+    totalCount: number;
+  };
 };
 
 type SalaryForm = {
@@ -43,14 +56,6 @@ type SalaryForm = {
 };
 
 const client = new AxiosClient();
-const API_MAX_PER_PAGE = 100;
-
-const toInputDate = (value: Date): string => {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, '0');
-  const day = String(value.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
 
 const toMonthValue = (value: Date): string => {
   const year = value.getFullYear();
@@ -74,8 +79,6 @@ const buildSalaryMonthOptions = (monthsBack: number): Array<{ label: string; val
   return options;
 };
 
-const parseAmount = (value: string): number => parseMoney(value);
-
 const extractApiErrorMessage = (error: unknown, fallback: string): string => {
   const response = (error as { response?: { data?: { error?: { code?: string; details?: Record<string, unknown>; message?: string } } } })?.response;
   const payload = response?.data?.error;
@@ -87,11 +90,7 @@ const extractApiErrorMessage = (error: unknown, fallback: string): string => {
     return `Safe balance is not enough. Current: ${formatCurrency(currentBalance, 'AFN')}. Requested: ${formatCurrency(requestedAmount, 'AFN')}. Add money to safe or reduce the salary amount.`;
   }
 
-  if (payload?.message) {
-    return payload.message;
-  }
-
-  return fallback;
+  return payload?.message || fallback;
 };
 
 const defaultForm = (): SalaryForm => ({
@@ -106,78 +105,52 @@ const defaultForm = (): SalaryForm => ({
   status: 'paid',
 });
 
-// eslint-disable-next-line react/function-component-definition
 export default function SalariesPage(): JSX.Element {
   const tSidebar = useTranslations('sidebar');
   const tReports = useTranslations('sidebar.reports');
   const { entities: staff } = useStaffList(1, 100);
+  const range = createDefaultReportRange(180);
   const [form, setForm] = useState<SalaryForm>(() => defaultForm());
-  const [rows, setRows] = useState<SalaryRow[]>([]);
+  const [report, setReport] = useState<SalaryReportResponse | null>(null);
+  const [startDate, setStartDate] = useState(range.startDate);
+  const [endDate, setEndDate] = useState(range.endDate);
+  const [staffFilter, setStaffFilter] = useState('');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const salaryMonthOptions = useMemo(() => buildSalaryMonthOptions(24), []);
 
-  const fetchAllSalaryRows = useCallback(async (): Promise<Array<Record<string, unknown>>> => {
-    return fetchAllRows(
-      client,
-      '/api/v1/dental-management/salary-payments',
-      {
-        include: ['staff'],
-        sortBy: 'paymentDate',
-        sortDirection: 'desc',
-      },
-      API_MAX_PER_PAGE
-    );
-  }, []);
-
-  const fetchData = useCallback(async (): Promise<void> => {
+  const fetchData = useCallback(async (pageNumber = page): Promise<void> => {
     setIsLoading(true);
     try {
-      const items = await fetchAllSalaryRows();
-      setRows(items.map((row) => {
-        const staffRow = row.staff as Record<string, unknown> | undefined;
-        const staffName = staffRow
-          ? [String(staffRow.firstName ?? ''), String(staffRow.lastName ?? '')].filter(Boolean).join(' ')
-          : '';
-        return {
-          currency: 'AFN',
-          id: String(row.id ?? ''),
-          netAmount: Number(row.netAmount ?? row.net_amount ?? 0),
-          netAmountInput: Number(row.netAmountInput ?? row.net_amount_input ?? row.netAmount ?? row.net_amount ?? 0),
-          paymentDate: String(row.paymentDate ?? row.payment_date ?? ''),
-          salaryMonth: String(row.salaryMonth ?? row.salary_month ?? ''),
-          staffId: String(row.staffId ?? row.staff_id ?? ''),
-          staffName: staffName || String(staffRow?.fullName ?? staffRow?.name ?? ''),
-          status: String(row.status ?? ''),
-        };
-      }));
+      const data = await fetchReport<SalaryReportResponse>('/api/v1/dental-management/reports/salaries', {
+        endDate,
+        page: pageNumber,
+        perPage: 12,
+        search,
+        sortBy: 'paymentDate',
+        sortDirection: 'desc',
+        staffId: staffFilter,
+        startDate,
+      });
+      setReport(data);
+      setPage(pageNumber);
     } finally {
       setIsLoading(false);
     }
-  }, [fetchAllSalaryRows]);
+  }, [endDate, page, search, staffFilter, startDate]);
 
   useEffect(() => {
-    void fetchData();
+    void fetchData(1);
   }, [fetchData]);
-
-  const totals = useMemo(() => {
-    const paid = rows
-      .filter((row) => row.status === 'paid' || row.status === 'partial')
-      .reduce((sum, row) => sum + row.netAmount, 0);
-
-    return {
-      paid,
-      pendingCount: rows.filter((row) => row.status === 'pending').length,
-      totalCount: rows.length,
-    };
-  }, [rows]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
 
-    const grossAmount = parseAmount(form.grossAmount);
-    const bonusAmount = parseAmount(form.bonusAmount);
-    const deductionAmount = parseAmount(form.deductionAmount);
+    const grossAmount = parseMoney(form.grossAmount);
+    const bonusAmount = parseMoney(form.bonusAmount);
+    const deductionAmount = parseMoney(form.deductionAmount);
     if (!form.staffId || grossAmount <= 0 || !form.salaryMonth || !form.paymentDate) {
       return;
     }
@@ -202,7 +175,7 @@ export default function SalariesPage(): JSX.Element {
       })
       .then(async () => {
         setForm(defaultForm());
-        await fetchData();
+        await fetchData(1);
         toast.success('Salary payment saved.');
       })
       .catch((error: unknown) => {
@@ -213,11 +186,11 @@ export default function SalariesPage(): JSX.Element {
       });
   };
 
-  const removeRow = (id: string): void => {
+  const removeRow = (id: number): void => {
     void client
       .delete(`/api/v1/dental-management/salary-payments/${id}`)
       .then(async () => {
-        await fetchData();
+        await fetchData(page);
         toast.success('Salary payment deleted.');
       })
       .catch((error: unknown) => {
@@ -247,12 +220,7 @@ export default function SalariesPage(): JSX.Element {
                 <form onSubmit={handleSubmit} className="grid gap-3 rounded-2xl border bg-background/85 p-4">
                   <div className="grid gap-1.5">
                     <Label>Staff</Label>
-                    <select
-                      className="h-9 rounded-md border bg-background px-3 text-sm"
-                      value={form.staffId}
-                      onChange={(event) => setForm((prev) => ({ ...prev, staffId: event.target.value }))}
-                      required
-                    >
+                    <select className="h-9 rounded-md border bg-background px-3 text-sm" value={form.staffId} onChange={(event) => setForm((prev) => ({ ...prev, staffId: event.target.value }))} required>
                       <option value="">Select staff</option>
                       {staff.map((member) => (
                         <option key={member.id} value={String(member.id)}>
@@ -264,82 +232,43 @@ export default function SalariesPage(): JSX.Element {
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-1.5">
                       <Label>Salary Month</Label>
-                      <select
-                        className="h-9 rounded-md border bg-background px-3 text-sm"
-                        value={form.salaryMonth}
-                        onChange={(event) => setForm((prev) => ({ ...prev, salaryMonth: event.target.value }))}
-                        required
-                      >
+                      <select className="h-9 rounded-md border bg-background px-3 text-sm" value={form.salaryMonth} onChange={(event) => setForm((prev) => ({ ...prev, salaryMonth: event.target.value }))} required>
                         {salaryMonthOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
+                          <option key={option.value} value={option.value}>{option.label}</option>
                         ))}
                       </select>
                     </div>
                     <div className="grid gap-1.5">
                       <Label>Payment Date</Label>
-                      <Input
-                        type="date"
-                        value={form.paymentDate}
-                        onChange={(event) => setForm((prev) => ({ ...prev, paymentDate: event.target.value }))}
-                        required
-                      />
+                      <Input type="date" value={form.paymentDate} onChange={(event) => setForm((prev) => ({ ...prev, paymentDate: event.target.value }))} required />
                     </div>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-3">
                     <div className="grid gap-1.5">
                       <Label>Gross</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={form.grossAmount}
-                        onChange={(event) => setForm((prev) => ({ ...prev, grossAmount: event.target.value }))}
-                        required
-                      />
+                      <Input type="number" min="0" step="0.01" value={form.grossAmount} onChange={(event) => setForm((prev) => ({ ...prev, grossAmount: event.target.value }))} required />
                     </div>
                     <div className="grid gap-1.5">
                       <Label>Bonus</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={form.bonusAmount}
-                        onChange={(event) => setForm((prev) => ({ ...prev, bonusAmount: event.target.value }))}
-                      />
+                      <Input type="number" min="0" step="0.01" value={form.bonusAmount} onChange={(event) => setForm((prev) => ({ ...prev, bonusAmount: event.target.value }))} />
                     </div>
                     <div className="grid gap-1.5">
                       <Label>Deduction</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={form.deductionAmount}
-                        onChange={(event) => setForm((prev) => ({ ...prev, deductionAmount: event.target.value }))}
-                      />
+                      <Input type="number" min="0" step="0.01" value={form.deductionAmount} onChange={(event) => setForm((prev) => ({ ...prev, deductionAmount: event.target.value }))} />
                     </div>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-1.5">
                       <Label>Status</Label>
-                      <select
-                        className="h-9 rounded-md border bg-background px-3 text-sm"
-                        value={form.status}
-                        onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value as SalaryForm['status'] }))}
-                      >
+                      <select className="h-9 rounded-md border bg-background px-3 text-sm" value={form.status} onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value as SalaryForm['status'] }))}>
                         <option value="paid">Paid</option>
                         <option value="partial">Partial</option>
                         <option value="pending">Pending</option>
                       </select>
                     </div>
                     <div className="grid gap-1.5">
-                      <Label>Paid from safe</Label>
-                      <select
-                        className="h-9 rounded-md border bg-background px-3 text-sm"
-                        value={form.paidFromSafe ? 'yes' : 'no'}
-                        onChange={(event) => setForm((prev) => ({ ...prev, paidFromSafe: event.target.value === 'yes' }))}
-                      >
+                      <Label>Paid From Safe</Label>
+                      <select className="h-9 rounded-md border bg-background px-3 text-sm" value={form.paidFromSafe ? 'yes' : 'no'} onChange={(event) => setForm((prev) => ({ ...prev, paidFromSafe: event.target.value === 'yes' }))}>
                         <option value="yes">Yes</option>
                         <option value="no">No</option>
                       </select>
@@ -347,77 +276,115 @@ export default function SalariesPage(): JSX.Element {
                   </div>
                   <div className="grid gap-1.5">
                     <Label>Notes</Label>
-                    <textarea
-                      className="min-h-20 rounded-md border bg-background px-3 py-2 text-sm"
-                      value={form.notes}
-                      onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))}
-                      placeholder="Optional note"
-                    />
+                    <Input value={form.notes} onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))} placeholder="Optional note" />
                   </div>
-                  <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Saving...' : 'Add Salary Entry'}</Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? 'Saving...' : 'Save Salary Payment'}
+                  </Button>
                 </form>
 
                 <div className="grid gap-3">
-                  <div className="rounded-2xl border bg-white/90 p-4">
-                    <p className="text-xs text-muted-foreground">Paid Salaries</p>
-                    <p className="text-2xl font-semibold">{formatCurrency(totals.paid, 'AFN')}</p>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-xl border bg-violet-100/70 p-3 text-violet-900">
-                      <p className="text-xs">Total Rows</p>
-                      <p className="text-lg font-semibold">{totals.totalCount}</p>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-2xl border bg-background/80 p-4">
+                      <p className="text-xs text-muted-foreground">Paid In Range</p>
+                      <p className="text-2xl font-semibold">{formatCurrency(report?.summary.paidTotal ?? 0, 'AFN')}</p>
                     </div>
-                    <div className="rounded-xl border bg-orange-100/70 p-3 text-orange-900">
-                      <p className="text-xs">Pending</p>
-                      <p className="text-lg font-semibold">{totals.pendingCount}</p>
+                    <div className="rounded-2xl border bg-background/80 p-4">
+                      <p className="text-xs text-muted-foreground">Pending</p>
+                      <p className="text-2xl font-semibold">{report?.summary.pendingCount ?? 0}</p>
+                    </div>
+                    <div className="rounded-2xl border bg-background/80 p-4">
+                      <p className="text-xs text-muted-foreground">Total Rows</p>
+                      <p className="text-2xl font-semibold">{report?.summary.totalCount ?? 0}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 rounded-2xl border bg-background/80 p-4 md:grid-cols-4">
+                    <div className="grid gap-1.5">
+                      <Label>Start Date</Label>
+                      <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label>End Date</Label>
+                      <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label>Staff</Label>
+                      <select className="h-9 rounded-md border bg-background px-3 text-sm" value={staffFilter} onChange={(event) => setStaffFilter(event.target.value)}>
+                        <option value="">All staff</option>
+                        {staff.map((member) => (
+                          <option key={member.id} value={String(member.id)}>
+                            {member.fullName || `Staff #${member.id}`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label>Search</Label>
+                      <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Month or staff..." />
+                    </div>
+                    <div className="md:col-span-4">
+                      <Button type="button" onClick={() => void fetchData(1)}>Apply Filters</Button>
                     </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl border">
+            <Card className="rounded-3xl border">
               <CardHeader>
-                <CardTitle>Salaries Table</CardTitle>
+                <CardTitle>Salary History</CardTitle>
               </CardHeader>
               <CardContent>
-                {isLoading ? (
-                  <LoadingState
-                    title="Loading salaries"
-                    description="Fetching salary rows and recalculating payment totals."
-                  />
-                ) : rows.length === 0 ? (
-                  <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">No salary records yet.</p>
+                {isLoading && report === null ? (
+                  <LoadingState compact title="Loading salary report" description="Fetching salary payments." />
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full text-sm">
-                      <thead>
-                        <tr className="border-b text-left text-muted-foreground">
-                          <th className="px-3 py-2">Month</th>
-                          <th className="px-3 py-2">Date</th>
-                          <th className="px-3 py-2">Staff</th>
-                          <th className="px-3 py-2">Status</th>
-                          <th className="px-3 py-2">Net</th>
-                          <th className="px-3 py-2">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows.map((row) => (
-                          <tr key={row.id} className="border-b">
-                            <td className="px-3 py-2">{row.salaryMonth}</td>
-                            <td className="px-3 py-2">{row.paymentDate}</td>
-                            <td className="px-3 py-2">{row.staffName || `Staff #${row.staffId}`}</td>
-                            <td className="px-3 py-2 capitalize">{row.status}</td>
-                            <td className="px-3 py-2 font-semibold">{formatCurrency(row.netAmountInput, 'AFN')}</td>
-                            <td className="px-3 py-2">
-                              <Button type="button" variant="ghost" size="sm" onClick={() => removeRow(row.id)}>
-                                <Trash2 className="size-4" />
-                              </Button>
-                            </td>
+                  <div className="space-y-4">
+                    <div className="overflow-x-auto rounded-2xl border">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-muted/30 text-left text-muted-foreground">
+                          <tr>
+                            <th className="px-3 py-2">Payment Date</th>
+                            <th className="px-3 py-2">Salary Month</th>
+                            <th className="px-3 py-2">Staff</th>
+                            <th className="px-3 py-2">Status</th>
+                            <th className="px-3 py-2">Net Amount</th>
+                            <th className="px-3 py-2">Action</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {(report?.rows.data ?? []).map((row) => (
+                            <tr key={row.id} className="border-t">
+                              <td className="px-3 py-2">{row.paymentDate}</td>
+                              <td className="px-3 py-2">{row.salaryMonth}</td>
+                              <td className="px-3 py-2">{row.staffName}</td>
+                              <td className="px-3 py-2">{row.status}</td>
+                              <td className="px-3 py-2 font-medium">{formatCurrency(row.netAmountInput, 'AFN')}</td>
+                              <td className="px-3 py-2">
+                                <Button type="button" variant="ghost" size="icon" onClick={() => removeRow(row.id)}>
+                                  <Trash2 className="size-4" />
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <span>{report?.rows.meta.total ?? 0} rows</span>
+                      <div className="flex items-center gap-2">
+                        <Button type="button" variant="outline" disabled={(report?.rows.meta.currentPage ?? 1) <= 1} onClick={() => void fetchData((report?.rows.meta.currentPage ?? 1) - 1)}>
+                          Previous
+                        </Button>
+                        <span>
+                          Page {report?.rows.meta.currentPage ?? 1} of {report?.rows.meta.lastPage ?? 1}
+                        </span>
+                        <Button type="button" variant="outline" disabled={(report?.rows.meta.currentPage ?? 1) >= (report?.rows.meta.lastPage ?? 1)} onClick={() => void fetchData((report?.rows.meta.currentPage ?? 1) + 1)}>
+                          Next
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </CardContent>
@@ -428,4 +395,3 @@ export default function SalariesPage(): JSX.Element {
     </>
   );
 }
-

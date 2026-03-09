@@ -50,4 +50,9 @@ return Application::configure(basePath: dirname(__DIR__))
             ->everyThirtyMinutes()
             ->withoutOverlapping()
             ->appendOutputTo(storage_path('logs/dental-backup.log'));
+
+        $schedule->command('reports:snapshots:run')
+            ->hourly()
+            ->withoutOverlapping()
+            ->appendOutputTo(storage_path('logs/report-snapshots.log'));
     })->create();

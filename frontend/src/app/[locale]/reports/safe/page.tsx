@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, JSX, useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Header } from '@/components/header';
 import { LoadingState } from '@/components/shared/loading-state';
@@ -9,26 +9,40 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
-import { fetchAllRows } from '@/modules/common/infrastructure/api/fetch-all-rows';
 import { useStaffList } from '@/modules/dental-management/presentation/hooks';
-import {
-  formatCurrency,
-  parseMoney,
-} from '@/lib/currency-utils';
+import { createDefaultReportRange, fetchReport, toInputDate } from '@/modules/dental-management/presentation/reports/report-client';
+import { formatCurrency, parseMoney } from '@/lib/currency-utils';
 import { HandCoins, Trash2, Vault } from 'lucide-react';
 import { toast } from 'sonner';
 
 type SafeRow = {
-  amount: number;
   amountInput: number;
-  currency: 'AFN';
+  createdAt: string;
   direction: string;
   entryType: string;
-  id: string;
+  id: number;
   notes: string;
-  pickedByStaffId: string;
+  pickedByStaffId: number;
   pickedByStaffName: string;
   transactionDate: string;
+};
+
+type SafeReportResponse = {
+  ledger: {
+    data: SafeRow[];
+    meta: {
+      currentPage: number;
+      lastPage: number;
+      perPage: number;
+      total: number;
+    };
+  };
+  summary: {
+    balance: number;
+    rangeNet: number;
+    totalIn: number;
+    totalOut: number;
+  };
 };
 
 type SafeForm = {
@@ -41,16 +55,6 @@ type SafeForm = {
 };
 
 const client = new AxiosClient();
-const API_MAX_PER_PAGE = 100;
-
-const toInputDate = (value: Date): string => {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, '0');
-  const day = String(value.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const parseAmount = (value: string): number => parseMoney(value);
 
 const extractApiErrorMessage = (error: unknown, fallback: string): string => {
   const response = (error as { response?: { data?: { error?: { code?: string; details?: Record<string, unknown>; message?: string } } } })?.response;
@@ -75,89 +79,51 @@ const defaultForm = (): SafeForm => ({
   transactionDate: toInputDate(new Date()),
 });
 
-// eslint-disable-next-line react/function-component-definition
 export default function SafePage(): JSX.Element {
   const tSidebar = useTranslations('sidebar');
   const tReports = useTranslations('sidebar.reports');
   const { entities: staff } = useStaffList(1, 100);
+  const range = createDefaultReportRange(90);
   const [form, setForm] = useState<SafeForm>(() => defaultForm());
-  const [rows, setRows] = useState<SafeRow[]>([]);
-  const [balance, setBalance] = useState(0);
-  const [totalIn, setTotalIn] = useState(0);
-  const [totalOut, setTotalOut] = useState(0);
+  const [report, setReport] = useState<SafeReportResponse | null>(null);
+  const [startDate, setStartDate] = useState(range.startDate);
+  const [endDate, setEndDate] = useState(range.endDate);
+  const [direction, setDirection] = useState('all');
+  const [entryType, setEntryType] = useState('all');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchAllSafeRows = useCallback(async (): Promise<Array<Record<string, unknown>>> => {
-    return fetchAllRows(
-      client,
-      '/api/v1/dental-management/safe-transactions',
-      {
-        include: ['pickedByStaff'],
-        sortBy: 'transactionDate',
-        sortDirection: 'desc',
-      },
-      API_MAX_PER_PAGE
-    );
-  }, []);
-
-  const fetchData = useCallback(async (): Promise<void> => {
+  const fetchData = useCallback(async (pageNumber = page): Promise<void> => {
     setIsLoading(true);
     try {
-      const [allRows, balanceResponse] = await Promise.all([
-        fetchAllSafeRows(),
-        client.get<{ afnPerUsd?: number; balance?: number; totalIn?: number; totalOut?: number }>('/api/v1/dental-management/safe-transactions/balance'),
-      ]);
-
-      const list = Array.isArray(allRows) ? allRows : [];
-      const uniqueRows = new Map<string, SafeRow>();
-
-      list.forEach((row, index) => {
-        const id = String(row.id ?? '').trim() || `safe-row-${index}`;
-
-        uniqueRows.set(id, {
-          amount: Number(row.amountInput ?? row.amount_input ?? row.amount ?? 0),
-          amountInput: Number(row.amountInput ?? row.amount_input ?? row.amount ?? 0),
-          currency: 'AFN',
-          direction: String(row.direction ?? ''),
-          entryType: String(row.entryType ?? row.entry_type ?? ''),
-          id,
-          notes: String(row.notes ?? ''),
-          pickedByStaffId: String(row.pickedByStaffId ?? row.picked_by_staff_id ?? ''),
-          pickedByStaffName: (() => {
-            const pickedBy = row.pickedByStaff as Record<string, unknown> | undefined;
-            if (!pickedBy) return '';
-            const fullName = [String(pickedBy.firstName ?? ''), String(pickedBy.lastName ?? '')]
-              .filter(Boolean)
-              .join(' ')
-              .trim();
-            return fullName || String(pickedBy.fullName ?? '');
-          })(),
-          transactionDate: String(row.transactionDate ?? row.transaction_date ?? ''),
-        });
+      const data = await fetchReport<SafeReportResponse>('/api/v1/dental-management/reports/safe', {
+        direction,
+        endDate,
+        entryType,
+        page: pageNumber,
+        perPage: 12,
+        search,
+        sortBy: 'transactionDate',
+        sortDirection: 'desc',
+        startDate,
       });
-
-      setRows([...uniqueRows.values()]);
-      setBalance(Number(balanceResponse.data?.balance ?? 0));
-      setTotalIn(Number(balanceResponse.data?.totalIn ?? 0));
-      setTotalOut(Number(balanceResponse.data?.totalOut ?? 0));
+      setReport(data);
+      setPage(pageNumber);
     } finally {
       setIsLoading(false);
     }
-  }, [fetchAllSafeRows]);
+  }, [direction, endDate, entryType, page, search, startDate]);
 
   useEffect(() => {
-    void fetchData();
+    void fetchData(1);
   }, [fetchData]);
-
-  const sortedRows = useMemo(() => {
-    return [...rows].sort((a, b) => b.transactionDate.localeCompare(a.transactionDate));
-  }, [rows]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
 
-    const rawAmount = parseAmount(form.amount);
+    const rawAmount = parseMoney(form.amount);
     if (!form.transactionDate || rawAmount <= 0) {
       return;
     }
@@ -177,7 +143,7 @@ export default function SafePage(): JSX.Element {
       })
       .then(async () => {
         setForm(defaultForm());
-        await fetchData();
+        await fetchData(1);
         toast.success('Safe transaction saved.');
       })
       .catch((error: unknown) => {
@@ -188,11 +154,11 @@ export default function SafePage(): JSX.Element {
       });
   };
 
-  const removeRow = (id: string): void => {
+  const removeRow = (id: number): void => {
     void client
       .delete(`/api/v1/dental-management/safe-transactions/${id}`)
       .then(async () => {
-        await fetchData();
+        await fetchData(page);
         toast.success('Safe transaction deleted.');
       })
       .catch((error: unknown) => {
@@ -223,45 +189,24 @@ export default function SafePage(): JSX.Element {
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-1.5">
                       <Label>Date</Label>
-                      <Input
-                        type="date"
-                        value={form.transactionDate}
-                        onChange={(event) => setForm((prev) => ({ ...prev, transactionDate: event.target.value }))}
-                        required
-                      />
+                      <Input type="date" value={form.transactionDate} onChange={(event) => setForm((prev) => ({ ...prev, transactionDate: event.target.value }))} required />
                     </div>
                     <div className="grid gap-1.5">
                       <Label>Amount</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={form.amount}
-                        onChange={(event) => setForm((prev) => ({ ...prev, amount: event.target.value }))}
-                        placeholder="0.00"
-                        required
-                      />
+                      <Input type="number" min="0" step="0.01" value={form.amount} onChange={(event) => setForm((prev) => ({ ...prev, amount: event.target.value }))} placeholder="0.00" required />
                     </div>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-1.5">
                       <Label>Direction</Label>
-                      <select
-                        className="h-9 rounded-md border bg-background px-3 text-sm"
-                        value={form.direction}
-                        onChange={(event) => setForm((prev) => ({ ...prev, direction: event.target.value as 'in' | 'out' }))}
-                      >
+                      <select className="h-9 rounded-md border bg-background px-3 text-sm" value={form.direction} onChange={(event) => setForm((prev) => ({ ...prev, direction: event.target.value as 'in' | 'out' }))}>
                         <option value="in">In</option>
                         <option value="out">Out</option>
                       </select>
                     </div>
                     <div className="grid gap-1.5">
                       <Label>Type</Label>
-                      <select
-                        className="h-9 rounded-md border bg-background px-3 text-sm"
-                        value={form.entryType}
-                        onChange={(event) => setForm((prev) => ({ ...prev, entryType: event.target.value }))}
-                      >
+                      <select className="h-9 rounded-md border bg-background px-3 text-sm" value={form.entryType} onChange={(event) => setForm((prev) => ({ ...prev, entryType: event.target.value }))}>
                         <option value="deposit">Deposit</option>
                         <option value="withdrawal">Withdrawal</option>
                         <option value="adjustment">Adjustment</option>
@@ -272,11 +217,7 @@ export default function SafePage(): JSX.Element {
                   </div>
                   <div className="grid gap-1.5">
                     <Label>Picked by staff (optional)</Label>
-                    <select
-                      className="h-9 rounded-md border bg-background px-3 text-sm"
-                      value={form.pickedByStaffId}
-                      onChange={(event) => setForm((prev) => ({ ...prev, pickedByStaffId: event.target.value }))}
-                    >
+                    <select className="h-9 rounded-md border bg-background px-3 text-sm" value={form.pickedByStaffId} onChange={(event) => setForm((prev) => ({ ...prev, pickedByStaffId: event.target.value }))}>
                       <option value="">Not selected</option>
                       {staff.map((member) => (
                         <option key={member.id} value={String(member.id)}>
@@ -287,87 +228,126 @@ export default function SafePage(): JSX.Element {
                   </div>
                   <div className="grid gap-1.5">
                     <Label>Notes</Label>
-                    <textarea
-                      className="min-h-20 rounded-md border bg-background px-3 py-2 text-sm"
-                      value={form.notes}
-                      onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))}
-                      placeholder="Optional note"
-                    />
+                    <Input value={form.notes} onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))} placeholder="Optional note" />
                   </div>
                   <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? 'Saving...' : 'Add Safe Transaction'}
+                    <HandCoins className="mr-2 size-4" />
+                    {isSubmitting ? 'Saving...' : 'Save Safe Transaction'}
                   </Button>
                 </form>
 
                 <div className="grid gap-3">
-                  <div className="rounded-2xl border bg-white/90 p-4">
-                    <p className="text-xs text-muted-foreground">Current Safe Balance</p>
-                    <p className="text-3xl font-semibold">{formatCurrency(balance, 'AFN')}</p>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-xl border bg-emerald-100/70 p-3 text-emerald-900">
-                      <p className="text-xs">Total In</p>
-                      <p className="text-lg font-semibold">{formatCurrency(totalIn, 'AFN')}</p>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-2xl border bg-background/80 p-4">
+                      <p className="text-xs text-muted-foreground">Current Balance</p>
+                      <p className="text-2xl font-semibold">{formatCurrency(report?.summary.balance ?? 0, 'AFN')}</p>
                     </div>
-                    <div className="rounded-xl border bg-orange-100/70 p-3 text-orange-900">
-                      <p className="text-xs">Total Out</p>
-                      <p className="text-lg font-semibold">{formatCurrency(totalOut, 'AFN')}</p>
+                    <div className="rounded-2xl border bg-background/80 p-4">
+                      <p className="text-xs text-muted-foreground">Range In</p>
+                      <p className="text-2xl font-semibold">{formatCurrency(report?.summary.totalIn ?? 0, 'AFN')}</p>
+                    </div>
+                    <div className="rounded-2xl border bg-background/80 p-4">
+                      <p className="text-xs text-muted-foreground">Range Out</p>
+                      <p className="text-2xl font-semibold">{formatCurrency(report?.summary.totalOut ?? 0, 'AFN')}</p>
                     </div>
                   </div>
-                  <div className="rounded-xl border bg-white/90 p-3 text-sm text-muted-foreground">
-                    Safe outflow tracks who picked money (when selected) and appears in reports.
+
+                  <div className="grid gap-3 rounded-2xl border bg-background/80 p-4 md:grid-cols-4">
+                    <div className="grid gap-1.5">
+                      <Label>Start Date</Label>
+                      <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label>End Date</Label>
+                      <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label>Direction</Label>
+                      <select className="h-9 rounded-md border bg-background px-3 text-sm" value={direction} onChange={(event) => setDirection(event.target.value)}>
+                        <option value="all">All directions</option>
+                        <option value="in">In</option>
+                        <option value="out">Out</option>
+                      </select>
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label>Entry Type</Label>
+                      <Input value={entryType} onChange={(event) => setEntryType(event.target.value)} placeholder="deposit, salary..." />
+                    </div>
+                    <div className="grid gap-1.5 md:col-span-3">
+                      <Label>Search</Label>
+                      <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Notes or staff..." />
+                    </div>
+                    <div className="flex items-end">
+                      <Button type="button" onClick={() => void fetchData(1)}>Apply Filters</Button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border bg-background/80 p-4">
+                    <p className="text-xs text-muted-foreground">Range Net</p>
+                    <p className="text-2xl font-semibold">{formatCurrency(report?.summary.rangeNet ?? 0, 'AFN')}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl border">
+            <Card className="rounded-3xl border">
               <CardHeader>
-                <CardTitle className="inline-flex items-center gap-2">
-                  <HandCoins className="size-5 text-primary" />
-                  Safe Transactions
-                </CardTitle>
+                <CardTitle>Ledger History</CardTitle>
               </CardHeader>
               <CardContent>
-                {isLoading ? (
-                  <LoadingState
-                    title="Loading safe ledger"
-                    description="Fetching transactions and recalculating the current safe balance."
-                  />
-                ) : sortedRows.length === 0 ? (
-                  <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">No safe transactions yet.</p>
+                {isLoading && report === null ? (
+                  <LoadingState compact title="Loading safe report" description="Fetching safe transactions and balances." />
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full text-sm">
-                      <thead>
-                        <tr className="border-b text-left text-muted-foreground">
-                          <th className="px-3 py-2">Date</th>
-                          <th className="px-3 py-2">Type</th>
-                          <th className="px-3 py-2">Direction</th>
-                          <th className="px-3 py-2">Picked By</th>
-                          <th className="px-3 py-2">Amount</th>
-                          <th className="px-3 py-2">Notes</th>
-                          <th className="px-3 py-2">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sortedRows.map((row) => (
-                          <tr key={row.id} className="border-b">
-                            <td className="px-3 py-2">{row.transactionDate}</td>
-                            <td className="px-3 py-2 capitalize">{row.entryType.replace('_', ' ')}</td>
-                            <td className="px-3 py-2 uppercase">{row.direction}</td>
-                            <td className="px-3 py-2">{row.pickedByStaffName || '-'}</td>
-                            <td className="px-3 py-2 font-semibold">{formatCurrency(row.amountInput, 'AFN')}</td>
-                            <td className="px-3 py-2">{row.notes || '-'}</td>
-                            <td className="px-3 py-2">
-                              <Button type="button" variant="ghost" size="sm" onClick={() => removeRow(row.id)}>
-                                <Trash2 className="size-4" />
-                              </Button>
-                            </td>
+                  <div className="space-y-4">
+                    <div className="overflow-x-auto rounded-2xl border">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-muted/30 text-left text-muted-foreground">
+                          <tr>
+                            <th className="px-3 py-2">Date</th>
+                            <th className="px-3 py-2">Direction</th>
+                            <th className="px-3 py-2">Type</th>
+                            <th className="px-3 py-2">Amount</th>
+                            <th className="px-3 py-2">Picked By</th>
+                            <th className="px-3 py-2">Notes</th>
+                            <th className="px-3 py-2">Action</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {(report?.ledger.data ?? []).map((row) => (
+                            <tr key={row.id} className="border-t">
+                              <td className="px-3 py-2">{row.transactionDate}</td>
+                              <td className="px-3 py-2">{row.direction}</td>
+                              <td className="px-3 py-2">{row.entryType}</td>
+                              <td className={`px-3 py-2 font-medium ${row.direction === 'out' ? 'text-rose-600' : 'text-emerald-700'}`}>
+                                {formatCurrency(row.amountInput, 'AFN')}
+                              </td>
+                              <td className="px-3 py-2">{row.pickedByStaffName || '-'}</td>
+                              <td className="px-3 py-2">{row.notes || '-'}</td>
+                              <td className="px-3 py-2">
+                                <Button type="button" variant="ghost" size="icon" onClick={() => removeRow(row.id)}>
+                                  <Trash2 className="size-4" />
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <span>{report?.ledger.meta.total ?? 0} transactions</span>
+                      <div className="flex items-center gap-2">
+                        <Button type="button" variant="outline" disabled={(report?.ledger.meta.currentPage ?? 1) <= 1} onClick={() => void fetchData((report?.ledger.meta.currentPage ?? 1) - 1)}>
+                          Previous
+                        </Button>
+                        <span>
+                          Page {report?.ledger.meta.currentPage ?? 1} of {report?.ledger.meta.lastPage ?? 1}
+                        </span>
+                        <Button type="button" variant="outline" disabled={(report?.ledger.meta.currentPage ?? 1) >= (report?.ledger.meta.lastPage ?? 1)} onClick={() => void fetchData((report?.ledger.meta.currentPage ?? 1) + 1)}>
+                          Next
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </CardContent>
@@ -378,4 +358,3 @@ export default function SafePage(): JSX.Element {
     </>
   );
 }
-

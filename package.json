@@ -4,6 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "build:frontend:laravel": "npm --prefix frontend run build:laravel",
+    "build:frontend:prod:laravel": "npm --prefix frontend run build:prod:laravel",
     "test": "echo \"Error: no test specified\" && exit 1",
     "prepare": "husky"
   },

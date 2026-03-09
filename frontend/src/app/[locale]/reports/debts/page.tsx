@@ -8,25 +8,42 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  formatCurrency,
-  parseMoney,
-} from '@/lib/currency-utils';
+import { formatCurrency } from '@/lib/currency-utils';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
-import { fetchAllRows } from '@/modules/common/infrastructure/api/fetch-all-rows';
+import { createDefaultReportRange, fetchReport, toInputDate } from '@/modules/dental-management/presentation/reports/report-client';
 import { Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 
 type DebtRow = {
-  debtId: string;
-  debtInput: number;
-  invoiceId: string;
+  agingBucket: string;
+  debtAmount: number;
+  id: number;
   invoiceDate: string;
-  netAmountInput: number;
+  invoiceId: string;
+  netAmount: number;
   paidAmount: number;
   patientId: string;
   patientName: string;
   status: string;
+};
+
+type DebtReportResponse = {
+  aging: Array<{ amount: number; bucket: string; count: number }>;
+  rows: {
+    data: DebtRow[];
+    meta: {
+      currentPage: number;
+      lastPage: number;
+      perPage: number;
+      total: number;
+    };
+  };
+  summary: {
+    debtCount: number;
+    totalDebt: number;
+    totalNet: number;
+    totalPaid: number;
+  };
 };
 
 type SettleFormState = {
@@ -35,31 +52,7 @@ type SettleFormState = {
   paymentDate: string;
 };
 
-const API_MAX_PER_PAGE = 100;
 const client = new AxiosClient();
-
-const toInputDate = (value: Date): string => {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, '0');
-  const day = String(value.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const asText = (value: unknown): string => {
-  if (value === null || value === undefined) return '';
-  if (typeof value === 'number') return String(value);
-  if (typeof value === 'string') return value.trim();
-  return '';
-};
-
-const parseAmount = (value: unknown): number => parseMoney(value);
-
-const formatDisplayDate = (value: string, locale: string): string => {
-  if (!value) return '-';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(parsed);
-};
 
 const extractApiErrorMessage = (
   error: unknown,
@@ -84,127 +77,71 @@ const createDefaultForm = (): SettleFormState => ({
   paymentDate: toInputDate(new Date()),
 });
 
-const fetchAllDebtRows = async (): Promise<Array<Record<string, unknown>>> => {
-  return fetchAllRows(
-    client,
-    '/api/v1/dental-management/debts',
-    {
-      filter: {
-        status: ['open'],
-      },
-      include: ['patient'],
-      sortBy: 'invoiceDate',
-      sortDirection: 'desc',
-    },
-    API_MAX_PER_PAGE
-  );
-};
-
-const normalizeDebtRows = (
-  rows: Array<Record<string, unknown>>,
-  patientFallback: (id: string) => string
-): DebtRow[] => {
-  return rows
-    .map((row): DebtRow | null => {
-      const debtId = asText(row.id);
-      const invoiceId = asText(row.invoiceId ?? row.invoice_id);
-      if (!debtId || !invoiceId) return null;
-
-      const status = asText(row.status || 'open').toLowerCase();
-      if (status !== 'open') {
-        return null;
-      }
-
-      const patient = (row.patient ?? {}) as Record<string, unknown>;
-      const patientId = asText(row.patientId ?? row.patient_id);
-      const patientName = `${asText(patient.firstName ?? patient.first_name)} ${asText(patient.lastName ?? patient.last_name)}`.trim()
-        || asText(patient.fullName ?? patient.full_name)
-        || asText(row.patientName ?? row.patient_name)
-        || asText(patient.patientCode)
-        || patientFallback(patientId || '-');
-
-      const netAmountInput = parseAmount(row.netAmount ?? row.net_amount);
-      const paidAmount = parseAmount(row.paidAmount ?? row.paid_amount);
-      const debtInput = parseAmount(row.debtAmount ?? row.debt_amount);
-
-      if (debtInput <= 0) return null;
-
-      return {
-        debtId,
-        debtInput,
-        invoiceDate: asText(row.invoiceDate ?? row.invoice_date),
-        invoiceId,
-        netAmountInput,
-        paidAmount: Number(paidAmount.toFixed(2)),
-        patientId,
-        patientName,
-        status,
-      };
-    })
-    .filter((row): row is DebtRow => row !== null)
-    .sort((left, right) => right.invoiceDate.localeCompare(left.invoiceDate));
-};
-
 const getSettledNote = (baseNote: string, row: DebtRow): string => {
   const prefix = `Debt settled for invoice #${row.invoiceId}`;
   const note = baseNote.trim();
   return note ? `${prefix} - ${note}` : prefix;
 };
 
-// eslint-disable-next-line react/function-component-definition
 export default function DebtsPage(): JSX.Element {
   const locale = useLocale();
   const tDebts = useTranslations('app.debtsPage');
   const tSidebar = useTranslations('sidebar');
   const tReports = useTranslations('sidebar.reports');
-  const [rows, setRows] = useState<DebtRow[]>([]);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const range = createDefaultReportRange(90);
+  const [report, setReport] = useState<DebtReportResponse | null>(null);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [form, setForm] = useState<SettleFormState>(() => createDefaultForm());
+  const [startDate, setStartDate] = useState(range.startDate);
+  const [endDate, setEndDate] = useState(range.endDate);
+  const [search, setSearch] = useState('');
+  const [invoiceId, setInvoiceId] = useState('');
+  const [agingBucket, setAgingBucket] = useState('all');
+  const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const refreshDebts = useCallback(async (): Promise<void> => {
+  const refreshDebts = useCallback(async (pageNumber = page): Promise<void> => {
     setIsLoading(true);
     try {
-      const debtRows = await fetchAllDebtRows();
-      const normalizedRows = normalizeDebtRows(debtRows, (id) => tDebts('patientFallback', { id }));
-      setRows(normalizedRows);
-      const normalizedIds = new Set(normalizedRows.map((row) => row.debtId));
-      setSelectedIds((previous) => previous.filter((id) => normalizedIds.has(id)));
+      const data = await fetchReport<DebtReportResponse>('/api/v1/dental-management/reports/debts', {
+        debtAgingBucket: agingBucket,
+        endDate,
+        invoiceId,
+        page: pageNumber,
+        perPage: 12,
+        search,
+        sortBy: 'invoiceDate',
+        sortDirection: 'desc',
+        startDate,
+      });
+      setReport(data);
+      setPage(pageNumber);
+      const validIds = new Set(data.rows.data.map((row) => row.id));
+      setSelectedIds((previous) => previous.filter((id) => validIds.has(id)));
     } finally {
       setIsLoading(false);
     }
-  }, [tDebts]);
+  }, [agingBucket, endDate, invoiceId, page, search, startDate]);
 
   useEffect(() => {
-    void refreshDebts();
+    void refreshDebts(1);
   }, [refreshDebts]);
 
   const selectedRows = useMemo(() => {
-    const selectedSet = new Set(selectedIds);
-    return rows.filter((row) => selectedSet.has(row.debtId));
-  }, [rows, selectedIds]);
-
-  const summary = useMemo(() => {
-    const totalDebt = Number(rows.reduce((sum, row) => sum + row.debtInput, 0).toFixed(2));
-    const selectedDebt = Number(selectedRows.reduce((sum, row) => sum + row.debtInput, 0).toFixed(2));
-    return {
-      count: rows.length,
-      selectedCount: selectedRows.length,
-      selectedDebt,
-      totalDebt,
-    };
-  }, [rows, selectedRows]);
+    const ids = new Set(selectedIds);
+    return (report?.rows.data ?? []).filter((row) => ids.has(row.id));
+  }, [report?.rows.data, selectedIds]);
 
   const toggleSelectAll = (checked: boolean): void => {
     if (checked) {
-      setSelectedIds(rows.map((row) => row.debtId));
+      setSelectedIds((report?.rows.data ?? []).map((row) => row.id));
       return;
     }
     setSelectedIds([]);
   };
 
-  const toggleRow = (id: string, checked: boolean): void => {
+  const toggleRow = (id: number, checked: boolean): void => {
     setSelectedIds((previous) => {
       if (checked) {
         return previous.includes(id) ? previous : [...previous, id];
@@ -224,7 +161,7 @@ export default function DebtsPage(): JSX.Element {
 
     void Promise.allSettled(
       selectedRows.map(async (row) => {
-        await client.post(`/api/v1/dental-management/debts/${row.debtId}/settle`, {
+        await client.post(`/api/v1/dental-management/debts/${row.id}/settle`, {
           method: form.method,
           notes: getSettledNote(form.notes, row),
           paymentDate: form.paymentDate,
@@ -237,7 +174,7 @@ export default function DebtsPage(): JSX.Element {
 
         if (successCount > 0) {
           toast.success(tDebts('savedSuccess', { count: successCount }));
-          await refreshDebts();
+          await refreshDebts(1);
         }
 
         if (firstFailure) {
@@ -276,135 +213,150 @@ export default function DebtsPage(): JSX.Element {
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-1.5">
                       <Label htmlFor="debt-date">{tDebts('paymentDate')}</Label>
-                      <Input
-                        id="debt-date"
-                        type="date"
-                        value={form.paymentDate}
-                        onChange={(event) => setForm((previous) => ({ ...previous, paymentDate: event.target.value }))}
-                        required
-                      />
+                      <Input id="debt-date" type="date" value={form.paymentDate} onChange={(event) => setForm((previous) => ({ ...previous, paymentDate: event.target.value }))} required />
                     </div>
                     <div className="grid gap-1.5">
                       <Label htmlFor="debt-method">{tDebts('paymentMethod')}</Label>
-                      <select
-                        id="debt-method"
-                        className="h-9 rounded-md border bg-background px-3 text-sm"
-                        value={form.method}
-                        onChange={(event) => setForm((previous) => ({ ...previous, method: event.target.value as SettleFormState['method'] }))}
-                      >
+                      <select id="debt-method" className="h-9 rounded-md border bg-background px-3 text-sm" value={form.method} onChange={(event) => setForm((previous) => ({ ...previous, method: event.target.value as SettleFormState['method'] }))}>
                         <option value="cash">{tDebts('methods.cash')}</option>
                         <option value="card">{tDebts('methods.card')}</option>
                         <option value="insurance">{tDebts('methods.insurance')}</option>
                       </select>
                     </div>
                   </div>
-
                   <div className="grid gap-1.5">
                     <Label htmlFor="debt-notes">{tDebts('notes')}</Label>
-                    <Input
-                      id="debt-notes"
-                      value={form.notes}
-                      onChange={(event) => setForm((previous) => ({ ...previous, notes: event.target.value }))}
-                      placeholder={tDebts('notesPlaceholder')}
-                    />
+                    <Input id="debt-notes" value={form.notes} onChange={(event) => setForm((previous) => ({ ...previous, notes: event.target.value }))} placeholder={tDebts('notesPlaceholder')} />
                   </div>
-
-                  <Button type="submit" disabled={isSubmitting || summary.selectedCount === 0}>
-                    {isSubmitting
-                      ? tDebts('saving')
-                      : tDebts('settleSelected', { count: summary.selectedCount })}
+                  <Button type="submit" disabled={isSubmitting || selectedRows.length === 0}>
+                    {isSubmitting ? tDebts('saving') : tDebts('settleSelected', { count: selectedRows.length })}
                   </Button>
                 </form>
 
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-                  <div className="rounded-xl border bg-white/85 p-3">
-                    <p className="text-xs text-muted-foreground">{tDebts('outstandingDebt')}</p>
-                    <p className="text-lg font-semibold">{formatCurrency(summary.totalDebt, 'AFN')}</p>
-                    <p className="text-xs text-muted-foreground">{tDebts('openInvoices', { count: summary.count })}</p>
+                <div className="grid gap-3">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-xl border bg-white/85 p-3">
+                      <p className="text-xs text-muted-foreground">Open Debt</p>
+                      <p className="text-lg font-semibold">{formatCurrency(report?.summary.totalDebt ?? 0, 'AFN')}</p>
+                    </div>
+                    <div className="rounded-xl border bg-white/85 p-3">
+                      <p className="text-xs text-muted-foreground">Net Invoices</p>
+                      <p className="text-lg font-semibold">{formatCurrency(report?.summary.totalNet ?? 0, 'AFN')}</p>
+                    </div>
+                    <div className="rounded-xl border bg-white/85 p-3">
+                      <p className="text-xs text-muted-foreground">Paid</p>
+                      <p className="text-lg font-semibold">{formatCurrency(report?.summary.totalPaid ?? 0, 'AFN')}</p>
+                    </div>
                   </div>
-                  <div className="rounded-xl border bg-white/85 p-3">
-                    <p className="text-xs text-muted-foreground">{tDebts('selectedDebt')}</p>
-                    <p className="text-lg font-semibold">{formatCurrency(summary.selectedDebt, 'AFN')}</p>
-                    <p className="text-xs text-muted-foreground">{tDebts('selectedCount', { count: summary.selectedCount })}</p>
+
+                  <div className="grid gap-3 rounded-2xl border bg-white/85 p-4 md:grid-cols-4">
+                    <div className="grid gap-1.5">
+                      <Label>Start Date</Label>
+                      <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label>End Date</Label>
+                      <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label>Invoice ID</Label>
+                      <Input value={invoiceId} onChange={(event) => setInvoiceId(event.target.value)} placeholder="Invoice number" />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label>Aging Bucket</Label>
+                      <select className="h-9 rounded-md border bg-background px-3 text-sm" value={agingBucket} onChange={(event) => setAgingBucket(event.target.value)}>
+                        <option value="all">All buckets</option>
+                        <option value="0-30 days">0-30 days</option>
+                        <option value="31-60 days">31-60 days</option>
+                        <option value="61-90 days">61-90 days</option>
+                        <option value="90+ days">90+ days</option>
+                      </select>
+                    </div>
+                    <div className="grid gap-1.5 md:col-span-3">
+                      <Label>Search</Label>
+                      <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Patient or invoice..." />
+                    </div>
+                    <div className="flex items-end">
+                      <Button type="button" onClick={() => void refreshDebts(1)}>Apply Filters</Button>
+                    </div>
                   </div>
-                  <div className="rounded-xl border bg-white/85 p-3 text-xs text-muted-foreground">
-                    {tDebts('helpText')}
+
+                  <div className="rounded-2xl border bg-white/85 p-4">
+                    <p className="mb-2 text-sm font-medium">Aging Snapshot</p>
+                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                      {(report?.aging ?? []).map((row) => (
+                        <div key={row.bucket} className="rounded-xl border bg-background/80 p-3">
+                          <p className="text-xs text-muted-foreground">{row.bucket}</p>
+                          <p className="text-base font-semibold">{formatCurrency(row.amount, 'AFN')}</p>
+                          <p className="text-xs text-muted-foreground">{row.count} invoices</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl border">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>{tDebts('outstandingDebtsTable')}</CardTitle>
-                <Button type="button" variant="outline" onClick={() => void refreshDebts()} disabled={isLoading}>
-                  {isLoading ? tDebts('refreshing') : tDebts('refresh')}
-                </Button>
+            <Card className="rounded-3xl border">
+              <CardHeader>
+                <CardTitle>Outstanding Invoices</CardTitle>
               </CardHeader>
               <CardContent>
-                {isLoading ? (
-                  <LoadingState
-                    title={tDebts('loading')}
-                    description="Collecting invoice balances and building the outstanding debt list."
-                  />
-                ) : rows.length === 0 ? (
-                  <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-                    {tDebts('noDebts')}
-                  </p>
+                {isLoading && report === null ? (
+                  <LoadingState compact title="Loading debts" description="Fetching open debt rows." />
                 ) : (
-                  <div className="overflow-auto rounded-xl border">
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-muted/30 text-left">
-                        <tr className="border-b">
-                          <th className="px-3 py-2">
-                            <input
-                              type="checkbox"
-                              checked={summary.selectedCount > 0 && summary.selectedCount === rows.length}
-                              onChange={(event) => toggleSelectAll(event.target.checked)}
-                              aria-label={tDebts('ariaSelectAll')}
-                            />
-                          </th>
-                          <th className="px-3 py-2">{tDebts('columns.invoice')}</th>
-                          <th className="px-3 py-2">{tDebts('columns.patient')}</th>
-                          <th className="px-3 py-2">{tDebts('columns.date')}</th>
-                          <th className="px-3 py-2">{tDebts('columns.status')}</th>
-                          <th className="px-3 py-2">{tDebts('columns.net')}</th>
-                          <th className="px-3 py-2">{tDebts('columns.paid')}</th>
-                          <th className="px-3 py-2">{tDebts('columns.debt')}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows.map((row) => {
-                          const checked = selectedIds.includes(row.debtId);
-                          return (
-                            <tr key={row.debtId} className="border-b last:border-0">
-                              <td className="px-3 py-2 align-top">
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={(event) => toggleRow(row.debtId, event.target.checked)}
-                                  aria-label={tDebts('ariaSelectInvoice', { invoiceId: row.invoiceId })}
-                                />
+                  <div className="space-y-4">
+                    <div className="overflow-x-auto rounded-2xl border">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-muted/30 text-left text-muted-foreground">
+                          <tr>
+                            <th className="px-3 py-2">
+                              <input
+                                type="checkbox"
+                                checked={(report?.rows.data.length ?? 0) > 0 && selectedRows.length === (report?.rows.data.length ?? 0)}
+                                onChange={(event) => toggleSelectAll(event.target.checked)}
+                              />
+                            </th>
+                            <th className="px-3 py-2">Invoice</th>
+                            <th className="px-3 py-2">Date</th>
+                            <th className="px-3 py-2">Patient</th>
+                            <th className="px-3 py-2">Paid</th>
+                            <th className="px-3 py-2">Debt</th>
+                            <th className="px-3 py-2">Bucket</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(report?.rows.data ?? []).map((row) => (
+                            <tr key={row.id} className="border-t">
+                              <td className="px-3 py-2">
+                                <input type="checkbox" checked={selectedIds.includes(row.id)} onChange={(event) => toggleRow(row.id, event.target.checked)} />
                               </td>
-                              <td className="px-3 py-2 align-top font-medium">#{row.invoiceId}</td>
-                              <td className="px-3 py-2 align-top">
-                                <p>{row.patientName}</p>
-                                <p className="text-xs text-muted-foreground">{tDebts('patientIdLabel', { id: row.patientId || '-' })}</p>
-                              </td>
-                              <td className="px-3 py-2 align-top">{formatDisplayDate(row.invoiceDate, locale)}</td>
-                              <td className="px-3 py-2 align-top">{row.status || tDebts('openStatus')}</td>
-                              <td className="px-3 py-2 align-top">
-                                {formatCurrency(row.netAmountInput, 'AFN')}
-                              </td>
-                              <td className="px-3 py-2 align-top">{formatCurrency(row.paidAmount, 'AFN')}</td>
-                              <td className="px-3 py-2 align-top font-semibold text-rose-600">
-                                {formatCurrency(row.debtInput, 'AFN')}
-                              </td>
+                              <td className="px-3 py-2 font-medium">#{row.invoiceId}</td>
+                              <td className="px-3 py-2">{new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(row.invoiceDate))}</td>
+                              <td className="px-3 py-2">{row.patientName}</td>
+                              <td className="px-3 py-2">{formatCurrency(row.paidAmount, 'AFN')}</td>
+                              <td className="px-3 py-2 text-rose-600">{formatCurrency(row.debtAmount, 'AFN')}</td>
+                              <td className="px-3 py-2">{row.agingBucket}</td>
                             </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <span>{report?.rows.meta.total ?? 0} open invoices</span>
+                      <div className="flex items-center gap-2">
+                        <Button type="button" variant="outline" disabled={(report?.rows.meta.currentPage ?? 1) <= 1} onClick={() => void refreshDebts((report?.rows.meta.currentPage ?? 1) - 1)}>
+                          Previous
+                        </Button>
+                        <span>
+                          Page {report?.rows.meta.currentPage ?? 1} of {report?.rows.meta.lastPage ?? 1}
+                        </span>
+                        <Button type="button" variant="outline" disabled={(report?.rows.meta.currentPage ?? 1) >= (report?.rows.meta.lastPage ?? 1)} onClick={() => void refreshDebts((report?.rows.meta.currentPage ?? 1) + 1)}>
+                          Next
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </CardContent>

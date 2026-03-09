@@ -23,7 +23,7 @@ Route::get('/{any}', function (Request $request, string $any) {
     ];
 
     foreach ($candidates as $candidate) {
-        if (File::exists($candidate)) {
+        if (File::exists($candidate) && is_file($candidate)) {
             return response()->file($candidate);
         }
     }

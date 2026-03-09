@@ -1271,8 +1271,13 @@ export const TreatmentChartWorkspace = ({
         flow: 'chart',
         visitId: String(visitIdForSave),
       });
+      const invoiceFlowUrl = `/${locale}/dental-management/invoices/?${searchParameters.toString()}`;
       toast.success('Treatment saved. Redirecting to payment and invoice flow.');
-      router.push(`/${locale}/dental-management/invoices?${searchParameters.toString()}`);
+      if (typeof window !== 'undefined') {
+        window.location.assign(invoiceFlowUrl);
+      } else {
+        router.push(invoiceFlowUrl);
+      }
       return;
     }
 

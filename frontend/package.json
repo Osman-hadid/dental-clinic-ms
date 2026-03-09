@@ -15,6 +15,7 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
+    "build:laravel": "npm run build && node ./scripts/sync-out-to-laravel.mjs",
     "start": "next start",
     "lint": "eslint . --ext ts,tsx",
     "lint:fix": "eslint . --ext ts,tsx --fix",
@@ -29,7 +30,9 @@
     "build:test": "cross-env NEXT_PUBLIC_RUNTIME_ENV=test next build",
     "start:test": "cross-env NEXT_PUBLIC_RUNTIME_ENV=test next start",
     "build:prod": "cross-env NEXT_PUBLIC_RUNTIME_ENV=production npm run build",
-    "start:prod": "cross-env NEXT_PUBLIC_RUNTIME_ENV=production npm run start"
+    "build:prod:laravel": "cross-env NEXT_PUBLIC_RUNTIME_ENV=production npm run build:laravel",
+    "start:prod": "cross-env NEXT_PUBLIC_RUNTIME_ENV=production npm run start",
+    "sync:laravel-public": "node ./scripts/sync-out-to-laravel.mjs"
   },
   "dependencies": {
     "@diceui/combobox": "^1.2.0",
