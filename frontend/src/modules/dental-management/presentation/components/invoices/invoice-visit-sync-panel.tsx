@@ -152,12 +152,13 @@ const getInvoiceSourceVisitIds = (sourceVisitIds: unknown): string[] => {
 };
 
 const resolvePersonName = (
-  fallbackLabel?: string,
+  fallbackLabel?: unknown,
   relation?: Record<string, unknown>,
   fallbackId?: string
 ): string => {
-  if (fallbackLabel && fallbackLabel.trim()) {
-    return fallbackLabel.trim();
+  const normalizedFallbackLabel = asText(fallbackLabel);
+  if (normalizedFallbackLabel) {
+    return normalizedFallbackLabel;
   }
 
   if (relation) {
@@ -181,8 +182,9 @@ const resolvePersonName = (
 };
 
 const formatVisitLabel = (visit: Visit): string => {
-  if (visit.tag && visit.tag.trim()) {
-    return visit.tag.trim();
+  const tag = asText(visit.tag);
+  if (tag) {
+    return tag;
   }
   return `Visit #${visit.id}`;
 };

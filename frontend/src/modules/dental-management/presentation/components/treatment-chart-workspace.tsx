@@ -617,10 +617,10 @@ const formatPrescriptionSummary = (
     frequency: string;
     name: string;
   }>): string => {
-    const name = source.name?.trim() || '';
-    const amount = source.amount?.trim() || '';
-    const frequency = source.frequency?.trim() || '';
-    const foodTimingRaw = source.foodTiming?.trim() || '';
+    const name = asText(source.name);
+    const amount = asText(source.amount);
+    const frequency = asText(source.frequency);
+    const foodTimingRaw = asText(source.foodTiming);
     const foodTiming = (foodTimingRaw in PRESCRIPTION_FOOD_TIMING_LABELS
       ? PRESCRIPTION_FOOD_TIMING_LABELS[foodTimingRaw as PrescriptionFoodTiming]
       : foodTimingRaw);
@@ -659,7 +659,7 @@ const formatPrescriptionSummary = (
   }
 
   if (single === '') {
-    return prescription.content?.trim() || '-';
+    return asText(prescription.content) || '-';
   }
   return '-';
 };
@@ -677,7 +677,7 @@ export const TreatmentChartWorkspace = ({
   const params = useParams<{ locale?: string | string[] }>();
   const locale = resolveLocale(params?.locale);
   const authenticatedUser = useAuthStore((state) => state.user);
-  const authenticatedEmail = authenticatedUser?.email?.trim().toLowerCase() ?? '';
+  const authenticatedEmail = asText(authenticatedUser?.email).toLowerCase();
   const createVisitTreatment = useCreateVisitTreatment();
   const defaultPatientId = initialPatientId !== undefined && initialPatientId !== null
     ? String(initialPatientId)
@@ -749,9 +749,7 @@ export const TreatmentChartWorkspace = ({
       return null;
     }
 
-    const matches = staff.filter(
-      (member) => member.email && member.email.trim().toLowerCase() === authenticatedEmail
-    );
+    const matches = staff.filter((member) => asText(member.email).toLowerCase() === authenticatedEmail);
 
     if (matches.length === 0) {
       return null;
@@ -873,7 +871,7 @@ export const TreatmentChartWorkspace = ({
     return mapped;
   }, [resolveRowTeeth]);
   const resolveRowMaterialSummary = useCallback((row: VisitTreatmentWithRelations): string => {
-    const directMaterial = row.material?.trim();
+    const directMaterial = asText(row.material);
     if (directMaterial) {
       return directMaterial;
     }
@@ -885,8 +883,8 @@ export const TreatmentChartWorkspace = ({
     const parts = row.materialItems
       .map((item) => {
         const itemNameFromRow = 'itemName' in item ? item.itemName : undefined;
-        const itemName = typeof itemNameFromRow === 'string' && itemNameFromRow.trim() !== ''
-          ? itemNameFromRow.trim()
+        const itemName = asText(itemNameFromRow)
+          ? asText(itemNameFromRow)
           : `Item #${item.inventoryItemId ?? '-'}`;
         const quantityUsed = 'quantityUsed' in item ? item.quantityUsed : undefined;
         const quantityFromPayload = 'quantity' in item ? item.quantity : undefined;
@@ -953,12 +951,12 @@ export const TreatmentChartWorkspace = ({
     !createVisitTreatment.isPending;
 
   const doctorName = useMemo(() => {
-    const visitDentistName = selectedVisit?.dentistName?.trim() || '';
+    const visitDentistName = asText(selectedVisit?.dentistName);
     if (visitDentistName) {
       return visitDentistName;
     }
 
-    const mappedStaffName = authenticatedDentist?.fullName?.trim() || '';
+    const mappedStaffName = asText(authenticatedDentist?.fullName);
     if (mappedStaffName) {
       return mappedStaffName;
     }
@@ -1241,7 +1239,7 @@ export const TreatmentChartWorkspace = ({
       payload.toothId = String(targetTooth.id);
     }
 
-    const dentistIdForPayload = selectedVisit?.dentistId?.trim() || (authenticatedDentist ? String(authenticatedDentist.id) : '');
+    const dentistIdForPayload = asText(selectedVisit?.dentistId) || (authenticatedDentist ? String(authenticatedDentist.id) : '');
     if (dentistIdForPayload) {
       payload.dentistId = dentistIdForPayload;
     }
