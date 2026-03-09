@@ -12,26 +12,42 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('appointments', function (Blueprint $table): void {
-            $table->index(['dentist_id', 'appointment_date', 'start_time'], 'appointments_dentist_schedule_idx');
-            $table->index(['patient_id', 'appointment_date'], 'appointments_patient_date_idx');
+            if (!Schema::hasIndex('appointments', 'appointments_dentist_schedule_idx')) {
+                $table->index(['dentist_id', 'appointment_date', 'start_time'], 'appointments_dentist_schedule_idx');
+            }
+            if (!Schema::hasIndex('appointments', 'appointments_patient_date_idx')) {
+                $table->index(['patient_id', 'appointment_date'], 'appointments_patient_date_idx');
+            }
         });
 
         Schema::table('visits', function (Blueprint $table): void {
-            $table->index(['patient_id', 'visit_date'], 'visits_patient_date_idx');
-            $table->index(['dentist_id', 'visit_date'], 'visits_dentist_date_idx');
+            if (!Schema::hasIndex('visits', 'visits_patient_date_idx')) {
+                $table->index(['patient_id', 'visit_date'], 'visits_patient_date_idx');
+            }
+            if (!Schema::hasIndex('visits', 'visits_dentist_date_idx')) {
+                $table->index(['dentist_id', 'visit_date'], 'visits_dentist_date_idx');
+            }
         });
 
         Schema::table('invoices', function (Blueprint $table): void {
-            $table->index(['patient_id', 'status'], 'invoices_patient_status_idx');
-            $table->index(['visit_id'], 'invoices_visit_id_idx');
+            if (!Schema::hasIndex('invoices', 'invoices_patient_status_idx')) {
+                $table->index(['patient_id', 'status'], 'invoices_patient_status_idx');
+            }
+            if (!Schema::hasIndex('invoices', 'invoices_visit_id_idx')) {
+                $table->index(['visit_id'], 'invoices_visit_id_idx');
+            }
         });
 
         Schema::table('payments', function (Blueprint $table): void {
-            $table->index(['invoice_id', 'payment_date'], 'payments_invoice_date_idx');
+            if (!Schema::hasIndex('payments', 'payments_invoice_date_idx')) {
+                $table->index(['invoice_id', 'payment_date'], 'payments_invoice_date_idx');
+            }
         });
 
         Schema::table('visit_treatments', function (Blueprint $table): void {
-            $table->index(['visit_id', 'dentist_id'], 'visit_treatments_visit_dentist_idx');
+            if (!Schema::hasIndex('visit_treatments', 'visit_treatments_visit_dentist_idx')) {
+                $table->index(['visit_id', 'dentist_id'], 'visit_treatments_visit_dentist_idx');
+            }
         });
 
         if (DB::getDriverName() !== 'pgsql') {
@@ -115,26 +131,42 @@ SQL);
         }
 
         Schema::table('visit_treatments', function (Blueprint $table): void {
-            $table->dropIndex('visit_treatments_visit_dentist_idx');
+            if (Schema::hasIndex('visit_treatments', 'visit_treatments_visit_dentist_idx')) {
+                $table->dropIndex('visit_treatments_visit_dentist_idx');
+            }
         });
 
         Schema::table('payments', function (Blueprint $table): void {
-            $table->dropIndex('payments_invoice_date_idx');
+            if (Schema::hasIndex('payments', 'payments_invoice_date_idx')) {
+                $table->dropIndex('payments_invoice_date_idx');
+            }
         });
 
         Schema::table('invoices', function (Blueprint $table): void {
-            $table->dropIndex('invoices_patient_status_idx');
-            $table->dropIndex('invoices_visit_id_idx');
+            if (Schema::hasIndex('invoices', 'invoices_patient_status_idx')) {
+                $table->dropIndex('invoices_patient_status_idx');
+            }
+            if (Schema::hasIndex('invoices', 'invoices_visit_id_idx')) {
+                $table->dropIndex('invoices_visit_id_idx');
+            }
         });
 
         Schema::table('visits', function (Blueprint $table): void {
-            $table->dropIndex('visits_patient_date_idx');
-            $table->dropIndex('visits_dentist_date_idx');
+            if (Schema::hasIndex('visits', 'visits_patient_date_idx')) {
+                $table->dropIndex('visits_patient_date_idx');
+            }
+            if (Schema::hasIndex('visits', 'visits_dentist_date_idx')) {
+                $table->dropIndex('visits_dentist_date_idx');
+            }
         });
 
         Schema::table('appointments', function (Blueprint $table): void {
-            $table->dropIndex('appointments_dentist_schedule_idx');
-            $table->dropIndex('appointments_patient_date_idx');
+            if (Schema::hasIndex('appointments', 'appointments_dentist_schedule_idx')) {
+                $table->dropIndex('appointments_dentist_schedule_idx');
+            }
+            if (Schema::hasIndex('appointments', 'appointments_patient_date_idx')) {
+                $table->dropIndex('appointments_patient_date_idx');
+            }
         });
     }
 };
