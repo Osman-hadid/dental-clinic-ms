@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { writePendingInvoiceFlow } from '@/modules/dental-management/presentation/components/invoices/invoice-flow-storage';
 import {
   Select,
   SelectContent,
@@ -1274,6 +1275,7 @@ export const TreatmentChartWorkspace = ({
       const invoiceFlowUrl = `/${locale}/dental-management/invoices/?${searchParameters.toString()}`;
       toast.success('Treatment saved. Redirecting to payment and invoice flow.');
       if (typeof window !== 'undefined') {
+        writePendingInvoiceFlow(String(visitIdForSave), 'chart');
         window.location.assign(invoiceFlowUrl);
       } else {
         router.push(invoiceFlowUrl);

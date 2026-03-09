@@ -16,6 +16,11 @@ import { cn } from '@/lib/utilities';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import { type Visit } from '@/modules/dental-management/domain/entities/Visit';
 import {
+  clearPendingInvoiceFlow,
+  readPendingInvoiceFlow,
+  readPendingInvoiceVisitId,
+} from '@/modules/dental-management/presentation/components/invoices/invoice-flow-storage';
+import {
   useCreateInvoice,
   useGetVisit,
   useInvoiceList,
@@ -203,8 +208,12 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParameters = useSearchParams();
-  const requestedVisitId = asText(searchParameters.get('visitId'));
-  const flowSource = asText(searchParameters.get('flow')).toLowerCase();
+  const requestedVisitIdFromQuery = asText(searchParameters.get('visitId'));
+  const flowSourceFromQuery = asText(searchParameters.get('flow')).toLowerCase();
+  const [requestedVisitIdFromStorage, setRequestedVisitIdFromStorage] = useState<string>(() => readPendingInvoiceVisitId());
+  const [flowSourceFromStorage, setFlowSourceFromStorage] = useState<string>(() => readPendingInvoiceFlow().toLowerCase());
+  const requestedVisitId = requestedVisitIdFromQuery || requestedVisitIdFromStorage;
+  const flowSource = flowSourceFromQuery || flowSourceFromStorage;
   const isChartFlow = flowSource === 'chart';
   const hasProcessedRequestedVisit = useRef(false);
   const [formState, setFormState] = useState<VisitInvoiceFormState>(() =>
@@ -435,6 +444,10 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
   }, [invoiceNetAmount, isNetAmountEdited]);
 
   const clearRequestedVisitQuery = useCallback((): void => {
+    clearPendingInvoiceFlow();
+    setRequestedVisitIdFromStorage('');
+    setFlowSourceFromStorage('');
+
     if (!searchParameters.get('flow') && !searchParameters.get('visitId')) {
       return;
     }
@@ -455,7 +468,7 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
       return;
     }
 
-    if (isLoadingVisits || isLoadingInvoices || isLoadingRequestedVisit) {
+    if (isLoadingVisits || isLoadingInvoices || isLoadingRequestedVisit || isLoadingVisitAmounts) {
       return;
     }
 
@@ -488,6 +501,7 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
     clearRequestedVisitQuery,
     isChartFlow,
     isLoadingInvoices,
+    isLoadingVisitAmounts,
     isLoadingRequestedVisit,
     isLoadingVisits,
     requestedVisitId,
