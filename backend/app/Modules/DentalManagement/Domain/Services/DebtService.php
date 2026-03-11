@@ -38,6 +38,9 @@ final class DebtService
         if ($invoiceStatus === 'cancelled') {
             $debtAmount = 0;
             $debtStatus = 'cancelled';
+        } elseif ($invoiceStatus === 'paid') {
+            $debtAmount = 0;
+            $debtStatus = 'paid';
         } elseif ($debtAmount <= 0.01) {
             $debtAmount = 0;
             $debtStatus = 'paid';

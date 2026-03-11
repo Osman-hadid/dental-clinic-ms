@@ -109,6 +109,7 @@ final class ReportDashboardService
         $net = 0.0;
         $paid = 0.0;
         $outstandingRows = [];
+        $outstandingTotal = 0.0;
         $revenueTrend = [];
         $paymentMethodMix = [];
         $revenueByPatient = [];
@@ -152,7 +153,10 @@ final class ReportDashboardService
                 $revenueByPaymentMethod[$method]['amount'] = $this->decimal($revenueByPaymentMethod[$method]['amount'] + $amount);
             }
 
-            $debt = max(0, $netAmount - $invoicePaid);
+            $invoiceStatus = $this->text($invoice['status'] ?? 'unpaid', 'unpaid');
+            $normalizedStatus = mb_strtolower($invoiceStatus);
+            $isDebtInvoice = \in_array($normalizedStatus, ['unpaid', 'partially_paid'], true);
+            $debt = $isDebtInvoice ? max(0, $netAmount - $invoicePaid) : 0;
             if ($debt > 0) {
                 $outstandingRows[] = [
                     'debtAmount' => $this->decimal($debt),
@@ -162,8 +166,9 @@ final class ReportDashboardService
                     'paidAmount' => $this->decimal($invoicePaid),
                     'patientId' => $patientId,
                     'patientName' => $patientNameMap[$patientId] ?? $this->patientName(null, $patientId),
-                    'status' => $this->text($invoice['status'] ?? 'pending', 'pending'),
+                    'status' => $invoiceStatus,
                 ];
+                $outstandingTotal += $debt;
             }
 
             $patientName = $patientNameMap[$patientId] ?? $this->patientName(null, $patientId);
@@ -306,7 +311,7 @@ final class ReportDashboardService
                 'collectionRate' => $collectionRate,
                 'expenses' => $this->decimal($expenseTotal),
                 'net' => $this->decimal($net),
-                'outstanding' => $this->decimal(max(0, $net - $paid)),
+                'outstanding' => $this->decimal($outstandingTotal),
                 'paid' => $this->decimal($paid),
                 'safeBalance' => $this->decimal(max(0, $safeBalance)),
                 'safeIn' => $this->decimal($safeIn),

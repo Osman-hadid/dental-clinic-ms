@@ -18,6 +18,7 @@ final class SettleDebtRequest extends BaseFormRequest
     public function rules(): array
     {
         return [
+            'amount' => 'required|numeric|gt:0',
             'paymentDate' => 'required|date_format:Y-m-d',
             'method' => 'required|string|in:cash,card,insurance',
             'notes' => 'nullable|string|max:255',

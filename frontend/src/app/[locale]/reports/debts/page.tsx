@@ -22,6 +22,7 @@ type DebtRow = {
   invoiceId: string;
   netAmount: number;
   paidAmount: number;
+  patientDebtAmount?: number;
   patientId: string;
   patientName: string;
   status: string;
@@ -47,6 +48,7 @@ type DebtReportResponse = {
 };
 
 type SettleFormState = {
+  amount: string;
   method: 'cash' | 'card' | 'insurance';
   notes: string;
   paymentDate: string;
@@ -72,6 +74,7 @@ const extractApiErrorMessage = (
 };
 
 const createDefaultForm = (): SettleFormState => ({
+  amount: '',
   method: 'cash',
   notes: '',
   paymentDate: toInputDate(new Date()),
@@ -101,6 +104,9 @@ export default function DebtsPage(): JSX.Element {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const activePage = report?.rows.meta.currentPage ?? page;
+  const lastPage = report?.rows.meta.lastPage ?? 1;
+
   const refreshDebts = useCallback(async (pageNumber = page): Promise<void> => {
     setIsLoading(true);
     try {
@@ -125,13 +131,20 @@ export default function DebtsPage(): JSX.Element {
   }, [agingBucket, endDate, invoiceId, page, search, startDate]);
 
   useEffect(() => {
-    void refreshDebts(1);
-  }, [refreshDebts]);
+    void refreshDebts(page);
+  }, [agingBucket, endDate, invoiceId, page, search, startDate, refreshDebts]);
 
   const selectedRows = useMemo(() => {
     const ids = new Set(selectedIds);
     return (report?.rows.data ?? []).filter((row) => ids.has(row.id));
   }, [report?.rows.data, selectedIds]);
+
+  const selectedDebt = selectedRows.length === 1 ? selectedRows[0] : null;
+  const enteredAmount = Number.parseFloat(form.amount);
+  const normalizedEnteredAmount = Number.isFinite(enteredAmount) ? Math.max(0, enteredAmount) : 0;
+  const remainingAfterPayment = selectedDebt
+    ? Math.max(0, Number((selectedDebt.debtAmount - normalizedEnteredAmount).toFixed(2)))
+    : 0;
 
   const toggleSelectAll = (checked: boolean): void => {
     if (checked) {
@@ -157,11 +170,28 @@ export default function DebtsPage(): JSX.Element {
       return;
     }
 
+    const parsedAmount = Number.parseFloat(form.amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      toast.error('Enter a valid amount to pay.');
+      return;
+    }
+
+    if (selectedRows.length > 1) {
+      toast.error('Select only one debt when paying a partial amount.');
+      return;
+    }
+
+    if (parsedAmount - selectedRows[0].debtAmount > 0.01) {
+      toast.error(`Amount cannot be greater than remaining debt ${formatCurrency(selectedRows[0].debtAmount, 'AFN')}.`);
+      return;
+    }
+
     setIsSubmitting(true);
 
     void Promise.allSettled(
       selectedRows.map(async (row) => {
         await client.post(`/api/v1/dental-management/debts/${row.id}/settle`, {
+          amount: parsedAmount,
           method: form.method,
           notes: getSettledNote(form.notes, row),
           paymentDate: form.paymentDate,
@@ -211,11 +241,37 @@ export default function DebtsPage(): JSX.Element {
               <CardContent className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
                 <form onSubmit={handleSettleSelected} className="grid gap-3 rounded-2xl border bg-background/90 p-4">
                   <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-xl border bg-white/90 p-3">
+                      <p className="text-xs text-muted-foreground">Selected Debt</p>
+                      <p className="text-lg font-semibold text-rose-600">
+                        {selectedDebt ? formatCurrency(selectedDebt.debtAmount, 'AFN') : formatCurrency(0, 'AFN')}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {selectedDebt ? `Invoice #${selectedDebt.invoiceId} · ${selectedDebt.patientName}` : 'Select one invoice to see the debt amount.'}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border bg-white/90 p-3">
+                      <p className="text-xs text-muted-foreground">Remaining After Payment</p>
+                      <p className="text-lg font-semibold text-amber-600">
+                        {selectedDebt ? formatCurrency(remainingAfterPayment, 'AFN') : formatCurrency(0, 'AFN')}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        This updates dynamically as you enter the amount to pay.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-1.5">
                       <Label htmlFor="debt-date">{tDebts('paymentDate')}</Label>
                       <Input id="debt-date" type="date" value={form.paymentDate} onChange={(event) => setForm((previous) => ({ ...previous, paymentDate: event.target.value }))} required />
                     </div>
                     <div className="grid gap-1.5">
+                      <Label htmlFor="debt-amount">Amount To Pay</Label>
+                      <Input id="debt-amount" type="number" min="0" step="0.01" value={form.amount ?? ''} onChange={(event) => setForm((previous) => ({ ...previous, amount: event.target.value }))} placeholder="Enter paid amount" required />
+                    </div>
+                  </div>
+                  <div className="grid gap-1.5">
                       <Label htmlFor="debt-method">{tDebts('paymentMethod')}</Label>
                       <select id="debt-method" className="h-9 rounded-md border bg-background px-3 text-sm" value={form.method} onChange={(event) => setForm((previous) => ({ ...previous, method: event.target.value as SettleFormState['method'] }))}>
                         <option value="cash">{tDebts('methods.cash')}</option>
@@ -223,6 +279,8 @@ export default function DebtsPage(): JSX.Element {
                         <option value="insurance">{tDebts('methods.insurance')}</option>
                       </select>
                     </div>
+                  <div className="rounded-xl border bg-muted/30 p-3 text-xs text-muted-foreground">
+                    Pay part of a debt now and keep the rest as remaining debt.
                   </div>
                   <div className="grid gap-1.5">
                     <Label htmlFor="debt-notes">{tDebts('notes')}</Label>
@@ -238,6 +296,7 @@ export default function DebtsPage(): JSX.Element {
                     <div className="rounded-xl border bg-white/85 p-3">
                       <p className="text-xs text-muted-foreground">Open Debt</p>
                       <p className="text-lg font-semibold">{formatCurrency(report?.summary.totalDebt ?? 0, 'AFN')}</p>
+                      <p className="text-xs text-muted-foreground">Includes unpaid and partially paid invoice balances.</p>
                     </div>
                     <div className="rounded-xl border bg-white/85 p-3">
                       <p className="text-xs text-muted-foreground">Net Invoices</p>
@@ -335,7 +394,9 @@ export default function DebtsPage(): JSX.Element {
                               <td className="px-3 py-2">{new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(row.invoiceDate))}</td>
                               <td className="px-3 py-2">{row.patientName}</td>
                               <td className="px-3 py-2">{formatCurrency(row.paidAmount, 'AFN')}</td>
-                              <td className="px-3 py-2 text-rose-600">{formatCurrency(row.debtAmount, 'AFN')}</td>
+                              <td className="px-3 py-2 text-rose-600">
+                                {formatCurrency(row.patientDebtAmount ?? row.debtAmount, 'AFN')}
+                              </td>
                               <td className="px-3 py-2">{row.agingBucket}</td>
                             </tr>
                           ))}
@@ -346,13 +407,13 @@ export default function DebtsPage(): JSX.Element {
                     <div className="flex items-center justify-between text-sm text-muted-foreground">
                       <span>{report?.rows.meta.total ?? 0} open invoices</span>
                       <div className="flex items-center gap-2">
-                        <Button type="button" variant="outline" disabled={(report?.rows.meta.currentPage ?? 1) <= 1} onClick={() => void refreshDebts((report?.rows.meta.currentPage ?? 1) - 1)}>
+                        <Button type="button" variant="outline" disabled={isLoading || activePage <= 1} onClick={() => void refreshDebts(activePage - 1)}>
                           Previous
                         </Button>
                         <span>
-                          Page {report?.rows.meta.currentPage ?? 1} of {report?.rows.meta.lastPage ?? 1}
+                          Page {activePage} of {lastPage}
                         </span>
-                        <Button type="button" variant="outline" disabled={(report?.rows.meta.currentPage ?? 1) >= (report?.rows.meta.lastPage ?? 1)} onClick={() => void refreshDebts((report?.rows.meta.currentPage ?? 1) + 1)}>
+                        <Button type="button" variant="outline" disabled={isLoading || activePage >= lastPage} onClick={() => void refreshDebts(activePage + 1)}>
                           Next
                         </Button>
                       </div>

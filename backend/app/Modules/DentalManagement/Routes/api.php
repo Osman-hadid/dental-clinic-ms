@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\AiImagingController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\AppointmentController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\DebtController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\DashboardSummaryController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\DentalBackupController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\ExpenseController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\FinancialSettingController;
@@ -49,6 +50,8 @@ Route::middleware(['api', 'auth:sanctum', 'set_locale'])->prefix('api/v1/dental-
     Route::post('/reports/snapshots', [ReportController::class, 'storeSnapshot']);
     Route::get('/reports/snapshot-schedule', [ReportController::class, 'snapshotSchedule']);
     Route::put('/reports/snapshot-schedule', [ReportController::class, 'updateSnapshotSchedule']);
+    Route::get('/dashboard/radial-safe-summary', [DashboardSummaryController::class, 'radialSafeSummary']);
+    Route::get('/dashboard/overview', [DashboardSummaryController::class, 'overview']);
     Route::post('/patients/restore/{id}', [PatientController::class, 'restore']);
     Route::delete('/patients/force/{id}', [PatientController::class, 'forceDelete']);
     Route::delete('/patients/bulk', [PatientController::class, 'bulkDelete']);

@@ -196,7 +196,10 @@ final class ReportSubpageService
 
         $rows = Debt::query()
             ->with('patient:id,patient_code,first_name,last_name')
-            ->where('status', 'open')
+            ->where('debt_amount', '>', 0)
+            ->whereHas('invoice', function ($query): void {
+                $query->whereIn('status', ['unpaid', 'partially_paid']);
+            })
             ->where('invoice_date', '>=', $startDate->toDateString())
             ->where('invoice_date', '<=', $endDate->toDateString())
             ->orderByDesc('invoice_date')
@@ -240,6 +243,28 @@ final class ReportSubpageService
             ->values()
             ->all();
 
+        $patientDebtTotals = [];
+        foreach ($rows as $row) {
+            $patientId = (string) ($row['patientId'] ?? '');
+            if ($patientId === '') {
+                continue;
+            }
+            $patientDebtTotals[$patientId] = $this->decimal(
+                ($patientDebtTotals[$patientId] ?? 0) + (float) ($row['debtAmount'] ?? 0)
+            );
+        }
+
+        $totalPatientDebt = $this->decimal(array_sum($patientDebtTotals));
+
+        $rows = array_map(function (array $row) use ($patientDebtTotals): array {
+            $patientId = (string) ($row['patientId'] ?? '');
+            $row['patientDebtAmount'] = $this->decimal(
+                $patientId !== '' ? ($patientDebtTotals[$patientId] ?? 0) : ($row['debtAmount'] ?? 0)
+            );
+
+            return $row;
+        }, $rows);
+
         $agingBreakdown = [];
         foreach ($rows as $row) {
             $bucket = (string) $row['agingBucket'];
@@ -251,7 +276,7 @@ final class ReportSubpageService
         return [
             'summary' => [
                 'debtCount' => count($rows),
-                'totalDebt' => $this->decimal(array_sum(array_column($rows, 'debtAmount'))),
+                'totalDebt' => $totalPatientDebt,
                 'totalNet' => $this->decimal(array_sum(array_column($rows, 'netAmount'))),
                 'totalPaid' => $this->decimal(array_sum(array_column($rows, 'paidAmount'))),
             ],

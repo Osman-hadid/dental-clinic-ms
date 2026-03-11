@@ -3,245 +3,125 @@
 import { JSX, useCallback, useEffect, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Header } from '@/components/header';
-import {
-  type DashboardImplantSupplierSummary,
-  type DashboardSafeSummary,
-  type DashboardSafeTransaction,
-  DentalChartDashboard,
-} from '@/components/shared/dental/dental-chart-dashboard';
+import { DentalChartDashboard } from '@/components/shared/dental/dental-chart-dashboard';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
-import { fetchAllRows } from '@/modules/common/infrastructure/api/fetch-all-rows';
-import { DEFAULT_AFN_PER_USD } from '@/lib/currency-utils';
-import { aggregateImplantSupplierBalances } from '@/modules/dental-management/presentation/utils/implant-supplier-analytics';
-import {
-  useAppointmentList,
-  useInvoiceList,
-  usePatientList,
-  usePaymentList,
-  useVisitList,
-} from '@/modules/dental-management/presentation/hooks';
-
-const APPOINTMENT_RELATIONS = ['patient', 'dentist'];
-const APPOINTMENT_SEARCH_FIELDS = ['tag', 'notes'];
-const PATIENT_SEARCH_FIELDS = ['patientCode', 'firstName', 'lastName'];
-const TABLE_PER_PAGE = 100;
-const VISIT_RELATIONS = ['appointment', 'patient', 'dentist'];
-const VISIT_SEARCH_FIELDS = ['tag', 'diagnosisNotes'];
 const apiClient = new AxiosClient();
 
-type SessionTaskRow = {
-  createdAt?: string;
-  id: number | string;
-  notes?: string;
-  patientId: string;
-  status?: string;
-  title?: string;
-};
-
-const asText = (value: unknown): string => {
-  if (value === null || value === undefined) return '';
-  if (typeof value === 'number') return String(value);
-  if (typeof value === 'string') return value.trim();
-  return '';
-};
-
-const parseAmount = (value: unknown): number => {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
-  const parsed = Number(asText(value).replace(/[^0-9.-]/g, ''));
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const fetchAllSafeRows = async (): Promise<DashboardSafeTransaction[]> => {
-  const rows = await fetchAllRows(
-    apiClient,
-    '/api/v1/dental-management/safe-transactions',
-    {
-      include: ['pickedByStaff'],
-      sortBy: 'transactionDate',
-      sortDirection: 'desc',
-    },
-    TABLE_PER_PAGE
-  );
-
-  return rows.map((row) => {
-    const pickedBy = row.pickedByStaff as Record<string, unknown> | undefined;
-    const pickedByName = pickedBy
-      ? [asText(pickedBy.firstName ?? pickedBy.first_name), asText(pickedBy.lastName ?? pickedBy.last_name)]
-        .filter(Boolean)
-        .join(' ')
-      : '';
-    return {
-      amount: parseAmount(row.amount),
-      direction: asText(row.direction),
-      entryType: asText(row.entryType ?? row.entry_type),
-      id: asText(row.id),
-      notes: asText(row.notes),
-      pickedByStaffId: asText(row.pickedByStaffId ?? row.picked_by_staff_id),
-      pickedByStaffName: pickedByName || asText(pickedBy?.fullName ?? pickedBy?.name),
-      transactionDate: asText(row.transactionDate ?? row.transaction_date),
-    };
-  });
-};
-
-const fetchImplantSessionTasks = async (): Promise<SessionTaskRow[]> => {
-  const rows = await fetchAllRows(
-    apiClient,
-    '/api/v1/dental-management/patient-session-tasks',
-    {
-      sortBy: 'createdAt',
-      sortDirection: 'desc',
-    },
-    TABLE_PER_PAGE
-  );
-
-  return rows.map((task) => ({
-    createdAt: asText(task.createdAt ?? task.created_at),
-    id: asText(task.id),
-    notes: asText(task.notes),
-    patientId: asText(task.patientId ?? task.patient_id),
-    status: asText(task.status),
-    title: asText(task.title),
-  }));
+type DashboardOverviewResponse = {
+  schedule: {
+    start: string;
+    end: string;
+    todayKey: string;
+    todayVisits: number;
+    todayAppointments: number;
+    eventsByDate: Record<
+      string,
+      Array<{
+        dateKey: string;
+        dentistName: string;
+        key: string;
+        linkedVisitId: number | string | null;
+        note: string;
+        patientId: number | string | null;
+        patientName: string;
+        status: string;
+        tag: string;
+        timeLabel: string;
+        title: string;
+        type: 'appointment' | 'visit';
+        timestamp: number;
+      }>
+    >;
+    upcomingEvents: Array<{
+      dateKey: string;
+      dentistName: string;
+      key: string;
+      linkedVisitId: number | string | null;
+      note: string;
+      patientId: number | string | null;
+      patientName: string;
+      status: string;
+      tag: string;
+      timeLabel: string;
+      title: string;
+      type: 'appointment' | 'visit';
+      timestamp: number;
+    }>;
+  };
+  patients: { total: number; new30d: number; returning: number };
+  performance: { completionRate: number; calendarCoverageDays: number };
+  charts: {
+    revenueRange: '7d' | '30d' | '90d';
+    revenueSeries: Array<{ date: string; billed: number; paid: number }>;
+    appointmentMix: { scheduled: number; completed: number; cancelled: number };
+  };
+  safe: {
+    balance: number;
+    totalIn: number;
+    totalOut: number;
+    afnPerUsd: number;
+    topPickups: Array<{ name: string; amount: number }>;
+    recentTransactions: Array<{
+      id: string;
+      entryType: string;
+      direction: string;
+      amount: number;
+      transactionDate: string;
+      pickedByStaffId: string;
+      pickedByStaffName: string;
+      notes: string;
+    }>;
+  };
+  implantSupplier: {
+    implantCount: number;
+    paidRatio: number;
+    totalPaid: number;
+    totalSupplierCost: number;
+    totalUnpaid: number;
+    unpaidCount: number;
+    byAvailability: Array<{
+      status: 'not_available' | 'in_purchase' | 'available' | 'done';
+      count: number;
+      paid: number;
+      total: number;
+      unpaid: number;
+    }>;
+  };
+  radialSafeSummary: {
+    safeBalance: number;
+    debtOutstanding: number;
+    supplierUnpaids: number;
+    ring: { safePercent: number; debtPercent: number; unpaidPercent: number };
+    chartData: Array<{ category: 'inSafe' | 'debts' | 'unpaids'; value: number }>;
+  } | null;
 };
 
 // eslint-disable-next-line react/function-component-definition
 export default function Page(): JSX.Element {
   const locale = useLocale();
   const t = useTranslations('global');
-  const [safeSummary, setSafeSummary] = useState<DashboardSafeSummary>({
-    afnPerUsd: DEFAULT_AFN_PER_USD,
-    balance: 0,
-    totalIn: 0,
-    totalOut: 0,
-    transactions: [],
-  });
-  const [implantSupplierSummary, setImplantSupplierSummary] = useState<DashboardImplantSupplierSummary>({
-    byAvailability: [],
-    implantCount: 0,
-    paidRatio: 0,
-    totalPaid: 0,
-    totalSupplierCost: 0,
-    totalUnpaid: 0,
-    unpaidCount: 0,
-  });
+  const [overview, setOverview] = useState<DashboardOverviewResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [revenueRange, setRevenueRange] = useState<'7d' | '30d' | '90d'>('90d');
 
-  const { entities: appointments, isFetching: isLoadingAppointments } = useAppointmentList(
-    1,
-    TABLE_PER_PAGE,
-    '',
-    APPOINTMENT_SEARCH_FIELDS,
-    APPOINTMENT_RELATIONS,
-    {}
-  );
-
-  const { entities: visits, isFetching: isLoadingVisits } = useVisitList(
-    1,
-    TABLE_PER_PAGE,
-    '',
-    VISIT_SEARCH_FIELDS,
-    VISIT_RELATIONS,
-    {}
-  );
-
-  const { entities: patients, isFetching: isLoadingPatients } = usePatientList(
-    1,
-    TABLE_PER_PAGE,
-    '',
-    PATIENT_SEARCH_FIELDS,
-    [],
-    {}
-  );
-  const { entities: invoices, isFetching: isLoadingInvoices } = useInvoiceList(
-    1,
-    TABLE_PER_PAGE,
-    '',
-    [],
-    [],
-    {}
-  );
-  const { entities: payments, isFetching: isLoadingPayments } = usePaymentList(
-    1,
-    TABLE_PER_PAGE,
-    '',
-    [],
-    [],
-    {}
-  );
-  const isPrimaryDashboardLoading =
-    isLoadingAppointments
-    || isLoadingVisits
-    || isLoadingPatients
-    || isLoadingInvoices
-    || isLoadingPayments;
-
-  const fetchSafeSummary = useCallback(async (): Promise<void> => {
+  const fetchOverview = useCallback(async (range: '7d' | '30d' | '90d'): Promise<void> => {
+    setIsLoading(true);
     try {
-      const [balanceResponse, transactions] = await Promise.all([
-        apiClient.get<{ afnPerUsd?: number; balance?: number; totalIn?: number; totalOut?: number }>(
-          '/api/v1/dental-management/safe-transactions/balance'
-        ),
-        fetchAllSafeRows(),
-      ]);
-
-      setSafeSummary({
-        afnPerUsd: parseAmount(balanceResponse.data?.afnPerUsd) || DEFAULT_AFN_PER_USD,
-        balance: parseAmount(balanceResponse.data?.balance),
-        totalIn: parseAmount(balanceResponse.data?.totalIn),
-        totalOut: parseAmount(balanceResponse.data?.totalOut),
-        transactions,
-      });
-    } catch {
-      setSafeSummary({
-        afnPerUsd: DEFAULT_AFN_PER_USD,
-        balance: 0,
-        totalIn: 0,
-        totalOut: 0,
-        transactions: [],
-      });
+      const response = await apiClient.get<DashboardOverviewResponse>(
+        '/api/v1/dental-management/dashboard/overview',
+        {
+          params: { revenueRange: range },
+        }
+      );
+      setOverview(response.data);
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void fetchSafeSummary();
-  }, [fetchSafeSummary]);
-
-  const fetchImplantSupplierSummary = useCallback(async (): Promise<void> => {
-    try {
-      const allTasks = await fetchImplantSessionTasks();
-      const summary = aggregateImplantSupplierBalances(allTasks);
-      const byAvailability = (['not_available', 'in_purchase', 'available', 'done'] as const).map((status) => ({
-        count: summary.byAvailability[status].count,
-        paid: summary.byAvailability[status].paid,
-        status,
-        total: summary.byAvailability[status].total,
-        unpaid: summary.byAvailability[status].unpaid,
-      }));
-
-      setImplantSupplierSummary({
-        byAvailability,
-        implantCount: summary.implantCount,
-        paidRatio: summary.paidRatio,
-        totalPaid: summary.totalPaid,
-        totalSupplierCost: summary.totalSupplierCost,
-        totalUnpaid: summary.totalUnpaid,
-        unpaidCount: summary.unpaidCount,
-      });
-    } catch {
-      setImplantSupplierSummary({
-        byAvailability: [],
-        implantCount: 0,
-        paidRatio: 0,
-        totalPaid: 0,
-        totalSupplierCost: 0,
-        totalUnpaid: 0,
-        unpaidCount: 0,
-      });
-    }
-  }, []);
-
-  useEffect(() => {
-    void fetchImplantSupplierSummary();
-  }, [fetchImplantSupplierSummary]);
+    void fetchOverview(revenueRange);
+  }, [fetchOverview, revenueRange]);
 
   return (
     <>
@@ -254,17 +134,21 @@ export default function Page(): JSX.Element {
       <div className="flex flex-1 flex-col">
         <div className="@container/main flex flex-1 flex-col gap-2">
           <div className="flex flex-col gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6">
-            <DentalChartDashboard
-              appointments={appointments}
-              implantSupplierSummary={implantSupplierSummary}
-              invoices={invoices}
-              locale={locale}
-              payments={payments}
-              visits={visits}
-              patients={patients}
-              safeSummary={safeSummary}
-              isLoading={isPrimaryDashboardLoading}
-            />
+            {overview ? (
+              <DentalChartDashboard
+                locale={locale}
+                overview={overview}
+                isLoading={isLoading}
+                onRevenueRangeChange={setRevenueRange}
+              />
+            ) : (
+              <DentalChartDashboard
+                locale={locale}
+                overview={null}
+                isLoading={isLoading}
+                onRevenueRangeChange={setRevenueRange}
+              />
+            )}
           </div>
         </div>
       </div>

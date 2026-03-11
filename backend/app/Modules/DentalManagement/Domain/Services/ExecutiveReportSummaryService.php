@@ -134,6 +134,7 @@ final class ExecutiveReportSummaryService
         $paymentRows = collect();
         $paymentMethodOptions = [];
         $paymentMethodsByInvoiceId = [];
+        $paidByInvoiceId = [];
 
         foreach ($invoices as $invoice) {
             $invoiceId = (string) $invoice->id;
@@ -150,6 +151,7 @@ final class ExecutiveReportSummaryService
                     'invoiceId' => $invoiceId,
                     'method' => $method,
                 ]);
+                $paidByInvoiceId[$invoiceId] = ($paidByInvoiceId[$invoiceId] ?? 0) + $amount;
                 $paymentMethodOptions[$method] = true;
                 $paymentMethodsByInvoiceId[$invoiceId] ??= [];
                 $paymentMethodsByInvoiceId[$invoiceId][$method] = true;
@@ -271,7 +273,22 @@ final class ExecutiveReportSummaryService
         $discount = $this->toTwoDecimals($filteredInvoices->sum(fn (Invoice $invoice): float => $this->toFloat($invoice->discount ?? 0)));
         $net = $this->toTwoDecimals($filteredInvoices->sum(fn (Invoice $invoice): float => $this->toFloat($invoice->net_amount ?? 0)));
         $paid = $this->toTwoDecimals($filteredPayments->sum(fn (array $payment): float => (float) $payment['amount']));
-        $debt = $this->toTwoDecimals(max(0, $net - $paid));
+        $debt = $this->toTwoDecimals($filteredInvoices->reduce(
+            function (float $carry, Invoice $invoice) use ($paidByInvoiceId): float {
+                $status = mb_strtolower((string) ($invoice->status ?? 'unpaid'));
+                if (!\in_array($status, ['unpaid', 'partially_paid'], true)) {
+                    return $carry;
+                }
+
+                $invoiceId = (string) $invoice->id;
+                $netAmount = $this->toFloat($invoice->net_amount ?? 0);
+                $paidAmount = (float) ($paidByInvoiceId[$invoiceId] ?? 0);
+                $remaining = max(0, $netAmount - $paidAmount);
+
+                return $carry + $remaining;
+            },
+            0.0
+        ));
 
         $activePatients = [];
         foreach ($filteredVisits as $visit) {

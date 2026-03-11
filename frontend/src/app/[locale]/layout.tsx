@@ -53,7 +53,7 @@ export default async function RootLayout({
 
   return (
     <html lang={locale} dir={direction} className="light">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`} dir={direction}>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased custom-cursor`} dir={direction}>
         <NextIntlClientProvider locale={locale}>
           <ReactQueryProvider>
             <AuthInitializer />

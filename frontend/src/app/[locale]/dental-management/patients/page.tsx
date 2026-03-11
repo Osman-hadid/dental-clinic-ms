@@ -18,6 +18,128 @@ import {
 import { CalendarDays, ChevronRight, Search, UsersRound } from 'lucide-react';
 
 const TABLE_PER_PAGE = 100;
+const SEARCH_RESULTS_VISIBLE_LIMIT = 12;
+
+const normalizeSearchValue = (value: string): string => value.replace(/\s+/g, ' ').trim().toLowerCase();
+
+const tokenizeSearchValue = (value: string): string[] => normalizeSearchValue(value).split(' ').filter(Boolean);
+
+const computeSearchPriority = (value: string, query: string): number => {
+  const normalizedValue = normalizeSearchValue(value);
+  const normalizedQuery = normalizeSearchValue(query);
+
+  if (!normalizedValue || !normalizedQuery) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  if (normalizedValue === normalizedQuery) {
+    return 0;
+  }
+
+  if (normalizedValue.startsWith(normalizedQuery)) {
+    return 1;
+  }
+
+  const wordIndex = normalizedValue.indexOf(` ${normalizedQuery}`);
+  if (wordIndex >= 0) {
+    return 2 + wordIndex;
+  }
+
+  const includesIndex = normalizedValue.indexOf(normalizedQuery);
+  if (includesIndex >= 0) {
+    return 100 + includesIndex;
+  }
+
+  return Number.MAX_SAFE_INTEGER;
+};
+
+const computeHumanSearchScore = (patient: {
+  contactNumber?: string | null;
+  firstName?: string | null;
+  id?: string | number | null;
+  lastName?: string | null;
+  patientCode?: string | null;
+}, query: string): number => {
+  const normalizedQuery = normalizeSearchValue(query);
+  const queryTokens = tokenizeSearchValue(query);
+  const fullName = [patient.firstName, patient.lastName].filter(Boolean).join(' ').trim();
+  const reversedName = [patient.lastName, patient.firstName].filter(Boolean).join(' ').trim();
+  const patientCode = String(patient.patientCode ?? '');
+  const contactNumber = String(patient.contactNumber ?? '');
+  const candidateFields = [fullName, reversedName, patientCode, contactNumber];
+
+  let score = Number.MAX_SAFE_INTEGER;
+
+  candidateFields.forEach((field, fieldIndex) => {
+    const priority = computeSearchPriority(field, normalizedQuery);
+    if (priority !== Number.MAX_SAFE_INTEGER) {
+      score = Math.min(score, priority + fieldIndex * 1000);
+    }
+
+    const normalizedField = normalizeSearchValue(field);
+    const fieldTokens = tokenizeSearchValue(field);
+
+    if (normalizedField && normalizedQuery) {
+      queryTokens.forEach((token, tokenIndex) => {
+        if (!token) {
+          return;
+        }
+
+        if (fieldTokens.includes(token)) {
+          score = Math.min(score, 200 + tokenIndex + fieldIndex * 1000);
+          return;
+        }
+
+        const tokenPrefixIndex = fieldTokens.findIndex((fieldToken) => fieldToken.startsWith(token));
+        if (tokenPrefixIndex >= 0) {
+          score = Math.min(score, 300 + tokenIndex * 10 + tokenPrefixIndex + fieldIndex * 1000);
+          return;
+        }
+
+        const containsIndex = normalizedField.indexOf(token);
+        if (containsIndex >= 0) {
+          score = Math.min(score, 500 + tokenIndex * 10 + containsIndex + fieldIndex * 1000);
+        }
+      });
+    }
+  });
+
+  if (score !== Number.MAX_SAFE_INTEGER) {
+    return score;
+  }
+
+  return 900000 + String(patient.id ?? '').length;
+};
+
+const buildPatientSearchBlob = (patient: {
+  address?: string | null;
+  bloodGroup?: string | null;
+  contactNumber?: string | null;
+  email?: string | null;
+  emergencyContact?: string | null;
+  firstName?: string | null;
+  id?: string | number | null;
+  lastName?: string | null;
+  patientCode?: string | null;
+}): string => {
+  return [
+    patient.patientCode,
+    patient.firstName,
+    patient.lastName,
+    [patient.firstName, patient.lastName].filter(Boolean).join(' '),
+    [patient.lastName, patient.firstName].filter(Boolean).join(' '),
+    patient.contactNumber,
+    patient.email,
+    patient.address,
+    patient.bloodGroup,
+    patient.emergencyContact,
+    patient.id,
+  ]
+    .map((value) => String(value ?? ''))
+    .map(normalizeSearchValue)
+    .filter(Boolean)
+    .join(' ');
+};
 
 // eslint-disable-next-line react/function-component-definition
 export default function PatientsPage(): JSX.Element {
@@ -42,11 +164,45 @@ export default function PatientsPage(): JSX.Element {
     isFetching: isSearching,
   } = usePatientList(
     1,
-    12,
-    trimmedSearch,
+    TABLE_PER_PAGE,
+    '',
     searchFields,
     [],
     {}
+  );
+
+  const filteredSearchResults = useMemo(() => {
+    if (!trimmedSearch) {
+      return [];
+    }
+
+    const normalizedSearch = normalizeSearchValue(trimmedSearch);
+    if (!normalizedSearch) {
+      return [];
+    }
+
+    return searchResults
+      .filter((patient) => buildPatientSearchBlob(patient).includes(normalizedSearch))
+      .sort((left, right) => {
+        const leftScore = computeHumanSearchScore(left, normalizedSearch);
+        const rightScore = computeHumanSearchScore(right, normalizedSearch);
+
+        if (leftScore !== rightScore) {
+          return leftScore - rightScore;
+        }
+
+        const leftFullName = [left.firstName, left.lastName].filter(Boolean).join(' ').trim();
+        const rightFullName = [right.firstName, right.lastName].filter(Boolean).join(' ').trim();
+        const leftLabel = leftFullName || left.patientCode || String(left.id);
+        const rightLabel = rightFullName || right.patientCode || String(right.id);
+
+        return leftLabel.localeCompare(rightLabel, undefined, { sensitivity: 'base' });
+      });
+  }, [searchResults, trimmedSearch]);
+
+  const visibleSearchResults = useMemo(
+    () => filteredSearchResults.slice(0, SEARCH_RESULTS_VISIBLE_LIMIT),
+    [filteredSearchResults]
   );
 
   const { entities: dashboardPatients } = usePatientList(1, TABLE_PER_PAGE, '', searchFields, [], {});
@@ -163,30 +319,33 @@ export default function PatientsPage(): JSX.Element {
                 <div className="mt-4 rounded-xl border border-border bg-background p-3">
                   {isSearching ? (
                     <p className="text-sm text-muted-foreground">Searching...</p>
-                  ) : searchResults.length === 0 ? (
+                  ) : filteredSearchResults.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No patients found.</p>
                   ) : (
-                    <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                      {searchResults.map((patient) => {
-                        const fullName = [patient.firstName, patient.lastName].filter(Boolean).join(' ').trim() || patient.patientCode;
-                        return (
-                          <button
-                            key={patient.id}
-                            type="button"
-                            onClick={() => {
-                              handleOpenPatient(patient.id);
-                            }}
-                            className="group rounded-lg border border-border bg-card p-3 text-left transition hover:border-primary hover:bg-accent/30"
-                          >
-                            <p className="font-semibold text-foreground">{fullName}</p>
-                            <p className="text-xs text-muted-foreground">{patient.patientCode}</p>
-                            <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-                              <span>{patient.contactNumber || 'No phone'}</span>
-                              <ChevronRight className="size-3.5 opacity-80 transition group-hover:translate-x-0.5" />
-                            </div>
-                          </button>
-                        );
-                      })}
+                    <div className="space-y-3">
+                      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                        {visibleSearchResults.map((patient) => {
+                          const fullName = [patient.firstName, patient.lastName].filter(Boolean).join(' ').trim() || patient.patientCode;
+                          return (
+                            <button
+                              key={patient.id}
+                              type="button"
+                              onClick={() => {
+                                handleOpenPatient(patient.id);
+                              }}
+                              className="group rounded-lg border border-border bg-card p-3 text-left transition hover:border-primary hover:bg-accent/30"
+                            >
+                              <p className="font-semibold text-foreground">{fullName}</p>
+                              <p className="text-xs text-muted-foreground">{patient.patientCode}</p>
+                              <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                                <span>{patient.contactNumber || 'No phone'}</span>
+                                <ChevronRight className="size-3.5 opacity-80 transition group-hover:translate-x-0.5" />
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+
                     </div>
                   )}
                 </div>

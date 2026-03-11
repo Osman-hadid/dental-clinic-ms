@@ -16,6 +16,7 @@ final class ListDebtsRequest extends BaseListRequest
             'invoice_date',
             'debt_amount',
             'created_at',
+            'updated_at',
         ];
     }
 
@@ -60,5 +61,15 @@ final class ListDebtsRequest extends BaseListRequest
             'updatedAt' => 'updated_at',
         ];
     }
-}
 
+    protected static function sortableMap(): array
+    {
+        return [
+            'id' => 'id',
+            'invoiceDate' => 'invoice_date',
+            'debtAmount' => 'debt_amount',
+            'createdAt' => 'created_at',
+            'updatedAt' => 'updated_at',
+        ];
+    }
+}

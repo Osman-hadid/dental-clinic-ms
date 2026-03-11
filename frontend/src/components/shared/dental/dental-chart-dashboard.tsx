@@ -1,6 +1,6 @@
 'use client';
 
-import { JSX, useMemo, useState, type CSSProperties } from 'react';
+import { JSX, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -68,19 +68,19 @@ type EventType = 'appointment' | 'visit';
 type ImplantAvailabilityStatus = 'not_available' | 'in_purchase' | 'available' | 'done';
 
 type ScheduleEvent = {
-  date: Date;
   dateKey: string;
   dentistName: string;
   key: string;
   linkedVisitId?: number | string | null;
   note: string;
-  patientId?: number | string;
+  patientId?: number | string | null;
   patientName: string;
   status: string;
   tag: string;
   timeLabel: string;
   title: string;
   type: EventType;
+  timestamp?: number;
 };
 
 type StatusMeta = {
@@ -103,78 +103,6 @@ type CalendarCellTheme = {
   cellStyle?: CSSProperties;
 };
 
-export type DashboardPatient = {
-  createdAt?: string;
-  firstName?: string;
-  id: number | string;
-  lastName?: string;
-  patientCode?: string;
-};
-
-export type DashboardAppointment = {
-  appointmentDate?: string;
-  dentist?: unknown;
-  dentistId?: string | number;
-  dentistName?: string;
-  id: number | string;
-  notes?: string;
-  patient?: unknown;
-  patientId?: string | number;
-  patientName?: string;
-  startTime?: string;
-  status?: string;
-  tag?: string;
-  visits?: unknown;
-};
-
-export type DashboardVisit = {
-  appointmentId?: string | number;
-  appointment?: unknown;
-  dentist?: unknown;
-  dentistId?: string | number;
-  dentistName?: string;
-  diagnosisNotes?: string;
-  id: number | string;
-  patient?: unknown;
-  patientId?: string | number;
-  patientName?: string;
-  tag?: string;
-  visitDate?: string;
-};
-
-export type DashboardInvoice = {
-  id: number | string;
-  invoiceDate?: string;
-  netAmount?: string | number;
-  status?: string;
-};
-
-export type DashboardPayment = {
-  amount?: string | number;
-  id: number | string;
-  invoiceId?: string | number;
-  paymentDate?: string;
-};
-
-export type DashboardSafeTransaction = {
-  amount: number;
-  direction: string;
-  entryType: string;
-  id: string;
-  notes: string;
-  pickedByStaffId: string;
-  pickedByStaffName: string;
-  transactionDate: string;
-};
-
-export type DashboardSafeSummary = {
-  afnPerUsd?: number;
-  balance: number;
-  totalIn: number;
-  totalOut: number;
-  transactions: DashboardSafeTransaction[];
-};
-
 export type DashboardImplantSupplierAvailability = {
   count: number;
   paid: number;
@@ -194,15 +122,54 @@ export type DashboardImplantSupplierSummary = {
 };
 
 type DentalChartDashboardProps = {
-  appointments: DashboardAppointment[];
-  implantSupplierSummary?: DashboardImplantSupplierSummary;
-  invoices: DashboardInvoice[];
   isLoading?: boolean;
   locale: string;
-  patients: DashboardPatient[];
-  payments: DashboardPayment[];
-  safeSummary?: DashboardSafeSummary;
-  visits: DashboardVisit[];
+  overview:
+    | {
+        schedule: {
+          start: string;
+          end: string;
+          todayKey: string;
+          todayVisits: number;
+          todayAppointments: number;
+          eventsByDate: Record<string, ScheduleEvent[]>;
+          upcomingEvents: ScheduleEvent[];
+        };
+        patients: { total: number; new30d: number; returning: number };
+        performance: { completionRate: number; calendarCoverageDays: number };
+        charts: {
+          revenueRange: '7d' | '30d' | '90d';
+          revenueSeries: Array<{ date: string; billed: number; paid: number }>;
+          appointmentMix: { scheduled: number; completed: number; cancelled: number };
+        };
+        safe: {
+          balance: number;
+          totalIn: number;
+          totalOut: number;
+          afnPerUsd: number;
+          topPickups: Array<{ name: string; amount: number }>;
+          recentTransactions: Array<{
+            id: string;
+            entryType: string;
+            direction: string;
+            amount: number;
+            transactionDate: string;
+            pickedByStaffId: string;
+            pickedByStaffName: string;
+            notes: string;
+          }>;
+        };
+        implantSupplier: DashboardImplantSupplierSummary;
+        radialSafeSummary: {
+          safeBalance: number;
+          debtOutstanding: number;
+          supplierUnpaids: number;
+          ring: { safePercent: number; debtPercent: number; unpaidPercent: number };
+          chartData: Array<{ category: 'inSafe' | 'debts' | 'unpaids'; value: number }>;
+        } | null;
+      }
+    | null;
+  onRevenueRangeChange?: (range: '7d' | '30d' | '90d') => void;
 };
 
 const safeRadialChartConfig = {
@@ -668,15 +635,10 @@ const ToothSurfaceInspector = (): JSX.Element => {
 };
 
 export const DentalChartDashboard = ({
-  appointments,
-  implantSupplierSummary,
-  invoices,
   isLoading = false,
   locale,
-  patients,
-  payments,
-  safeSummary,
-  visits,
+  overview,
+  onRevenueRangeChange,
 }: DentalChartDashboardProps): JSX.Element => {
   const router = useRouter();
   const now = new Date();
@@ -684,151 +646,24 @@ export const DentalChartDashboard = ({
 
   const [currentMonth, setCurrentMonth] = useState<Date>(startOfMonth(today));
   const [searchTerm, setSearchTerm] = useState('');
-  const [revenueTimeRange, setRevenueTimeRange] = useState<'90d' | '30d' | '7d'>('90d');
+  const [revenueTimeRange, setRevenueTimeRange] = useState<'90d' | '30d' | '7d'>(
+    overview?.charts.revenueRange ?? '90d'
+  );
   const [selectedDate, setSelectedDate] = useState<Date>(today);
   const [manualSelectedEventKey, setManualSelectedEventKey] = useState<string | null>(null);
 
-  const patientNameById = useMemo(() => {
-    const map = new Map<string, string>();
-    patients.forEach((patient) => {
-      const fullName = [asText(patient.firstName), asText(patient.lastName)]
-        .filter(Boolean)
-        .join(' ')
-        .trim();
-      const fallback = fullName || asText(patient.patientCode) || `Patient #${patient.id}`;
-      map.set(String(patient.id), fallback);
-    });
-    return map;
-  }, [patients]);
+  useEffect(() => {
+    setRevenueTimeRange(overview?.charts.revenueRange ?? '90d');
+  }, [overview?.charts.revenueRange]);
 
-  const visitIdByAppointmentId = useMemo(() => {
-    const map = new Map<string, string | number>();
-    visits.forEach((visit) => {
-      const appointmentId = visit.appointmentId;
-      if (
-        appointmentId !== undefined &&
-        appointmentId !== null &&
-        !map.has(String(appointmentId))
-      ) {
-        map.set(String(appointmentId), visit.id);
-      }
-    });
-    return map;
-  }, [visits]);
-
-  const appointmentEvents = useMemo<ScheduleEvent[]>(() => {
-    const events: ScheduleEvent[] = [];
-
-    appointments.forEach((appointment, index) => {
-      const dateTime = parseDateTime(appointment.appointmentDate, appointment.startTime);
-      if (!dateTime) return;
-
-      const patientName =
-        asText(appointment.patientName) ||
-        buildNameFromRelation(appointment.patient) ||
-        patientNameById.get(String(appointment.patientId ?? '')) ||
-        `Patient #${appointment.patientId ?? appointment.id}`;
-
-      const dentistName =
-        asText(appointment.dentistName) ||
-        buildNameFromRelation(appointment.dentist) ||
-        `Dentist #${appointment.dentistId ?? '-'}`;
-
-      events.push({
-        date: dateTime,
-        dateKey: toDateKey(dateTime),
-        dentistName,
-        key: `appointment-${appointment.id}-${index}`,
-        linkedVisitId:
-          extractFirstVisitId(appointment.visits) ??
-          visitIdByAppointmentId.get(String(appointment.id)) ??
-          null,
-        note: asText(appointment.notes),
-        patientId: appointment.patientId,
-        patientName,
-        status: asText(appointment.status) || 'scheduled',
-        tag: asText(appointment.tag) || `Appointment #${appointment.id}`,
-        timeLabel: formatClock(dateTime),
-        title: 'Appointment',
-        type: 'appointment',
-      });
-    });
-
-    return events.sort((a, b) => a.date.getTime() - b.date.getTime());
-  }, [appointments, patientNameById, visitIdByAppointmentId]);
-
-  const visitEvents = useMemo<ScheduleEvent[]>(() => {
-    const events: ScheduleEvent[] = [];
-
-    visits.forEach((visit, index) => {
-      const fallbackTime =
-        visit.appointment && typeof visit.appointment === 'object'
-          ? (visit.appointment as Record<string, unknown>).startTime
-          : '';
-
-      const dateTime = parseDateTime(visit.visitDate, fallbackTime);
-      if (!dateTime) return;
-
-      const patientName =
-        asText(visit.patientName) ||
-        buildNameFromRelation(visit.patient) ||
-        patientNameById.get(String(visit.patientId ?? '')) ||
-        `Patient #${visit.patientId ?? visit.id}`;
-
-      const dentistName =
-        asText(visit.dentistName) ||
-        buildNameFromRelation(visit.dentist) ||
-        `Dentist #${visit.dentistId ?? '-'}`;
-
-      events.push({
-        date: dateTime,
-        dateKey: toDateKey(dateTime),
-        dentistName,
-        key: `visit-${visit.id}-${index}`,
-        linkedVisitId: visit.id,
-        note: asText(visit.diagnosisNotes),
-        patientId: visit.patientId,
-        patientName,
-        status: 'completed',
-        tag: asText(visit.tag) || `Visit #${visit.id}`,
-        timeLabel: formatClock(dateTime),
-        title: 'Visit',
-        type: 'visit',
-      });
-    });
-
-    return events.sort((a, b) => a.date.getTime() - b.date.getTime());
-  }, [patientNameById, visits]);
-
-  const calendarEvents = useMemo(
-    () => appointmentEvents.slice().sort((a, b) => a.date.getTime() - b.date.getTime()),
-    [appointmentEvents]
-  );
-
-  const eventsByDate = useMemo(() => {
-    const map = new Map<string, ScheduleEvent[]>();
-    calendarEvents.forEach((event) => {
-      const existing = map.get(event.dateKey) ?? [];
-      existing.push(event);
-      map.set(event.dateKey, existing);
-    });
-    return map;
-  }, [calendarEvents]);
-
-  const eventCountByDate = useMemo(() => {
-    const map = new Map<string, number>();
-    calendarEvents.forEach((event) => {
-      map.set(event.dateKey, (map.get(event.dateKey) ?? 0) + 1);
-    });
-    return map;
-  }, [calendarEvents]);
+  const eventsByDate = overview?.schedule.eventsByDate ?? {};
+  const todayKey = overview?.schedule.todayKey ?? toDateKey(today);
 
   const selectedDateKey = useMemo(() => toDateKey(selectedDate), [selectedDate]);
 
   const selectedDateEvents = useMemo(() => {
-    return (eventsByDate.get(selectedDateKey) ?? [])
-      .slice()
-      .sort((a, b) => a.date.getTime() - b.date.getTime());
+    const events = eventsByDate[selectedDateKey] ?? [];
+    return events.slice();
   }, [eventsByDate, selectedDateKey]);
 
   const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -848,169 +683,44 @@ export const DentalChartDashboard = ({
     return filteredSelectedDateEvents[0] ?? null;
   }, [filteredSelectedDateEvents, manualSelectedEventKey]);
 
-  const todayKey = useMemo(() => toDateKey(today), [today]);
-  const todayEvents = useMemo(() => eventsByDate.get(todayKey) ?? [], [eventsByDate, todayKey]);
-  const todayVisits = useMemo(
-    () => visitEvents.filter((event) => event.dateKey === todayKey).length,
-    [visitEvents, todayKey]
-  );
-  const todayAppointments = useMemo(() => {
-    return todayEvents.length;
-  }, [todayEvents]);
+  const todayVisits = overview?.schedule.todayVisits ?? 0;
+  const todayAppointments = overview?.schedule.todayAppointments ?? 0;
+  const completionRate = overview?.performance.completionRate ?? 0;
+  const newPatients = overview?.patients.new30d ?? 0;
+  const returningPatients = overview?.patients.returning ?? 0;
 
-  const appointmentCount = appointmentEvents.length;
-  const completedAppointmentCount = appointmentEvents.filter(
-    (event) => event.status.toLowerCase() === 'completed'
-  ).length;
-  const cancelledAppointmentCount = appointmentEvents.filter(
-    (event) => event.status.toLowerCase() === 'cancelled'
-  ).length;
-  const scheduledAppointmentCount = Math.max(
-    appointmentCount - completedAppointmentCount - cancelledAppointmentCount,
-    0
-  );
-  const completionRate =
-    appointmentCount > 0 ? Math.round((completedAppointmentCount / appointmentCount) * 100) : 0;
-
-  const newPatients = useMemo(() => {
-    return patients.filter((patient) => {
-      const createdAt = parseDateOnly(patient.createdAt);
-      if (!createdAt) return false;
-      return today.getTime() - createdAt.getTime() <= 30 * MS_IN_DAY;
-    }).length;
-  }, [patients, today]);
-
-  const returningPatients = Math.max(patients.length - newPatients, 0);
-
-  const revenueAreaSeries = useMemo(() => {
-    const financialGrouped = new Map<string, { billed: number; paid: number }>();
-
-    invoices.forEach((invoice) => {
-      const date = parseDateOnly(invoice.invoiceDate);
-      if (!date) return;
-      const key = toDateKey(date);
-      const current = financialGrouped.get(key) ?? { billed: 0, paid: 0 };
-      current.billed = roundCurrency(current.billed + parseMoney(invoice.netAmount));
-      financialGrouped.set(key, current);
-    });
-
-    payments.forEach((payment) => {
-      const date = parseDateOnly(payment.paymentDate);
-      if (!date) return;
-      const key = toDateKey(date);
-      const current = financialGrouped.get(key) ?? { billed: 0, paid: 0 };
-      current.paid = roundCurrency(current.paid + parseMoney(payment.amount));
-      financialGrouped.set(key, current);
-    });
-
-    const financialData = [...financialGrouped.entries()]
-      .sort((left, right) => left[0].localeCompare(right[0]))
-      .map(([date, value]) => ({
-        billed: value.billed,
-        date,
-        paid: value.paid,
-      }));
-
-    if (financialData.length > 0) {
-      return {
-        data: financialData,
-        source: 'financial' as const,
-      };
-    }
-
-    const activityGrouped = new Map<string, { billed: number; paid: number }>();
-    appointmentEvents.forEach((event) => {
-      const current = activityGrouped.get(event.dateKey) ?? { billed: 0, paid: 0 };
-      current.billed += 1;
-      activityGrouped.set(event.dateKey, current);
-    });
-
-    visitEvents.forEach((event) => {
-      const current = activityGrouped.get(event.dateKey) ?? { billed: 0, paid: 0 };
-      current.paid += 1;
-      activityGrouped.set(event.dateKey, current);
-    });
-
-    const activityData = [...activityGrouped.entries()]
-      .sort((left, right) => left[0].localeCompare(right[0]))
-      .map(([date, value]) => ({
-        billed: value.billed,
-        date,
-        paid: value.paid,
-      }));
-
-    if (activityData.length > 0) {
-      return {
-        data: activityData,
-        source: 'activity' as const,
-      };
-    }
-
-    return {
-      data: [] as Array<{ billed: number; date: string; paid: number }>,
-      source: 'empty' as const,
-    };
-  }, [appointmentEvents, invoices, payments, visitEvents]);
-  const revenueAreaData = revenueAreaSeries.data;
+  const revenueAreaData = overview?.charts.revenueSeries ?? [];
   const revenueAreaChartConfig = useMemo(
     () =>
       ({
         billed: {
           color: 'var(--chart-1)',
-          label: revenueAreaSeries.source === 'financial' ? 'Billed' : 'Appointments',
+          label: 'Billed',
         },
         paid: {
           color: 'var(--chart-2)',
-          label: revenueAreaSeries.source === 'financial' ? 'Paid' : 'Visits',
+          label: 'Paid',
         },
       }) satisfies ChartConfig,
-    [revenueAreaSeries.source]
+    []
   );
-  const revenueAreaDescription = useMemo(() => {
-    if (revenueAreaSeries.source === 'financial') {
-      return 'Showing total billed and paid for the selected range';
-    }
-    if (revenueAreaSeries.source === 'activity') {
-      return 'Showing appointments and visits for the selected range';
-    }
-    return 'No billing or activity data available yet';
-  }, [revenueAreaSeries.source]);
-  const filteredRevenueAreaData = useMemo(() => {
-    if (revenueAreaData.length === 0) {
-      return [];
-    }
-
-    const latestDateText = revenueAreaData[revenueAreaData.length - 1]?.date;
-    const referenceDate = latestDateText ? new Date(latestDateText) : new Date();
-    if (Number.isNaN(referenceDate.getTime())) {
-      return revenueAreaData;
-    }
-
-    const daysToSubtract = revenueTimeRange === '7d' ? 7 : revenueTimeRange === '30d' ? 30 : 90;
-    const startDate = new Date(referenceDate);
-    startDate.setDate(startDate.getDate() - daysToSubtract);
-
-    return revenueAreaData.filter((item) => {
-      const date = new Date(item.date);
-      return !Number.isNaN(date.getTime()) && date >= startDate;
-    });
-  }, [revenueAreaData, revenueTimeRange]);
+  const revenueAreaDescription = 'Showing total billed and paid for the selected range';
   const appointmentMixData = useMemo(
     () => [
-      { name: 'Scheduled', value: scheduledAppointmentCount },
-      { name: 'Completed', value: completedAppointmentCount },
-      { name: 'Cancelled', value: cancelledAppointmentCount },
+      { name: 'Scheduled', value: overview?.charts.appointmentMix.scheduled ?? 0 },
+      { name: 'Completed', value: overview?.charts.appointmentMix.completed ?? 0 },
+      { name: 'Cancelled', value: overview?.charts.appointmentMix.cancelled ?? 0 },
     ],
-    [scheduledAppointmentCount, completedAppointmentCount, cancelledAppointmentCount]
+    [
+      overview?.charts.appointmentMix.scheduled,
+      overview?.charts.appointmentMix.completed,
+      overview?.charts.appointmentMix.cancelled,
+    ]
   );
-  const safeTransactions = useMemo(
-    () => safeSummary?.transactions ?? [],
-    [safeSummary?.transactions]
-  );
-  const safeBalance = safeSummary?.balance ?? 0;
-  const safeTotalIn = safeSummary?.totalIn ?? 0;
-  const safeTotalOut = safeSummary?.totalOut ?? 0;
-  const afnPerUsd = safeSummary?.afnPerUsd ?? DEFAULT_AFN_PER_USD;
+  const safeBalance = overview?.safe.balance ?? 0;
+  const safeTotalIn = overview?.safe.totalIn ?? 0;
+  const safeTotalOut = overview?.safe.totalOut ?? 0;
+  const afnPerUsd = overview?.safe.afnPerUsd ?? DEFAULT_AFN_PER_USD;
   const emptyImplantAvailability = useMemo<DashboardImplantSupplierAvailability[]>(
     () => [
       { count: 0, paid: 0, status: 'not_available', total: 0, unpaid: 0 },
@@ -1020,7 +730,7 @@ export const DentalChartDashboard = ({
     ],
     []
   );
-  const implantSupplierData = implantSupplierSummary ?? {
+  const implantSupplierData = overview?.implantSupplier ?? {
     byAvailability: emptyImplantAvailability,
     implantCount: 0,
     paidRatio: 0,
@@ -1044,39 +754,14 @@ export const DentalChartDashboard = ({
     }));
   }, [implantSupplierData.byAvailability]);
   const formatDualCurrency = (usdValue: number): string => formatDualFromUsd(usdValue, afnPerUsd);
-  const topSafePickups = useMemo(() => {
-    const grouped = new Map<string, number>();
-    safeTransactions.forEach((entry) => {
-      if (normalizeStatus(asText(entry.direction)) !== 'out') return;
-      const person =
-        asText(entry.pickedByStaffName) || `Staff #${asText(entry.pickedByStaffId) || '-'}`;
-      grouped.set(person, roundCurrency((grouped.get(person) ?? 0) + parseMoney(entry.amount)));
-    });
-
-    return [...grouped.entries()]
-      .map(([name, amount]) => ({ amount, name }))
-      .sort((left, right) => right.amount - left.amount)
-      .slice(0, 4);
-  }, [safeTransactions]);
-  const recentSafeTransactions = useMemo(() => {
-    return safeTransactions
-      .slice()
-      .sort((left, right) =>
-        asText(right.transactionDate).localeCompare(asText(left.transactionDate))
-      )
-      .slice(0, 6);
-  }, [safeTransactions]);
+  const topSafePickups = overview?.safe.topPickups ?? [];
+  const recentSafeTransactions = overview?.safe.recentTransactions ?? [];
 
   const upcomingEvents = useMemo(() => {
-    const startTime = today.getTime();
-    const events = appointmentEvents.filter((event) => {
-      if (event.date.getTime() < startTime) return false;
-      if (isCompletedStatus(event.status)) return false;
-      return true;
-    });
+    const events = overview?.schedule.upcomingEvents ?? [];
     if (!normalizedSearch) return events.slice(0, 5);
     return events.filter((event) => toSearchBlob(event).includes(normalizedSearch)).slice(0, 5);
-  }, [appointmentEvents, normalizedSearch, today]);
+  }, [normalizedSearch, overview?.schedule.upcomingEvents]);
 
   const monthGrid = useMemo(() => {
     const year = currentMonth.getFullYear();
@@ -1110,63 +795,24 @@ export const DentalChartDashboard = ({
   };
 
   const selectedEventStatus = statusTheme(selectedEvent?.status ?? 'scheduled');
-  const debtOutstanding = useMemo(() => {
-    const activeInvoices = invoices.filter(
-      (invoice) => normalizeStatus(asText(invoice.status || '')) !== 'cancelled'
-    );
-    const paidByInvoiceId = new Map<string, number>();
-
-    payments.forEach((payment) => {
-      const invoiceId = asText(payment.invoiceId);
-      if (!invoiceId) return;
-      paidByInvoiceId.set(
-        invoiceId,
-        roundCurrency((paidByInvoiceId.get(invoiceId) ?? 0) + parseMoney(payment.amount))
-      );
-    });
-
-    return roundCurrency(
-      activeInvoices.reduce((sum, invoice) => {
-        const invoiceId = String(invoice.id);
-        const netAmount = parseMoney(invoice.netAmount);
-        const paidAmount = paidByInvoiceId.get(invoiceId) ?? 0;
-        const isPaidStatus = normalizeStatus(asText(invoice.status || '')) === 'paid';
-        const effectivePaid = paidAmount > 0 ? paidAmount : isPaidStatus ? netAmount : 0;
-        return sum + Math.max(0, netAmount - effectivePaid);
-      }, 0)
-    );
-  }, [invoices, payments]);
-  const safeMoneyForRing = Math.max(0, roundCurrency(safeBalance));
-  const supplierUnpaids = Math.max(0, roundCurrency(implantSupplierData.totalUnpaid));
-  const ringBreakdown = useMemo(() => {
-    const total = safeMoneyForRing + debtOutstanding + supplierUnpaids;
-    if (total <= 0) {
-      return {
-        debtPercent: 0,
-        safePercent: 0,
-        unpaidPercent: 0,
-      };
-    }
-
-    const safePercent = Math.min(100, Math.max(0, (safeMoneyForRing / total) * 100));
-    const debtPercent = Math.min(100 - safePercent, Math.max(0, (debtOutstanding / total) * 100));
-    const unpaidPercent = Math.max(0, 100 - safePercent - debtPercent);
-
-    return {
-      debtPercent,
-      safePercent,
-      unpaidPercent,
+  const debtOutstanding = overview?.radialSafeSummary?.debtOutstanding ?? 0;
+  const supplierUnpaids = overview?.radialSafeSummary?.supplierUnpaids ?? 0;
+  const ringBreakdown =
+    overview?.radialSafeSummary?.ring ?? {
+      safePercent: 0,
+      debtPercent: 0,
+      unpaidPercent: 0,
     };
-  }, [debtOutstanding, safeMoneyForRing, supplierUnpaids]);
-  const safeRadialChartData = useMemo(
-    () =>
-      [
-        { category: 'inSafe', value: safeMoneyForRing, fill: 'var(--color-inSafe)' },
-        { category: 'debts', value: debtOutstanding, fill: 'var(--color-debts)' },
-        { category: 'unpaids', value: supplierUnpaids, fill: 'var(--color-unpaids)' },
-      ].filter((entry) => entry.value > 0),
-    [debtOutstanding, safeMoneyForRing, supplierUnpaids]
-  );
+  const safeRadialChartData =
+    overview?.radialSafeSummary?.chartData?.map((entry) => ({
+      ...entry,
+      fill:
+        entry.category === 'inSafe'
+          ? 'var(--color-inSafe)'
+          : entry.category === 'debts'
+            ? 'var(--color-debts)'
+            : 'var(--color-unpaids)',
+    })) ?? [];
   const hasSafeRadialChartData = safeRadialChartData.length > 0;
 
   const openTreatmentChartFromSelection = (): void => {
@@ -1527,7 +1173,7 @@ export const DentalChartDashboard = ({
                     }
 
                     const cellKey = toDateKey(cell.date);
-                    const dateEvents = eventsByDate.get(cellKey) ?? [];
+                    const dateEvents = eventsByDate[cellKey] ?? [];
                     const eventCount = dateEvents.length;
                     const cellTheme = calendarCellTheme(dateEvents);
                     const isToday = cellKey === todayKey;
@@ -1605,7 +1251,7 @@ export const DentalChartDashboard = ({
                             {event.title} - {event.tag}
                           </p>
                           <p className="mt-1 text-xs text-muted-foreground">
-                            {formatDayHeading(event.date)} - {event.timeLabel}
+                            {formatDayHeading(parseDateOnly(event.dateKey) ?? new Date(event.dateKey))} - {event.timeLabel}
                           </p>
                         </div>
                       );
@@ -1641,7 +1287,9 @@ export const DentalChartDashboard = ({
                 <CalendarDays className="size-4 text-primary" />
                 <p className="text-sm font-semibold">Calendar Coverage</p>
               </div>
-              <p className="text-3xl font-semibold">{eventCountByDate.size}</p>
+              <p className="text-3xl font-semibold">
+                {overview?.performance.calendarCoverageDays ?? Object.keys(eventsByDate).length}
+              </p>
               <p className="text-xs text-muted-foreground">Days with any scheduled record</p>
             </CardContent>
           </Card>
@@ -1652,7 +1300,7 @@ export const DentalChartDashboard = ({
                 <UsersRound className="size-4 text-primary" />
                 <p className="text-sm font-semibold">Patient Pool</p>
               </div>
-              <p className="text-3xl font-semibold">{patients.length}</p>
+              <p className="text-3xl font-semibold">{overview?.patients.total ?? 0}</p>
               <p className="text-xs text-muted-foreground">Registered patients in current feed</p>
             </CardContent>
           </Card>
@@ -1693,6 +1341,7 @@ export const DentalChartDashboard = ({
                 onValueChange={(value) => {
                   if (value === '7d' || value === '30d' || value === '90d') {
                     setRevenueTimeRange(value);
+                    onRevenueRangeChange?.(value);
                   }
                 }}
               >
@@ -1716,7 +1365,7 @@ export const DentalChartDashboard = ({
               </Select>
             </CardHeader>
             <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
-              {filteredRevenueAreaData.length === 0 ? (
+              {revenueAreaData.length === 0 ? (
                 <div className="grid h-[250px] place-items-center rounded-xl border border-dashed text-sm text-muted-foreground">
                   No chart data available yet.
                 </div>
@@ -1725,7 +1374,7 @@ export const DentalChartDashboard = ({
                   config={revenueAreaChartConfig}
                   className="aspect-auto h-[250px] w-full"
                 >
-                  <AreaChart data={filteredRevenueAreaData}>
+                  <AreaChart data={revenueAreaData}>
                     <defs>
                       <linearGradient id="fillBilled" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="var(--color-billed)" stopOpacity={0.8} />

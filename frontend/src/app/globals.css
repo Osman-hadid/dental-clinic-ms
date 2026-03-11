@@ -161,6 +161,30 @@
   }
 }
 
+.custom-cursor {
+  cursor: url('/cursor-default.png') 0 0, auto;
+}
+
+.custom-cursor * {
+  cursor: inherit;
+}
+
+.custom-cursor a,
+.custom-cursor button,
+.custom-cursor [role='button'],
+.custom-cursor [data-cursor='pointer'],
+.custom-cursor .cursor-pointer,
+.custom-cursor summary,
+.custom-cursor label {
+  cursor: url('/cursor-pointer.png') 0 0, pointer;
+}
+
+.custom-cursor input,
+.custom-cursor textarea,
+.custom-cursor [contenteditable='true'] {
+  cursor: url('/type.png') 0 0, text;
+}
+
 .sourire-cube-loader {
   position: relative;
   margin: 0.35rem auto 0;
@@ -246,4 +270,14 @@
   50% {
     transform: scale(1.2, 1);
   }
+}
+
+.glass-input:-webkit-autofill,
+.glass-input:-webkit-autofill:hover,
+.glass-input:-webkit-autofill:focus,
+.glass-input:-webkit-autofill:active {
+  -webkit-text-fill-color: #ffffff;
+  caret-color: #ffffff;
+  transition: background-color 9999s ease-in-out 0s;
+  box-shadow: 0 0 0px 1000px rgb(255 255 255 / 0.18) inset;
 }

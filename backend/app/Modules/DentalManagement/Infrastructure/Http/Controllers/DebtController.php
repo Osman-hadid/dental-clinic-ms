@@ -48,7 +48,11 @@ final class DebtController extends BaseApiController
 
         $status = $this->resolveFilterValue($filters['status'] ?? 'open');
         if ($status !== null && $status !== '' && $status !== 'all') {
-            $query->where('status', $status);
+            if ($status === 'open') {
+                $query->where('status', 'open');
+            } else {
+                $query->where('status', $status);
+            }
         }
 
         $this->applyExactFilter($query, 'invoice_id', $filters['invoiceId'] ?? null);
@@ -56,7 +60,18 @@ final class DebtController extends BaseApiController
         $this->applyDateFilter($query, 'invoice_date', $filters['dateFrom'] ?? null, '>=');
         $this->applyDateFilter($query, 'invoice_date', $filters['dateTo'] ?? null, '<=');
 
-        $query->orderBy((string) ($queryData['sortBy'] ?? 'invoice_date'), (string) ($queryData['sortDirection'] ?? 'desc'));
+        $requestedSortBy = (string) ($queryData['sortBy'] ?? 'invoice_date');
+        $requestedSortDirection = (string) ($queryData['sortDirection'] ?? 'desc');
+
+        if ($requestedSortBy === 'invoice_date') {
+            $query->orderByDesc('updated_at')
+                ->orderBy($requestedSortBy, $requestedSortDirection)
+                ->orderByDesc('id');
+        } else {
+            $query->orderBy($requestedSortBy, $requestedSortDirection)
+                ->orderByDesc('updated_at')
+                ->orderByDesc('id');
+        }
 
         $paginated = $query->paginate((int) ($queryData['perPage'] ?? 10), ['*'], 'page', (int) ($queryData['page'] ?? 1));
 
