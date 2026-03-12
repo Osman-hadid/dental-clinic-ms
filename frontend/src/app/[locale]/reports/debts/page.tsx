@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { FormEvent, JSX, useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Header } from '@/components/header';
 import { LoadingState } from '@/components/shared/loading-state';
@@ -142,9 +142,9 @@ export default function DebtsPage(): JSX.Element {
   const selectedDebt = selectedRows.length === 1 ? selectedRows[0] : null;
   const enteredAmount = Number.parseFloat(form.amount);
   const normalizedEnteredAmount = Number.isFinite(enteredAmount) ? Math.max(0, enteredAmount) : 0;
-  const remainingAfterPayment = selectedDebt
-    ? Math.max(0, Number((selectedDebt.debtAmount - normalizedEnteredAmount).toFixed(2)))
-    : 0;
+  const totalSelectedDebt = selectedRows.reduce((sum, row) => sum + row.debtAmount, 0);
+  const selectedDebtAmount = selectedDebt ? selectedDebt.debtAmount : totalSelectedDebt;
+  const remainingAfterPayment = Math.max(0, Number((selectedDebtAmount - normalizedEnteredAmount).toFixed(2)));
 
   const toggleSelectAll = (checked: boolean): void => {
     if (checked) {
@@ -160,6 +160,20 @@ export default function DebtsPage(): JSX.Element {
         return previous.includes(id) ? previous : [...previous, id];
       }
       return previous.filter((item) => item !== id);
+    });
+  };
+
+  const togglePatientRows = (patientId: string, checked: boolean): void => {
+    const patientInvoices = (report?.rows.data ?? [])
+      .filter((row) => row.patientId === patientId)
+      .map((row) => row.id);
+    
+    setSelectedIds((previous) => {
+      if (checked) {
+        const newIds = patientInvoices.filter((id) => !previous.includes(id));
+        return [...previous, ...newIds];
+      }
+      return previous.filter((id) => !patientInvoices.includes(id));
     });
   };
 
@@ -231,7 +245,7 @@ export default function DebtsPage(): JSX.Element {
       <div className="flex flex-1 flex-col">
         <div className="@container/main flex flex-1 flex-col gap-2">
           <div className="flex flex-col gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6">
-            <Card className="rounded-3xl border border-rose-200 bg-gradient-to-br from-rose-50 via-background to-amber-50">
+            <Card className="rounded-3xl border border-rose-200 bg-linear-to-br from-rose-50 via-background to-amber-50">
               <CardHeader>
                 <CardTitle className="inline-flex items-center gap-2">
                   <Wallet className="size-5 text-rose-500" />
@@ -244,16 +258,20 @@ export default function DebtsPage(): JSX.Element {
                     <div className="rounded-xl border bg-white/90 p-3">
                       <p className="text-xs text-muted-foreground">Selected Debt</p>
                       <p className="text-lg font-semibold text-rose-600">
-                        {selectedDebt ? formatCurrency(selectedDebt.debtAmount, 'AFN') : formatCurrency(0, 'AFN')}
+                        {formatCurrency(selectedDebtAmount, 'AFN')}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {selectedDebt ? `Invoice #${selectedDebt.invoiceId} · ${selectedDebt.patientName}` : 'Select one invoice to see the debt amount.'}
+                        {selectedDebt
+                          ? `Invoice #${selectedDebt.invoiceId} · ${selectedDebt.patientName}`
+                          : selectedRows.length > 1
+                          ? `${selectedRows.length} invoices selected`
+                          : 'Select one or more invoices to see the debt amount.'}
                       </p>
                     </div>
                     <div className="rounded-xl border bg-white/90 p-3">
                       <p className="text-xs text-muted-foreground">Remaining After Payment</p>
                       <p className="text-lg font-semibold text-amber-600">
-                        {selectedDebt ? formatCurrency(remainingAfterPayment, 'AFN') : formatCurrency(0, 'AFN')}
+                        {selectedRows.length > 0 ? formatCurrency(remainingAfterPayment, 'AFN') : formatCurrency(0, 'AFN')}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         This updates dynamically as you enter the amount to pay.
@@ -365,6 +383,10 @@ export default function DebtsPage(): JSX.Element {
                   <LoadingState compact title="Loading debts" description="Fetching open debt rows." />
                 ) : (
                   <div className="space-y-4">
+                    <div className="grid gap-1.5">
+                      <Label>Search Invoices</Label>
+                      <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by patient name or invoice ID..." />
+                    </div>
                     <div className="overflow-x-auto rounded-2xl border">
                       <table className="min-w-full text-sm">
                         <thead className="bg-muted/30 text-left text-muted-foreground">
@@ -385,21 +407,83 @@ export default function DebtsPage(): JSX.Element {
                           </tr>
                         </thead>
                         <tbody>
-                          {(report?.rows.data ?? []).map((row) => (
-                            <tr key={row.id} className="border-t">
-                              <td className="px-3 py-2">
-                                <input type="checkbox" checked={selectedIds.includes(row.id)} onChange={(event) => toggleRow(row.id, event.target.checked)} />
-                              </td>
-                              <td className="px-3 py-2 font-medium">#{row.invoiceId}</td>
-                              <td className="px-3 py-2">{new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(row.invoiceDate))}</td>
-                              <td className="px-3 py-2">{row.patientName}</td>
-                              <td className="px-3 py-2">{formatCurrency(row.paidAmount, 'AFN')}</td>
-                              <td className="px-3 py-2 text-rose-600">
-                                {formatCurrency(row.patientDebtAmount ?? row.debtAmount, 'AFN')}
-                              </td>
-                              <td className="px-3 py-2">{row.agingBucket}</td>
-                            </tr>
-                          ))}
+                          {(() => {
+                            const groupedByPatient = (report?.rows.data ?? []).reduce((groups, row) => {
+                              const key = row.patientId;
+                              if (!groups[key]) {
+                                groups[key] = {
+                                  patientId: row.patientId,
+                                  patientName: row.patientName,
+                                  invoices: []
+                                };
+                              }
+                              groups[key].invoices.push(row);
+                              return groups;
+                            }, {} as Record<string, { patientId: string; patientName: string; invoices: DebtRow[] }>);
+
+                            return Object.values(groupedByPatient).map((patient, patientIndex) => {
+                              const allPatientInvoicesSelected = patient.invoices.every(invoice => selectedIds.includes(invoice.id));
+                              const somePatientInvoicesSelected = patient.invoices.some(invoice => selectedIds.includes(invoice.id));
+                              
+                              return (
+                                <React.Fragment key={patient.patientId}>
+                                  <tr className="border-b-2 border-gray-200 bg-linear-to-r from-slate-50 to-gray-50">
+                                    <td colSpan={7} className="px-4 py-3">
+                                      <div className="flex items-center gap-3">
+                                        <input
+                                          type="checkbox"
+                                          checked={allPatientInvoicesSelected}
+                                          ref={(el) => {
+                                            if (el) el.indeterminate = somePatientInvoicesSelected && !allPatientInvoicesSelected;
+                                          }}
+                                          onChange={(event) => togglePatientRows(patient.patientId, event.target.checked)}
+                                          className="h-4 w-4 rounded border-gray-300"
+                                        />
+                                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-blue-700 text-xs font-semibold">
+                                          {patient.patientId.slice(-4)}
+                                        </div>
+                                        <div>
+                                          <span className="font-semibold text-gray-900">{patient.patientName}</span>
+                                          <span className="ml-2 text-sm text-gray-500">ID: {patient.patientId}</span>
+                                          <span className="ml-2 rounded-full bg-rose-100 px-2 py-1 text-xs font-medium text-rose-700">
+                                            {patient.invoices.length} invoice{patient.invoices.length > 1 ? 's' : ''}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                  {patient.invoices.map((row, invoiceIndex) => (
+                                    <tr key={row.id} className={`border-b border-gray-200 hover:bg-blue-50 transition-colors ${
+                                      patient.invoices.length === 1 
+                                        ? 'bg-white' 
+                                        : 'bg-blue-50/30'
+                                    }`}>
+                                      <td className="px-4 py-3">
+                                        <input type="checkbox" checked={selectedIds.includes(row.id)} onChange={(event) => toggleRow(row.id, event.target.checked)} className="h-4 w-4 rounded border-gray-300" />
+                                      </td>
+                                      <td className="px-4 py-3 font-medium text-gray-900">#{row.invoiceId}</td>
+                                      <td className="px-4 py-3 text-gray-700">{new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(row.invoiceDate))}</td>
+                                      <td className="px-4 py-3 text-gray-700">{row.patientName}</td>
+                                      <td className="px-4 py-3 text-gray-700">{formatCurrency(row.paidAmount, 'AFN')}</td>
+                                      <td className="px-4 py-3 font-semibold text-rose-600">
+                                        {formatCurrency(row.debtAmount, 'AFN')}
+                                      </td>
+                                      <td className="px-4 py-3">
+                                        <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
+                                          row.agingBucket === '0-30 days' ? 'bg-green-100 text-green-800' :
+                                          row.agingBucket === '31-60 days' ? 'bg-yellow-100 text-yellow-800' :
+                                          row.agingBucket === '61-90 days' ? 'bg-orange-100 text-orange-800' :
+                                          'bg-red-100 text-red-800'
+                                        }`}>
+                                          {row.agingBucket}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </React.Fragment>
+                              );
+                            });
+                          })()}
                         </tbody>
                       </table>
                     </div>

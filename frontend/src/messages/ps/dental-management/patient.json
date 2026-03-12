@@ -67,7 +67,18 @@
       "bloodGroup": {
         "label": "د وینې ګروپ",
         "validation": {
+          "in": "د وینې ګروپ باید یو له اجازه ورکړل شوي ارزښتونو څخه وي",
           "maxLength": "د وینې ګروپ باید 255 حروف یا لږ وي"
+        },
+        "options": {
+          "aPositive": "A+",
+          "aNegative": "A-",
+          "bPositive": "B+",
+          "bNegative": "B-",
+          "abPositive": "AB+",
+          "abNegative": "AB-",
+          "oPositive": "O+",
+          "oNegative": "O-"
         }
       },
       "emergencyContact": {

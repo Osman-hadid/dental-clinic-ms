@@ -34,10 +34,10 @@ export const treatmentConfig: EntityModuleConfig = {
       accessorKey: 'enabled',
       header: 'config.form.enabled.label',
     },
-    {
-      accessorKey: 'visitTreatments',
-      header: 'config.form.visitTreatments.label',
-    },
+    // {
+    //   accessorKey: 'visitTreatments',
+    //   header: 'config.form.visitTreatments.label',
+    // },
   ],
   createButton: 'config.table.add',
   createSubmitText: 'config.create',
@@ -110,30 +110,30 @@ export const treatmentConfig: EntityModuleConfig = {
         maxLength: { value: 255, message: 'config.form.description.validation.maxLength' },
       },
     },
-    {
-      label: 'config.form.createdBy.label',
-      name: 'createdBy',
-      required: false,
-      type: 'number',
-    },
-    {
-      label: 'config.form.updatedBy.label',
-      name: 'updatedBy',
-      required: false,
-      type: 'number',
-    },
+    // {
+    //   label: 'config.form.createdBy.label',
+    //   name: 'createdBy',
+    //   required: false,
+    //   type: 'number',
+    // },
+    // {
+    //   label: 'config.form.updatedBy.label',
+    //   name: 'updatedBy',
+    //   required: false,
+    //   type: 'number',
+    // },
     {
       label: 'config.form.enabled.label',
       name: 'enabled',
       required: false,
       type: 'checkbox',
     },
-    {
-      label: 'config.form.visitTreatments.label',
-      name: 'visitTreatments',
-      required: false,
-      type: 'multiselect',
-    },
+    // {
+    //   label: 'config.form.visitTreatments.label',
+    //   name: 'visitTreatments',
+    //   required: false,
+    //   type: 'multiselect',
+    // },
   ],
   queryKey: 'treatments',
   searchFields: [

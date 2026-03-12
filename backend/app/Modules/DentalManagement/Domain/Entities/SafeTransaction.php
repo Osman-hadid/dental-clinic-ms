@@ -9,9 +9,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
+use App\Modules\Common\Domain\Entities\Concerns\HasUserStamps;
 
 final class SafeTransaction extends Model
 {
+    use HasUserStamps;
     use LogsActivity;
     use SoftDeletes;
 

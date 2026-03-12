@@ -65,8 +65,11 @@ export type FinancialData = {
     salaryPaid: number;
     shareholderContribution: number;
     shareholderDistribution: number;
+    thirdCompanyPaid: number;
+    thirdCompanyUnpaid: number;
   };
   tables: {
+    implantCompanyRecords: Array<Record<string, unknown>>;
     implantInstallments: Array<Record<string, unknown>>;
     outstandingInvoices: Array<Record<string, unknown>>;
     revenueByDentist: Array<Record<string, unknown>>;

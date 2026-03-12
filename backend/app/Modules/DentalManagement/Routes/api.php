@@ -9,6 +9,8 @@ use App\Modules\DentalManagement\Infrastructure\Http\Controllers\DashboardSummar
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\DentalBackupController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\ExpenseController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\FinancialSettingController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\ImplantCompanyController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\ImplantPlanningController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\InventoryItemController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\InvoiceController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\PatientController;
@@ -61,6 +63,9 @@ Route::middleware(['api', 'auth:sanctum', 'set_locale'])->prefix('api/v1/dental-
     Route::post('/patients/{patientId}/session-tasks', [PatientSessionTaskController::class, 'store']);
     Route::put('/patients/{patientId}/session-tasks/{taskId}', [PatientSessionTaskController::class, 'update']);
     Route::delete('/patients/{patientId}/session-tasks/{taskId}', [PatientSessionTaskController::class, 'destroy']);
+    Route::get('/implant-companies', [ImplantCompanyController::class, 'index']);
+    Route::post('/implant-companies', [ImplantCompanyController::class, 'store']);
+    Route::post('/implant-planning', [ImplantPlanningController::class, 'store']);
     Route::apiResource('patients', PatientController::class);
     Route::post('/staff/restore/{id}', [StaffController::class, 'restore']);
     Route::delete('/staff/force/{id}', [StaffController::class, 'forceDelete']);

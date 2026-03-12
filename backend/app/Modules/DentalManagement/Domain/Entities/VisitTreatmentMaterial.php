@@ -6,9 +6,11 @@ namespace App\Modules\DentalManagement\Domain\Entities;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Modules\Common\Domain\Entities\Concerns\HasUserStamps;
 
 final class VisitTreatmentMaterial extends Model
 {
+    use HasUserStamps;
     protected $fillable = [
         'visit_treatment_id',
         'inventory_item_id',
@@ -42,4 +44,3 @@ final class VisitTreatmentMaterial extends Model
         return $this->belongsTo(InventoryItem::class);
     }
 }
-

@@ -10,9 +10,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
+use App\Modules\Common\Domain\Entities\Concerns\HasUserStamps;
 
 final class Appointment extends Model
 {
+    use HasUserStamps;
     use LogsActivity;
     use SoftDeletes;
 

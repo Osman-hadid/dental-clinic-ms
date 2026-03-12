@@ -93,7 +93,7 @@ const CONDITIONS: Record<ConditionKey, ConditionMeta> = {
   implant: { color: '#c084fc', label: 'Implant' },
   periodontitis: { color: '#67e8f9', label: 'Periodontitis' },
   periostitis: { color: '#8b5e3c', label: 'Periostitis' },
-  removal: { color: '#cbd5e1', label: 'Removal' },
+  removal: { color: '#3b82f6', label: 'Removal' },
   surgery: { color: '#f9a8d4', label: 'Surgery' },
 };
 
@@ -318,11 +318,11 @@ const ToothGlyph = ({
   const rootGradientId = `${uid}-root`;
   const glossGradientId = `${uid}-gloss`;
   const strokeColor = isActive ? '#e5e7eb' : '#c3ccd8';
-  const crownHighlight = '#ffffff';
-  const crownBase = isActive ? '#f4f6f8' : '#eef1f4';
-  const crownDepth = isActive ? '#d9e0e8' : '#d5dde6';
-  const rootTop = isActive ? '#eef2f6' : '#e5ebf2';
-  const rootBottom = isActive ? '#c7d1dc' : '#c0cad7';
+  const crownHighlight = '#f7f8f9';
+  const crownBase = isActive ? '#eef1f4' : '#ebeff3';
+  const crownDepth = isActive ? '#d5dde6' : '#d1d8e0';
+  const rootTop = isActive ? '#e3e8ee' : '#dde3ea';
+  const rootBottom = isActive ? '#bcc7d3' : '#b6c1cd';
   const detailColor = isActive ? 'rgba(255,255,255,0.56)' : 'rgba(100,116,139,0.3)';
   const shadowColor = isActive ? 'rgba(88, 28, 135, 0.42)' : 'rgba(15, 23, 42, 0.22)';
 
@@ -580,6 +580,19 @@ const hexToRgba = (hex: string, alpha: number): string => {
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 };
 
+const isLightColor = (hex: string): boolean => {
+  const normalized = hex.replace('#', '');
+  if (normalized.length !== 6) {
+    return false;
+  }
+  const bigint = Number.parseInt(normalized, 16);
+  const red = (bigint >> 16) & 255;
+  const green = (bigint >> 8) & 255;
+  const blue = bigint & 255;
+  const luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255;
+  return luminance > 0.7;
+};
+
 const createMaterialSelectionRow = (): MaterialSelectionRow => ({
   inventoryItemId: '',
   key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -686,11 +699,11 @@ export const TreatmentChartWorkspace = ({
     ? String(initialVisitId)
     : '';
 
-  const [activeCondition, setActiveCondition] = useState<ConditionKey>('implant');
+  const [activeCondition, setActiveCondition] = useState<ConditionKey | null>(null);
   const [selectedPatientId, setSelectedPatientId] = useState<string>(defaultPatientId);
   const [selectedVisitId, setSelectedVisitId] = useState<string>(defaultVisitId);
   const [selectedTreatmentId, setSelectedTreatmentId] = useState<string>('');
-  const [selectedToothNumber, setSelectedToothNumber] = useState<string>('25');
+  const [selectedToothNumber, setSelectedToothNumber] = useState<string>('');
   const [price, setPrice] = useState<string>('');
   const [requiresImage, setRequiresImage] = useState<boolean>(false);
   const [imagePrice, setImagePrice] = useState<string>('');
@@ -1102,6 +1115,9 @@ export const TreatmentChartWorkspace = ({
 
   const paintTooth = (toothNumber: string): void => {
     setSelectedToothNumber(toothNumber);
+    if (!activeCondition) {
+      return;
+    }
     setConditionOverrides((previous) => ({
       ...previous,
       [toothNumber]: activeCondition,
@@ -1190,9 +1206,15 @@ export const TreatmentChartWorkspace = ({
       }
     }
 
+    const fallbackCondition = toothConditions[selectedToothNumber] ?? activeCondition;
+    if (!fallbackCondition && paintedTeeth.length === 0) {
+      toast.error('Select a condition first.');
+      return;
+    }
+
     const targets = paintedTeeth.length > 0
       ? paintedTeeth
-      : [{ condition: (toothConditions[selectedToothNumber] ?? activeCondition), toothNumber: selectedToothNumber }];
+      : [{ condition: fallbackCondition as ConditionKey, toothNumber: selectedToothNumber }];
     const uniqueTargets = Array.from(
       new Map(targets.map((target) => [target.toothNumber, target])).values()
     );
@@ -1458,7 +1480,11 @@ export const TreatmentChartWorkspace = ({
     <div class="box">
       <h3>Clinical Context</h3>
       <p><strong>Doctor:</strong> ${escapeHtml(doctorName)}</p>
-      <p><strong>Selected Tooth:</strong> ${escapeHtml(selectedToothNumber)} (${escapeHtml(getToothRegion(selectedToothNumber))})</p>
+      <p><strong>Selected Tooth:</strong> ${
+        selectedToothNumber
+          ? `${escapeHtml(selectedToothNumber)} (${escapeHtml(getToothRegion(selectedToothNumber))})`
+          : 'None'
+      }</p>
     </div>
   </div>
 
@@ -1897,6 +1923,15 @@ export const TreatmentChartWorkspace = ({
                     setActiveCondition(conditionKey);
                   }}
                   className="gap-2"
+                  style={
+                    isActive
+                      ? {
+                          backgroundColor: condition.color,
+                          borderColor: condition.color,
+                          color: isLightColor(condition.color) ? '#0f172a' : '#ffffff',
+                        }
+                      : undefined
+                  }
                 >
                   <span
                     className="size-2.5 rounded-full border"
@@ -1921,6 +1956,8 @@ export const TreatmentChartWorkspace = ({
                 const toothMeta = resolveToothDisplayMeta(toothNumber);
                 const toothCode = resolveToothQuadrantCode(toothNumber);
                 const conditionColor = condition ? CONDITIONS[condition].color : '#d1d5db';
+                const selectionColor = condition ? conditionColor : (activeCondition ? CONDITIONS[activeCondition].color : '#94a3b8');
+                const selectionTextColor = isLightColor(selectionColor) ? '#0f172a' : '#ffffff';
 
                 return (
                   <button
@@ -1935,15 +1972,15 @@ export const TreatmentChartWorkspace = ({
                     )}
                     style={{
                       background: isSelected
-                        ? 'linear-gradient(180deg, #7c3aed 0%, #9333ea 100%)'
+                        ? `linear-gradient(180deg, ${hexToRgba(selectionColor, 0.32)} 0%, ${hexToRgba(selectionColor, 0.78)} 100%)`
                         : condition
                           ? `linear-gradient(180deg, ${hexToRgba(conditionColor, 0.16)} 0%, #f8fafc 100%)`
                           : '#f8fafc',
-                      borderColor: isSelected ? '#7c3aed' : condition ? hexToRgba(conditionColor, 0.65) : '#e5e7eb',
+                      borderColor: isSelected ? selectionColor : condition ? hexToRgba(conditionColor, 0.65) : '#e5e7eb',
                       boxShadow: isSelected
-                        ? '0 14px 26px rgba(124,58,237,0.28)'
+                        ? `0 14px 26px ${hexToRgba(selectionColor, 0.28)}`
                         : '0 8px 16px rgba(15,23,42,0.06)',
-                      color: isSelected ? '#ffffff' : '#1f2937',
+                      color: isSelected ? selectionTextColor : '#1f2937',
                     }}
                     aria-label={`Tooth ${toothNumber} ${toothMeta.fullLabel}`}
                     title={`${toothCode} - ${toothMeta.fullLabel}`}
@@ -1975,6 +2012,8 @@ export const TreatmentChartWorkspace = ({
                 const toothMeta = resolveToothDisplayMeta(toothNumber);
                 const toothCode = resolveToothQuadrantCode(toothNumber);
                 const conditionColor = condition ? CONDITIONS[condition].color : '#d1d5db';
+                const selectionColor = condition ? conditionColor : (activeCondition ? CONDITIONS[activeCondition].color : '#94a3b8');
+                const selectionTextColor = isLightColor(selectionColor) ? '#0f172a' : '#ffffff';
 
                 return (
                   <button
@@ -1989,15 +2028,15 @@ export const TreatmentChartWorkspace = ({
                     )}
                     style={{
                       background: isSelected
-                        ? 'linear-gradient(180deg, #7c3aed 0%, #9333ea 100%)'
+                        ? `linear-gradient(180deg, ${hexToRgba(selectionColor, 0.32)} 0%, ${hexToRgba(selectionColor, 0.78)} 100%)`
                         : condition
                           ? `linear-gradient(180deg, ${hexToRgba(conditionColor, 0.16)} 0%, #f8fafc 100%)`
                           : '#f8fafc',
-                      borderColor: isSelected ? '#7c3aed' : condition ? hexToRgba(conditionColor, 0.65) : '#e5e7eb',
+                      borderColor: isSelected ? selectionColor : condition ? hexToRgba(conditionColor, 0.65) : '#e5e7eb',
                       boxShadow: isSelected
-                        ? '0 14px 26px rgba(124,58,237,0.28)'
+                        ? `0 14px 26px ${hexToRgba(selectionColor, 0.28)}`
                         : '0 8px 16px rgba(15,23,42,0.06)',
-                      color: isSelected ? '#ffffff' : '#1f2937',
+                      color: isSelected ? selectionTextColor : '#1f2937',
                     }}
                     aria-label={`Tooth ${toothNumber} ${toothMeta.fullLabel}`}
                     title={`${toothCode} - ${toothMeta.fullLabel}`}
@@ -2049,7 +2088,7 @@ export const TreatmentChartWorkspace = ({
           <div className="flex items-center justify-between rounded-lg border bg-background p-4">
             <div className="space-y-1">
               <p className="text-sm font-semibold">
-                Selected tooth: <span className="text-primary">{selectedToothNumber}</span>
+                Selected tooth: <span className="text-primary">{selectedToothNumber || 'None'}</span>
               </p>
               <p className="text-xs text-muted-foreground">
                 {selectedTreatment
@@ -2074,14 +2113,16 @@ export const TreatmentChartWorkspace = ({
           <div className="rounded-lg border bg-background p-4">
             <div className="mb-2 flex items-center justify-between">
               <p className="text-sm font-semibold">
-                {getToothRegion(selectedToothNumber)} {selectedToothNumber}
+                {selectedToothNumber ? `${getToothRegion(selectedToothNumber)} ${selectedToothNumber}` : 'No tooth selected'}
               </p>
-              {selectedCondition ? (
+              {selectedToothNumber && selectedCondition ? (
                 <Badge style={{ backgroundColor: CONDITIONS[selectedCondition].color, color: '#111827' }}>
                   {CONDITIONS[selectedCondition].label}
                 </Badge>
-              ) : (
+              ) : selectedToothNumber ? (
                 <Badge variant="outline">Healthy</Badge>
+              ) : (
+                <Badge variant="outline">Select a tooth</Badge>
               )}
             </div>
             <p className="text-xs text-muted-foreground">Last manipulation: {new Date().toLocaleDateString()}</p>
@@ -2141,7 +2182,11 @@ export const TreatmentChartWorkspace = ({
               Paint mode
             </p>
             <p className="text-xs text-muted-foreground">
-              Active condition: <span className="font-medium">{CONDITIONS[activeCondition].label}</span>. Click any tooth to apply this color.
+              Active condition:{' '}
+              <span className="font-medium">
+                {activeCondition ? CONDITIONS[activeCondition].label : 'None'}
+              </span>
+              . Click any tooth to apply this color.
             </p>
           </div>
 

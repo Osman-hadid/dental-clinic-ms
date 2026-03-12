@@ -48,6 +48,7 @@ export type SidebarSubItem = {
   url: string;
   title?: string;
   permission?: string;
+  section?: string;
 };
 
 export type SidebarItem = {
@@ -64,35 +65,37 @@ const staticNavItems: SidebarItem[] = [
   {
     icon: House,
     isActive: true,
-    items: [{ key: 'overview', url: '/dashboard' }],
+    items: [{ key: 'overview', permission: 'page.dashboard', url: '/dashboard' }],
     key: 'dashboard',
     url: '/dashboard',
   },
   {
     icon: HeartPulse,
     items: [
-      { key: 'patients', url: '/dental-management/patients' },
+      { key: 'patients', permission: 'page.dental-management.patients', section: 'Patients', url: '/dental-management/patients' },
       {
         key: 'patientQuestions',
-        permission: 'dental-management.patient-questions.view',
+        permission: 'page.dental-management.patient-questions',
+        section: 'Patients',
         url: '/dental-management/patient-questions',
       },
-      { key: 'staff', url: '/dental-management/staff' },
+      { key: 'appointments', permission: 'page.dental-management.appointments', section: 'Scheduling', url: '/dental-management/appointments' },
+      { key: 'visits', permission: 'page.dental-management.visits', section: 'Scheduling', url: '/dental-management/visits' },
+      // { key: 'teeth', url: '/dental-management/teeth' },
+      { key: 'visitTreatments', permission: 'page.dental-management.visit-treatments', section: 'Clinical', url: '/dental-management/visit-treatments' },
+      { key: 'treatments', permission: 'page.dental-management.treatments', section: 'Clinical', url: '/dental-management/treatments' },
+      { key: 'implants', permission: 'page.dental-management.implants', section: 'Implants', url: '/dental-management/implants' },
+      { key: 'implantsInProcess', permission: 'page.dental-management.implants-in-process', section: 'Implants', url: '/dental-management/implants/in-process' },
+      { key: 'invoices', permission: 'page.dental-management.invoices', section: 'Billing', url: '/dental-management/invoices' },
+      { key: 'payments', permission: 'page.dental-management.payments', section: 'Billing', url: '/dental-management/payments' },
+      { key: 'staff', permission: 'page.dental-management.staff', section: 'People', url: '/dental-management/staff' },
       {
         key: 'shareholders',
-        permission: 'dental-management.shareholders.view',
+        permission: 'page.dental-management.shareholders',
+        section: 'People',
         url: '/dental-management/shareholders',
       },
-      { key: 'appointments', url: '/dental-management/appointments' },
-      { key: 'visits', url: '/dental-management/visits' },
-      { key: 'teeth', url: '/dental-management/teeth' },
-      { key: 'treatments', url: '/dental-management/treatments' },
-      { key: 'implants', url: '/dental-management/implants' },
-      { key: 'implantsInProcess', url: '/dental-management/implants/in-process' },
-      { key: 'visitTreatments', url: '/dental-management/visit-treatments' },
-      { key: 'invoices', url: '/dental-management/invoices' },
-      { key: 'payments', url: '/dental-management/payments' },
-      { key: 'aiImaging', newTab: true, url: '/dental-management/ai-imaging' },
+      { key: 'aiImaging', newTab: true, permission: 'page.dental-management.ai-imaging', section: 'Tools', url: '/dental-management/ai-imaging' },
     ],
     key: 'dentalManagement',
     url: '/dental-management',
@@ -100,15 +103,15 @@ const staticNavItems: SidebarItem[] = [
   {
     icon: BarChart3,
     items: [
-      { key: 'overview', url: '/reports' },
-      { key: 'debts', permission: 'dental-management.debts.view', url: '/reports/debts' },
-      { key: 'dailyExpenses', url: '/reports/daily-expenses' },
-      { key: 'clinicalExpenses', url: '/reports/clinical-expenses' },
-      { key: 'safe', url: '/reports/safe' },
-      { key: 'salaries', url: '/reports/salaries' },
+      { key: 'overview', permission: 'page.reports.overview', url: '/reports' },
+      { key: 'debts', permission: 'page.reports.debts', url: '/reports/debts' },
+      { key: 'dailyExpenses', permission: 'page.reports.daily-expenses', url: '/reports/daily-expenses' },
+      { key: 'clinicalExpenses', permission: 'page.reports.clinical-expenses', url: '/reports/clinical-expenses' },
+      { key: 'safe', permission: 'page.reports.safe', url: '/reports/safe' },
+      { key: 'salaries', permission: 'page.reports.salaries', url: '/reports/salaries' },
       {
         key: 'shareholders',
-        permission: 'dental-management.shareholders.view',
+        permission: 'page.reports.shareholders',
         url: '/reports/shareholders',
       },
     ],
@@ -117,7 +120,7 @@ const staticNavItems: SidebarItem[] = [
   },
   {
     icon: Boxes,
-    items: [{ key: 'inventory', url: '/inventory-management' }],
+    items: [{ key: 'inventory', permission: 'page.inventory-management', url: '/inventory-management' }],
     key: 'inventoryManagement',
     url: '/inventory-management',
   },
@@ -126,7 +129,7 @@ const staticNavItems: SidebarItem[] = [
     items: [
       {
         key: 'backups',
-        permission: 'dental-management.backups.view',
+        permission: 'page.dental-management.backups',
         url: '/dental-management/backups',
       },
     ],
@@ -136,9 +139,9 @@ const staticNavItems: SidebarItem[] = [
   {
     icon: ShieldUser,
     items: [
-      { key: 'users', url: '/user-management/users' },
-      { key: 'roles', url: '/user-management/roles' },
-      { key: 'permissions', url: '/user-management/permissions' },
+      { key: 'users', permission: 'page.user-management.users', url: '/user-management/users' },
+      { key: 'roles', permission: 'page.user-management.roles', url: '/user-management/roles' },
+      { key: 'permissions', permission: 'page.user-management.permissions', url: '/user-management/permissions' },
     ],
     key: 'userManagement',
     url: '/user-management',

@@ -49,6 +49,14 @@ const normalizeFieldValue = (field: FormField, value: any): any => {
     });
   }
 
+  if (fieldType === 'number') {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  }
+
   if (fieldType === 'checkbox' || fieldType === 'switch') {
     return !!value;
   }
@@ -132,6 +140,15 @@ export const EntityForm = ({
       if (!(await trigger())) return;
       try {
         const payload = { ...data };
+        
+        // Transform number fields to ensure they're sent as numbers
+        for (const field of formConfig) {
+          if (field.type === 'number' && payload[field.name] !== null && payload[field.name] !== undefined) {
+            const num = Number(payload[field.name]);
+            payload[field.name] = Number.isFinite(num) ? num : null;
+          }
+        }
+        
         if (config.queryKey === 'appointments' && !payload.status) {
           payload.status = 'scheduled';
         }
@@ -144,7 +161,7 @@ export const EntityForm = ({
         console.error('Form submission error:', error);
       }
     },
-    [config.queryKey, onSubmit, onSuccess, reset, trigger]
+    [config.queryKey, formConfig, onSubmit, onSuccess, reset, trigger]
   );
 
   return (

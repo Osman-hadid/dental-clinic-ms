@@ -67,7 +67,18 @@
       "bloodGroup": {
         "label": "گروه خونی",
         "validation": {
+          "in": "گروه خونی باید یکی از مقادیر مجاز باشد",
           "maxLength": "گروه خونی باید 255 نویسه یا کمتر باشد"
+        },
+        "options": {
+          "aPositive": "A+",
+          "aNegative": "A-",
+          "bPositive": "B+",
+          "bNegative": "B-",
+          "abPositive": "AB+",
+          "abNegative": "AB-",
+          "oPositive": "O+",
+          "oNegative": "O-"
         }
       },
       "emergencyContact": {

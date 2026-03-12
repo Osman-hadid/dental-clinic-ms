@@ -41,96 +41,116 @@ export const WindowsLoginForm = ({
     'transition-all duration-200 hover:bg-white/30 hover:border-white/60 hover:shadow-[0_12px_40px_rgba(0,0,0,0.22)]';
 
   return (
-    <Form {...form}>
-      <form
-        onSubmit={form.handleSubmit(onSubmit)}
-        className={cn('flex w-full flex-col items-center gap-4', className)}
-        {...props}
-      >
-        <FormField
-          control={form.control}
-          name="email"
-          render={({ field }) => (
-            <FormItem className="w-full max-w-[640px]">
-              <FormControl>
-                <div className={cn(glassPill, glassHover, 'rounded-full px-6 py-3')}>
-                  <Input
-                    type="email"
-                    placeholder="Email"
-                    className="glass-input h-10 border-0 bg-transparent px-0 text-base text-white placeholder:text-white/70 shadow-none focus-visible:border-0 focus-visible:ring-0 md:h-12 md:text-lg"
-                    {...field}
-                  />
-                </div>
-              </FormControl>
-              <FormMessage className="text-xs text-rose-200/90 md:text-sm" />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="password"
-          render={({ field }) => (
-            <FormItem className="w-full max-w-[720px]">
-              <FormControl>
-                <div className="flex w-full items-center justify-center gap-4 md:gap-5">
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((value) => !value)}
-                    className={cn(
-                      glassPill,
-                      'flex size-12 items-center justify-center rounded-full md:size-16'
-                    )}
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  >
-                    <Image
-                      src="/figma/windows-login/eye-closed.svg"
-                      alt=""
-                      width={20}
-                      height={20}
-                      className="md:size-6"
-                    />
-                  </button>
-
-                  <div className={cn(glassPill, glassHover, 'flex-1 rounded-full px-6 py-3 md:px-8')}>
+    <>
+      <Form {...form}>
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          className={cn('flex w-full flex-col items-center gap-4 animate-scale-in [animation-delay:800ms]', className)}
+          {...props}
+        >
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem className="w-full max-w-160 animate-scale-in [animation-delay:900ms]">
+                <FormControl>
+                  <div className={cn(glassPill, glassHover, 'rounded-full px-6 py-3')}>
                     <Input
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder="Password"
+                      type="email"
+                      placeholder="Email"
                       className="glass-input h-10 border-0 bg-transparent px-0 text-base text-white placeholder:text-white/70 shadow-none focus-visible:border-0 focus-visible:ring-0 md:h-12 md:text-lg"
                       {...field}
                     />
                   </div>
+                </FormControl>
+                <FormMessage className="text-xs text-rose-200/90 md:text-sm" />
+              </FormItem>
+            )}
+          />
 
-                  <button
-                    type="submit"
-                    disabled={isBusy}
-                    className={cn(
-                      glassPill,
-                      'flex size-12 items-center justify-center rounded-full transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 md:size-16'
-                    )}
-                    aria-label="Login"
-                  >
-                    <Image
-                      src="/figma/windows-login/arrow-circle.svg"
-                      alt=""
-                      width={22}
-                      height={22}
-                      className="md:size-7"
-                    />
-                  </button>
-                </div>
-              </FormControl>
-              <FormMessage className="text-xs text-rose-200/90 md:text-sm" />
-            </FormItem>
-          )}
-        />
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem className="w-full max-w-180 animate-scale-in [animation-delay:1000ms]">
+                <FormControl>
+                  <div className="flex w-full items-center justify-center gap-4 md:gap-5">
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((value) => !value)}
+                      className={cn(
+                        glassPill,
+                        'flex size-12 items-center justify-center rounded-full md:size-16 animate-scale-in [animation-delay:1100ms]'
+                      )}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      <Image
+                        src="/figma/windows-login/eye-closed.svg"
+                        alt=""
+                        width={20}
+                        height={20}
+                        className="md:size-6"
+                      />
+                    </button>
 
-        {loginError ? (
-          <div className="text-xs text-rose-200/90 md:text-sm">{loginError.message}</div>
-        ) : null}
+                    <div className={cn(glassPill, glassHover, 'flex-1 rounded-full px-6 py-3 md:px-8 animate-scale-in [animation-delay:1200ms]')}>
+                      <Input
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="Password"
+                        className="glass-input h-10 border-0 bg-transparent px-0 text-base text-white placeholder:text-white/70 shadow-none focus-visible:border-0 focus-visible:ring-0 md:h-12 md:text-lg"
+                        {...field}
+                      />
+                    </div>
 
-      </form>
-    </Form>
+                    <button
+                      type="submit"
+                      disabled={isBusy}
+                      className={cn(
+                        glassPill,
+                        'flex size-12 items-center justify-center rounded-full transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 md:size-16 animate-scale-in [animation-delay:1300ms]'
+                      )}
+                      aria-label="Login"
+                    >
+                      <Image
+                        src="/figma/windows-login/arrow-circle.svg"
+                        alt=""
+                        width={22}
+                        height={22}
+                        className="md:size-7"
+                      />
+                    </button>
+                  </div>
+                </FormControl>
+                <FormMessage className="text-xs text-rose-200/90 md:text-sm" />
+              </FormItem>
+            )}
+          />
+
+          {loginError ? (
+            <div className="text-xs text-rose-200/90 md:text-sm animate-scale-in [animation-delay:1400ms]">{loginError?.message}</div>
+          ) : null}
+
+        </form>
+      </Form>
+      
+      <style jsx>{`
+        @keyframes scale-in {
+          from {
+            opacity: 0;
+            transform: scale(0.8);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+
+        .animate-scale-in {
+          animation: scale-in 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+          opacity: 0;
+        }
+      `}</style>
+    </>
   );
 };
 

@@ -33,6 +33,7 @@ final class DentalBackupService
         'invoices',
         'payments',
         'patient_session_tasks',
+        'implant_companies',
         'expenses',
         'safe_transactions',
         'salary_payments',

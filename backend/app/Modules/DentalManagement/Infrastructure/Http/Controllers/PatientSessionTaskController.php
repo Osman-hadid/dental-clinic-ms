@@ -116,6 +116,7 @@ final class PatientSessionTaskController extends BaseApiController
             'mark' => $validated['mark'],
             'status' => $validated['status'],
             'notes' => $validated['notes'] ?? null,
+            'implant_company_id' => $validated['implantCompanyId'] ?? null,
             'created_by' => $userId,
             'updated_by' => $userId,
         ]);
@@ -147,6 +148,9 @@ final class PatientSessionTaskController extends BaseApiController
         }
         if (\array_key_exists('notes', $validated)) {
             $payload['notes'] = $validated['notes'];
+        }
+        if (\array_key_exists('implantCompanyId', $validated)) {
+            $payload['implant_company_id'] = $validated['implantCompanyId'];
         }
 
         if ($payload !== []) {

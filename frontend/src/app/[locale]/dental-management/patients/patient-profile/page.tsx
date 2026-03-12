@@ -1602,6 +1602,7 @@ export default function PatientProfilePage(): JSX.Element {
     body { font-family: Arial, sans-serif; padding: 24px; margin: 14mm; color: #111827; }
     h1,h2,h3 { margin: 0 0 8px 0; }
     .section { margin-top: 18px; }
+    .page-break { break-before: page; page-break-before: always; }
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .box { border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; }
     table { width: 100%; border-collapse: collapse; margin-top: 8px; }
@@ -1739,7 +1740,7 @@ export default function PatientProfilePage(): JSX.Element {
     : '<p class="muted">No notes were recorded for this patient.</p>'}
   </div>
 
-  <div class="section">
+  <div class="section page-break">
     <h2>Patient Questionnaire</h2>
     <div class="summary-grid">
       <div class="summary-card">

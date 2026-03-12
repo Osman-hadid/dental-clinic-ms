@@ -221,6 +221,13 @@ final readonly class InvoiceService
                 'source_id' => $invoice->id,
             ]);
 
+        if ($this->isDebtSettlementInvoice($invoice)) {
+            if ($entry->exists) {
+                $entry->delete();
+            }
+            return;
+        }
+
         $hasPayments = Payment::query()
             ->where('invoice_id', $invoice->id)
             ->exists();
@@ -245,6 +252,13 @@ final readonly class InvoiceService
         ]);
         $entry->deleted_at = null;
         $entry->save();
+    }
+
+    private function isDebtSettlementInvoice(Invoice $invoice): bool
+    {
+        $notes = mb_strtolower((string) ($invoice->notes ?? ''));
+
+        return str_contains($notes, 'settlement invoice generated from invoice #');
     }
 
 }

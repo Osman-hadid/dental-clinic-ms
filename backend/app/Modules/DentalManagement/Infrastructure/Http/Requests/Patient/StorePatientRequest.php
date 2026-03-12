@@ -29,7 +29,7 @@ final class StorePatientRequest extends BaseFormRequest
             'contactNumber' => 'nullable|string|max:255',
             'email' => 'nullable|string|max:255|unique:patients,email',
             'address' => 'nullable|string|max:255',
-            'bloodGroup' => 'nullable|string|max:255',
+            'bloodGroup' => 'nullable|string|in:A+,A-,B+,B-,AB+,AB-,O+,O-',
             'emergencyContact' => 'nullable|string|max:255',
             'enabled' => 'nullable|boolean',
             'status' => 'nullable|string|in:pending,approved,rejected',

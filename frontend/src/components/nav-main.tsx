@@ -36,6 +36,7 @@ export const NavMain = ({
       title: string;
       newTab?: boolean;
       url: string;
+      section?: string;
     }[];
   }[];
 }): React.ReactElement => {
@@ -129,29 +130,40 @@ export const NavMain = ({
                         setHoveredCollapsedItem((current) => (current === item.url ? null : current));
                       }}
                     >
-                      {item.items?.map((subItem) => {
+                      {item.items?.map((subItem, index) => {
                         const isActive =
                           cleanPathname === subItem.url || cleanPathname.startsWith(subItem.url);
+                        const previousSection = item.items?.[index - 1]?.section;
+                        const showSection = subItem.section && subItem.section !== previousSection;
 
                         return (
-                          <DropdownMenuItem
-                            key={subItem.url}
-                            asChild
-                            className={cn(
-                              'cursor-pointer rounded-lg px-2.5 py-2 text-sm',
-                              isActive && 'bg-sidebar-primary/25 text-foreground'
-                            )}
-                          >
-                            <Link
-                              href={subItem.url}
-                              rel={subItem.newTab ? 'noopener noreferrer' : undefined}
-                              target={subItem.newTab ? '_blank' : undefined}
-                              className="flex w-full items-center gap-2"
+                          <React.Fragment key={subItem.url}>
+                            {showSection ? (
+                              <DropdownMenuItem
+                                disabled
+                                className="cursor-default px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/80"
+                              >
+                                {subItem.section}
+                              </DropdownMenuItem>
+                            ) : null}
+                            <DropdownMenuItem
+                              asChild
+                              className={cn(
+                                'cursor-pointer rounded-lg px-2.5 py-2 text-sm',
+                                isActive && 'bg-sidebar-primary/25 text-foreground'
+                              )}
                             >
-                              {subItem.icon ? <subItem.icon className="size-4 shrink-0 opacity-80" /> : null}
-                              {subItem.title}
-                            </Link>
-                          </DropdownMenuItem>
+                              <Link
+                                href={subItem.url}
+                                rel={subItem.newTab ? 'noopener noreferrer' : undefined}
+                                target={subItem.newTab ? '_blank' : undefined}
+                                className="flex w-full items-center gap-2"
+                              >
+                                {subItem.icon ? <subItem.icon className="size-4 shrink-0 opacity-80" /> : null}
+                                {subItem.title}
+                              </Link>
+                            </DropdownMenuItem>
+                          </React.Fragment>
                         );
                       })}
                     </DropdownMenuContent>
@@ -247,27 +259,36 @@ export const NavMain = ({
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <SidebarMenuSub>
-                    {item.items?.map((subItem) => {
+                    {item.items?.map((subItem, index) => {
                       const isActive =
                         cleanPathname === subItem.url || cleanPathname.startsWith(subItem.url);
+                      const previousSection = item.items?.[index - 1]?.section;
+                      const showSection = subItem.section && subItem.section !== previousSection;
 
                       return (
-                        <SidebarMenuSubItem key={subItem.title}>
-                          <SidebarMenuSubButton asChild>
-                            <Link
-                              href={subItem.url}
-                              rel={subItem.newTab ? 'noopener noreferrer' : undefined}
-                              target={subItem.newTab ? '_blank' : undefined}
-                              className={cn(
-                                'flex items-center gap-2 rounded-lg border border-transparent px-3 py-2 text-sm transition-colors hover:border-white/50 hover:bg-white/40 hover:text-foreground hover:backdrop-blur-md',
-                                isActive && 'bg-sidebar-primary/25 font-medium text-foreground'
-                              )}
-                            >
-                              {subItem.icon ? <subItem.icon className="size-4 shrink-0 opacity-80" /> : null}
-                              {subItem.title}
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
+                        <React.Fragment key={subItem.title}>
+                          {showSection ? (
+                            <li className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/80">
+                              {subItem.section}
+                            </li>
+                          ) : null}
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild>
+                              <Link
+                                href={subItem.url}
+                                rel={subItem.newTab ? 'noopener noreferrer' : undefined}
+                                target={subItem.newTab ? '_blank' : undefined}
+                                className={cn(
+                                  'flex items-center gap-2 rounded-lg border border-transparent px-3 py-2 text-sm transition-colors hover:border-white/50 hover:bg-white/40 hover:text-foreground hover:backdrop-blur-md',
+                                  isActive && 'bg-sidebar-primary/25 font-medium text-foreground'
+                                )}
+                              >
+                                {subItem.icon ? <subItem.icon className="size-4 shrink-0 opacity-80" /> : null}
+                                {subItem.title}
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        </React.Fragment>
                       );
                     })}
                   </SidebarMenuSub>

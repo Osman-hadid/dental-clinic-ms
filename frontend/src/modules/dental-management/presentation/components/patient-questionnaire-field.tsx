@@ -31,8 +31,13 @@ export const PatientQuestionnaireField = ({ onChange, value }: Props): JSX.Eleme
   const t = useTranslations('patient');
   const { formState } = useFormContext();
   const { entities: questions, isFetching } = usePatientQuestionList(1, 100, '', [], [], {
-    isActive: ['1'],
+    // Temporarily remove isActive filter to see all questions
+    // isActive: ['1'],
   });
+
+  // Debug: Log the fetched questions
+  console.log('PatientQuestionnaireField - Fetched questions:', questions);
+  console.log('PatientQuestionnaireField - Is fetching:', isFetching);
 
   const normalizedValue = useMemo(() => {
     if (!Array.isArray(value)) {

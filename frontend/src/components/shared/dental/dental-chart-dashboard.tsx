@@ -1269,67 +1269,7 @@ export const DentalChartDashboard = ({
           <p className="text-sm font-semibold">Performance Snapshot</p>
           <p className="text-xs text-muted-foreground">Quick operational health indicators</p>
         </div>
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card className="rounded-2xl border">
-            <CardContent className="p-4">
-              <div className="mb-2 flex items-center gap-2">
-                <Activity className="size-4 text-primary" />
-                <p className="text-sm font-semibold">Visit Performance</p>
-              </div>
-              <p className="text-3xl font-semibold">{completionRate}%</p>
-              <p className="text-xs text-muted-foreground">Completed appointments ratio</p>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl border">
-            <CardContent className="p-4">
-              <div className="mb-2 flex items-center gap-2">
-                <CalendarDays className="size-4 text-primary" />
-                <p className="text-sm font-semibold">Calendar Coverage</p>
-              </div>
-              <p className="text-3xl font-semibold">
-                {overview?.performance.calendarCoverageDays ?? Object.keys(eventsByDate).length}
-              </p>
-              <p className="text-xs text-muted-foreground">Days with any scheduled record</p>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl border">
-            <CardContent className="p-4">
-              <div className="mb-2 flex items-center gap-2">
-                <UsersRound className="size-4 text-primary" />
-                <p className="text-sm font-semibold">Patient Pool</p>
-              </div>
-              <p className="text-3xl font-semibold">{overview?.patients.total ?? 0}</p>
-              <p className="text-xs text-muted-foreground">Registered patients in current feed</p>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl border">
-            <CardContent className="p-4">
-              <div className="mb-2 flex items-center gap-2">
-                <Building2 className="size-4 text-primary" />
-                <p className="text-sm font-semibold">Supplier Unpaid</p>
-              </div>
-              <p className="text-3xl font-semibold">
-                {formatDualCurrency(implantSupplierData.totalUnpaid)}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {implantSupplierData.unpaidCount} implant teeth still unpaid
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-
-      <section className="space-y-2">
-        <div className="px-1">
-          <p className="text-sm font-semibold">Analytics</p>
-          <p className="text-xs text-muted-foreground">
-            Appointments, revenue, and supplier trends
-          </p>
-        </div>
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid gap-4">
           <Card className="rounded-2xl border border-border/80 bg-gradient-to-br from-blue-50 via-background to-cyan-50 pt-0">
             <CardHeader className="flex items-center gap-2 space-y-0 border-b py-5 sm:flex-row">
               <div className="grid flex-1 gap-1">
@@ -1434,7 +1374,17 @@ export const DentalChartDashboard = ({
               )}
             </CardContent>
           </Card>
+        </div>
+      </section>
 
+      <section className="space-y-2">
+        <div className="px-1">
+          <p className="text-sm font-semibold">Analytics</p>
+          <p className="text-xs text-muted-foreground">
+            Appointments, revenue, and supplier trends
+          </p>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
           <Card className="rounded-2xl border border-border/80 bg-gradient-to-br from-orange-50 via-background to-emerald-50">
             <CardContent className="p-4">
               <div className="mb-3">
@@ -1651,6 +1601,64 @@ export const DentalChartDashboard = ({
                   ))
                 )}
               </div>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      <section className="space-y-2">
+        <div className="px-1">
+          <p className="text-sm font-semibold">Performance Metrics</p>
+          <p className="text-xs text-muted-foreground">Quick operational health indicators</p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-4">
+          <Card className="rounded-2xl border">
+            <CardContent className="p-4">
+              <div className="mb-2 flex items-center gap-2">
+                <Activity className="size-4 text-primary" />
+                <p className="text-sm font-semibold">Visit Performance</p>
+              </div>
+              <p className="text-3xl font-semibold">{completionRate}%</p>
+              <p className="text-xs text-muted-foreground">Completed appointments ratio</p>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border">
+            <CardContent className="p-4">
+              <div className="mb-2 flex items-center gap-2">
+                <CalendarDays className="size-4 text-primary" />
+                <p className="text-sm font-semibold">Calendar Coverage</p>
+              </div>
+              <p className="text-3xl font-semibold">
+                {overview?.performance.calendarCoverageDays ?? Object.keys(eventsByDate).length}
+              </p>
+              <p className="text-xs text-muted-foreground">Days with any scheduled record</p>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border">
+            <CardContent className="p-4">
+              <div className="mb-2 flex items-center gap-2">
+                <UsersRound className="size-4 text-primary" />
+                <p className="text-sm font-semibold">Patient Pool</p>
+              </div>
+              <p className="text-3xl font-semibold">{overview?.patients.total ?? 0}</p>
+              <p className="text-xs text-muted-foreground">Registered patients in current feed</p>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border">
+            <CardContent className="p-4">
+              <div className="mb-2 flex items-center gap-2">
+                <Building2 className="size-4 text-primary" />
+                <p className="text-sm font-semibold">Supplier Unpaid</p>
+              </div>
+              <p className="text-3xl font-semibold">
+                {formatDualCurrency(implantSupplierData.totalUnpaid)}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {implantSupplierData.unpaidCount} implant teeth still unpaid
+              </p>
             </CardContent>
           </Card>
         </div>

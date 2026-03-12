@@ -13,24 +13,16 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { CreateInvoiceUseCase } from '@/modules/dental-management/application/use-cases/invoices/create-invoice-use-case';
 import { type Patient } from '@/modules/dental-management/domain/entities/Patient';
-import { CreatePaymentUseCase } from '@/modules/dental-management/application/use-cases/payments/create-payment-use-case';
 import { ListStaffUseCase } from '@/modules/dental-management/application/use-cases/staff/list-staff-use-case';
 import { ListTreatmentsUseCase } from '@/modules/dental-management/application/use-cases/treatments/list-treatments-use-case';
-import { CreateVisitTreatmentUseCase } from '@/modules/dental-management/application/use-cases/visit-treatments/create-visit-treatment-use-case';
 import { ListVisitTreatmentsUseCase } from '@/modules/dental-management/application/use-cases/visit-treatments/list-visit-treatments-use-case';
-import { CreateVisitUseCase } from '@/modules/dental-management/application/use-cases/visits/create-visit-use-case';
 import { ListVisitsUseCase } from '@/modules/dental-management/application/use-cases/visits/list-visits-use-case';
-import { type Invoice } from '@/modules/dental-management/domain/entities/Invoice';
-import { type Payment } from '@/modules/dental-management/domain/entities/Payment';
 import { type Staff } from '@/modules/dental-management/domain/entities/Staff';
 import { type Treatment } from '@/modules/dental-management/domain/entities/Treatment';
 import { type Visit } from '@/modules/dental-management/domain/entities/Visit';
 import { type VisitTreatment } from '@/modules/dental-management/domain/entities/VisitTreatment';
-import { InvoiceRepository } from '@/modules/dental-management/infrastructure/repositories/invoice-repository';
 import { PatientRepository } from '@/modules/dental-management/infrastructure/repositories/patient-repository';
-import { PaymentRepository } from '@/modules/dental-management/infrastructure/repositories/payment-repository';
 import { StaffRepository } from '@/modules/dental-management/infrastructure/repositories/staff-repository';
 import { TreatmentRepository } from '@/modules/dental-management/infrastructure/repositories/treatment-repository';
 import { VisitTreatmentRepository } from '@/modules/dental-management/infrastructure/repositories/visit-treatment-repository';
@@ -65,6 +57,11 @@ type ImplantPlanningForm = {
   boneWidthMm: string;
   dentistId: string;
   imagingType: ImagingType;
+  implantCompanyDate: string;
+  implantCompanyId: string;
+  implantCompanyName: string;
+  implantCompanyNote: string;
+  implantCompanyType: string;
   implantArch: ImplantArch;
   implantDiameterMm: string;
   implantLengthMm: string;
@@ -105,16 +102,12 @@ type SaveSummary = {
   visitId: number;
 };
 
-type SessionTaskStatus = 'pending' | 'in_progress' | 'done';
-type SessionTaskMark = 'green' | 'blue' | 'yellow' | 'orange' | 'red' | 'purple';
-type ImplantAvailabilityStatus = 'not_available' | 'in_purchase' | 'available' | 'done';
-type SessionTask = {
+type ImplantCompanyRecord = {
+  companyName: string;
   id: number;
-  mark: SessionTaskMark;
-  notes?: string;
-  patientId: number;
-  status: SessionTaskStatus;
-  title: string;
+  implantType: string;
+  note?: string;
+  recordDate?: string;
 };
 
 const RISK_FACTOR_LABELS: Record<RiskFactorKey, string> = {
@@ -126,25 +119,17 @@ const RISK_FACTOR_LABELS: Record<RiskFactorKey, string> = {
   uncontrolledDiabetes: 'Uncontrolled diabetes',
 };
 
-const IMPLANT_TASK_MARKER = 'implant_tooth';
-const AVAILABILITY_TO_TASK_STATUS: Record<ImplantAvailabilityStatus, SessionTaskStatus> = {
-  available: 'in_progress',
-  done: 'done',
-  in_purchase: 'in_progress',
-  not_available: 'pending',
-};
-const AVAILABILITY_TO_TASK_MARK: Record<ImplantAvailabilityStatus, SessionTaskMark> = {
-  available: 'green',
-  done: 'blue',
-  in_purchase: 'yellow',
-  not_available: 'red',
-};
 
-const DEFAULT_FORM: ImplantPlanningForm = {
+const buildDefaultForm = (): ImplantPlanningForm => ({
   boneHeightMm: '',
   boneWidthMm: '',
   dentistId: '',
   imagingType: 'cbct',
+  implantCompanyDate: new Date().toISOString().slice(0, 10),
+  implantCompanyId: '',
+  implantCompanyName: '',
+  implantCompanyNote: '',
+  implantCompanyType: '',
   implantArch: 'maxilla',
   implantDiameterMm: '',
   implantLengthMm: '',
@@ -165,7 +150,7 @@ const DEFAULT_FORM: ImplantPlanningForm = {
   surgeryGuideType: 'pilot',
   treatmentId: '',
   visitDate: '',
-};
+});
 
 const toNumber = (value: string): number | null => {
   const parsed = Number.parseFloat(value);
@@ -183,34 +168,7 @@ const truncate = (value: string, maxLength: number): string => {
   return value.length > maxLength ? value.slice(0, maxLength) : value;
 };
 
-const extractImplantToothFromTask = (task: Pick<SessionTask, 'notes' | 'title'>): string | null => {
-  const notesMatch = task.notes?.match(/\[implant_tooth:([0-9]{2})\]/i);
-  if (notesMatch?.[1]) {
-    return notesMatch[1];
-  }
 
-  const titleMatch = task.title.match(/([0-9]{2})/);
-  return titleMatch?.[1] ?? null;
-};
-
-const buildImplantTaskTitle = (toothNumber: string): string => `Implant Tooth ${toothNumber}`;
-const buildImplantTaskNotes = (
-  toothNumber: string,
-  availability: ImplantAvailabilityStatus,
-  supplierPaid: number,
-  supplierTotal: number
-): string =>
-  `[${IMPLANT_TASK_MARKER}:${toothNumber}] [implant_availability:${availability}] [supplier_paid:${supplierPaid.toFixed(2)}] [supplier_total:${supplierTotal.toFixed(2)}]`;
-const buildImplantTaskPayload = (
-  toothNumber: string,
-  availability: ImplantAvailabilityStatus,
-  supplier: { paid: number; total: number }
-): Pick<SessionTask, 'mark' | 'notes' | 'status' | 'title'> => ({
-  mark: AVAILABILITY_TO_TASK_MARK[availability],
-  notes: buildImplantTaskNotes(toothNumber, availability, supplier.paid, supplier.total),
-  status: AVAILABILITY_TO_TASK_STATUS[availability],
-  title: buildImplantTaskTitle(toothNumber),
-});
 
 const formatCurrency = (value: number): string => {
   return new Intl.NumberFormat('en-US', {
@@ -356,7 +314,7 @@ const getRiskLevel = (score: number): { label: string; tone: 'default' | 'second
 export default function ImplantsPage(): JSX.Element {
   const tSidebar = useTranslations('sidebar.dentalManagement');
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<ImplantPlanningForm>(DEFAULT_FORM);
+  const [form, setForm] = useState<ImplantPlanningForm>(() => buildDefaultForm());
   const [isSavingPlan, setIsSavingPlan] = useState(false);
   const [saveSummary, setSaveSummary] = useState<SaveSummary | null>(null);
   const [selectedTeethByPatient, setSelectedTeethByPatient] = useState<Record<string, string[]>>({});
@@ -436,6 +394,23 @@ export default function ImplantsPage(): JSX.Element {
     refetchOnWindowFocus: false,
     staleTime: 5 * 60 * 1000,
   });
+  const { data: implantCompanies = [], isFetching: isLoadingImplantCompanies } = useQuery<ImplantCompanyRecord[]>({
+    queryFn: async () => {
+      const client = new AxiosClient();
+      const response = await client.get<ImplantCompanyRecord[]>(
+        '/api/v1/dental-management/implant-companies'
+      );
+
+      if (!response.success || !response.data) {
+        return [];
+      }
+
+      return response.data;
+    },
+    queryKey: ['implant-company-options'],
+    refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000,
+  });
   const { data: patientVisits = [], isFetching: isLoadingPatientVisits } = useQuery<Visit[]>({
     enabled: Boolean(form.patientId),
     queryFn: async () => {
@@ -473,28 +448,6 @@ export default function ImplantsPage(): JSX.Element {
     refetchOnWindowFocus: false,
     staleTime: 60 * 1000,
   });
-  const { data: patientSessionTasks = [] } = useQuery<SessionTask[]>({
-    enabled: Boolean(form.patientId),
-    queryFn: async () => {
-      if (!form.patientId) {
-        return [];
-      }
-
-      const client = new AxiosClient();
-      const response = await client.get<SessionTask[]>(
-        `/api/v1/dental-management/patients/${form.patientId}/session-tasks`
-      );
-
-      if (!response.success || !response.data) {
-        return [];
-      }
-
-      return response.data;
-    },
-    queryKey: patientTasksQueryKey,
-    refetchOnWindowFocus: false,
-    staleTime: 60 * 1000,
-  });
   const { data: implantTeethFromChart = [], isFetching: isLoadingImplantTeeth } = useQuery<string[]>({
     enabled: Boolean(form.patientId),
     queryFn: async () => {
@@ -505,7 +458,7 @@ export default function ImplantsPage(): JSX.Element {
       try {
         const visitRepository = new VisitRepository();
         const listVisitsUseCase = new ListVisitsUseCase(visitRepository);
-        const allVisitIds: string[] = [];
+        const allVisits: Visit[] = [];
         let visitPage = 1;
         let lastVisitPage = 1;
 
@@ -522,46 +475,57 @@ export default function ImplantsPage(): JSX.Element {
             return [];
           }
 
-          visitResponse.data.data.forEach((visit) => {
-            allVisitIds.push(String(visit.id));
-          });
+          allVisits.push(...visitResponse.data.data);
           lastVisitPage = visitResponse.data.meta?.lastPage ?? visitPage;
           visitPage += 1;
         } while (visitPage <= lastVisitPage);
 
-        if (allVisitIds.length === 0) {
+        if (allVisits.length === 0) {
           return [];
         }
 
+        const resolveVisitTimestamp = (visit: Visit): number => {
+          const visitDateTimestamp = Date.parse(visit.visitDate ?? '');
+          if (!Number.isNaN(visitDateTimestamp)) {
+            return visitDateTimestamp;
+          }
+
+          const createdAtTimestamp = Date.parse(visit.createdAt ?? '');
+          if (!Number.isNaN(createdAtTimestamp)) {
+            return createdAtTimestamp;
+          }
+
+          return 0;
+        };
+
+        const latestVisit = allVisits.reduce((current, visit) => {
+          return resolveVisitTimestamp(visit) > resolveVisitTimestamp(current) ? visit : current;
+        });
+        const latestVisitId = String(latestVisit.id);
         const visitTreatmentRepository = new VisitTreatmentRepository();
         const listVisitTreatmentsUseCase = new ListVisitTreatmentsUseCase(visitTreatmentRepository);
         const allVisitTreatments: VisitTreatment[] = [];
-        const chunkSize = 30;
+        let visitTreatmentPage = 1;
+        let lastVisitTreatmentPage = 1;
 
-        for (let index = 0; index < allVisitIds.length; index += chunkSize) {
-          const visitIdChunk = allVisitIds.slice(index, index + chunkSize);
-          let visitTreatmentPage = 1;
-          let lastVisitTreatmentPage = 1;
+        do {
+          const visitTreatmentResponse = await listVisitTreatmentsUseCase.execute(
+            '',
+            [],
+            [],
+            { visitId: [latestVisitId] },
+            visitTreatmentPage,
+            100
+          );
 
-          do {
-            const visitTreatmentResponse = await listVisitTreatmentsUseCase.execute(
-              '',
-              [],
-              [],
-              { visitId: visitIdChunk },
-              visitTreatmentPage,
-              100
-            );
+          if (visitTreatmentResponse.error || !visitTreatmentResponse.data) {
+            break;
+          }
 
-            if (visitTreatmentResponse.error || !visitTreatmentResponse.data) {
-              break;
-            }
-
-            allVisitTreatments.push(...visitTreatmentResponse.data.data);
-            lastVisitTreatmentPage = visitTreatmentResponse.data.meta?.lastPage ?? visitTreatmentPage;
-            visitTreatmentPage += 1;
-          } while (visitTreatmentPage <= lastVisitTreatmentPage);
-        }
+          allVisitTreatments.push(...visitTreatmentResponse.data.data);
+          lastVisitTreatmentPage = visitTreatmentResponse.data.meta?.lastPage ?? visitTreatmentPage;
+          visitTreatmentPage += 1;
+        } while (visitTreatmentPage <= lastVisitTreatmentPage);
 
         return extractImplantTeeth(allVisitTreatments);
       } catch {
@@ -669,24 +633,6 @@ export default function ImplantsPage(): JSX.Element {
     return client;
   };
 
-  const implantTasksByTooth = useMemo<Record<string, SessionTask>>(() => {
-    const byTooth: Record<string, SessionTask> = {};
-    patientSessionTasks.forEach((task) => {
-      const toothNumber = extractImplantToothFromTask(task);
-      if (!toothNumber) {
-        return;
-      }
-
-      const notes = task.notes ?? '';
-      if (!notes.includes(IMPLANT_TASK_MARKER) && !task.title.toLowerCase().includes('implant tooth')) {
-        return;
-      }
-
-      byTooth[toothNumber] = task;
-    });
-
-    return byTooth;
-  }, [patientSessionTasks]);
 
   const checklist = useMemo<ChecklistItem[]>(() => {
     const hasSite = Boolean(form.patientId && selectedImplantTeeth.length > 0);
@@ -745,6 +691,16 @@ export default function ImplantsPage(): JSX.Element {
       }))
       .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: 'base' })),
     [allPatients]
+  );
+  const implantCompanyOptions = useMemo(
+    () => implantCompanies
+      .map((company) => ({
+        id: String(company.id),
+        label: `${company.companyName} — ${company.implantType}${company.recordDate ? ` (${company.recordDate})` : ''}`,
+        record: company,
+      }))
+      .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: 'base' })),
+    [implantCompanies]
   );
   const dentistOptions = useMemo(
     () => allStaff
@@ -906,204 +862,43 @@ export default function ImplantsPage(): JSX.Element {
     try {
       const today = new Date().toISOString().slice(0, 10);
       const recordDate = form.visitDate || today;
-
-      const visitRepository = new VisitRepository();
-      const visitTreatmentRepository = new VisitTreatmentRepository();
-      const invoiceRepository = new InvoiceRepository();
-      const paymentRepository = new PaymentRepository();
-
-      const createVisitUseCase = new CreateVisitUseCase(visitRepository);
-      const createVisitTreatmentUseCase = new CreateVisitTreatmentUseCase(visitTreatmentRepository);
-      const createInvoiceUseCase = new CreateInvoiceUseCase(invoiceRepository);
-      const createPaymentUseCase = new CreatePaymentUseCase(paymentRepository);
-
-      let visitId = Number(form.linkedVisitId);
-      const hasExistingVisit = Number.isFinite(visitId) && visitId > 0;
-      let dentistId = Number(form.dentistId);
-
-      if (hasExistingVisit) {
-        const linkedVisitDentist = Number(selectedLinkedVisit?.dentistId);
-        if (Number.isFinite(linkedVisitDentist) && linkedVisitDentist > 0) {
-          dentistId = linkedVisitDentist;
-        }
-      }
-
-      if (!hasExistingVisit) {
-        if (!Number.isFinite(dentistId) || dentistId <= 0) {
-          toast.error('A valid dentist is required to create a new implant visit.');
-          return;
-        }
-
-        const patientCodeTagPart = (selectedPatient?.patientCode ?? form.patientId).replace(/\s+/g, '-');
-        const generatedTag = truncate(`implant-${patientCodeTagPart}-${recordDate.replace(/-/g, '')}`, 100);
-        const diagnosisNotes = truncate(
-          [form.notes.trim(), '[implant-planning-sheet]'].filter(Boolean).join(' | '),
-          255
-        );
-
-        const visitResponse = await createVisitUseCase.execute({
-          appointmentId: undefined,
-          createdBy: undefined,
-          deletedBy: undefined,
-          dentistId: String(dentistId),
-          diagnosisNotes: diagnosisNotes || undefined,
-          invoices: undefined,
-          nextVisitDate: undefined,
-          patientId: form.patientId,
-          tag: generatedTag,
-          updatedBy: undefined,
+      const planningClient = await fetchCsrfClient();
+      const planningResponse = await planningClient.post<SaveSummary>(
+        '/api/v1/dental-management/implant-planning',
+        {
+          dentistId: form.dentistId ? Number(form.dentistId) : undefined,
+          implantArch: form.implantArch,
+          implantCompanyDate: form.implantCompanyDate || recordDate,
+          implantCompanyId: form.implantCompanyId ? Number(form.implantCompanyId) : undefined,
+          implantCompanyName: form.implantCompanyName.trim() || undefined,
+          implantCompanyNote: form.implantCompanyNote.trim() || undefined,
+          implantCompanyType: form.implantCompanyType.trim() || undefined,
+          implantDiameterMm: form.implantDiameterMm,
+          implantLengthMm: form.implantLengthMm,
+          implantPricePerTooth,
+          implantSystem: form.implantSystem.trim() || undefined,
+          implantTeeth: selectedImplantTeeth,
+          linkedVisitId: form.linkedVisitId ? Number(form.linkedVisitId) : undefined,
+          loadingProtocol: form.loadingProtocol,
+          notes: form.notes.trim() || undefined,
+          paidNowAmount: paidNowAmount,
+          patientId: Number(form.patientId),
+          paymentMethod: form.paymentMethod,
+          supplierCostPerTooth,
+          treatmentId: Number(form.treatmentId),
           visitDate: recordDate,
-          visitTreatments: undefined,
-        });
-
-        if (!visitResponse.success || !visitResponse.data) {
-          toast.error(visitResponse.error?.message || 'Failed to create visit record.');
-          return;
         }
+      );
 
-        visitId = Number(visitResponse.data.id);
-      }
-
-      if (!Number.isFinite(visitId) || visitId <= 0) {
-        toast.error('Unable to resolve visit for implant record.');
+      if (!planningResponse.success || !planningResponse.data) {
+        toast.error(planningResponse.error?.message || 'Failed to save implant planning data.');
         return;
       }
 
-      if (!Number.isFinite(dentistId) || dentistId <= 0) {
-        toast.error('Unable to resolve dentist for implant record.');
-        return;
-      }
-
-      const treatmentId = Number(form.treatmentId);
-      if (!Number.isFinite(treatmentId) || treatmentId <= 0) {
-        toast.error('Invalid treatment selected.');
-        return;
-      }
-
-      for (const toothNumber of selectedImplantTeeth) {
-        const noteParts = [
-          '[condition:implant]',
-          `[tooth:${toothNumber}]`,
-          `[patientPrice:${implantPricePerTooth.toFixed(2)}]`,
-          `[supplierCost:${supplierCostPerTooth.toFixed(2)}]`,
-          `[diameter:${asText(form.implantDiameterMm) || '-'}]`,
-          `[length:${asText(form.implantLengthMm) || '-'}]`,
-          `[arch:${form.implantArch}]`,
-          `[protocol:${form.loadingProtocol}]`,
-          form.notes.trim(),
-        ];
-        const treatmentNote = truncate(noteParts.filter(Boolean).join(' '), 255);
-
-        const visitTreatmentResponse = await createVisitTreatmentUseCase.execute({
-          createdBy: undefined,
-          deletedBy: undefined,
-          dentistId: String(dentistId),
-          material: truncate(form.implantSystem.trim(), 255) || undefined,
-          notes: treatmentNote || undefined,
-          price: implantPricePerTooth.toFixed(2),
-          toothId: undefined,
-          toothNumber,
-          treatmentId: String(treatmentId),
-          updatedBy: undefined,
-          visitId: String(visitId),
-        });
-
-        if (!visitTreatmentResponse.success) {
-          toast.error(visitTreatmentResponse.error?.message || `Failed to save implant tooth ${toothNumber}.`);
-          return;
-        }
-      }
-
-      const invoiceResponse = await createInvoiceUseCase.execute({
-        createdBy: undefined,
-        currency: 'AFN',
-        deletedBy: undefined,
-        discount: '0.00',
-        exchangeRate: 1,
-        invoiceDate: recordDate,
-        netAmount: invoiceNetAmount.toFixed(2),
-        notes: truncate(form.notes.trim(), 255) || undefined,
-        patientId: Number(form.patientId),
-        payments: undefined,
-        paymentType: form.paymentMethod,
-        sourceVisitIds: [visitId],
-        status: effectiveInvoiceStatus,
-        totalAmount: totalSelectedImplantsPayment.toFixed(2),
-        updatedBy: undefined,
-        visitId,
-      } as Omit<Invoice, 'id' | 'createdAt' | 'updatedAt'>);
-
-      if (!invoiceResponse.success || !invoiceResponse.data) {
-        toast.error(invoiceResponse.error?.message || 'Implant records saved, but invoice creation failed.');
-        return;
-      }
-
-      const createdInvoiceId = Number(invoiceResponse.data.id);
-      let createdPaymentId: number | undefined;
-
-      if (paidNowAmount > 0 && Number.isFinite(createdInvoiceId) && createdInvoiceId > 0) {
-        const paymentResponse = await createPaymentUseCase.execute({
-          amount: paidNowAmount.toFixed(2),
-          createdBy: undefined,
-          currency: 'AFN',
-          deletedBy: undefined,
-          exchangeRate: 1,
-          invoiceId: String(createdInvoiceId),
-          method: form.paymentMethod,
-          notes: 'Initial payment from implant planning flow.',
-          paymentDate: recordDate,
-          updatedBy: undefined,
-        } as Omit<Payment, 'id' | 'createdAt' | 'updatedAt'>);
-
-        if (!paymentResponse.success) {
-          toast.error('Implant and invoice saved, but payment save failed.');
-        } else {
-          createdPaymentId = Number(paymentResponse.data?.id);
-        }
-      }
-
-      if (form.patientId) {
-        try {
-          const taskClient = await fetchCsrfClient();
-
-          for (const toothNumber of selectedImplantTeeth) {
-            const existingTask = implantTasksByTooth[toothNumber];
-            if (existingTask) {
-              continue;
-            }
-
-            const taskResponse = await taskClient.post<SessionTask>(
-              `/api/v1/dental-management/patients/${form.patientId}/session-tasks`,
-              buildImplantTaskPayload(toothNumber, 'not_available', {
-                paid: 0,
-                total: supplierCostPerTooth,
-              })
-            );
-
-            if (!taskResponse.success) {
-              toast.error(`Implant saved, but tooth ${toothNumber} lifecycle card could not be created.`);
-            }
-          }
-
-          await queryClient.invalidateQueries({ queryKey: patientTasksQueryKey });
-        } catch {
-          toast.error('Implant saved, but lifecycle cards could not be synced.');
-        }
-      }
-
-      setSaveSummary({
-        createdVisit: !hasExistingVisit,
-        invoiceId: createdInvoiceId,
-        paidNowAmount,
-        paymentId: createdPaymentId,
-        remainingDebt: remainingDebtAmount,
-        savedAt: new Date().toISOString(),
-        supplierRemainingAmount,
-        supplierTotalCost: totalSupplierCost,
-        treatmentCount: selectedImplantTeeth.length,
-        visitId,
-      });
-
+      setSaveSummary(planningResponse.data);
+      await queryClient.invalidateQueries({ queryKey: patientTasksQueryKey });
+      await queryClient.invalidateQueries({ queryKey: ['implant-company-options'] });
+      await queryClient.invalidateQueries({ queryKey: ['implant-patient-visits', form.patientId] });
       toast.success('Implant planning data saved to patient records and billing.');
     } finally {
       setIsSavingPlan(false);
@@ -1379,6 +1174,83 @@ export default function ImplantsPage(): JSX.Element {
                     readOnly
                   />
                 </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Select
+                    value={form.implantCompanyId || undefined}
+                    onValueChange={(value) => {
+                      const selected = implantCompanyOptions.find((option) => option.id === value);
+                      if (!selected) {
+                        setForm((prev) => ({
+                          ...prev,
+                          implantCompanyId: value,
+                        }));
+                        return;
+                      }
+
+                      setForm((prev) => ({
+                        ...prev,
+                        implantCompanyDate: selected.record.recordDate || prev.implantCompanyDate,
+                        implantCompanyId: value,
+                        implantCompanyName: selected.record.companyName,
+                        implantCompanyNote: selected.record.note ?? '',
+                        implantCompanyType: selected.record.implantType,
+                      }));
+                    }}
+                    disabled={isLoadingImplantCompanies || implantCompanyOptions.length === 0}
+                  >
+                    <SelectTrigger>
+                      <SelectValue
+                        placeholder={isLoadingImplantCompanies ? 'Loading companies...' : 'Select saved company (optional)'}
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {implantCompanyOptions.map((option) => (
+                        <SelectItem key={option.id} value={option.id}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    placeholder="Company name"
+                    value={form.implantCompanyName}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setForm((prev) => ({
+                        ...prev,
+                        implantCompanyId: prev.implantCompanyId && prev.implantCompanyName !== value ? '' : prev.implantCompanyId,
+                        implantCompanyName: value,
+                      }));
+                    }}
+                  />
+                  <Input
+                    placeholder="Implant type"
+                    value={form.implantCompanyType}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setForm((prev) => ({
+                        ...prev,
+                        implantCompanyId: prev.implantCompanyId && prev.implantCompanyType !== value ? '' : prev.implantCompanyId,
+                        implantCompanyType: value,
+                      }));
+                    }}
+                  />
+                  <Input
+                    type="date"
+                    value={form.implantCompanyDate}
+                    onChange={(event) => {
+                      setField('implantCompanyDate', event.target.value);
+                    }}
+                  />
+                  <Input
+                    className="md:col-span-2"
+                    placeholder="Company note"
+                    value={form.implantCompanyNote}
+                    onChange={(event) => {
+                      setField('implantCompanyNote', event.target.value);
+                    }}
+                  />
+                </div>
                 <p className="text-xs text-muted-foreground">
                   Company payment is handled in the implants in-process page when status changes to in purchase.
                 </p>
@@ -1563,7 +1435,7 @@ export default function ImplantsPage(): JSX.Element {
                   variant="outline"
                   disabled={isSavingPlan}
                   onClick={() => {
-                    setForm(DEFAULT_FORM);
+                    setForm(buildDefaultForm());
                   }}
                 >
                   <RefreshCcw className="me-2 size-4" />

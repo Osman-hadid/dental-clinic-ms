@@ -28,9 +28,12 @@ export const ExecutiveReportPanel = ({
   onSaveSchedule,
   schedule,
   snapshots,
-}: Props): JSX.Element => (
-  <div className="space-y-4">
-    <div className="grid gap-4 md:grid-cols-3">
+}: Props): JSX.Element => {
+  const totalUnpaidAll = data.kpis?.thirdCompanyUnpaid ?? 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 md:grid-cols-4">
       <MetricCard
         emphasize
         label="Money in safe now"
@@ -39,16 +42,22 @@ export const ExecutiveReportPanel = ({
       />
       <MetricCard
         emphasize
-        label="Total unpaid money"
+        label="Total Debts"
         tone="danger"
         value={formatCurrency(data.kpis?.debt ?? 0, 'AFN')}
+      />
+      <MetricCard
+        emphasize
+        label="Total unpaid money"
+        tone="danger"
+        value={formatCurrency(totalUnpaidAll, 'AFN')}
       />
       <MetricCard
         emphasize
         label="Profit after costs"
         value={formatCurrency(data.profitLoss ?? 0, 'AFN')}
       />
-    </div>
+      </div>
 
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       <MetricCard label="Total billed to patients" value={formatCurrency(data.kpis?.billed ?? 0, 'AFN')} />
@@ -231,5 +240,6 @@ export const ExecutiveReportPanel = ({
         </CardContent>
       </Card>
     </div>
-  </div>
-);
+    </div>
+  );
+};

@@ -8,9 +8,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
+use App\Modules\Common\Domain\Entities\Concerns\HasUserStamps;
 
 final class Debt extends Model
 {
+    use HasUserStamps;
     use LogsActivity;
 
     protected $fillable = [

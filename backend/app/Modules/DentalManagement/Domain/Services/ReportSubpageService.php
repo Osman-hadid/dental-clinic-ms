@@ -318,6 +318,7 @@ final class ReportSubpageService
                     'notes' => $this->text($row->notes),
                     'pickedByStaffId' => (int) ($row->picked_by_staff_id ?? 0),
                     'pickedByStaffName' => $this->text($row->pickedByStaff?->full_name, $row->picked_by_staff_id ? "Staff #{$row->picked_by_staff_id}" : ''),
+                    'sourceType' => $this->text($row->source_type),
                     'transactionDate' => $this->dateString($row->transaction_date),
                 ];
             })

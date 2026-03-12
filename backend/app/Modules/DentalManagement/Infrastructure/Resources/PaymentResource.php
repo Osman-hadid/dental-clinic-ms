@@ -7,9 +7,12 @@ namespace App\Modules\DentalManagement\Infrastructure\Resources;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Collection;
+use App\Modules\Common\Infrastructure\Resources\Concerns\ResolvesUserStamps;
 
 class PaymentResource extends JsonResource
 {
+    use ResolvesUserStamps;
+
     public function toArray(Request $request): array
     {
         return $this->filterEmpty([
@@ -22,8 +25,8 @@ class PaymentResource extends JsonResource
             'exchangeRate' => $this->exchange_rate,
             'method' => $this->method,
             'notes' => $this->notes,
-            'createdBy' => $this->created_by,
-            'updatedBy' => $this->updated_by,
+            'createdBy' => $this->resolveUserStampName($this->created_by),
+            'updatedBy' => $this->resolveUserStampName($this->updated_by),
             'deletedBy' => $this->deleted_by,
             'invoice' => $this->invoice,
             'createdAt' => $this->created_at?->toIso8601String(),

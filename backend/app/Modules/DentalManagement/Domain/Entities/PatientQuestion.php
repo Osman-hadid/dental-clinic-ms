@@ -7,9 +7,11 @@ namespace App\Modules\DentalManagement\Domain\Entities;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Modules\Common\Domain\Entities\Concerns\HasUserStamps;
 
 final class PatientQuestion extends Model
 {
+    use HasUserStamps;
     use SoftDeletes;
 
     protected $fillable = [

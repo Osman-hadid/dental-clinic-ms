@@ -7,7 +7,7 @@ import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, Res
 
 export const FinancialReportPanel = ({ data }: { data: FinancialData }): JSX.Element => (
   <div className="space-y-4">
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="grid gap-4 md:grid-cols-5">
       <MetricCard
         emphasize
         label="Money in safe now"
@@ -16,9 +16,20 @@ export const FinancialReportPanel = ({ data }: { data: FinancialData }): JSX.Ele
       />
       <MetricCard
         emphasize
-        label="Total unpaid money"
+        label="Total Debts"
         tone="danger"
         value={formatCurrency(data.summary.outstanding, 'AFN')}
+      />
+      <MetricCard
+        emphasize
+        label="Total unpaid money"
+        tone="danger"
+        value={formatCurrency(data.summary.thirdCompanyUnpaid, 'AFN')}
+      />
+      <MetricCard
+        emphasize
+        label="Total third company paid"
+        value={formatCurrency(data.summary.thirdCompanyPaid ?? 0, 'AFN')}
       />
       <MetricCard
         emphasize
@@ -250,6 +261,53 @@ export const FinancialReportPanel = ({ data }: { data: FinancialData }): JSX.Ele
                 )) : (
                   <tr className="border-t">
                     <td colSpan={4} className="px-3 py-6 text-center text-muted-foreground">No safe activity was found for the selected filters.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+
+    <div className="grid gap-4">
+      <Card className="rounded-3xl border">
+        <CardHeader>
+          <CardTitle>Implant company records</CardTitle>
+          <CardDescription>Supplier costs grouped by implant company and implant type.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto rounded-2xl border">
+            <table className="min-w-full text-sm">
+              <thead className="bg-muted/30 text-left text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2">Company</th>
+                  <th className="px-3 py-2">Implant Type</th>
+                  <th className="px-3 py-2">Teeth</th>
+                  <th className="px-3 py-2">Total</th>
+                  <th className="px-3 py-2">Paid</th>
+                  <th className="px-3 py-2">Unpaid</th>
+                  <th className="px-3 py-2">Date</th>
+                  <th className="px-3 py-2">Note</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.tables.implantCompanyRecords.length > 0 ? data.tables.implantCompanyRecords.map((row, index) => (
+                  <tr key={`${String(row.companyId ?? 'company')}-${index}`} className="border-t">
+                    <td className="px-3 py-2 font-medium">{String(row.companyName ?? '-')}</td>
+                    <td className="px-3 py-2">{String(row.implantType ?? '-')}</td>
+                    <td className="px-3 py-2">{Number(row.implantCount ?? 0)}</td>
+                    <td className="px-3 py-2">{formatCurrency(Number(row.supplierTotal ?? 0), 'AFN')}</td>
+                    <td className="px-3 py-2 text-emerald-700">{formatCurrency(Number(row.supplierPaid ?? 0), 'AFN')}</td>
+                    <td className="px-3 py-2 text-rose-600">{formatCurrency(Number(row.supplierRemaining ?? 0), 'AFN')}</td>
+                    <td className="px-3 py-2">{String(row.recordDate ?? '-')}</td>
+                    <td className="px-3 py-2">{String(row.note ?? '-')}</td>
+                  </tr>
+                )) : (
+                  <tr className="border-t">
+                    <td colSpan={8} className="px-3 py-6 text-center text-muted-foreground">
+                      No implant company records matched the selected filters.
+                    </td>
                   </tr>
                 )}
               </tbody>

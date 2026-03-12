@@ -6,9 +6,11 @@ namespace App\Modules\DentalManagement\Domain\Entities;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Modules\Common\Domain\Entities\Concerns\HasUserStamps;
 
 final class PatientQuestionAnswer extends Model
 {
+    use HasUserStamps;
     protected $fillable = [
         'patient_id',
         'patient_question_id',

@@ -35,7 +35,7 @@ final class UpdatePatientRequest extends BaseFormRequest
                 Rule::unique(table: 'patients', column: 'email')->ignore(id: $this->route(param: 'patient')),
             ],
             'address' => 'nullable|string|max:255',
-            'bloodGroup' => 'nullable|string|max:255',
+            'bloodGroup' => 'nullable|string|in:A+,A-,B+,B-,AB+,AB-,O+,O-',
             'emergencyContact' => 'nullable|string|max:255',
             'enabled' => 'nullable|boolean',
             'status' => 'nullable|string|in:pending,approved,rejected',

@@ -9,9 +9,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
+use App\Modules\Common\Domain\Entities\Concerns\HasUserStamps;
 
 final class Module extends Model
 {
+    use HasUserStamps;
     use LogsActivity;
 
     protected $fillable = [

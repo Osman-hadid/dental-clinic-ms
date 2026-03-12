@@ -181,11 +181,21 @@ export default function PatientsPage(): JSX.Element {
       return [];
     }
 
+    const searchTokens = tokenizeSearchValue(trimmedSearch);
+
     return searchResults
-      .filter((patient) => buildPatientSearchBlob(patient).includes(normalizedSearch))
+      .filter((patient) => {
+        const searchBlob = buildPatientSearchBlob(patient);
+        
+        // Check if all search tokens are found in the search blob
+        return searchTokens.every(token => {
+          const normalizedToken = normalizeSearchValue(token);
+          return searchBlob.includes(normalizedToken);
+        });
+      })
       .sort((left, right) => {
-        const leftScore = computeHumanSearchScore(left, normalizedSearch);
-        const rightScore = computeHumanSearchScore(right, normalizedSearch);
+        const leftScore = computeHumanSearchScore(left, trimmedSearch);
+        const rightScore = computeHumanSearchScore(right, trimmedSearch);
 
         if (leftScore !== rightScore) {
           return leftScore - rightScore;

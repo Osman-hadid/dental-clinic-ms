@@ -7,9 +7,11 @@ namespace App\Modules\DentalManagement\Domain\Entities;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Modules\Common\Domain\Entities\Concerns\HasUserStamps;
 
 final class DentalBackupSchedule extends Model
 {
+    use HasUserStamps;
     protected $fillable = [
         'frequency',
         'run_at_time',

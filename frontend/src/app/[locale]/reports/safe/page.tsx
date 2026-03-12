@@ -24,6 +24,7 @@ type SafeRow = {
   notes: string;
   pickedByStaffId: number;
   pickedByStaffName: string;
+  sourceType?: string;
   transactionDate: string;
 };
 
@@ -67,6 +68,22 @@ const extractApiErrorMessage = (error: unknown, fallback: string): string => {
     return `Safe balance is not enough. Current: ${formatCurrency(currentBalance, 'AFN')}. Requested: ${formatCurrency(requestedAmount, 'AFN')}.`;
   }
 
+  if (code === 'SAFE_TRANSACTION_READ_ONLY') {
+    return payload?.message || 'System generated safe entries cannot be edited or deleted.';
+  }
+
+  const validationErrors = (response as { data?: { errors?: Record<string, string[] | string> } })?.data?.errors;
+  if (validationErrors) {
+    const firstKey = Object.keys(validationErrors)[0];
+    const firstValue = validationErrors[firstKey];
+    if (Array.isArray(firstValue)) {
+      return firstValue[0] || fallback;
+    }
+    if (typeof firstValue === 'string') {
+      return firstValue;
+    }
+  }
+
   return payload?.message || fallback;
 };
 
@@ -95,11 +112,11 @@ export default function SafePage(): JSX.Element {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchData = useCallback(async (pageNumber = page): Promise<void> => {
+  const fetchData = useCallback(async (pageNumber: number): Promise<void> => {
     setIsLoading(true);
     try {
       const data = await fetchReport<SafeReportResponse>('/api/v1/dental-management/reports/safe', {
-        direction,
+        direction: direction === 'all' ? undefined : direction,
         endDate,
         entryType,
         page: pageNumber,
@@ -114,7 +131,7 @@ export default function SafePage(): JSX.Element {
     } finally {
       setIsLoading(false);
     }
-  }, [direction, endDate, entryType, page, search, startDate]);
+  }, [direction, endDate, entryType, search, startDate]);
 
   useEffect(() => {
     void fetchData(1);
@@ -324,9 +341,13 @@ export default function SafePage(): JSX.Element {
                               <td className="px-3 py-2">{row.pickedByStaffName || '-'}</td>
                               <td className="px-3 py-2">{row.notes || '-'}</td>
                               <td className="px-3 py-2">
-                                <Button type="button" variant="ghost" size="icon" onClick={() => removeRow(row.id)}>
-                                  <Trash2 className="size-4" />
-                                </Button>
+                                {row.sourceType ? (
+                                  <span className="text-xs text-muted-foreground">System</span>
+                                ) : (
+                                  <Button type="button" variant="ghost" size="icon" onClick={() => removeRow(row.id)}>
+                                    <Trash2 className="size-4" />
+                                  </Button>
+                                )}
                               </td>
                             </tr>
                           ))}

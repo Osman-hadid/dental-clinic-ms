@@ -202,10 +202,44 @@ export const patientConfig: EntityModuleConfig = {
       label: 'config.form.bloodGroup.label',
       name: 'bloodGroup',
       required: false,
-      type: 'text',
+      type: 'select',
       validation: {
-        maxLength: { value: 255, message: 'config.form.bloodGroup.validation.maxLength' },
+        in: { value: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'], message: 'config.form.bloodGroup.validation.in' },
       },
+      options: [
+        {
+          label: 'config.form.bloodGroup.options.aPositive',
+          value: 'A+',
+        },
+        {
+          label: 'config.form.bloodGroup.options.aNegative',
+          value: 'A-',
+        },
+        {
+          label: 'config.form.bloodGroup.options.bPositive',
+          value: 'B+',
+        },
+        {
+          label: 'config.form.bloodGroup.options.bNegative',
+          value: 'B-',
+        },
+        {
+          label: 'config.form.bloodGroup.options.abPositive',
+          value: 'AB+',
+        },
+        {
+          label: 'config.form.bloodGroup.options.abNegative',
+          value: 'AB-',
+        },
+        {
+          label: 'config.form.bloodGroup.options.oPositive',
+          value: 'O+',
+        },
+        {
+          label: 'config.form.bloodGroup.options.oNegative',
+          value: 'O-',
+        },
+      ],
     },
     {
       label: 'config.form.emergencyContact.label',

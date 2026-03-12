@@ -53,7 +53,20 @@
       },
       "bloodGroup": {
         "label": "Blood Group",
-        "validation": { "maxLength": "Blood Group must be 255 characters or less" }
+        "validation": { 
+          "in": "Blood Group must be one of the allowed values",
+          "maxLength": "Blood Group must be 255 characters or less" 
+        },
+        "options": {
+          "aPositive": "A+",
+          "aNegative": "A-",
+          "bPositive": "B+",
+          "bNegative": "B-",
+          "abPositive": "AB+",
+          "abNegative": "AB-",
+          "oPositive": "O+",
+          "oNegative": "O-"
+        }
       },
       "emergencyContact": {
         "label": "Emergency Contact",

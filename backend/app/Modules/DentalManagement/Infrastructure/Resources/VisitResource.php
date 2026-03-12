@@ -7,9 +7,12 @@ namespace App\Modules\DentalManagement\Infrastructure\Resources;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Collection;
+use App\Modules\Common\Infrastructure\Resources\Concerns\ResolvesUserStamps;
 
 class VisitResource extends JsonResource
 {
+    use ResolvesUserStamps;
+
     public function toArray(Request $request): array
     {
         return $this->filterEmpty([
@@ -24,8 +27,8 @@ class VisitResource extends JsonResource
             'visitDate' => $this->formatDate($this->visit_date),
             'diagnosisNotes' => $this->diagnosis_notes,
             'nextVisitDate' => $this->formatDate($this->next_visit_date),
-            'createdBy' => $this->created_by,
-            'updatedBy' => $this->updated_by,
+            'createdBy' => $this->resolveUserStampName($this->created_by),
+            'updatedBy' => $this->resolveUserStampName($this->updated_by),
             'deletedBy' => $this->deleted_by,
             'appointment' => $this->appointment,
             'patient' => $this->patient,

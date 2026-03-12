@@ -6,6 +6,7 @@ namespace App\Modules\DentalManagement\Domain\Services;
 
 use App\Modules\DentalManagement\Domain\Entities\Appointment;
 use App\Modules\DentalManagement\Domain\Entities\Expense;
+use App\Modules\DentalManagement\Domain\Entities\ImplantCompany;
 use App\Modules\DentalManagement\Domain\Entities\Invoice;
 use App\Modules\DentalManagement\Domain\Entities\Patient;
 use App\Modules\DentalManagement\Domain\Entities\PatientSessionTask;
@@ -61,7 +62,7 @@ final class ReportDatasetService
             ->get();
 
         $tasks = PatientSessionTask::query()
-            ->select(['id', 'patient_id', 'title', 'status', 'notes', 'created_at', 'updated_at'])
+            ->select(['id', 'patient_id', 'implant_company_id', 'title', 'status', 'notes', 'created_at', 'updated_at'])
             ->where('created_at', '>=', $startDate->startOfDay())
             ->where('created_at', '<=', $endDate->endOfDay())
             ->get();
@@ -206,13 +207,21 @@ final class ReportDatasetService
             ->get();
 
         $tasks = PatientSessionTask::query()
-            ->select(['id', 'patient_id', 'title', 'status', 'notes', 'created_at', 'updated_at'])
+            ->select(['id', 'patient_id', 'implant_company_id', 'title', 'status', 'notes', 'created_at', 'updated_at'])
             ->where('created_at', '>=', $startDate->startOfDay())
             ->where('created_at', '<=', $endDate->endOfDay())
             ->get();
 
+        $implantCompanies = ImplantCompany::query()
+            ->select(['id', 'company_name', 'implant_type', 'record_date', 'note', 'created_at', 'updated_at'])
+            ->orderBy('company_name')
+            ->orderBy('implant_type')
+            ->orderByDesc('record_date')
+            ->get();
+
         return [
             'expenseRows' => $expenses->map(fn (Expense $expense): array => $this->expenseRow($expense))->values()->all(),
+            'implantCompanies' => $implantCompanies->map(fn (ImplantCompany $company): array => $this->implantCompanyRow($company))->values()->all(),
             'invoiceRows' => $invoices->map(fn (Invoice $invoice): array => $this->invoiceRow($invoice))->values()->all(),
             'patientNameMap' => $this->patientNameMap($patients),
             'patientSessionTasks' => $tasks->map(fn (PatientSessionTask $task): array => $this->taskRow($task))->values()->all(),
@@ -457,11 +466,25 @@ final class ReportDatasetService
         return [
             'createdAt' => $this->dateTimeString($task->created_at),
             'id' => (string) $task->id,
+            'implantCompanyId' => (string) ($task->implant_company_id ?? ''),
             'notes' => (string) ($task->notes ?? ''),
             'patientId' => (string) ($task->patient_id ?? ''),
             'status' => (string) ($task->status ?? ''),
             'title' => (string) ($task->title ?? ''),
             'updatedAt' => $this->dateTimeString($task->updated_at),
+        ];
+    }
+
+    private function implantCompanyRow(ImplantCompany $company): array
+    {
+        return [
+            'companyName' => (string) ($company->company_name ?? ''),
+            'createdAt' => $this->dateTimeString($company->created_at),
+            'id' => (string) $company->id,
+            'implantType' => (string) ($company->implant_type ?? ''),
+            'note' => (string) ($company->note ?? ''),
+            'recordDate' => $this->dateString($company->record_date),
+            'updatedAt' => $this->dateTimeString($company->updated_at),
         ];
     }
 

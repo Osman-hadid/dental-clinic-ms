@@ -13,9 +13,11 @@ use Laravel\Sanctum\HasApiTokens;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Permission\Traits\HasRoles;
+use App\Modules\Common\Domain\Entities\Concerns\HasUserStamps;
 
 final class User extends Authenticatable
 {
+    use HasUserStamps;
     use HasApiTokens;
     use HasFactory;
     use HasRoles;

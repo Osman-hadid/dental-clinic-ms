@@ -276,6 +276,22 @@ final class ReportDashboardService
             ];
         }
 
+        $patientFilter = $this->normalizedFilter($filters, 'patientFilter');
+        $statusFilter = $this->normalizedFilter($filters, 'statusFilter');
+        $implantCompanyMap = [];
+        foreach (($dataset['implantCompanies'] ?? []) as $company) {
+            $companyId = (string) ($company['id'] ?? '');
+            if ($companyId === '') {
+                continue;
+            }
+
+            $implantCompanyMap[$companyId] = [
+                'companyName' => $this->text($company['companyName'] ?? '', "Company #{$companyId}"),
+                'implantType' => $this->text($company['implantType'] ?? '', '-'),
+                'note' => $this->text($company['note'] ?? ''),
+                'recordDate' => $this->text($company['recordDate'] ?? ''),
+            ];
+        }
         $implantInstallments = [];
         foreach (($dataset['patientSessionTasks'] ?? []) as $task) {
             $notes = $this->text($task['notes'] ?? '');
@@ -285,11 +301,22 @@ final class ReportDashboardService
             }
 
             $patientId = (string) ($task['patientId'] ?? '');
+            if ($patientFilter !== '' && $patientId !== $patientFilter) {
+                continue;
+            }
+
+            $availability = $this->taskAvailability($notes, $this->text($task['status'] ?? 'pending'));
+            $reportStatus = $availability === 'done' ? 'completed' : 'pending';
+            if ($statusFilter !== '' && $reportStatus !== $statusFilter) {
+                continue;
+            }
+
             $supplierTotal = $this->taggedAmount($notes, 'supplier_total');
             $supplierPaid = min($supplierTotal, $this->taggedAmount($notes, 'supplier_paid'));
             $implantInstallments[] = [
-                'availability' => $this->taskAvailability($notes, $this->text($task['status'] ?? 'pending')),
+                'availability' => $availability,
                 'createdAt' => $this->dateTimeString($task['createdAt'] ?? ''),
+                'implantCompanyId' => (string) ($task['implantCompanyId'] ?? ''),
                 'patientId' => $patientId,
                 'patientName' => $patientNameMap[$patientId] ?? $this->patientName(null, $patientId),
                 'supplierPaid' => $this->decimal($supplierPaid),
@@ -297,6 +324,74 @@ final class ReportDashboardService
                 'supplierTotal' => $this->decimal($supplierTotal),
                 'toothNumber' => $this->implantToothNumber($notes, $title) ?? '-',
             ];
+        }
+
+        $rowsByToothKey = [];
+        foreach ($implantInstallments as $row) {
+            $key = (string) ($row['patientId'] ?? '').':'.(string) ($row['toothNumber'] ?? '');
+            if ($key === ':' || $key === '') {
+                continue;
+            }
+
+            $previous = $rowsByToothKey[$key] ?? null;
+            if ($previous === null) {
+                $rowsByToothKey[$key] = $row;
+                continue;
+            }
+
+            $currentDate = $this->parseDate($row['createdAt'] ?? '');
+            $previousDate = $this->parseDate($previous['createdAt'] ?? '');
+            if ($previousDate === null || ($currentDate !== null && $currentDate->gt($previousDate))) {
+                $rowsByToothKey[$key] = $row;
+            }
+        }
+        $thirdCompanyPaid = $this->decimal(array_sum(array_map(
+            static fn (array $row): float => (float) ($row['supplierPaid'] ?? 0),
+            array_values($rowsByToothKey)
+        )));
+        $thirdCompanyUnpaid = $this->decimal(array_sum(array_map(
+            static fn (array $row): float => (float) ($row['supplierRemaining'] ?? 0),
+            array_values($rowsByToothKey)
+        )));
+
+        $implantCompanyRecords = [];
+        foreach ($rowsByToothKey as $row) {
+            $companyId = (string) ($row['implantCompanyId'] ?? '');
+            if ($companyId === '') {
+                continue;
+            }
+
+            $details = $implantCompanyMap[$companyId] ?? [
+                'companyName' => "Company #{$companyId}",
+                'implantType' => '-',
+                'note' => '',
+                'recordDate' => '',
+            ];
+
+            if (!isset($implantCompanyRecords[$companyId])) {
+                $implantCompanyRecords[$companyId] = [
+                    'companyId' => $companyId,
+                    'companyName' => $details['companyName'],
+                    'implantType' => $details['implantType'],
+                    'recordDate' => $details['recordDate'],
+                    'note' => $details['note'],
+                    'implantCount' => 0,
+                    'supplierPaid' => 0.0,
+                    'supplierRemaining' => 0.0,
+                    'supplierTotal' => 0.0,
+                ];
+            }
+
+            $implantCompanyRecords[$companyId]['implantCount'] += 1;
+            $implantCompanyRecords[$companyId]['supplierPaid'] = $this->decimal(
+                $implantCompanyRecords[$companyId]['supplierPaid'] + (float) ($row['supplierPaid'] ?? 0)
+            );
+            $implantCompanyRecords[$companyId]['supplierRemaining'] = $this->decimal(
+                $implantCompanyRecords[$companyId]['supplierRemaining'] + (float) ($row['supplierRemaining'] ?? 0)
+            );
+            $implantCompanyRecords[$companyId]['supplierTotal'] = $this->decimal(
+                $implantCompanyRecords[$companyId]['supplierTotal'] + (float) ($row['supplierTotal'] ?? 0)
+            );
         }
 
         $collectionRate = $net > 0 ? round(min(100, ($paid / $net) * 100), 1) : 0.0;
@@ -319,6 +414,8 @@ final class ReportDashboardService
                 'salaryPaid' => $this->decimal($salaryPaid),
                 'shareholderContribution' => $this->decimal($shareholderContribution),
                 'shareholderDistribution' => $this->decimal($shareholderDistribution),
+                'thirdCompanyPaid' => $thirdCompanyPaid,
+                'thirdCompanyUnpaid' => $thirdCompanyUnpaid,
             ],
             'charts' => [
                 'expenseByCategory' => array_slice($this->sortRows(array_values($expenseByCategory), 'amount'), 0, 12),
@@ -336,6 +433,7 @@ final class ReportDashboardService
                 ], $safeFlowRows),
             ],
             'tables' => [
+                'implantCompanyRecords' => array_slice($this->sortRows(array_values($implantCompanyRecords), 'supplierRemaining'), 0, 50),
                 'implantInstallments' => array_slice($this->sortRows($implantInstallments, 'createdAt'), 0, 25),
                 'outstandingInvoices' => array_slice($this->sortRows($outstandingRows, 'debtAmount'), 0, 25),
                 'revenueByDentist' => array_slice($this->sortRows(array_values($revenueByDentist), 'amount'), 0, 25),
@@ -467,7 +565,7 @@ final class ReportDashboardService
         foreach ($inventoryItems as $item) {
             $consumedQuantity = max(0, (int) round((float) ($item->consumed_quantity ?? 0)));
             $quantity = (int) ($item->quantity ?? 0);
-            $availableQuantity = max(0, $quantity - $consumedQuantity);
+            $availableQuantity = max(0, $quantity);
             $stockValue = $this->decimal($availableQuantity * (float) ($item->unit_cost ?? 0));
             $availability = $availableQuantity <= 0
                 ? 'out_of_stock'

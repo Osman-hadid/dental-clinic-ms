@@ -15,6 +15,13 @@ final class StorePatientSessionTaskRequest extends BaseFormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if (!$this->has('implantCompanyId') && $this->has('implant_company_id')) {
+            $this->merge(['implantCompanyId' => $this->input('implant_company_id')]);
+        }
+    }
+
     public function rules(): array
     {
         return [
@@ -22,6 +29,7 @@ final class StorePatientSessionTaskRequest extends BaseFormRequest
             'mark' => 'required|string|in:green,blue,yellow,orange,red,purple',
             'status' => 'required|string|in:pending,in_progress,done',
             'notes' => 'nullable|string|max:2000',
+            'implantCompanyId' => 'nullable|integer|exists:implant_companies,id',
         ];
     }
 }

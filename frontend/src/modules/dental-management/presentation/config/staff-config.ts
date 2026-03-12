@@ -42,18 +42,18 @@ export const staffConfig: EntityModuleConfig = {
       accessorKey: 'enabled',
       header: 'config.form.enabled.label',
     },
-    {
-      accessorKey: 'appointments',
-      header: 'config.form.appointments.label',
-    },
-    {
-      accessorKey: 'visits',
-      header: 'config.form.visits.label',
-    },
-    {
-      accessorKey: 'visitTreatments',
-      header: 'config.form.visitTreatments.label',
-    },
+    // {
+    //   accessorKey: 'appointments',
+    //   header: 'config.form.appointments.label',
+    // },
+    // {
+    //   accessorKey: 'visits',
+    //   header: 'config.form.visits.label',
+    // },
+    // {
+    //   accessorKey: 'visitTreatments',
+    //   header: 'config.form.visitTreatments.label',
+    // },
   ],
   createButton: 'config.table.add',
   createSubmitText: 'config.create',
@@ -181,42 +181,42 @@ export const staffConfig: EntityModuleConfig = {
         maxLength: { value: 255, message: 'config.form.remarks.validation.maxLength' },
       },
     },
-    {
-      label: 'config.form.createdBy.label',
-      name: 'createdBy',
-      required: false,
-      type: 'number',
-    },
-    {
-      label: 'config.form.updatedBy.label',
-      name: 'updatedBy',
-      required: false,
-      type: 'number',
-    },
+    // {
+    //   label: 'config.form.createdBy.label',
+    //   name: 'createdBy',
+    //   required: false,
+    //   type: 'number',
+    // },
+    // {
+    //   label: 'config.form.updatedBy.label',
+    //   name: 'updatedBy',
+    //   required: false,
+    //   type: 'number',
+    // },
     {
       label: 'config.form.enabled.label',
       name: 'enabled',
       required: false,
       type: 'checkbox',
     },
-    {
-      label: 'config.form.appointments.label',
-      name: 'appointments',
-      required: false,
-      type: 'multiselect',
-    },
-    {
-      label: 'config.form.visits.label',
-      name: 'visits',
-      required: false,
-      type: 'multiselect',
-    },
-    {
-      label: 'config.form.visitTreatments.label',
-      name: 'visitTreatments',
-      required: false,
-      type: 'multiselect',
-    },
+    // {
+    //   label: 'config.form.appointments.label',
+    //   name: 'appointments',
+    //   required: false,
+    //   type: 'multiselect',
+    // },
+    // {
+    //   label: 'config.form.visits.label',
+    //   name: 'visits',
+    //   required: false,
+    //   type: 'multiselect',
+    // },
+    // {
+    //   label: 'config.form.visitTreatments.label',
+    //   name: 'visitTreatments',
+    //   required: false,
+    //   type: 'multiselect',
+    // },
   ],
   queryKey: 'staff',
   searchFields: [

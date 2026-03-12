@@ -6,9 +6,11 @@ namespace App\Modules\DentalManagement\Domain\Entities;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Modules\Common\Domain\Entities\Concerns\HasUserStamps;
 
 final class PrescriptionItem extends Model
 {
+    use HasUserStamps;
     protected $fillable = [
         'prescription_id',
         'name',
@@ -36,4 +38,3 @@ final class PrescriptionItem extends Model
         return $this->belongsTo(Prescription::class);
     }
 }
-

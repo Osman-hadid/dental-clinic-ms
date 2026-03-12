@@ -119,18 +119,18 @@ export const visitTreatmentConfig: EntityModuleConfig = {
         maxLength: { value: 255, message: 'config.form.notes.validation.maxLength' },
       },
     },
-    {
-      label: 'config.form.createdBy.label',
-      name: 'createdBy',
-      required: false,
-      type: 'number',
-    },
-    {
-      label: 'config.form.updatedBy.label',
-      name: 'updatedBy',
-      required: false,
-      type: 'number',
-    },
+    // {
+    //   label: 'config.form.createdBy.label',
+    //   name: 'createdBy',
+    //   required: false,
+    //   type: 'number',
+    // },
+    // {
+    //   label: 'config.form.updatedBy.label',
+    //   name: 'updatedBy',
+    //   required: false,
+    //   type: 'number',
+    // },
   ],
   queryKey: 'visitTreatments',
   searchFields: [

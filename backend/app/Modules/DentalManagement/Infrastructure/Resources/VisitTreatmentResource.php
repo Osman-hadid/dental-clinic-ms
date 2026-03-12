@@ -6,10 +6,13 @@ namespace App\Modules\DentalManagement\Infrastructure\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use App\Modules\Common\Infrastructure\Resources\Concerns\ResolvesUserStamps;
 use Illuminate\Support\Collection;
 
 class VisitTreatmentResource extends JsonResource
 {
+    use ResolvesUserStamps;
+
     public function toArray(Request $request): array
     {
         return $this->filterEmpty([
@@ -42,14 +45,14 @@ class VisitTreatmentResource extends JsonResource
                     'amount' => $item->amount,
                     'frequency' => $item->frequency,
                     'foodTiming' => $item->food_timing,
-                    'createdBy' => $item->created_by,
-                    'updatedBy' => $item->updated_by,
+                    'createdBy' => $this->resolveUserStampName($item->created_by),
+                    'updatedBy' => $this->resolveUserStampName($item->updated_by),
                     'deletedBy' => $item->deleted_by,
                     'createdAt' => $item->created_at?->toIso8601String(),
                     'updatedAt' => $item->updated_at?->toIso8601String(),
                 ])->values()->all() : [],
-                'createdBy' => $this->prescription->created_by,
-                'updatedBy' => $this->prescription->updated_by,
+                'createdBy' => $this->resolveUserStampName($this->prescription->created_by),
+                'updatedBy' => $this->resolveUserStampName($this->prescription->updated_by),
                 'deletedBy' => $this->prescription->deleted_by,
                 'createdAt' => $this->prescription->created_at?->toIso8601String(),
                 'updatedAt' => $this->prescription->updated_at?->toIso8601String(),
@@ -61,14 +64,14 @@ class VisitTreatmentResource extends JsonResource
                 'itemName' => $item->item_name,
                 'unit' => $item->unit,
                 'quantityUsed' => $item->quantity_used,
-                'createdBy' => $item->created_by,
-                'updatedBy' => $item->updated_by,
+                'createdBy' => $this->resolveUserStampName($item->created_by),
+                'updatedBy' => $this->resolveUserStampName($item->updated_by),
                 'deletedBy' => $item->deleted_by,
                 'createdAt' => $item->created_at?->toIso8601String(),
                 'updatedAt' => $item->updated_at?->toIso8601String(),
             ])->values()->all() : null,
-            'createdBy' => $this->created_by,
-            'updatedBy' => $this->updated_by,
+            'createdBy' => $this->resolveUserStampName($this->created_by),
+            'updatedBy' => $this->resolveUserStampName($this->updated_by),
             'deletedBy' => $this->deleted_by,
             'visit' => $this->visit,
             'treatment' => $this->treatment,

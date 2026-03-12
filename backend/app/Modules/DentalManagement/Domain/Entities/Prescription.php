@@ -8,9 +8,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Modules\Common\Domain\Entities\Concerns\HasUserStamps;
 
 final class Prescription extends Model
 {
+    use HasUserStamps;
     use SoftDeletes;
 
     protected $fillable = [
