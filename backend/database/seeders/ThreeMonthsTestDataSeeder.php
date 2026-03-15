@@ -109,6 +109,16 @@ final class ThreeMonthsTestDataSeeder extends Seeder
         }
 
         $staff = collect();
+        $firstNames = [
+            'Amina', 'Omar', 'Sara', 'Ahmad', 'Laila', 'Hassan', 'Mariam', 'Yasir', 'Nadia', 'Bilal',
+            'Fatima', 'Imran', 'Zahra', 'Khalid', 'Noor', 'Samir', 'Rana', 'Adil', 'Huda', 'Karim',
+            'Rania', 'Tariq', 'Salma', 'Nabil', 'Leila', 'Farid', 'Asma', 'Hamid', 'Dina', 'Jamal',
+        ];
+        $lastNames = [
+            'Ahmadi', 'Khan', 'Rahimi', 'Hussaini', 'Najafi', 'Saeed', 'Latifi', 'Karimi', 'Qasimi', 'Sadiq',
+            'Mirza', 'Noori', 'Sultan', 'Hakimi', 'Siddiq', 'Azimi', 'Shirzad', 'Safar', 'Zamani', 'Fazli',
+            'Mahmoudi', 'Wardak', 'Hashemi', 'Farahani', 'Saberi', 'Rahman', 'Jafari', 'Gul', 'Masoud', 'Nabi',
+        ];
         $roles = [
             ['role' => 'dentist', 'count' => 4, 'spec' => ['General Dentistry', 'Orthodontics', 'Endodontics']],
             ['role' => 'assistant', 'count' => 3, 'spec' => ['Chairside']],
@@ -118,8 +128,10 @@ final class ThreeMonthsTestDataSeeder extends Seeder
         $k = 1;
         foreach ($roles as $roleMeta) {
             for ($i = 1; $i <= $roleMeta['count']; $i++) {
+                $firstName = $firstNames[array_rand($firstNames)];
+                $lastName = $lastNames[array_rand($lastNames)];
                 $staff->push(Staff::query()->create([
-                    'full_name' => ucfirst($roleMeta['role'])." {$i} {$seed}",
+                    'full_name' => "{$firstName} {$lastName}",
                     'role' => $roleMeta['role'],
                     'specialization' => $roleMeta['spec'][array_rand($roleMeta['spec'])],
                     'contact_number' => $this->seedPhone('07', "staff{$seed}", $k),
@@ -138,10 +150,12 @@ final class ThreeMonthsTestDataSeeder extends Seeder
         $patients = collect();
         $patientCount = 1000;
         for ($i = 1; $i <= $patientCount; $i++) {
+            $firstName = $firstNames[array_rand($firstNames)];
+            $lastName = $lastNames[array_rand($lastNames)];
             $patients->push(Patient::query()->create([
                 'patient_code' => 'PT-'.strtoupper(substr($seed, -6)).'-'.str_pad((string) $i, 4, '0', STR_PAD_LEFT),
-                'first_name' => "Patient {$i}",
-                'last_name' => 'Seed',
+                'first_name' => $firstName,
+                'last_name' => $lastName,
                 'gender' => $i % 2 === 0 ? 'female' : 'male',
                 'date_of_birth' => $this->randomDate($start->copy()->subYears(60), $start->copy()->subYears(5))->format('Y-m-d'),
                 'contact_number' => $this->seedPhone('07', "patient{$seed}", $i),

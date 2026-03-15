@@ -40,6 +40,7 @@ final class ListPatientsRequest extends BaseListRequest
     protected static function searchableColumns(): array
     {
         return [
+            'id' => 'id',
             'patientCode' => 'patient_code',
             'firstName' => 'first_name',
             'lastName' => 'last_name',

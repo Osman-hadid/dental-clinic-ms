@@ -18,6 +18,7 @@ import {
 import { CalendarDays, ChevronRight, Search, UsersRound } from 'lucide-react';
 
 const TABLE_PER_PAGE = 100;
+const SEARCH_PAGE_SIZE = 100;
 const SEARCH_RESULTS_VISIBLE_LIMIT = 12;
 
 const normalizeSearchValue = (value: string): string => value.replace(/\s+/g, ' ').trim().toLowerCase();
@@ -62,11 +63,12 @@ const computeHumanSearchScore = (patient: {
 }, query: string): number => {
   const normalizedQuery = normalizeSearchValue(query);
   const queryTokens = tokenizeSearchValue(query);
+  const patientId = String(patient.id ?? '');
   const fullName = [patient.firstName, patient.lastName].filter(Boolean).join(' ').trim();
   const reversedName = [patient.lastName, patient.firstName].filter(Boolean).join(' ').trim();
   const patientCode = String(patient.patientCode ?? '');
   const contactNumber = String(patient.contactNumber ?? '');
-  const candidateFields = [fullName, reversedName, patientCode, contactNumber];
+  const candidateFields = [patientId, patientCode, fullName, reversedName, contactNumber];
 
   let score = Number.MAX_SAFE_INTEGER;
 
@@ -155,17 +157,18 @@ export default function PatientsPage(): JSX.Element {
 
   const trimmedSearch = search.trim();
   const searchFields = useMemo(
-    () => ['patientCode', 'firstName', 'lastName', 'contactNumber', 'email'],
+    () => ['id', 'patientCode', 'firstName', 'lastName', 'contactNumber', 'email'],
     []
   );
 
+  const searchPageSize = trimmedSearch ? SEARCH_PAGE_SIZE : TABLE_PER_PAGE;
   const {
     entities: searchResults,
     isFetching: isSearching,
   } = usePatientList(
     1,
-    TABLE_PER_PAGE,
-    '',
+    searchPageSize,
+    trimmedSearch,
     searchFields,
     [],
     {}
@@ -306,12 +309,12 @@ export default function PatientsPage(): JSX.Element {
               <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={search}
-                    onChange={(event) => {
-                      setSearch(event.target.value);
-                    }}
-                    placeholder="Search patient by name, code, phone..."
+                    <Input
+                      value={search}
+                      onChange={(event) => {
+                        setSearch(event.target.value);
+                      }}
+                    placeholder="Search patient by name, ID, code, phone..."
                     className="h-11 border-input bg-background pl-10 text-foreground placeholder:text-muted-foreground"
                   />
                 </div>

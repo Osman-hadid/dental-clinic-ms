@@ -302,6 +302,7 @@ export const patientConfig: EntityModuleConfig = {
   ],
   queryKey: 'patients',
   searchFields: [
+    { label: 'config.form.id.label', value: 'id' },
     { label: 'config.form.patientCode.label', value: 'patientCode' },
     { label: 'config.form.firstName.label', value: 'firstName' },
     { label: 'config.form.lastName.label', value: 'lastName' },

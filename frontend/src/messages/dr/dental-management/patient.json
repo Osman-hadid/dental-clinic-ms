@@ -9,6 +9,9 @@
       "update": "بیمار را به روز کنید"
     },
     "form": {
+      "id": {
+        "label": "ID"
+      },
       "patientCode": {
         "label": "کد بیمار",
         "validation": {

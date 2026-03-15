@@ -9,6 +9,9 @@
       "update": "Update Patient"
     },
     "form": {
+      "id": {
+        "label": "ID"
+      },
       "patientCode": {
         "label": "Patient Code",
         "validation": {

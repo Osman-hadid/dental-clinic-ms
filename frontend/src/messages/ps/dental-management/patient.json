@@ -9,6 +9,9 @@
       "update": "ناروغ تازه کړئ"
     },
     "form": {
+      "id": {
+        "label": "ID"
+      },
       "patientCode": {
         "label": "د ناروغ کوډ",
         "validation": {

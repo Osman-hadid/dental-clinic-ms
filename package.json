@@ -4,10 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build:frontend:laravel": "npm --prefix frontend run build:laravel",
-    "build:frontend:prod:laravel": "npm --prefix frontend run build:prod:laravel",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "prepare": "husky"
+    "backend": "cd backend && php artisan serve",
+    "frontend": "cd frontend && npm run dev",
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\""
   },
   "repository": {
     "type": "git",
@@ -17,6 +16,10 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "husky": "^9.1.7"
+  },
+  "dependencies": {
+    "open-cli": "^8.0.0"
   }
 }

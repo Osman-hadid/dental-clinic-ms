@@ -122,7 +122,7 @@ abstract class BaseEloquentRepository
 
     private function buildLikeQuery(array $columns, string $word): array
     {
-        $parts = array_map(fn ($col): string => "LOWER({$col}) LIKE LOWER(?)", $columns);
+        $parts = array_map(fn ($col): string => "LOWER(CAST({$col} AS TEXT)) LIKE LOWER(?)", $columns);
 
         return [implode(' OR ', $parts), array_fill(0, count($columns), "%{$word}%")];
     }
