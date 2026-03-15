@@ -173,6 +173,8 @@ const ReportsPage = (): JSX.Element => {
   const [isSavingSnapshot, setIsSavingSnapshot] = useState(false);
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
   const activeReport = reportExperience[activeTab];
+  const coreTabs: ReportTab[] = ['executive', 'financial', 'clinical', 'inventory'];
+  const isCoreTabActive = coreTabs.includes(activeTab);
 
   const reportParams = useMemo(() => buildReportParams(appliedFilters), [appliedFilters]);
   const draftReportParams = useMemo(() => buildReportParams(draftFilters), [draftFilters]);
@@ -211,12 +213,36 @@ const ReportsPage = (): JSX.Element => {
     }
   }, [reportParams]);
 
+  const fetchCoreTabs = useCallback(async (params = reportParams, showLoading = isCoreTabActive): Promise<void> => {
+    if (showLoading) setIsLoadingTab(true);
+    try {
+      const [executiveData, financialData, clinicalData, inventoryData] = await Promise.all([
+        fetchReport<ExecutiveData>('/api/v1/dental-management/reports/executive', params),
+        fetchReport<FinancialData>('/api/v1/dental-management/reports/financial', params),
+        fetchReport<ClinicalData>('/api/v1/dental-management/reports/clinical', params),
+        fetchReport<InventoryData>('/api/v1/dental-management/reports/inventory', params),
+      ]);
+      setExecutive(executiveData);
+      setFinancial(financialData);
+      setClinical(clinicalData);
+      setInventory(inventoryData);
+    } finally {
+      if (showLoading) setIsLoadingTab(false);
+    }
+  }, [reportParams, isCoreTabActive]);
+
   useEffect(() => {
     void fetchFilterOptions();
   }, [fetchFilterOptions]);
 
   useEffect(() => {
-    void fetchTab(activeTab);
+    void fetchCoreTabs(reportParams, isCoreTabActive);
+  }, [fetchCoreTabs, reportParams, isCoreTabActive]);
+
+  useEffect(() => {
+    if (activeTab === 'audit') {
+      void fetchTab('audit');
+    }
   }, [activeTab, fetchTab]);
 
   useEffect(() => {
@@ -624,7 +650,7 @@ const ReportsPage = (): JSX.Element => {
                   <Button type="button" variant="outline" onClick={applyFilters} disabled={isLoadingFilters || isLoadingTab}>
                     {isLoadingFilters || isLoadingTab ? 'Updating report...' : 'Update report'}
                   </Button>
-                  <p className="text-xs text-muted-foreground">Only the filters shown here affect the current report.</p>
+                  <p className="text-xs text-muted-foreground">Filters apply across Clinic Overview, Money and Collections, Clinical Care, and Stock and Supplies.</p>
                 </div>
               </CardContent>
             </Card>
