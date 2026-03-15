@@ -66,3 +66,7 @@ export { useDeletePayment } from './payments/useDeletePayment';
 export { useGetPayment } from './payments/useGetPayment';
 export { usePaymentList } from './payments/usePaymentList';
 export { useUpdatePayment } from './payments/useUpdatePayment';
+
+/* eslint-disable */
+export { useClinicProfile } from './clinic-profile/useClinicProfile';
+export { useUpdateClinicProfile } from './clinic-profile/useUpdateClinicProfile';

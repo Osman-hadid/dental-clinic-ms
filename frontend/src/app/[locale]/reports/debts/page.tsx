@@ -103,6 +103,7 @@ export default function DebtsPage(): JSX.Element {
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const totalDebts = report?.summary.debtCount ?? 0;
 
   const activePage = report?.rows.meta.currentPage ?? page;
   const lastPage = report?.rows.meta.lastPage ?? 1;
@@ -297,9 +298,6 @@ export default function DebtsPage(): JSX.Element {
                         <option value="insurance">{tDebts('methods.insurance')}</option>
                       </select>
                     </div>
-                  <div className="rounded-xl border bg-muted/30 p-3 text-xs text-muted-foreground">
-                    Pay part of a debt now and keep the rest as remaining debt.
-                  </div>
                   <div className="grid gap-1.5">
                     <Label htmlFor="debt-notes">{tDebts('notes')}</Label>
                     <Input id="debt-notes" value={form.notes} onChange={(event) => setForm((previous) => ({ ...previous, notes: event.target.value }))} placeholder={tDebts('notesPlaceholder')} />
@@ -310,7 +308,7 @@ export default function DebtsPage(): JSX.Element {
                 </form>
 
                 <div className="grid gap-3">
-                  <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <div className="rounded-xl border bg-white/85 p-3">
                       <p className="text-xs text-muted-foreground">Open Debt</p>
                       <p className="text-lg font-semibold">{formatCurrency(report?.summary.totalDebt ?? 0, 'AFN')}</p>
@@ -323,6 +321,11 @@ export default function DebtsPage(): JSX.Element {
                     <div className="rounded-xl border bg-white/85 p-3">
                       <p className="text-xs text-muted-foreground">Paid</p>
                       <p className="text-lg font-semibold">{formatCurrency(report?.summary.totalPaid ?? 0, 'AFN')}</p>
+                    </div>
+                    <div className="rounded-xl border bg-white/85 p-3">
+                      <p className="text-xs text-muted-foreground">Total Debts</p>
+                      <p className="text-lg font-semibold">{totalDebts.toLocaleString(locale)}</p>
+                      <p className="text-xs text-muted-foreground">Number of outstanding invoices in this range.</p>
                     </div>
                   </div>
 

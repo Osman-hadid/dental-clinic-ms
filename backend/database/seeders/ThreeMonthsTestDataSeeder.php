@@ -136,7 +136,8 @@ final class ThreeMonthsTestDataSeeder extends Seeder
         $dentists = $staff->where('role', 'dentist')->values();
 
         $patients = collect();
-        for ($i = 1; $i <= 140; $i++) {
+        $patientCount = 1000;
+        for ($i = 1; $i <= $patientCount; $i++) {
             $patients->push(Patient::query()->create([
                 'patient_code' => 'PT-'.strtoupper(substr($seed, -6)).'-'.str_pad((string) $i, 4, '0', STR_PAD_LEFT),
                 'first_name' => "Patient {$i}",

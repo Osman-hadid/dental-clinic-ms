@@ -45,23 +45,9 @@ export const NavMain = ({
   const isRtl = ['dr', 'ps'].includes(locale);
   const { state } = useSidebar();
   const isCollapsed = state === 'collapsed';
-  const [hoveredExpandedItem, setHoveredExpandedItem] = React.useState<string | null>(null);
-  const [hoveredCollapsedItem, setHoveredCollapsedItem] = React.useState<string | null>(null);
-  const closeTimerRef = React.useRef<number | null>(null);
+  const [openExpandedItem, setOpenExpandedItem] = React.useState<string | null>(null);
 
   const cleanPathname = pathname.replace(/^\/[a-z]{2}/, '').split('?')[0];
-  const clearCloseTimer = React.useCallback(() => {
-    if (closeTimerRef.current !== null) {
-      window.clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
-    }
-  }, []);
-
-  React.useEffect(() => {
-    return () => {
-      clearCloseTimer();
-    };
-  }, [clearCloseTimer]);
 
   if (isCollapsed) {
     return (
@@ -81,10 +67,10 @@ export const NavMain = ({
               return (
                 <SidebarMenuItem key={item.url}>
                   <DropdownMenu
-                    open={hoveredCollapsedItem === item.url}
+                    open={openExpandedItem === item.url}
                     onOpenChange={(open) => {
                       if (!open) {
-                        setHoveredCollapsedItem((current) => (current === item.url ? null : current));
+                        setOpenExpandedItem((current) => (current === item.url ? null : current));
                       }
                     }}
                     modal={false}
@@ -93,17 +79,9 @@ export const NavMain = ({
                       <SidebarMenuButton
                         asChild
                         isActive={!!isParentActive}
-                        onMouseEnter={() => {
-                          clearCloseTimer();
-                          setHoveredCollapsedItem(item.url);
-                        }}
+                        onMouseEnter={() => setOpenExpandedItem(item.url)}
                         onMouseLeave={() => {
-                          clearCloseTimer();
-                          closeTimerRef.current = window.setTimeout(() => {
-                            setHoveredCollapsedItem((current) =>
-                              current === item.url ? null : current
-                            );
-                          }, 130);
+                          setOpenExpandedItem((current) => (current === item.url ? null : current));
                         }}
                         className={cn(
                           'mx-auto h-11 w-11 justify-center rounded-full border border-transparent p-0 shadow-xs [&>svg]:size-5 [&>svg]:stroke-[1.8]',
@@ -111,7 +89,10 @@ export const NavMain = ({
                           'data-[active=true]:border-sidebar-primary/50 data-[active=true]:bg-sidebar-primary/25 data-[active=true]:text-sidebar-foreground data-[active=true]:shadow-sm'
                         )}
                       >
-                        <button type="button" className="flex h-full w-full items-center justify-center">
+                        <button
+                          type="button"
+                          className="flex h-full w-full items-center justify-center"
+                        >
                           {item.icon ? <item.icon className="size-5" /> : null}
                           <span className="sr-only">{item.title}</span>
                         </button>
@@ -122,12 +103,9 @@ export const NavMain = ({
                       align="start"
                       sideOffset={12}
                       className="bg-sidebar/95 min-w-48 rounded-xl border-sidebar-border/80 p-1.5 backdrop-blur-md"
-                      onMouseEnter={() => {
-                        clearCloseTimer();
-                        setHoveredCollapsedItem(item.url);
-                      }}
+                      onMouseEnter={() => setOpenExpandedItem(item.url)}
                       onMouseLeave={() => {
-                        setHoveredCollapsedItem((current) => (current === item.url ? null : current));
+                        setOpenExpandedItem((current) => (current === item.url ? null : current));
                       }}
                     >
                       {item.items?.map((subItem, index) => {
@@ -159,7 +137,9 @@ export const NavMain = ({
                                 target={subItem.newTab ? '_blank' : undefined}
                                 className="flex w-full items-center gap-2"
                               >
-                                {subItem.icon ? <subItem.icon className="size-4 shrink-0 opacity-80" /> : null}
+                                {subItem.icon ? (
+                                  <subItem.icon className="size-4 shrink-0 opacity-80" />
+                                ) : null}
                                 {subItem.title}
                               </Link>
                             </DropdownMenuItem>
@@ -201,13 +181,12 @@ export const NavMain = ({
     <SidebarGroup className="px-2 py-2">
       <SidebarMenu className="gap-1.5">
         {items.map((item) => {
-          const hasDropdown = (item.items?.length ?? 0) > 0;
           const isParentActive =
             pathname === item.url ||
             item.items?.some(
               (subItem) => cleanPathname === subItem.url || cleanPathname.startsWith(subItem.url)
             );
-          const isOpen = isParentActive || hoveredExpandedItem === item.url;
+          const isOpen = isParentActive || openExpandedItem === item.url;
 
           return (
             <Collapsible
@@ -219,28 +198,11 @@ export const NavMain = ({
                   return;
                 }
 
-                setHoveredExpandedItem((current) => {
-                  if (open) {
-                    return item.url;
-                  }
-
-                  return current === item.url ? null : current;
-                });
+                setOpenExpandedItem(open ? item.url : null);
               }}
               className="group/collapsible"
             >
-              <SidebarMenuItem
-                onMouseEnter={() => {
-                  if (hasDropdown) {
-                    setHoveredExpandedItem(item.url);
-                  }
-                }}
-                onMouseLeave={() => {
-                  if (!isParentActive && hasDropdown) {
-                    setHoveredExpandedItem((current) => (current === item.url ? null : current));
-                  }
-                }}
-              >
+              <SidebarMenuItem>
                 <CollapsibleTrigger asChild>
                   <SidebarMenuButton
                     tooltip={item.title}

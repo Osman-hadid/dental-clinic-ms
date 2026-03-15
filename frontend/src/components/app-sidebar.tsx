@@ -17,6 +17,7 @@ import { useAuthStore } from '@/modules/auth/application/stores/auth-store';
 import {
   Archive,
   BadgeDollarSign,
+  Building2,
   BarChart3,
   Boxes,
   Brain,
@@ -137,6 +138,18 @@ const staticNavItems: SidebarItem[] = [
     url: '/dental-management/backups',
   },
   {
+    icon: Building2,
+    items: [
+      {
+        key: 'clinicProfile',
+        permission: 'page.dental-management.clinic-profile',
+        url: '/dental-management/clinic-profile',
+      },
+    ],
+    key: 'clinic',
+    url: '/dental-management/clinic-profile',
+  },
+  {
     icon: ShieldUser,
     items: [
       { key: 'users', permission: 'page.user-management.users', url: '/user-management/users' },
@@ -162,6 +175,7 @@ const sidebarSubItemIcons: Record<string, LucideIcon> = {
   aiImaging: Brain,
   appointments: Calendar,
   backups: Archive,
+  clinicProfile: Smile,
   clinicalExpenses: ShoppingCart,
   dailyExpenses: CalendarDays,
   debts: HandCoins,

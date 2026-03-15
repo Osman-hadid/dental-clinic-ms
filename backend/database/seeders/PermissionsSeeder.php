@@ -35,6 +35,7 @@ class PermissionsSeeder extends Seeder
         'update-user-password' => ['en' => 'Update User Password', 'ps' => 'د کاروونکي پټنوم بدلول', 'dr' => 'تغییر رمز کاربر'],
         'patients' => ['en' => 'Patients', 'ps' => 'ناروغان', 'dr' => 'بیماران'],
         'patient-questions' => ['en' => 'Patient Questions', 'ps' => 'Patient Questions', 'dr' => 'Patient Questions'],
+        'clinic-profile' => ['en' => 'Clinic Profile', 'ps' => 'Clinic Profile', 'dr' => 'Clinic Profile'],
         'staff' => ['en' => 'Staff', 'ps' => 'کارکوونکي', 'dr' => 'کارمندان'],
         'appointments' => ['en' => 'Appointments', 'ps' => 'ملاقاتونه', 'dr' => 'ملاقات‌ها'],
         'visits' => ['en' => 'Visits', 'ps' => 'ویزیتونه', 'dr' => 'ویزیت‌ها'],
@@ -82,7 +83,7 @@ class PermissionsSeeder extends Seeder
 
     private const RESOURCES = [
         '/user-management' => ['users', 'roles', 'permissions', 'employee-activities', 'online-employees', 'update-user-password'],
-        '/dental-management' => ['patients', 'patient-questions', 'staff', 'appointments', 'visits', 'teeth', 'treatments', 'visit-treatments', 'invoices', 'payments', 'debts', 'backups', 'shareholders', 'shareholder-transactions'],
+        '/dental-management' => ['patients', 'patient-questions', 'clinic-profile', 'staff', 'appointments', 'visits', 'teeth', 'treatments', 'visit-treatments', 'invoices', 'payments', 'debts', 'backups', 'shareholders', 'shareholder-transactions'],
         '/incidents' => ['incidents', 'incident-reports'],
         '/biographic' => ['employee-details', 'inactive-employees', 'suspended-employees', 'add-vacant-positions', 'check-position-statuses', 'unknown-persons', 'data-entry-reports', 'assignment-lists', 'assignment-filters', 'statistical-reports', 'vacant-positions', 'department-totals', 'assignment-report-by-departments'],
         '/structures' => ['organizational-structure', 'department-formations', 'formation-archives', 'submit-new-formations', 'edit-and-approve-new-formations', 'reduced-positions', 'archived-positions', 'formation-filters', 'comparison-tables', 'position-details', 'formation-statistics', 'organizational-charts', 'department-statuses', 'itemized-details', 'proposals', 'programs', 'ceilings'],

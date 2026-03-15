@@ -1,8 +1,8 @@
 {
-  "platform": "پلیټ فارم",
+  "platform": "پلۍ فارم",
   "name": "SOURIRE",
   "dashboard": {
-    "title": "ډشبورډ",
+    "title": "کشبورد",
     "overview": "کتنه"
   },
   "backupManagement": {
@@ -23,7 +23,7 @@
   },
   "settings": {
     "title": "ترتیبات",
-    "dashboard": "ډشبورډ"
+    "dashboard": "کشبورد"
   },
   "navUser": {
     "loggingOut": "ننوتل ...",
@@ -56,16 +56,20 @@
     "staff": "کارکوونکي",
     "shareholders": "Shareholders",
     "staffProfiles": "د کارمندانو پروفایلونه",
-    "appointments": "ګمارنې",
-    "visits": "لیدنه",
+    "appointments": "ټایمینګ",
+    "visits": "لیدنې",
     "teeth": "غاښونه",
-    "treatments": "درملنه",
+    "treatments": "درملنې",
     "implants": "امپلانټونه",
-    "implantsInProcess": "? ??????? ?????",
-    "visitTreatments": "د درملنې څخه لیدنه وکړئ",
+    "implantsInProcess": "امپلانټ روان",
+    "visitTreatments": "د درملنې څخه لیدنه",
     "invoices": "رسیدونه",
     "payments": "تادیات",
     "aiImaging": "د AI امیجنگ",
     "aiImagingN8n": "د AI عکس اخیستل (n8n)"
+  },
+  "clinic": {
+    "title": "کلینیک",
+    "clinicProfile": "Clinic Profile"
   }
 }

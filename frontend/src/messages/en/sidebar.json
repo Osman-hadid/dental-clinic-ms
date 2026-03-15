@@ -67,5 +67,9 @@
     "payments": "Payments",
     "aiImaging": "AI Imaging",
     "aiImagingN8n": "AI Imaging (n8n)"
+  },
+  "clinic": {
+    "title": "Clinic",
+    "clinicProfile": "Clinic Profile"
   }
 }

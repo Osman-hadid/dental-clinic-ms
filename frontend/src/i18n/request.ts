@@ -21,6 +21,7 @@ type Messages = {
   visitTreatment: Record<string, unknown>;
   invoice: Record<string, unknown>;
   payment: Record<string, unknown>;
+  clinicProfile: Record<string, unknown>;
 };
 
 export default getRequestConfig(async ({ requestLocale }) => {
@@ -52,6 +53,8 @@ export default getRequestConfig(async ({ requestLocale }) => {
       .default,
     invoice: (await import(`@/messages/${locale}/dental-management/invoice.json`)).default,
     payment: (await import(`@/messages/${locale}/dental-management/payment.json`)).default,
+    clinicProfile: (await import(`@/messages/${locale}/dental-management/clinic-profile.json`))
+      .default,
   };
 
   return { locale, messages };

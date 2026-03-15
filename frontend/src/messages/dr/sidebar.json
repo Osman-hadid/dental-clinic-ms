@@ -12,11 +12,11 @@
   "userManagement": {
     "title": "مدیریت کاربر",
     "users": "کاربران",
-    "roles": "نقش ها",
+    "roles": "نقش‌ها",
     "permissions": "مجوزها"
   },
   "documentation": {
-    "title": "مستندات",
+    "title": "اسناد",
     "users": "کاربران",
     "permissions": "مجوزها",
     "settings": "تنظیمات"
@@ -26,23 +26,23 @@
     "dashboard": "داشبورد"
   },
   "navUser": {
-    "loggingOut": "خروج از سیستم...",
-    "logout": "خروج از سیستم",
+    "loggingOut": "خروج ...",
+    "logout": "خروج",
     "account": "حساب",
-    "notifications": "اطلاعیه ها"
+    "notifications": "اطلاعیه‌ها"
   },
   "employees": {
     "title": "کارمندان",
     "jobTypes": "انواع شغل"
   },
   "reports": {
-    "title": "گزارش ها",
+    "title": "گزارش‌ها",
     "overview": "مرکز گزارش",
     "debts": "مرکز بدهی",
-    "dailyExpenses": "هزینه های روزانه",
-    "clinicalExpenses": "خریدهای بالینی",
+    "dailyExpenses": "مصارف روزانه",
+    "clinicalExpenses": "خریدهای کلینیکی",
     "safe": "دفتر کل امن",
-    "salaries": "حقوق و دستمزد",
+    "salaries": "معاشات",
     "shareholders": "Shareholders"
   },
   "inventoryManagement": {
@@ -50,22 +50,26 @@
     "inventory": "Inventory"
   },
   "dentalManagement": {
-    "title": "مدیریت دندانپزشکی",
+    "title": "مدیریت دندان",
     "patients": "بیماران",
     "patientQuestions": "Patient Questions",
     "staff": "کارکنان",
+    "shareholders": "Shareholders",
     "staffProfiles": "مشخصات کارکنان",
-    "appointments": "قرار ملاقات ها",
-    "visits": "بازدید می کند",
-    "teeth": "دندان ها",
-    "treatments": "درمان ها",
-    "implants": "ایمپلنت ها",
-    "implantsInProcess": "??????? ?? ?????",
-    "visitTreatments": "از درمان ها دیدن کنید",
-    "invoices": "فاکتورها",
-    "payments": "پرداخت ها",
-    "aiImaging": "تصویربرداری هوش مصنوعی",
-    "aiImagingN8n": "تصویربرداری هوش مصنوعی (n8n)",
-    "shareholders": "Shareholders"
+    "appointments": "قرار ملاقات‌ها",
+    "visits": "ویزیت‌ها",
+    "teeth": "دندان‌ها",
+    "treatments": "درمان‌ها",
+    "implants": "ایمپلنت‌ها",
+    "implantsInProcess": "ایمپلنت در جریان",
+    "visitTreatments": "درمان‌های ویزیت",
+    "invoices": "رسیدها",
+    "payments": "پرداخت‌ها",
+    "aiImaging": "تصویربرداری AI",
+    "aiImagingN8n": "تصویربرداری AI (n8n)"
+  },
+  "clinic": {
+    "title": "کلینیک",
+    "clinicProfile": "Clinic Profile"
   }
 }

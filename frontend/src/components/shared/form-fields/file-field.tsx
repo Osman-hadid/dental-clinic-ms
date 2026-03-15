@@ -1,7 +1,6 @@
 'use client';
 
 import { JSX } from 'react';
-import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import {
   FileUpload,
@@ -71,7 +70,9 @@ const getAcceptValue = (isProfilePhoto: boolean, mimes?: string[]): string => {
 
 export const FileField = ({ name, validation }: Props): JSX.Element => {
   const { control } = useFormContext();
-  const isProfilePhoto = name === 'profilePhotoPath';
+  const imageFieldNames = ['profilePhotoPath', 'logoPath', 'clinicLogoPath'];
+  const isProfilePhoto = imageFieldNames.includes(name);
+  const isUserProfilePhoto = name === 'profilePhotoPath';
 
   const accept: string = getAcceptValue(isProfilePhoto, validation?.mimes?.value);
 
@@ -126,13 +127,17 @@ export const FileField = ({ name, validation }: Props): JSX.Element => {
                       if (isExistingFile) {
                         if (isProfilePhoto) {
                           return (
-                            <Image
+                            <img
                               src={field.value as string}
                               alt={file.name}
-                              width={44}
-                              height={44}
                               className="size-full object-cover"
-                              onError={() => toast.error('Failed to load profile image')}
+                              onError={() => {
+                                if (isUserProfilePhoto) {
+                                  toast.error('Failed to load profile image');
+                                } else {
+                                  toast.error('Failed to load logo image');
+                                }
+                              }}
                             />
                           );
                         }

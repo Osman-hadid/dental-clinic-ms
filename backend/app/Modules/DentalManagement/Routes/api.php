@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\AiImagingController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\AppointmentController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\ClinicProfileController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\DebtController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\DashboardSummaryController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\DentalBackupController;
@@ -112,6 +113,8 @@ Route::middleware(['api', 'auth:sanctum', 'set_locale'])->prefix('api/v1/dental-
     Route::get('/backups/settings', [DentalBackupController::class, 'showSchedule']);
     Route::put('/backups/settings', [DentalBackupController::class, 'updateSchedule']);
     Route::post('/backups/run', [DentalBackupController::class, 'run']);
+    Route::get('/clinic-profile', [ClinicProfileController::class, 'show']);
+    Route::put('/clinic-profile', [ClinicProfileController::class, 'update']);
     Route::get('/financial-settings/exchange-rate', [FinancialSettingController::class, 'showExchangeRate']);
     Route::put('/financial-settings/exchange-rate', [FinancialSettingController::class, 'updateExchangeRate']);
 });

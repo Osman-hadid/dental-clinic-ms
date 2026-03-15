@@ -9,10 +9,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
+import { type ClinicProfile } from '@/modules/dental-management/domain/entities/ClinicProfile';
 import { type Tooth } from '@/modules/dental-management/domain/entities/Tooth';
 import { type Treatment } from '@/modules/dental-management/domain/entities/Treatment';
 import { type VisitTreatment } from '@/modules/dental-management/domain/entities/VisitTreatment';
 import {
+  useClinicProfile,
   useGetPatient,
   useInvoiceList,
   useToothList,
@@ -453,6 +455,8 @@ export default function PatientProfilePage(): JSX.Element {
     relations: ['questionnaireResponses.question'],
   });
   const patient = patientResponse?.data ?? null;
+  const { data: clinicProfileResponse } = useClinicProfile();
+  const clinicProfile = clinicProfileResponse?.data ?? null;
 
   const { entities: teeth } = useToothList(1, MAX_PER_PAGE);
   const toothById = useMemo(
@@ -946,7 +950,7 @@ export default function PatientProfilePage(): JSX.Element {
     }
   };
 
-  const handlePrintPrescriptionRecord = (): void => {
+  const handlePrintPrescriptionRecord = async (): Promise<void> => {
     if (!patient) {
       toast.error('Patient data is not ready yet.');
       return;
@@ -967,10 +971,37 @@ export default function PatientProfilePage(): JSX.Element {
       return normalized.length > 0 ? normalized : [content.trim()];
     };
 
-    const clinicName = 'Dental Clinic';
-    const clinicAddress = patient.address?.trim() || 'Address not provided';
-    const clinicPhone = patient.contactNumber?.trim() || '-';
-    const appLogoUrl = `${window.location.origin}/logo2.png`;
+    let resolvedClinicProfile: ClinicProfile | null = clinicProfile ?? null;
+    if (!resolvedClinicProfile) {
+      try {
+        const clinicResponse = await new AxiosClient().get<ClinicProfile | null>(
+          '/api/v1/dental-management/clinic-profile'
+        );
+        if (clinicResponse.success) {
+          resolvedClinicProfile = clinicResponse.data ?? null;
+        }
+      } catch {
+        resolvedClinicProfile = null;
+      }
+    }
+
+    const clinicName = resolvedClinicProfile?.name?.trim() || 'Dental Clinic';
+    const clinicAddress =
+      resolvedClinicProfile?.address?.trim() || patient.address?.trim() || 'Address not provided';
+    const clinicPhone =
+      resolvedClinicProfile?.contactNumber?.trim() || patient.contactNumber?.trim() || '-';
+    const clinicEmail = resolvedClinicProfile?.email?.trim() || '';
+    const clinicWebsite = resolvedClinicProfile?.website?.trim() || '';
+    const clinicLogoUrl =
+      resolvedClinicProfile?.logoPath &&
+      typeof resolvedClinicProfile.logoPath === 'string' &&
+      resolvedClinicProfile.logoPath.trim() !== ''
+        ? resolvedClinicProfile.logoPath
+        : `${window.location.origin}/logo2.png`;
+    const clinicFooterExtras = [clinicEmail, clinicWebsite]
+      .filter((value) => value)
+      .map((value) => `<p class="clinic-info">${escapeHtml(value)}</p>`)
+      .join('');
     const printedOnLabel = formatDisplayDate(new Date().toISOString());
 
     const sheetMarkup = prescriptionRecords
@@ -990,11 +1021,13 @@ export default function PatientProfilePage(): JSX.Element {
       <header class="card-header">
         <div class="header-band">
           <div class="header-copy">
+            <p class="clinic-title">${escapeHtml(clinicName)}</p>
+            <p class="clinic-subtitle">${escapeHtml(clinicAddress)}</p>
             <p class="doctor-name">${escapeHtml(doctorLabel)}</p>
             <p class="doctor-qualification">DENTAL CARE</p>
           </div>
           <div class="header-icon">
-            <img src="${escapeHtml(appLogoUrl)}" alt="App logo" class="header-logo" />
+            <img src="${escapeHtml(clinicLogoUrl)}" alt="Clinic logo" class="header-logo" />
           </div>
         </div>
       </header>
@@ -1040,6 +1073,7 @@ export default function PatientProfilePage(): JSX.Element {
         <p class="clinic-name">${escapeHtml(clinicName)}</p>
         <p class="clinic-info">${escapeHtml(clinicAddress)}</p>
         <p class="clinic-info">${escapeHtml(clinicPhone)}</p>
+        ${clinicFooterExtras}
       </footer>
     </div>
     <p class="print-timestamp">Printed on ${escapeHtml(printedOnLabel)}</p>
@@ -1121,6 +1155,19 @@ export default function PatientProfilePage(): JSX.Element {
       z-index: 1;
       color: #f8ffff;
       max-width: 95mm;
+    }
+    .clinic-title {
+      margin: 0 0 2px;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+    .clinic-subtitle {
+      margin: 0 0 6px;
+      font-size: 11px;
+      letter-spacing: 0.02em;
+      opacity: 0.9;
     }
     .doctor-name {
       margin: 0;

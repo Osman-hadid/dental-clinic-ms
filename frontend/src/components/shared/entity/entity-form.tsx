@@ -16,6 +16,7 @@ type EntityFormProps = {
   onSuccess: () => void;
   submitText: string;
   errors?: Record<string, string[]> | null;
+  keepValuesOnSuccess?: boolean;
 };
 
 const normalizeFieldValue = (field: FormField, value: any): any => {
@@ -91,6 +92,7 @@ export const EntityForm = ({
   defaultValues,
   errors,
   formConfig,
+  keepValuesOnSuccess = false,
   onSubmit,
   onSuccess,
   submitText,
@@ -155,7 +157,9 @@ export const EntityForm = ({
         const response = await onSubmit(payload);
         if (response.success) {
           onSuccess();
-          reset();
+          if (!keepValuesOnSuccess) {
+            reset();
+          }
         }
       } catch (error) {
         console.error('Form submission error:', error);
