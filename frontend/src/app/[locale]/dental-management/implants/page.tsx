@@ -28,7 +28,7 @@ import { TreatmentRepository } from '@/modules/dental-management/infrastructure/
 import { VisitTreatmentRepository } from '@/modules/dental-management/infrastructure/repositories/visit-treatment-repository';
 import { VisitRepository } from '@/modules/dental-management/infrastructure/repositories/visit-repository';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ClipboardCheck, Loader2, Printer, RefreshCcw, Save, ShieldAlert } from 'lucide-react';
 import {
@@ -318,31 +318,47 @@ export default function ImplantsPage(): JSX.Element {
   const [isSavingPlan, setIsSavingPlan] = useState(false);
   const [saveSummary, setSaveSummary] = useState<SaveSummary | null>(null);
   const [selectedTeethByPatient, setSelectedTeethByPatient] = useState<Record<string, string[]>>({});
+  const [patientSearch, setPatientSearch] = useState('');
+  const [patientSearchDebounced, setPatientSearchDebounced] = useState('');
   const patientTasksQueryKey = useMemo(() => ['patient-session-tasks', form.patientId], [form.patientId]);
-  const { data: allPatients = [], isFetching: isLoadingPatients } = useQuery<Patient[]>({
-    queryFn: async () => {
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setPatientSearchDebounced(patientSearch.trim());
+    }, 300);
+
+    return () => clearTimeout(timeout);
+  }, [patientSearch]);
+
+  const {
+    data: patientPages,
+    fetchNextPage,
+    hasNextPage,
+    isFetching: isLoadingPatients,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryFn: async ({ pageParam = 1 }) => {
       const patientRepository = new PatientRepository();
       const listPatientsUseCase = new ListPatientsUseCase(patientRepository);
-      const all: Patient[] = [];
-      let currentPage = 1;
-      let lastPage = 1;
-
-      do {
-        const response = await listPatientsUseCase.execute('', [], [], {}, currentPage, 100);
-        if (response.error || !response.data) {
-          throw new Error(response.error?.message || 'Failed to fetch patients');
-        }
-
-        all.push(...response.data.data);
-        lastPage = response.data.meta?.lastPage ?? currentPage;
-        currentPage += 1;
-      } while (currentPage <= lastPage);
-
-      return all;
+      const response = await listPatientsUseCase.execute(
+        patientSearchDebounced,
+        ['patientCode', 'firstName', 'lastName', 'contactNumber'],
+        [],
+        {},
+        pageParam,
+        50
+      );
+      if (response.error || !response.data) {
+        throw new Error(response.error?.message || 'Failed to fetch patients');
+      }
+      return response.data;
     },
-    queryKey: ['implant-patient-options'],
+    getNextPageParam: (lastPage) =>
+      lastPage.meta.currentPage < lastPage.meta.lastPage ? lastPage.meta.currentPage + 1 : undefined,
+    queryKey: ['implant-patient-options', patientSearchDebounced],
     refetchOnWindowFocus: false,
     staleTime: 5 * 60 * 1000,
+    initialPageParam: 1,
   });
   const { data: allStaff = [], isFetching: isLoadingStaff } = useQuery<Staff[]>({
     queryFn: async () => {
@@ -674,6 +690,11 @@ export default function ImplantsPage(): JSX.Element {
   const totalSupplierCost = supplierCostPerTooth * selectedImplantTeeth.length;
   const supplierRemainingAmount = totalSupplierCost;
 
+  const allPatients = useMemo(
+    () => (patientPages?.pages ?? []).flatMap((page) => page.data),
+    [patientPages]
+  );
+
   const selectedPatient = useMemo(
     () => allPatients.find((patient) => String(patient.id) === form.patientId),
     [allPatients, form.patientId]
@@ -683,15 +704,19 @@ export default function ImplantsPage(): JSX.Element {
     [form.linkedVisitId, patientVisits]
   );
 
-  const patientOptions = useMemo(
-    () => allPatients
+  const patientOptions = useMemo(() => {
+    const uniquePatients = new Map<string, Patient>();
+    allPatients.forEach((patient) => {
+      uniquePatients.set(String(patient.id), patient);
+    });
+
+    return Array.from(uniquePatients.values())
       .map((patient) => ({
         id: String(patient.id),
         label: `${patient.firstName} ${patient.lastName} (${patient.patientCode})`.trim(),
       }))
-      .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: 'base' })),
-    [allPatients]
-  );
+      .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: 'base' }));
+  }, [allPatients]);
   const implantCompanyOptions = useMemo(
     () => implantCompanies
       .map((company) => ({
@@ -931,30 +956,67 @@ export default function ImplantsPage(): JSX.Element {
               <section className="space-y-3">
                 <h3 className="text-sm font-semibold">Patient and Site</h3>
                 <div className="grid gap-3 md:grid-cols-3">
-                  <Select
-                    value={form.patientId || undefined}
-                    onValueChange={(value) => {
-                      setForm((prev) => ({
-                        ...prev,
-                        linkedVisitId: '',
-                        patientId: value,
-                      }));
-                    }}
-                    disabled={isLoadingPatients || patientOptions.length === 0}
-                  >
-                    <SelectTrigger>
-                      <SelectValue
-                        placeholder={isLoadingPatients ? 'Loading patients...' : 'Select patient'}
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {patientOptions.map((patient) => (
-                        <SelectItem key={patient.id} value={patient.id}>
-                          {patient.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="space-y-2">
+                    <Input
+                      placeholder="Search patient (name, code, phone)"
+                      value={patientSearch}
+                      onChange={(event) => setPatientSearch(event.target.value)}
+                    />
+                    <Select
+                      value={form.patientId || undefined}
+                      onValueChange={(value) => {
+                        setForm((prev) => ({
+                          ...prev,
+                          linkedVisitId: '',
+                          patientId: value,
+                        }));
+                      }}
+                      disabled={isLoadingPatients || patientOptions.length === 0}
+                    >
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={isLoadingPatients ? 'Loading patients...' : 'Select patient'}
+                        />
+                      </SelectTrigger>
+                      <SelectContent
+                        onScroll={(event) => {
+                          const target = event.currentTarget;
+                          const isNearBottom = target.scrollTop + target.clientHeight >= target.scrollHeight - 20;
+                          if (isNearBottom && hasNextPage && !isFetchingNextPage) {
+                            void fetchNextPage();
+                          }
+                        }}
+                      >
+                        {patientOptions.map((patient) => (
+                          <SelectItem key={patient.id} value={patient.id}>
+                            {patient.label}
+                          </SelectItem>
+                        ))}
+                        {hasNextPage ? (
+                          <div className="px-3 py-2 text-xs text-muted-foreground space-y-2">
+                            <p>{isFetchingNextPage ? 'Loading more patients...' : 'Scroll to load more patients.'}</p>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={isFetchingNextPage}
+                              onClick={() => {
+                                void fetchNextPage();
+                              }}
+                            >
+                              {isFetchingNextPage ? (
+                                <Loader2 className="me-2 size-4 animate-spin" />
+                              ) : null}
+                              Load more
+                            </Button>
+                          </div>
+                        ) : null}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Type to search by name, code, or phone. Scroll to load more.
+                    </p>
+                  </div>
                   <Input
                     placeholder="Patient ID / File Number"
                     value={selectedPatient?.patientCode ?? ''}

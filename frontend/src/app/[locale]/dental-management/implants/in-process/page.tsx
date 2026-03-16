@@ -1,6 +1,6 @@
 'use client';
 
-import { JSX, useMemo, useState } from 'react';
+import { JSX, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Header } from '@/components/header';
 import { Badge } from '@/components/ui/badge';
@@ -45,7 +45,7 @@ import { PatientRepository } from '@/modules/dental-management/infrastructure/re
 import { VisitTreatmentRepository } from '@/modules/dental-management/infrastructure/repositories/visit-treatment-repository';
 import { VisitRepository } from '@/modules/dental-management/infrastructure/repositories/visit-repository';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -222,35 +222,52 @@ export default function InProcessImplantsPage(): JSX.Element {
   const tSidebar = useTranslations('sidebar.dentalManagement');
   const queryClient = useQueryClient();
   const [patientId, setPatientId] = useState('');
+  const [patientSearch, setPatientSearch] = useState('');
+  const [patientSearchDebounced, setPatientSearchDebounced] = useState('');
   const [availabilityToothSaving, setAvailabilityToothSaving] = useState<string | null>(null);
   const [supplierPayNowByTooth, setSupplierPayNowByTooth] = useState<Record<string, string>>({});
   const [selectedPlanningRecord, setSelectedPlanningRecord] = useState<ImplantPlanningRecord | null>(null);
   const patientTasksQueryKey = useMemo(() => ['patient-session-tasks', patientId], [patientId]);
 
-  const { data: allPatients = [], isFetching: isLoadingPatients } = useQuery<Patient[]>({
-    queryFn: async () => {
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setPatientSearchDebounced(patientSearch.trim());
+    }, 300);
+
+    return () => clearTimeout(timeout);
+  }, [patientSearch]);
+
+  const {
+    data: patientPages,
+    fetchNextPage,
+    hasNextPage,
+    isFetching: isLoadingPatients,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryFn: async ({ pageParam = 1 }) => {
       const patientRepository = new PatientRepository();
       const listPatientsUseCase = new ListPatientsUseCase(patientRepository);
-      const all: Patient[] = [];
-      let currentPage = 1;
-      let lastPage = 1;
+      const response = await listPatientsUseCase.execute(
+        patientSearchDebounced,
+        ['patientCode', 'firstName', 'lastName', 'contactNumber'],
+        [],
+        {},
+        pageParam,
+        50
+      );
 
-      do {
-        const response = await listPatientsUseCase.execute('', [], [], {}, currentPage, 100);
-        if (response.error || !response.data) {
-          throw new Error(response.error?.message || 'Failed to fetch patients');
-        }
+      if (response.error || !response.data) {
+        throw new Error(response.error?.message || 'Failed to fetch patients');
+      }
 
-        all.push(...response.data.data);
-        lastPage = response.data.meta?.lastPage ?? currentPage;
-        currentPage += 1;
-      } while (currentPage <= lastPage);
-
-      return all;
+      return response.data;
     },
-    queryKey: ['in-process-implant-patient-options'],
+    getNextPageParam: (lastPage) =>
+      lastPage.meta.currentPage < lastPage.meta.lastPage ? lastPage.meta.currentPage + 1 : undefined,
+    queryKey: ['in-process-implant-patient-options', patientSearchDebounced],
     refetchOnWindowFocus: false,
     staleTime: 5 * 60 * 1000,
+    initialPageParam: 1,
   });
 
   const { data: patientSessionTasks = [] } = useQuery<SessionTask[]>({
@@ -392,18 +409,27 @@ export default function InProcessImplantsPage(): JSX.Element {
     staleTime: 60 * 1000,
   });
 
-  const patientOptions = useMemo(
-    () => allPatients
+  const allPatients = useMemo(
+    () => (patientPages?.pages ?? []).flatMap((page) => page.data),
+    [patientPages]
+  );
+
+  const patientOptions = useMemo(() => {
+    const uniquePatients = new Map<string, Patient>();
+    allPatients.forEach((patient) => {
+      uniquePatients.set(String(patient.id), patient);
+    });
+
+    return Array.from(uniquePatients.values())
       .map((patient) => ({
         id: String(patient.id),
         label: `${patient.firstName} ${patient.lastName} (${patient.patientCode})`.trim(),
       }))
-      .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: 'base' })),
-    [allPatients]
-  );
+      .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: 'base' }));
+  }, [allPatients]);
 
   const implantCards = useMemo<ImplantCard[]>(() => {
-    return patientSessionTasks
+    const cards = patientSessionTasks
       .map((task) => {
         const notes = task.notes ?? '';
         if (!notes.includes(IMPLANT_TASK_MARKER) && !task.title.toLowerCase().includes('implant tooth')) {
@@ -430,8 +456,17 @@ export default function InProcessImplantsPage(): JSX.Element {
           toothNumber,
         };
       })
-      .filter((card): card is ImplantCard => Boolean(card))
-      .sort((left, right) => left.toothNumber.localeCompare(right.toothNumber, undefined, { numeric: true }));
+      .filter((card): card is ImplantCard => Boolean(card));
+
+    const uniqueByTaskTooth = new Map<string, ImplantCard>();
+    cards.forEach((card) => {
+      const key = `${card.taskId}-${card.toothNumber}`;
+      uniqueByTaskTooth.set(key, card);
+    });
+
+    return Array.from(uniqueByTaskTooth.values()).sort((left, right) =>
+      left.toothNumber.localeCompare(right.toothNumber, undefined, { numeric: true })
+    );
   }, [patientSessionTasks]);
 
   const implantCardByTooth = useMemo<Record<string, ImplantCard>>(() => {
@@ -596,7 +631,12 @@ export default function InProcessImplantsPage(): JSX.Element {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className="max-w-md">
+            <div className="max-w-md space-y-2">
+              <Input
+                placeholder="Search patient (name, code, phone)"
+                value={patientSearch}
+                onChange={(event) => setPatientSearch(event.target.value)}
+              />
               <Select
                 value={patientId || undefined}
                 onValueChange={setPatientId}
@@ -605,14 +645,44 @@ export default function InProcessImplantsPage(): JSX.Element {
                 <SelectTrigger>
                   <SelectValue placeholder={isLoadingPatients ? 'Loading patients...' : 'Select patient'} />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent
+                  onScroll={(event) => {
+                    const target = event.currentTarget;
+                    const isNearBottom = target.scrollTop + target.clientHeight >= target.scrollHeight - 20;
+                    if (isNearBottom && hasNextPage && !isFetchingNextPage) {
+                      void fetchNextPage();
+                    }
+                  }}
+                >
                   {patientOptions.map((patient) => (
                     <SelectItem key={patient.id} value={patient.id}>
                       {patient.label}
                     </SelectItem>
                   ))}
+                  {hasNextPage ? (
+                    <div className="px-3 py-2 text-xs text-muted-foreground space-y-2">
+                      <p>{isFetchingNextPage ? 'Loading more patients...' : 'Scroll to load more patients.'}</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={isFetchingNextPage}
+                        onClick={() => {
+                          void fetchNextPage();
+                        }}
+                      >
+                        {isFetchingNextPage ? (
+                          <Loader2 className="me-2 size-4 animate-spin" />
+                        ) : null}
+                        Load more
+                      </Button>
+                    </div>
+                  ) : null}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">
+                Type to search by name, code, or phone. Scroll to load more.
+              </p>
             </div>
 
             {!patientId ? (
@@ -677,7 +747,7 @@ export default function InProcessImplantsPage(): JSX.Element {
                       ) : (
                         <div className="space-y-2">
                           {groupedImplants[availability].map((card) => (
-                            <div key={card.taskId} className="rounded-md border border-border p-2">
+                            <div key={`${card.taskId}-${card.toothNumber}`} className="rounded-md border border-border p-2">
                               <div className="flex items-center justify-between">
                                 <span className="text-sm font-medium">Tooth {card.toothNumber}</span>
                                 <Badge variant="outline">{AVAILABILITY_TITLES[card.availability]}</Badge>
@@ -755,7 +825,7 @@ export default function InProcessImplantsPage(): JSX.Element {
                       </TableHeader>
                       <TableBody>
                         {unpaidSupplierRows.map((row) => (
-                          <TableRow key={`unpaid-${row.taskId}`}>
+                          <TableRow key={`unpaid-${row.taskId}-${row.toothNumber}`}>
                             <TableCell>Tooth {row.toothNumber}</TableCell>
                             <TableCell>{AVAILABILITY_TITLES[row.availability]}</TableCell>
                             <TableCell>{formatCurrency(row.supplierTotal)}</TableCell>

@@ -2,6 +2,7 @@
 
 import { JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { useRouter } from 'next/navigation';
 import { Header } from '@/components/header';
 import { LoadingState } from '@/components/shared/loading-state';
 import { Button } from '@/components/ui/button';
@@ -28,11 +29,13 @@ import {
   SnapshotRecord,
   SnapshotScheduleResponse,
 } from '@/modules/dental-management/presentation/reports/report-dashboard-types';
-import { FilterLabel } from '@/modules/dental-management/presentation/reports/report-dashboard-utils';
+import { FilterLabel, MetricCard } from '@/modules/dental-management/presentation/reports/report-dashboard-utils';
+import { formatCurrency } from '@/lib/currency-utils';
 import { toast } from 'sonner';
 
 const client = new AxiosClient();
 type ReportFilterKey = 'dateRange' | 'dentist' | 'granularity' | 'patient' | 'paymentMethod' | 'search' | 'status' | 'treatment';
+type RangePreset = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom';
 
 const reportExperience: Record<
   ReportTab,
@@ -152,13 +155,26 @@ const areReportParamsEqual = (
   left.treatmentFilter === right.treatmentFilter
 );
 
+const rangePresets: Record<RangePreset, { days: number | null; granularity: FiltersState['granularity']; label: string }> = {
+  daily: { days: 0, granularity: 'day', label: 'Daily' },
+  weekly: { days: 7, granularity: 'day', label: 'Weekly' },
+  monthly: { days: 30, granularity: 'month', label: 'Monthly' },
+  yearly: { days: 365, granularity: 'year', label: 'Yearly' },
+  custom: { days: null, granularity: 'day', label: 'Custom range' },
+};
+
 const ReportsPage = (): JSX.Element => {
   const locale = useLocale();
   const tSidebar = useTranslations('sidebar');
+  const router = useRouter();
   const printableReportRef = useRef<HTMLDivElement | null>(null);
   const [activeTab, setActiveTab] = useState<ReportTab>('executive');
   const [draftFilters, setDraftFilters] = useState<FiltersState>(() => defaultFilters());
   const [appliedFilters, setAppliedFilters] = useState<FiltersState>(() => defaultFilters());
+  const [summaryRange, setSummaryRange] = useState<RangePreset>('monthly');
+  const [summaryRangeStart, setSummaryRangeStart] = useState(() => createDefaultReportRange(30).startDate);
+  const [summaryRangeEnd, setSummaryRangeEnd] = useState(() => createDefaultReportRange(30).endDate);
+  const [rangeSummary, setRangeSummary] = useState<FinancialData['summary'] | null>(null);
   const [filterOptions, setFilterOptions] = useState<FilterOptionsResponse | null>(null);
   const [executive, setExecutive] = useState<ExecutiveData | null>(null);
   const [financial, setFinancial] = useState<FinancialData | null>(null);
@@ -170,11 +186,10 @@ const ReportsPage = (): JSX.Element => {
   const [csvExportType, setCsvExportType] = useState<CsvExportType>('executive_summary');
   const [isLoadingFilters, setIsLoadingFilters] = useState(false);
   const [isLoadingTab, setIsLoadingTab] = useState(false);
+  const [isLoadingRangeSummary, setIsLoadingRangeSummary] = useState(false);
   const [isSavingSnapshot, setIsSavingSnapshot] = useState(false);
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
   const activeReport = reportExperience[activeTab];
-  const coreTabs: ReportTab[] = ['executive', 'financial', 'clinical', 'inventory'];
-  const isCoreTabActive = coreTabs.includes(activeTab);
 
   const reportParams = useMemo(() => buildReportParams(appliedFilters), [appliedFilters]);
   const draftReportParams = useMemo(() => buildReportParams(draftFilters), [draftFilters]);
@@ -213,37 +228,13 @@ const ReportsPage = (): JSX.Element => {
     }
   }, [reportParams]);
 
-  const fetchCoreTabs = useCallback(async (params = reportParams, showLoading = isCoreTabActive): Promise<void> => {
-    if (showLoading) setIsLoadingTab(true);
-    try {
-      const [executiveData, financialData, clinicalData, inventoryData] = await Promise.all([
-        fetchReport<ExecutiveData>('/api/v1/dental-management/reports/executive', params),
-        fetchReport<FinancialData>('/api/v1/dental-management/reports/financial', params),
-        fetchReport<ClinicalData>('/api/v1/dental-management/reports/clinical', params),
-        fetchReport<InventoryData>('/api/v1/dental-management/reports/inventory', params),
-      ]);
-      setExecutive(executiveData);
-      setFinancial(financialData);
-      setClinical(clinicalData);
-      setInventory(inventoryData);
-    } finally {
-      if (showLoading) setIsLoadingTab(false);
-    }
-  }, [reportParams, isCoreTabActive]);
-
   useEffect(() => {
     void fetchFilterOptions();
   }, [fetchFilterOptions]);
 
   useEffect(() => {
-    void fetchCoreTabs(reportParams, isCoreTabActive);
-  }, [fetchCoreTabs, reportParams, isCoreTabActive]);
-
-  useEffect(() => {
-    if (activeTab === 'audit') {
-      void fetchTab('audit');
-    }
-  }, [activeTab, fetchTab]);
+    void fetchTab(activeTab);
+  }, [activeTab, fetchTab, reportParams]);
 
   useEffect(() => {
     void Promise.all([fetchSnapshots(), fetchSnapshotSchedule()]);
@@ -255,8 +246,63 @@ const ReportsPage = (): JSX.Element => {
     }
   }, [activeReport, csvExportType]);
 
+  useEffect(() => {
+    let isActive = true;
+    const preset = rangePresets[summaryRange];
+    const fallbackRange = createDefaultReportRange(preset.days ?? 30);
+    const safeStart = summaryRangeStart || fallbackRange.startDate;
+    const safeEnd = summaryRangeEnd || fallbackRange.endDate;
+    const range = summaryRange === 'daily'
+      ? { startDate: safeStart, endDate: safeStart }
+      : preset.days === null
+        ? { startDate: safeStart, endDate: safeEnd }
+        : createDefaultReportRange(preset.days);
+    const baseFilters = defaultFilters();
+    const params = buildReportParams({
+      ...baseFilters,
+      endDate: range.endDate,
+      granularity: preset.granularity,
+      startDate: range.startDate,
+    });
+
+    setIsLoadingRangeSummary(true);
+    void fetchReport<FinancialData>('/api/v1/dental-management/reports/financial', { ...params, summaryOnly: 1 })
+      .then(async (data) => {
+        if (!isActive) return;
+        if (!data?.summary) {
+          const fallback = await fetchReport<FinancialData>('/api/v1/dental-management/reports/financial', params);
+          if (isActive) setRangeSummary(fallback?.summary ?? null);
+          return;
+        }
+        setRangeSummary(data.summary);
+      })
+      .catch(() => {
+        if (isActive) setRangeSummary(null);
+      })
+      .finally(() => {
+        if (isActive) setIsLoadingRangeSummary(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [summaryRange, summaryRangeEnd, summaryRangeStart]);
+
   const applyFilters = (): void => {
     setAppliedFilters(draftFilters);
+  };
+
+  const openSafeLedger = (focus: 'balance' | 'in' | 'out'): void => {
+    const endDate = summaryRange === 'daily' ? summaryRangeStart : summaryRangeEnd;
+    const params = new URLSearchParams({
+      endDate,
+      focus,
+      startDate: summaryRangeStart,
+    });
+    if (focus === 'in' || focus === 'out') {
+      params.set('direction', focus);
+    }
+    router.push(`/${locale}/reports/safe?${params.toString()}`);
   };
 
   const showsFilter = (filterKey: ReportFilterKey): boolean => activeReport.visibleFilters.includes(filterKey);
@@ -537,6 +583,128 @@ const ReportsPage = (): JSX.Element => {
       <div className="flex flex-1 flex-col">
         <div className="@container/main flex flex-1 flex-col gap-2">
           <div className="flex flex-col gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6">
+            <Card className="rounded-3xl border border-slate-200 bg-white/80">
+              <CardHeader className="pb-3">
+                <CardTitle>Quick Financial Snapshot</CardTitle>
+                <CardDescription>Choose a time range and review the headline money metrics.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="flex flex-col gap-0.5">
+                    <FilterLabel>Range</FilterLabel>
+                    <select
+                      className={reportSelectClassName}
+                      value={summaryRange}
+                      onChange={(event) => {
+                        const next = event.target.value as RangePreset;
+                        setSummaryRange(next);
+                        const preset = rangePresets[next];
+                        if (preset.days !== null) {
+                          const range = createDefaultReportRange(preset.days);
+                          setSummaryRangeStart(range.startDate);
+                          setSummaryRangeEnd(range.endDate);
+                        }
+                      }}
+                    >
+                      {Object.entries(rangePresets).map(([value, preset]) => (
+                        <option key={value} value={value}>{preset.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <FilterLabel>{summaryRange === 'daily' ? 'Date' : 'From'}</FilterLabel>
+                    <Input
+                      className={reportInputClassName}
+                      type="date"
+                      value={summaryRangeStart}
+                      onChange={(event) => {
+                        setSummaryRangeStart(event.target.value);
+                        if (summaryRange === 'daily') {
+                          setSummaryRangeEnd(event.target.value);
+                        } else {
+                          setSummaryRange('custom');
+                        }
+                      }}
+                    />
+                  </div>
+                  {summaryRange !== 'daily' ? (
+                    <div className="flex flex-col gap-0.5">
+                      <FilterLabel>To</FilterLabel>
+                      <Input
+                        className={reportInputClassName}
+                        type="date"
+                        value={summaryRangeEnd}
+                        onChange={(event) => {
+                          setSummaryRangeEnd(event.target.value);
+                          setSummaryRange('custom');
+                        }}
+                      />
+                    </div>
+                  ) : null}
+                  <p className="text-xs text-muted-foreground">
+                    Showing {rangePresets[summaryRange].label.toLowerCase()} totals.
+                  </p>
+                </div>
+
+                {isLoadingRangeSummary && !rangeSummary ? (
+                  <LoadingState compact title="Loading summary" description="Fetching totals for the selected range." />
+                ) : (
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <MetricCard
+                      label="Total money received"
+                      value={formatCurrency(rangeSummary?.paid ?? 0, 'AFN')}
+                      tone="safe"
+                    />
+                    <MetricCard
+                      label="Total debts"
+                      value={formatCurrency(rangeSummary?.outstanding ?? 0, 'AFN')}
+                      tone="danger"
+                    />
+                    <MetricCard
+                      label="Total unpaid money"
+                      value={formatCurrency(rangeSummary?.thirdCompanyUnpaid ?? 0, 'AFN')}
+                    />
+                    <div className="space-y-3">
+                      <button
+                        type="button"
+                        className="text-left transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50"
+                        onClick={() => openSafeLedger('balance')}
+                      >
+                        <MetricCard
+                          label="Total safe money"
+                          value={formatCurrency(rangeSummary?.safeBalance ?? 0, 'AFN')}
+                          tone="safe"
+                        />
+                      </button>
+                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                        <button
+                          type="button"
+                          className="text-left transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50"
+                          onClick={() => openSafeLedger('in')}
+                        >
+                          <MetricCard
+                            label="Safe money in"
+                            value={formatCurrency(rangeSummary?.safeIn ?? 0, 'AFN')}
+                          />
+                        </button>
+                        <button
+                          type="button"
+                          className="text-left transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50"
+                          onClick={() => openSafeLedger('out')}
+                        >
+                          <MetricCard
+                            label="Safe money out"
+                            value={formatCurrency(rangeSummary?.safeOut ?? 0, 'AFN')}
+                            tone="danger"
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             <Card className="rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 via-background to-cyan-50">
               <CardHeader className="pb-3">
                 <CardTitle>Reports Center</CardTitle>

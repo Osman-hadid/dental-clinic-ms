@@ -4,7 +4,8 @@
 
 import { useState } from 'react';
 
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { useRouter } from 'next/navigation';
 
 import {
 
@@ -54,7 +55,7 @@ import { type EntityModuleConfig, type TableColumn } from '@/types/EntityModuleC
 
 import { flexRender, type Table } from '@tanstack/react-table';
 
-import { AlertTriangle, Edit, PlusCircle, Printer, Trash2 } from 'lucide-react';
+import { AlertTriangle, Edit, LayoutDashboard, PlusCircle, Printer, Trash2 } from 'lucide-react';
 
 import { EntityTablePagination } from './entity-table-pagination';
 
@@ -137,6 +138,8 @@ export const EntityTable = <TData extends User>({
   const t = useTranslations(config.singleQueryKey);
 
   const tGlobal = useTranslations('global');
+  const locale = useLocale();
+  const router = useRouter();
 
   const totalItems = pagination?.total ?? table.getRowModel().rows.length;
 
@@ -1183,6 +1186,36 @@ export const EntityTable = <TData extends User>({
                   })}
 
                   <TableCell className="flex space-x-2">
+
+                    {config.queryKey === 'patients' ? (
+
+                      <Button
+
+                        variant="ghost"
+
+                        size="icon"
+
+                        onClick={() => {
+
+                          const patientId = row.original.id;
+
+                          const encodedPatientId = encodeURIComponent(String(patientId));
+
+                          router.push(`/${locale}/dental-management/patients/patient-profile?patientId=${encodedPatientId}`);
+
+                        }}
+
+                        aria-label="Open patient dashboard"
+
+                        className="text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50"
+
+                      >
+
+                        <LayoutDashboard className="h-4 w-4" />
+
+                      </Button>
+
+                    ) : null}
 
                     {config.queryKey === 'invoices' ? (
 

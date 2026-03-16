@@ -68,6 +68,50 @@ const getAcceptValue = (isProfilePhoto: boolean, mimes?: string[]): string => {
   return isProfilePhoto ? 'image/*' : '.pdf,.doc,.docx,.xls,.xlsx';
 };
 
+const resolveAssetBaseUrl = (): string => {
+  if (typeof window === 'undefined') {
+    return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  }
+
+  const { hostname, origin, port, protocol } = window.location;
+  const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1';
+
+  if (isLocalHost && port === '3000') {
+    return `${protocol}//${hostname}:8000`;
+  }
+
+  return process.env.NEXT_PUBLIC_API_URL || origin;
+};
+
+const resolveFileUrl = (value: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return value;
+  }
+
+  if (trimmed.startsWith('/storage')) {
+    return `${resolveAssetBaseUrl()}${trimmed}`;
+  }
+
+  if (trimmed.startsWith('storage/')) {
+    return `${resolveAssetBaseUrl()}/${trimmed}`;
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const url = new URL(trimmed);
+      const isLocalHost = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+      if (isLocalHost && url.port === '8000') {
+        return `${resolveAssetBaseUrl()}${url.pathname}`;
+      }
+    } catch {
+      // ignore and fall through
+    }
+  }
+
+  return trimmed;
+};
+
 export const FileField = ({ name, validation }: Props): JSX.Element => {
   const { control } = useFormContext();
   const imageFieldNames = ['profilePhotoPath', 'logoPath', 'clinicLogoPath'];
@@ -85,6 +129,7 @@ export const FileField = ({ name, validation }: Props): JSX.Element => {
       rules={validation}
       render={({ field }) => {
         const isExistingFile = typeof field.value === 'string' && field.value;
+        const resolvedUrl = isExistingFile ? resolveFileUrl(field.value as string) : '';
 
         const fileValue = isExistingFile
           ? createMockFileFromPath(field.value as string)
@@ -128,7 +173,7 @@ export const FileField = ({ name, validation }: Props): JSX.Element => {
                         if (isProfilePhoto) {
                           return (
                             <img
-                              src={field.value as string}
+                              src={resolvedUrl}
                               alt={file.name}
                               className="size-full object-cover"
                               onError={() => {

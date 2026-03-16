@@ -354,9 +354,27 @@ final class ReportSubpageService
             }
         }
 
+        $balanceIn = SafeTransaction::query()
+            ->where('direction', 'in')
+            ->where('transaction_date', '<=', $endDate->toDateString())
+            ->sum('amount_input');
+        $balanceOut = SafeTransaction::query()
+            ->where('direction', 'out')
+            ->where('transaction_date', '<=', $endDate->toDateString())
+            ->sum('amount_input');
+        $previousBalanceIn = SafeTransaction::query()
+            ->where('direction', 'in')
+            ->where('transaction_date', '<', $startDate->toDateString())
+            ->sum('amount_input');
+        $previousBalanceOut = SafeTransaction::query()
+            ->where('direction', 'out')
+            ->where('transaction_date', '<', $startDate->toDateString())
+            ->sum('amount_input');
+
         return [
             'summary' => [
-                'balance' => $this->decimal(SafeTransaction::query()->where('direction', 'in')->sum('amount_input') - SafeTransaction::query()->where('direction', 'out')->sum('amount_input')),
+                'balance' => $this->decimal($balanceIn - $balanceOut),
+                'previousBalance' => $this->decimal($previousBalanceIn - $previousBalanceOut),
                 'rangeNet' => $this->decimal($totalIn - $totalOut),
                 'totalIn' => $this->decimal($totalIn),
                 'totalOut' => $this->decimal($totalOut),

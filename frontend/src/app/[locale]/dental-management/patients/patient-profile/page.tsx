@@ -298,6 +298,50 @@ const formatDisplayDate = (value?: string): string => {
   return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(parsed);
 };
 
+const resolveAssetBaseUrl = (): string => {
+  if (typeof window === 'undefined') {
+    return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  }
+
+  const { hostname, origin, port, protocol } = window.location;
+  const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1';
+
+  if (isLocalHost && port === '3000') {
+    return `${protocol}//${hostname}:8000`;
+  }
+
+  return process.env.NEXT_PUBLIC_API_URL || origin;
+};
+
+const resolveFileUrl = (value: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return value;
+  }
+
+  if (trimmed.startsWith('/storage')) {
+    return `${resolveAssetBaseUrl()}${trimmed}`;
+  }
+
+  if (trimmed.startsWith('storage/')) {
+    return `${resolveAssetBaseUrl()}/${trimmed}`;
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const url = new URL(trimmed);
+      const isLocalHost = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+      if (isLocalHost && url.port === '8000') {
+        return `${resolveAssetBaseUrl()}${url.pathname}`;
+      }
+    } catch {
+      // ignore and fall through
+    }
+  }
+
+  return trimmed;
+};
+
 const formatQuestionnaireAnswer = (value?: string): string => {
   const normalized = asText(value);
   if (!normalized) return 'Not answered';
@@ -996,8 +1040,12 @@ export default function PatientProfilePage(): JSX.Element {
       resolvedClinicProfile?.logoPath &&
       typeof resolvedClinicProfile.logoPath === 'string' &&
       resolvedClinicProfile.logoPath.trim() !== ''
-        ? resolvedClinicProfile.logoPath
+        ? resolveFileUrl(resolvedClinicProfile.logoPath)
         : `${window.location.origin}/logo2.png`;
+    const isDefaultLogo = !(resolvedClinicProfile?.logoPath && typeof resolvedClinicProfile.logoPath === 'string' && resolvedClinicProfile.logoPath.trim() !== '');
+    const clinicLogoUrlBusted = clinicLogoUrl.includes('?')
+      ? `${clinicLogoUrl}&v=${Date.now()}`
+      : `${clinicLogoUrl}?v=${Date.now()}`;
     const clinicFooterExtras = [clinicEmail, clinicWebsite]
       .filter((value) => value)
       .map((value) => `<p class="clinic-info">${escapeHtml(value)}</p>`)
@@ -1027,7 +1075,7 @@ export default function PatientProfilePage(): JSX.Element {
             <p class="doctor-qualification">DENTAL CARE</p>
           </div>
           <div class="header-icon">
-            <img src="${escapeHtml(clinicLogoUrl)}" alt="Clinic logo" class="header-logo" />
+            <img src="${escapeHtml(clinicLogoUrlBusted)}" alt="Clinic logo" class="header-logo${isDefaultLogo ? ' is-default' : ''}" />
           </div>
         </div>
       </header>
@@ -1204,6 +1252,9 @@ export default function PatientProfilePage(): JSX.Element {
       object-fit: contain;
       object-position: center;
       display: block;
+      filter: none;
+    }
+    .header-logo.is-default {
       filter: brightness(0) invert(1);
     }
     .meta {
@@ -1401,15 +1452,49 @@ export default function PatientProfilePage(): JSX.Element {
       }, 1000);
     };
 
+    const waitForImages = async (): Promise<void> => {
+      const images = Array.from(iframeDocument.images ?? []);
+      if (images.length === 0) {
+        return;
+      }
+
+      await Promise.race([
+        Promise.all(
+          images.map((img) => new Promise<void>((resolve) => {
+            if (img.complete) {
+              resolve();
+              return;
+            }
+            const handleDone = (): void => {
+              img.removeEventListener('load', handleDone);
+              img.removeEventListener('error', handleDone);
+              resolve();
+            };
+            img.addEventListener('load', handleDone);
+            img.addEventListener('error', handleDone);
+          }))
+        ),
+        new Promise<void>((resolve) => {
+          setTimeout(() => resolve(), 1200);
+        }),
+      ]);
+    };
+
     iframe.onload = () => {
-      printAndCleanup();
+      void (async () => {
+        await waitForImages();
+        printAndCleanup();
+      })();
     };
 
     setTimeout(() => {
       if (document.body.contains(iframe)) {
-        printAndCleanup();
+        void (async () => {
+          await waitForImages();
+          printAndCleanup();
+        })();
       }
-    }, 150);
+    }, 250);
   };
 
   const handlePrintPatientRecord = (): void => {

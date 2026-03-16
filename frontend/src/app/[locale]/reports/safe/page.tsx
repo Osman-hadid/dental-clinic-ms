@@ -1,7 +1,8 @@
 'use client';
 
-import { FormEvent, JSX, useCallback, useEffect, useState } from 'react';
+import { FormEvent, JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useSearchParams } from 'next/navigation';
 import { Header } from '@/components/header';
 import { LoadingState } from '@/components/shared/loading-state';
 import { Button } from '@/components/ui/button';
@@ -40,6 +41,7 @@ type SafeReportResponse = {
   };
   summary: {
     balance: number;
+    previousBalance: number;
     rangeNet: number;
     totalIn: number;
     totalOut: number;
@@ -99,6 +101,8 @@ const defaultForm = (): SafeForm => ({
 export default function SafePage(): JSX.Element {
   const tSidebar = useTranslations('sidebar');
   const tReports = useTranslations('sidebar.reports');
+  const searchParams = useSearchParams();
+  const hasAppliedQuery = useRef(false);
   const { entities: staff } = useStaffList(1, 100);
   const range = createDefaultReportRange(90);
   const [form, setForm] = useState<SafeForm>(() => defaultForm());
@@ -106,6 +110,7 @@ export default function SafePage(): JSX.Element {
   const [startDate, setStartDate] = useState(range.startDate);
   const [endDate, setEndDate] = useState(range.endDate);
   const [direction, setDirection] = useState('all');
+  const [focus, setFocus] = useState<'balance' | 'in' | 'out' | null>(null);
   const [entryType, setEntryType] = useState('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -136,6 +141,26 @@ export default function SafePage(): JSX.Element {
   useEffect(() => {
     void fetchData(1);
   }, [fetchData]);
+
+  useEffect(() => {
+    if (hasAppliedQuery.current) {
+      return;
+    }
+
+    const nextStart = searchParams.get('startDate');
+    const nextEnd = searchParams.get('endDate');
+    const nextDirection = searchParams.get('direction');
+    const nextFocus = searchParams.get('focus');
+
+    if (nextStart) setStartDate(nextStart);
+    if (nextEnd) setEndDate(nextEnd);
+    if (nextDirection) setDirection(nextDirection);
+    if (nextFocus === 'balance' || nextFocus === 'in' || nextFocus === 'out') {
+      setFocus(nextFocus);
+    }
+
+    hasAppliedQuery.current = true;
+  }, [searchParams]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
@@ -254,20 +279,32 @@ export default function SafePage(): JSX.Element {
                 </form>
 
                 <div className="grid gap-3">
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-2xl border bg-background/80 p-4">
-                      <p className="text-xs text-muted-foreground">Current Balance</p>
-                      <p className="text-2xl font-semibold">{formatCurrency(report?.summary.balance ?? 0, 'AFN')}</p>
-                    </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-2xl border bg-background/80 p-4">
+                    <p className="text-xs text-muted-foreground">Current Balance</p>
+                    <p className="text-2xl font-semibold">{formatCurrency(report?.summary.balance ?? 0, 'AFN')}</p>
+                  </div>
                     <div className="rounded-2xl border bg-background/80 p-4">
                       <p className="text-xs text-muted-foreground">Range In</p>
                       <p className="text-2xl font-semibold">{formatCurrency(report?.summary.totalIn ?? 0, 'AFN')}</p>
                     </div>
                     <div className="rounded-2xl border bg-background/80 p-4">
-                      <p className="text-xs text-muted-foreground">Range Out</p>
-                      <p className="text-2xl font-semibold">{formatCurrency(report?.summary.totalOut ?? 0, 'AFN')}</p>
-                    </div>
+                    <p className="text-xs text-muted-foreground">Range Out</p>
+                    <p className="text-2xl font-semibold">{formatCurrency(report?.summary.totalOut ?? 0, 'AFN')}</p>
                   </div>
+                </div>
+                {focus ? (
+                  <div className="rounded-2xl border bg-background/80 p-3 text-xs text-muted-foreground space-y-1">
+                    <p>
+                      Showing ledger for <span className="font-medium text-foreground">{focus === 'balance' ? 'safe balance' : `safe money ${focus}`}</span> from {startDate} to {endDate}.
+                    </p>
+                    {startDate === endDate ? (
+                      <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
+                        Previous balance before {startDate}: <span className="font-medium text-foreground">{formatCurrency(report?.summary.previousBalance ?? 0, 'AFN')}</span>
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
 
                   <div className="grid gap-3 rounded-2xl border bg-background/80 p-4 md:grid-cols-4">
                     <div className="grid gap-1.5">

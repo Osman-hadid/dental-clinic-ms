@@ -92,6 +92,8 @@ final class ReportDashboardService
     public function financial(array $filters): array
     {
         $dataset = $this->reportDatasetService->buildFinancial($filters);
+        [$startDate, $endDate] = $this->resolveDateRange($filters);
+        $summaryOnly = filter_var($filters['summaryOnly'] ?? false, FILTER_VALIDATE_BOOL);
         $granularity = $this->text($filters['granularity'] ?? 'day', 'day');
         $patientNameMap = (array) ($dataset['patientNameMap'] ?? []);
         $visitsById = [];
@@ -240,6 +242,7 @@ final class ReportDashboardService
 
         $safeBalanceRows = SafeTransaction::query()
             ->select(['direction', 'amount_input', 'amount'])
+            ->where('transaction_date', '<=', $endDate->toDateString())
             ->get();
 
         foreach ($safeBalanceRows as $balanceRow) {
@@ -400,7 +403,7 @@ final class ReportDashboardService
         $safeFlowRows = array_values($safeFlow);
         usort($safeFlowRows, static fn (array $left, array $right): int => $left['sort'] <=> $right['sort']);
 
-        return [
+        $payload = [
             'summary' => [
                 'billed' => $this->decimal($billed),
                 'collectionRate' => $collectionRate,
@@ -417,6 +420,13 @@ final class ReportDashboardService
                 'thirdCompanyPaid' => $thirdCompanyPaid,
                 'thirdCompanyUnpaid' => $thirdCompanyUnpaid,
             ],
+        ];
+
+        if ($summaryOnly) {
+            return $payload;
+        }
+
+        return $payload + [
             'charts' => [
                 'expenseByCategory' => array_slice($this->sortRows(array_values($expenseByCategory), 'amount'), 0, 12),
                 'paymentMethodMix' => array_slice($this->sortRows(array_values($paymentMethodMix), 'amount'), 0, 12),
