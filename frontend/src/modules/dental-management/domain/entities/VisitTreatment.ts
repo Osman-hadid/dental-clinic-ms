@@ -47,6 +47,46 @@ export type VisitTreatmentMaterial = {
   updatedAt?: string;
 };
 
+export type VisitTreatmentImageModality =
+  | 'xray'
+  | 'opg'
+  | 'cbct'
+  | 'intraoral_photo'
+  | 'scanner_export'
+  | 'other';
+
+export type VisitTreatmentImageSource = 'upload' | 'camera' | 'device_import';
+
+export type VisitTreatmentImage = {
+  id?: number;
+  visitTreatmentId?: string;
+  path?: string;
+  url?: string;
+  originalName?: string;
+  mimeType?: string;
+  size?: number;
+  createdBy?: string;
+  updatedBy?: string;
+  deletedBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type VisitTreatmentCorrectionEntry = {
+  id?: number;
+  event?: string;
+  description?: string;
+  correctionReason?: string;
+  changedBy?: string;
+  createdAt?: string;
+  changes?: Array<{
+    field?: string;
+    label?: string;
+    before?: string;
+    after?: string;
+  }>;
+};
+
 export type VisitTreatment = {
   id: number;
   visitId: string;
@@ -56,9 +96,15 @@ export type VisitTreatment = {
   dentistId?: string;
   price: string;
   material?: string;
+  imageModality?: VisitTreatmentImageModality;
+  imageSource?: VisitTreatmentImageSource;
   notes?: string;
   prescription?: Prescription;
   materialItems?: Array<{ inventoryItemId: string; quantity: number } | VisitTreatmentMaterial>;
+  treatmentImages?: Array<VisitTreatmentImage | File>;
+  retainedTreatmentImageIds?: number[];
+  correctionReason?: string;
+  correctionHistory?: VisitTreatmentCorrectionEntry[];
   createdBy?: string;
   updatedBy?: string;
   deletedBy?: string;

@@ -48,6 +48,8 @@ final class ListAppointmentsRequest extends BaseListRequest
 
                 $query->where('appointment_date', '<=', (string) $resolved);
             }),
+            AllowedFilter::exact('patientId', 'patient_id', true),
+            AllowedFilter::exact('dentistId', 'dentist_id', true),
             AllowedFilter::exact('status', 'status', true),
             AllowedFilter::trashed(),
         ];

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\DentalManagement\Application\Policies;
 
 use App\Models\User;
+use App\Modules\DentalManagement\Domain\Services\WorkflowAccessService;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
 final class InvoicePolicy
@@ -33,7 +34,8 @@ final class InvoicePolicy
 
     public function delete(User $user): bool
     {
-        return $user->can('dental-management.invoices.delete');
+        return $user->can('dental-management.invoices.delete')
+            && app(WorkflowAccessService::class)->canDeleteInvoices($user);
     }
 
     public function restore(User $user): bool
@@ -43,11 +45,13 @@ final class InvoicePolicy
 
     public function forceDelete(User $user): bool
     {
-        return $user->can('dental-management.invoices.force-delete');
+        return $user->can('dental-management.invoices.force-delete')
+            && app(WorkflowAccessService::class)->canDeleteInvoices($user);
     }
 
     public function bulkDelete(User $user): bool
     {
-        return $user->can('dental-management.invoices.bulk-delete');
+        return $user->can('dental-management.invoices.bulk-delete')
+            && app(WorkflowAccessService::class)->canDeleteInvoices($user);
     }
 }

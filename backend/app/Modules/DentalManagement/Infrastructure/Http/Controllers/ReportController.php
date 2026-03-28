@@ -10,6 +10,7 @@ use App\Modules\DentalManagement\Domain\Services\ReportAccessLogService;
 use App\Modules\DentalManagement\Domain\Services\ReportExportService;
 use App\Modules\DentalManagement\Domain\Services\ReportReadService;
 use App\Modules\DentalManagement\Domain\Services\ReportSnapshotService;
+use App\Modules\DentalManagement\Domain\Services\WorkflowAccessService;
 use App\Modules\DentalManagement\Infrastructure\Http\Requests\Reports\ClinicalExpenseReportRequest;
 use App\Modules\DentalManagement\Infrastructure\Http\Requests\Reports\DailyExpenseReportRequest;
 use App\Modules\DentalManagement\Infrastructure\Http\Requests\Reports\DebtReportRequest;
@@ -31,6 +32,7 @@ final class ReportController extends BaseApiController
         private readonly ReportExportService $reportExportService,
         private readonly ReportReadService $reportReadService,
         private readonly ReportSnapshotService $reportSnapshotService,
+        private readonly WorkflowAccessService $workflowAccessService,
     ) {}
 
     public function filterOptions(MetricReportRequest $request): JsonResponse
@@ -95,7 +97,7 @@ final class ReportController extends BaseApiController
 
     public function export(ReportExportRequest $request, string $type): StreamedResponse
     {
-        $this->authorizeReports();
+        $this->authorizeReports($this->resolveReportAuthorizationKey($type));
         $filters = $request->validated();
         $this->reportAccessLogService->log(
             user: $this->currentUser(),
@@ -110,7 +112,7 @@ final class ReportController extends BaseApiController
 
     public function snapshots(Request $request): JsonResponse
     {
-        $this->authorizeReports();
+        abort_unless($this->workflowAccessService->canManageSnapshots($this->currentUser()), 403);
         $user = $this->currentUser();
         abort_unless($user !== null, 403);
 
@@ -128,7 +130,7 @@ final class ReportController extends BaseApiController
 
     public function storeSnapshot(StoreReportSnapshotRequest $request): JsonResponse
     {
-        $this->authorizeReports();
+        abort_unless($this->workflowAccessService->canManageSnapshots($this->currentUser()), 403);
         $user = $this->currentUser();
         abort_unless($user !== null, 403);
 
@@ -149,7 +151,7 @@ final class ReportController extends BaseApiController
 
     public function snapshotSchedule(Request $request): JsonResponse
     {
-        $this->authorizeReports();
+        abort_unless($this->workflowAccessService->canManageSnapshots($this->currentUser()), 403);
         $user = $this->currentUser();
         abort_unless($user !== null, 403);
 
@@ -164,7 +166,7 @@ final class ReportController extends BaseApiController
 
     public function updateSnapshotSchedule(UpdateReportSnapshotScheduleRequest $request): JsonResponse
     {
-        $this->authorizeReports();
+        abort_unless($this->workflowAccessService->canManageSnapshots($this->currentUser()), 403);
         $user = $this->currentUser();
         abort_unless($user !== null, 403);
 
@@ -182,7 +184,7 @@ final class ReportController extends BaseApiController
      */
     private function reportResponse(string $reportKey, string $action, array $filters, \Closure $callback, string $message): JsonResponse
     {
-        $this->authorizeReports();
+        $this->authorizeReports($reportKey);
         $this->reportAccessLogService->log(
             user: $this->currentUser(),
             reportKey: $reportKey,
@@ -196,9 +198,23 @@ final class ReportController extends BaseApiController
         );
     }
 
-    private function authorizeReports(): void
+    private function authorizeReports(string $reportKey): void
     {
-        abort_unless($this->currentUser()?->can('dental-management.view'), 403);
+        abort_unless($this->workflowAccessService->canAccessReport($this->currentUser(), $reportKey), 403);
+    }
+
+    private function resolveReportAuthorizationKey(string $key): string
+    {
+        $normalized = strtolower(trim($key));
+
+        return match (true) {
+            str_starts_with($normalized, 'financial_') => 'financial',
+            str_starts_with($normalized, 'audit') => 'audit',
+            str_starts_with($normalized, 'clinical') => 'clinical',
+            str_starts_with($normalized, 'inventory') => 'inventory',
+            str_starts_with($normalized, 'executive') => 'executive',
+            default => $normalized,
+        };
     }
 
     private function currentUser(): ?User

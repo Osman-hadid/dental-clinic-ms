@@ -8,7 +8,7 @@ export const AppShell = ({
   children,
 }: Readonly<{ children: React.ReactNode }>): React.ReactNode => {
   return (
-    <SidebarProvider defaultOpen={false}>
+    <SidebarProvider defaultOpen={true}>
       <AppSidebar />
       <SidebarInset>{children}</SidebarInset>
     </SidebarProvider>

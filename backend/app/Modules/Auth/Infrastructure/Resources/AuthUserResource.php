@@ -16,6 +16,7 @@ final class AuthUserResource extends JsonResource
             'lastName' => $this->last_name,
             'email' => $this->email,
             'locale' => $this->locale,
+            'rights' => $this->rights,
             'profilePhotoPath' => $this->fileUrl($this->profile_photo_path),
 
             'roles' => $this->whenLoaded(

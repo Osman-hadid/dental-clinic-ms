@@ -9,6 +9,7 @@ use App\Modules\DentalManagement\Infrastructure\Http\Controllers\DebtController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\DashboardSummaryController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\DentalBackupController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\ExpenseController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\FinancialControlController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\FinancialSettingController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\ImplantCompanyController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\ImplantPlanningController;
@@ -29,10 +30,12 @@ use App\Modules\DentalManagement\Infrastructure\Http\Controllers\ToothController
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\TreatmentController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\VisitController;
 use App\Modules\DentalManagement\Infrastructure\Http\Controllers\VisitTreatmentController;
+use App\Modules\DentalManagement\Infrastructure\Http\Controllers\WorkflowAccessController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['api', 'auth:sanctum', 'set_locale'])->prefix('api/v1/dental-management')->group(function (): void {
     Route::post('/ai-imaging/analyze', [AiImagingController::class, 'analyze']);
+    Route::get('/workflow/access-summary', [WorkflowAccessController::class, 'show']);
     Route::get('/reports/clinical-dataset', [ReportSummaryController::class, 'clinical']);
     Route::get('/reports/executive-summary', [ReportSummaryController::class, 'executive']);
     Route::get('/reports/financial-dataset', [ReportSummaryController::class, 'financial']);
@@ -45,6 +48,8 @@ Route::middleware(['api', 'auth:sanctum', 'set_locale'])->prefix('api/v1/dental-
     Route::get('/reports/daily-expenses', [ReportController::class, 'dailyExpenses']);
     Route::get('/reports/clinical-expenses', [ReportController::class, 'clinicalExpenses']);
     Route::get('/reports/debts', [ReportController::class, 'debts']);
+    Route::get('/reports/financial-control', [FinancialControlController::class, 'show']);
+    Route::post('/reports/financial-control/close-day', [FinancialControlController::class, 'closeDay']);
     Route::get('/reports/safe', [ReportController::class, 'safe']);
     Route::get('/reports/salaries', [ReportController::class, 'salaries']);
     Route::get('/reports/shareholders', [ReportController::class, 'shareholders']);
@@ -102,6 +107,8 @@ Route::middleware(['api', 'auth:sanctum', 'set_locale'])->prefix('api/v1/dental-
     Route::apiResource('payments', PaymentController::class);
     Route::get('/safe-transactions/balance', [SafeTransactionController::class, 'balance']);
     Route::apiResource('safe-transactions', SafeTransactionController::class);
+    Route::get('/inventory-adjustments', [InventoryItemController::class, 'adjustments']);
+    Route::post('/inventory-items/{id}/adjustments', [InventoryItemController::class, 'recordAdjustment']);
     Route::apiResource('inventory-items', InventoryItemController::class);
     Route::apiResource('expenses', ExpenseController::class);
     Route::apiResource('salary-payments', SalaryPaymentController::class);
@@ -111,6 +118,7 @@ Route::middleware(['api', 'auth:sanctum', 'set_locale'])->prefix('api/v1/dental-
     Route::post('/debts/{id}/settle', [DebtController::class, 'settle']);
     Route::post('/debts/rebuild', [DebtController::class, 'rebuild']);
     Route::get('/backups/settings', [DentalBackupController::class, 'showSchedule']);
+    Route::get('/backups/{id}/restore-readiness', [DentalBackupController::class, 'restoreReadiness']);
     Route::put('/backups/settings', [DentalBackupController::class, 'updateSchedule']);
     Route::post('/backups/run', [DentalBackupController::class, 'run']);
     Route::get('/clinic-profile', [ClinicProfileController::class, 'show']);

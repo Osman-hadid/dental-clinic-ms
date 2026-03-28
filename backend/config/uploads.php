@@ -10,6 +10,9 @@ return [
         'settings' => [
             'directory' => 'settings/uploads',
         ],
+        'dental-management' => [
+            'directory' => 'dental-management/visit-treatments',
+        ],
     ],
 
     'rate_limit' => [

@@ -132,6 +132,9 @@ export const appointmentConfig: EntityModuleConfig = {
       title: 'config.form.status.label',
       options: [
         { label: 'config.form.status.options.scheduled', value: 'scheduled' },
+        { label: 'Checked In', value: 'checked_in' },
+        { label: 'Waiting', value: 'waiting' },
+        { label: 'In Chair', value: 'in_chair' },
         { label: 'config.form.status.options.completed', value: 'completed' },
         { label: 'config.form.status.options.cancelled', value: 'cancelled' },
       ],
@@ -212,7 +215,7 @@ export const appointmentConfig: EntityModuleConfig = {
       type: 'select',
       validation: {
         in: {
-          value: ['scheduled', 'completed', 'cancelled'],
+          value: ['scheduled', 'checked_in', 'waiting', 'in_chair', 'completed', 'cancelled'],
           message: 'config.form.status.validation.in',
         },
       },
@@ -220,6 +223,18 @@ export const appointmentConfig: EntityModuleConfig = {
         {
           label: 'config.form.status.options.scheduled',
           value: 'scheduled',
+        },
+        {
+          label: 'Checked In',
+          value: 'checked_in',
+        },
+        {
+          label: 'Waiting',
+          value: 'waiting',
+        },
+        {
+          label: 'In Chair',
+          value: 'in_chair',
         },
         {
           label: 'config.form.status.options.completed',

@@ -20,12 +20,18 @@ final class ReportAccessLogService
         array $filters = [],
         array $meta = []
     ): ReportAccessLog {
+        $resolvedMeta = [
+            ...$meta,
+            'rightLevel' => is_string($user?->rights) ? strtolower(trim((string) $user->rights)) : null,
+            'roles' => $user?->roles?->pluck('name')->values()->all() ?? [],
+        ];
+
         return ReportAccessLog::query()->create([
             'user_id' => $user?->id,
             'report_key' => $reportKey,
             'action' => $action,
             'filters' => $filters,
-            'meta' => $meta,
+            'meta' => $resolvedMeta,
         ]);
     }
 }

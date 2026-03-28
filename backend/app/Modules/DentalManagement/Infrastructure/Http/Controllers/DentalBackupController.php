@@ -7,6 +7,7 @@ namespace App\Modules\DentalManagement\Infrastructure\Http\Controllers;
 use App\Modules\Common\Infrastructure\Http\Controllers\BaseApiController;
 use App\Modules\DentalManagement\Domain\Entities\DentalBackup;
 use App\Modules\DentalManagement\Domain\Services\DentalBackupService;
+use App\Modules\DentalManagement\Domain\Services\OperationsHealthService;
 use App\Modules\DentalManagement\Infrastructure\Http\Requests\Backup\RunDentalBackupRequest;
 use App\Modules\DentalManagement\Infrastructure\Http\Requests\Backup\UpdateDentalBackupScheduleRequest;
 use Illuminate\Http\JsonResponse;
@@ -14,7 +15,10 @@ use Throwable;
 
 final class DentalBackupController extends BaseApiController
 {
-    public function __construct(private readonly DentalBackupService $backupService) {}
+    public function __construct(
+        private readonly DentalBackupService $backupService,
+        private readonly OperationsHealthService $operationsHealthService,
+    ) {}
 
     public function showSchedule(): JsonResponse
     {
@@ -23,11 +27,16 @@ final class DentalBackupController extends BaseApiController
         try {
             $schedule = $this->backupService->getSchedule();
             $latestBackup = $this->backupService->latestBackup();
+            $lastSuccessfulBackup = $this->backupService->lastSuccessfulBackup();
+            $health = $this->operationsHealthService->buildSnapshot(10);
 
             return $this->successResponse(
                 data: [
-                    'schedule' => $this->backupService->schedulePayload($schedule),
+                    'health' => $health,
+                    'lastSuccessfulBackup' => $lastSuccessfulBackup ? $this->backupService->backupPayload($lastSuccessfulBackup) : null,
                     'latestBackup' => $latestBackup ? $this->backupService->backupPayload($latestBackup) : null,
+                    'recentBackups' => $health['recentBackups'] ?? [],
+                    'schedule' => $this->backupService->schedulePayload($schedule),
                 ],
                 message: 'Backup settings fetched successfully.'
             );
@@ -85,6 +94,29 @@ final class DentalBackupController extends BaseApiController
             return $this->errorResponse(
                 code: 'BACKUP_RUN_FAILED',
                 message: 'Failed to run backup.',
+                details: ['error' => [$exception->getMessage()]],
+                httpCode: 500
+            );
+        }
+    }
+
+    public function restoreReadiness(int $id): JsonResponse
+    {
+        $backup = DentalBackup::query()->findOrFail($id);
+        $this->authorize('view', $backup);
+
+        try {
+            return $this->successResponse(
+                data: [
+                    'backup' => $this->backupService->backupPayload($backup),
+                    'readiness' => $this->operationsHealthService->restoreReadinessPayload($backup),
+                ],
+                message: 'Backup restore readiness checked successfully.'
+            );
+        } catch (Throwable $exception) {
+            return $this->errorResponse(
+                code: 'BACKUP_RESTORE_READINESS_FAILED',
+                message: 'Failed to check backup restore readiness.',
                 details: ['error' => [$exception->getMessage()]],
                 httpCode: 500
             );

@@ -7,11 +7,13 @@ import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer,
 
 export const InventoryReportPanel = ({ data }: { data: InventoryData }): JSX.Element => (
   <div className="space-y-4">
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
       <MetricCard label="Items in inventory" value={data.summary.totalItems} />
       <MetricCard label="Total units in stock" value={data.summary.totalQuantity} />
       <MetricCard label="Estimated stock value" value={formatCurrency(data.summary.totalValue, 'AFN')} />
       <MetricCard label="Running low / out of stock" value={`${data.summary.lowStockCount} / ${data.summary.outOfStockCount}`} />
+      <MetricCard label="Stock pressure items" value={data.summary.stockPressureCount} />
+      <MetricCard label="Waste / loss value" value={formatCurrency(data.summary.wasteLossValue, 'AFN')} />
     </div>
 
     <div className="grid gap-4 xl:grid-cols-2">
@@ -56,6 +58,25 @@ export const InventoryReportPanel = ({ data }: { data: InventoryData }): JSX.Ele
     <div className="grid gap-4 xl:grid-cols-2">
       <Card className="rounded-3xl border">
         <CardHeader>
+          <CardTitle>Waste and loss trend</CardTitle>
+          <CardDescription>Shows inventory removed because of breakage, expiry, or unexplained loss.</CardDescription>
+        </CardHeader>
+        <CardContent className="h-80">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data.charts.wasteLossTrend}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="label" />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="wasteQuantity" fill="#7c3aed" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="lossQuantity" fill="#dc2626" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-3xl border">
+        <CardHeader>
           <CardTitle>Items by category</CardTitle>
           <CardDescription>See which supply categories make up most of the current stock.</CardDescription>
         </CardHeader>
@@ -72,7 +93,9 @@ export const InventoryReportPanel = ({ data }: { data: InventoryData }): JSX.Ele
           </ResponsiveContainer>
         </CardContent>
       </Card>
+    </div>
 
+    <div className="grid gap-4 xl:grid-cols-2">
       <Card className="rounded-3xl border">
         <CardHeader>
           <CardTitle>Implant stock</CardTitle>
@@ -100,6 +123,50 @@ export const InventoryReportPanel = ({ data }: { data: InventoryData }): JSX.Ele
                 )) : (
                   <tr className="border-t">
                     <td colSpan={4} className="px-3 py-6 text-center text-muted-foreground">No implant stock rows were found for the selected filters.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-3xl border">
+        <CardHeader>
+          <CardTitle>Stock pressure watchlist</CardTitle>
+          <CardDescription>Items at risk, with suggested next actions and possible substitutes.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto rounded-2xl border">
+            <table className="min-w-full text-sm">
+              <thead className="bg-muted/30 text-left text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2">Item</th>
+                  <th className="px-3 py-2">Available</th>
+                  <th className="px-3 py-2">Action</th>
+                  <th className="px-3 py-2">Substitute</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.tables.stockPressureRows.length > 0 ? data.tables.stockPressureRows.map((row, index) => (
+                  <tr key={`${String(row.itemName ?? 'pressure')}-${index}`} className="border-t">
+                    <td className="px-3 py-2">
+                      <div className="space-y-1">
+                        <p>{String(row.itemName ?? '-')}</p>
+                        <p className="text-xs text-muted-foreground">{String(row.category ?? '-')}</p>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">{Number(row.availableQuantity ?? 0)}</td>
+                    <td className="px-3 py-2">{String(row.recommendedAction ?? '-')}</td>
+                    <td className="px-3 py-2">
+                      {String(row.substituteItemName ?? '') !== ''
+                        ? `${String(row.substituteItemName ?? '-')} (${Number(row.substituteQuantity ?? 0)})`
+                        : '-'}
+                    </td>
+                  </tr>
+                )) : (
+                  <tr className="border-t">
+                    <td colSpan={4} className="px-3 py-6 text-center text-muted-foreground">No stock pressure items were found for the selected filters.</td>
                   </tr>
                 )}
               </tbody>
@@ -172,6 +239,47 @@ export const InventoryReportPanel = ({ data }: { data: InventoryData }): JSX.Ele
                 )) : (
                   <tr className="border-t">
                     <td colSpan={4} className="px-3 py-6 text-center text-muted-foreground">No usage records were found for the selected filters.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+
+    <div className="grid gap-4">
+      <Card className="rounded-3xl border">
+        <CardHeader>
+          <CardTitle>Waste and loss log</CardTitle>
+          <CardDescription>Recent inventory adjustments recorded outside treatment consumption.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto rounded-2xl border">
+            <table className="min-w-full text-sm">
+              <thead className="bg-muted/30 text-left text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2">Date</th>
+                  <th className="px-3 py-2">Item</th>
+                  <th className="px-3 py-2">Type</th>
+                  <th className="px-3 py-2">Quantity</th>
+                  <th className="px-3 py-2">Impact</th>
+                  <th className="px-3 py-2">Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.tables.adjustmentRows.length > 0 ? data.tables.adjustmentRows.map((row, index) => (
+                  <tr key={`${String(row.itemName ?? 'adjustment')}-${String(row.adjustmentDate ?? index)}`} className="border-t">
+                    <td className="px-3 py-2">{String(row.adjustmentDate ?? '-')}</td>
+                    <td className="px-3 py-2">{String(row.itemName ?? '-')}</td>
+                    <td className="px-3 py-2">{String(row.adjustmentType ?? '-')}</td>
+                    <td className="px-3 py-2">{Number(row.quantity ?? 0)} {String(row.unit ?? '')}</td>
+                    <td className="px-3 py-2">{formatCurrency(Number(row.totalCostImpact ?? 0), 'AFN')}</td>
+                    <td className="px-3 py-2">{String(row.notes ?? '-')}</td>
+                  </tr>
+                )) : (
+                  <tr className="border-t">
+                    <td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">No waste or loss adjustments were found for the selected filters.</td>
                   </tr>
                 )}
               </tbody>

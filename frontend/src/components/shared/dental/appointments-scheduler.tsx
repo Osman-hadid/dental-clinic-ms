@@ -189,7 +189,15 @@ const normalizeStatus = (status: string): string => status.trim().toLowerCase().
 
 const isOccupiedStatus = (status: string): boolean => {
   const normalized = normalizeStatus(status);
-  return normalized === 'scheduled' || normalized === 'confirmed' || normalized === 'in_progress' || normalized === 'ongoing';
+  return [
+    'scheduled',
+    'confirmed',
+    'checked_in',
+    'waiting',
+    'in_chair',
+    'in_progress',
+    'ongoing',
+  ].includes(normalized);
 };
 
 const typeMeta: Record<

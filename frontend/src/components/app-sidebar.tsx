@@ -81,6 +81,13 @@ const staticNavItems: SidebarItem[] = [
         url: '/dental-management/patient-questions',
       },
       { key: 'appointments', permission: 'page.dental-management.appointments', section: 'Scheduling', url: '/dental-management/appointments' },
+      {
+        key: 'queue',
+        permission: 'page.dental-management.appointments',
+        section: 'Scheduling',
+        title: 'Waiting Room',
+        url: '/dental-management/queue',
+      },
       { key: 'visits', permission: 'page.dental-management.visits', section: 'Scheduling', url: '/dental-management/visits' },
       // { key: 'teeth', url: '/dental-management/teeth' },
       { key: 'visitTreatments', permission: 'page.dental-management.visit-treatments', section: 'Clinical', url: '/dental-management/visit-treatments' },
@@ -106,6 +113,12 @@ const staticNavItems: SidebarItem[] = [
     items: [
       { key: 'overview', permission: 'page.reports.overview', url: '/reports' },
       { key: 'debts', permission: 'page.reports.debts', url: '/reports/debts' },
+      {
+        key: 'financialControl',
+        permission: 'page.reports.safe',
+        title: 'Financial Control',
+        url: '/reports/financial-control',
+      },
       { key: 'dailyExpenses', permission: 'page.reports.daily-expenses', url: '/reports/daily-expenses' },
       { key: 'clinicalExpenses', permission: 'page.reports.clinical-expenses', url: '/reports/clinical-expenses' },
       { key: 'safe', permission: 'page.reports.safe', url: '/reports/safe' },
@@ -183,10 +196,12 @@ const sidebarSubItemIcons: Record<string, LucideIcon> = {
   implantsInProcess: ClipboardList,
   inventory: Archive,
   invoices: Receipt,
+  financialControl: HandCoins,
   overview: ClipboardList,
   patientQuestions: ClipboardList,
   patients: User,
   payments: Wallet,
+  queue: CalendarDays,
   permissions: KeyRound,
   roles: ShieldUser,
   safe: Shield,
@@ -245,12 +260,12 @@ export const AppSidebar = (props: React.ComponentProps<typeof Sidebar>): React.J
     .filter(Boolean) as SidebarItem[];
 
   const localizedNavItems = visibleNavItems.map((item) => ({
-    ...item,
-    items: item.items?.map((subItem) => ({
-      ...subItem,
-      icon: subItem.icon ?? sidebarSubItemIcons[subItem.key],
-      title: t.has(`${item.key}.${subItem.key}`) ? t(`${item.key}.${subItem.key}`) : subItem.key,
-    })),
+      ...item,
+      items: item.items?.map((subItem) => ({
+        ...subItem,
+        icon: subItem.icon ?? sidebarSubItemIcons[subItem.key],
+        title: t.has(`${item.key}.${subItem.key}`) ? t(`${item.key}.${subItem.key}`) : (subItem.title ?? subItem.key),
+      })),
     title: t.has(`${item.key}.title`) ? t(`${item.key}.title`) : item.key,
   }));
 

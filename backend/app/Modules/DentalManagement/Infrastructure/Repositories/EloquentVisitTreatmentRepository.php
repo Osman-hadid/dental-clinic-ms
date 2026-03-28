@@ -4,24 +4,37 @@ declare(strict_types=1);
 
 namespace App\Modules\DentalManagement\Infrastructure\Repositories;
 
+use App\Models\User;
 use App\Modules\Common\Application\Exceptions\ApiException;
+use App\Modules\Common\Application\UseCases\DeleteFileUseCase;
+use App\Modules\Common\Application\UseCases\FileUploadUseCase;
 use App\Modules\Common\Infrastructure\Repositories\BaseEloquentRepository;
 use App\Modules\DentalManagement\Domain\Entities\InventoryItem;
 use App\Modules\DentalManagement\Domain\Entities\Prescription;
 use App\Modules\DentalManagement\Domain\Entities\PrescriptionItem;
 use App\Modules\DentalManagement\Domain\Entities\Visit;
 use App\Modules\DentalManagement\Domain\Entities\VisitTreatment;
+use App\Modules\DentalManagement\Domain\Entities\VisitTreatmentImage;
 use App\Modules\DentalManagement\Domain\Entities\VisitTreatmentMaterial;
 use App\Modules\DentalManagement\Domain\Repositories\VisitTreatmentRepositoryInterface;
 use App\Modules\DentalManagement\Infrastructure\Http\Requests\VisitTreatment\ListVisitTreatmentsRequest;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Spatie\QueryBuilder\QueryBuilder;
 
 final class EloquentVisitTreatmentRepository extends BaseEloquentRepository implements VisitTreatmentRepositoryInterface
 {
+    private const FILE_UPLOAD_MODULE = 'dental-management';
+
     protected string $model = VisitTreatment::class;
 
     protected string $requestClass = ListVisitTreatmentsRequest::class;
+
+    public function __construct(
+        private readonly FileUploadUseCase $fileUploadUseCase,
+        private readonly DeleteFileUseCase $deleteFileUseCase,
+    ) {}
 
     public function find(int $id): VisitTreatment
     {
@@ -42,30 +55,59 @@ final class EloquentVisitTreatmentRepository extends BaseEloquentRepository impl
 
     public function create(array $data): VisitTreatment
     {
+        $data = $this->stripUnsupportedImagingData($data);
+        $correctionReason = $this->extractCorrectionReason($data);
         $prescriptionData = $this->extractPrescriptionData($data);
         $materialItemsData = $this->extractMaterialItemsData($data);
+        $treatmentImagesData = $this->extractTreatmentImagesData($data);
+        $retainedTreatmentImageIds = $this->extractRetainedTreatmentImageIds($data);
 
-        return DB::transaction(function () use ($data, $prescriptionData, $materialItemsData): VisitTreatment {
+        return DB::transaction(function () use ($data, $correctionReason, $prescriptionData, $materialItemsData, $treatmentImagesData, $retainedTreatmentImageIds): VisitTreatment {
             $visitTreatment = VisitTreatment::create(attributes: $data);
             $this->syncMaterialItems($visitTreatment, $materialItemsData);
             $this->upsertPrescription($visitTreatment, $prescriptionData, true);
+            $this->syncTreatmentImages($visitTreatment, $treatmentImagesData, $retainedTreatmentImageIds);
 
-            return $visitTreatment->fresh();
+            $freshVisitTreatment = $visitTreatment->fresh($this->freshRelations());
+            $this->recordVisitTreatmentActivity(
+                event: 'created',
+                visitTreatment: $freshVisitTreatment,
+                afterSnapshot: $this->auditSnapshot($freshVisitTreatment),
+                reason: $correctionReason,
+            );
+
+            return $freshVisitTreatment->load($this->freshRelations());
         });
     }
 
     public function update(int $id, array $data): VisitTreatment
     {
+        $data = $this->stripUnsupportedImagingData($data);
+        $correctionReason = $this->extractCorrectionReason($data);
         $prescriptionData = $this->extractPrescriptionData($data);
         $materialItemsData = $this->extractMaterialItemsData($data);
+        $treatmentImagesData = $this->extractTreatmentImagesData($data);
+        $retainedTreatmentImageIds = $this->extractRetainedTreatmentImageIds($data);
 
-        return DB::transaction(function () use ($id, $data, $prescriptionData, $materialItemsData): VisitTreatment {
-            $visitTreatment = $this->find($id);
+        return DB::transaction(function () use ($id, $data, $correctionReason, $prescriptionData, $materialItemsData, $treatmentImagesData, $retainedTreatmentImageIds): VisitTreatment {
+            $visitTreatment = $this->findForAudit($id);
+            $beforeSnapshot = $this->auditSnapshot($visitTreatment);
             $visitTreatment->update(attributes: $data);
             $this->syncMaterialItems($visitTreatment, $materialItemsData);
             $this->upsertPrescription($visitTreatment, $prescriptionData, false);
+            $this->syncTreatmentImages($visitTreatment, $treatmentImagesData, $retainedTreatmentImageIds);
 
-            return $visitTreatment->fresh();
+            $freshVisitTreatment = $visitTreatment->fresh($this->freshRelations());
+            $afterSnapshot = $this->auditSnapshot($freshVisitTreatment);
+            $this->recordVisitTreatmentActivity(
+                event: 'corrected',
+                visitTreatment: $freshVisitTreatment,
+                beforeSnapshot: $beforeSnapshot,
+                afterSnapshot: $afterSnapshot,
+                reason: $correctionReason,
+            );
+
+            return $freshVisitTreatment->load($this->freshRelations());
         });
     }
 
@@ -73,14 +115,39 @@ final class EloquentVisitTreatmentRepository extends BaseEloquentRepository impl
     {
         $visitTreatment = $this->find(id: $id);
         $this->guardAgainstRelatedRecords($visitTreatment);
+        $snapshot = $this->auditSnapshot($this->findForAudit($id));
         $visitTreatment->delete();
+        $this->recordVisitTreatmentActivity(
+            event: 'deleted',
+            visitTreatment: $visitTreatment,
+            beforeSnapshot: $snapshot,
+        );
     }
 
     public function forceDelete(int $id): void
     {
-        $visitTreatment = VisitTreatment::withTrashed()->findOrFail($id);
+        $query = VisitTreatment::withTrashed();
+        if ($this->supportsTreatmentImagesTable()) {
+            $query->with('treatmentImages');
+        }
+
+        $visitTreatment = $query->findOrFail($id);
         $this->guardAgainstRelatedRecords($visitTreatment);
+        $snapshot = $this->auditSnapshot($visitTreatment);
+        if ($this->supportsTreatmentImagesTable()) {
+            foreach ($visitTreatment->treatmentImages as $image) {
+                $path = trim((string) $image->path);
+                if ($path !== '') {
+                    $this->deleteFileUseCase->execute($path);
+                }
+            }
+        }
         $visitTreatment->forceDelete();
+        $this->recordVisitTreatmentActivity(
+            event: 'force_deleted',
+            visitTreatment: $visitTreatment,
+            beforeSnapshot: $snapshot,
+        );
     }
 
     public function restore(int $id): VisitTreatment
@@ -137,6 +204,64 @@ final class EloquentVisitTreatmentRepository extends BaseEloquentRepository impl
         unset($data['material_items']);
 
         return $materialItemsData;
+    }
+
+    private function extractCorrectionReason(array &$data): ?string
+    {
+        if (!array_key_exists('correction_reason', $data)) {
+            return null;
+        }
+
+        $reason = trim((string) ($data['correction_reason'] ?? ''));
+        unset($data['correction_reason']);
+
+        return $reason !== '' ? $reason : null;
+    }
+
+    private function extractTreatmentImagesData(array &$data): ?array
+    {
+        if (!$this->supportsTreatmentImagesTable()) {
+            unset($data['treatment_images'], $data['retained_treatment_image_ids']);
+
+            return null;
+        }
+
+        if (!array_key_exists('treatment_images', $data)) {
+            return null;
+        }
+
+        $treatmentImagesData = is_array($data['treatment_images'])
+            ? array_values(array_filter(
+                $data['treatment_images'],
+                static fn (mixed $file): bool => $file instanceof UploadedFile
+            ))
+            : [];
+        unset($data['treatment_images']);
+
+        return $treatmentImagesData;
+    }
+
+    private function extractRetainedTreatmentImageIds(array &$data): ?array
+    {
+        if (!$this->supportsTreatmentImagesTable()) {
+            unset($data['retained_treatment_image_ids']);
+
+            return null;
+        }
+
+        if (!array_key_exists('retained_treatment_image_ids', $data)) {
+            return null;
+        }
+
+        $retainedTreatmentImageIds = is_array($data['retained_treatment_image_ids'])
+            ? array_values(array_filter(
+                array_map(static fn (mixed $id): int => (int) $id, $data['retained_treatment_image_ids']),
+                static fn (int $id): bool => $id > 0
+            ))
+            : [];
+        unset($data['retained_treatment_image_ids']);
+
+        return $retainedTreatmentImageIds;
     }
 
     private function upsertPrescription(VisitTreatment $visitTreatment, ?array $prescriptionData, bool $isCreate): void
@@ -409,6 +534,302 @@ final class EloquentVisitTreatmentRepository extends BaseEloquentRepository impl
         $summary = $this->buildMaterialSummary($rowsToCreate);
         $visitTreatment->material = $summary !== '' ? $summary : null;
         $visitTreatment->save();
+    }
+
+    private function syncTreatmentImages(
+        VisitTreatment $visitTreatment,
+        ?array $treatmentImagesData,
+        ?array $retainedTreatmentImageIds = null
+    ): void
+    {
+        if (!$this->supportsTreatmentImagesTable()) {
+            return;
+        }
+
+        if ($retainedTreatmentImageIds !== null) {
+            $imagesToDelete = $visitTreatment->treatmentImages()
+                ->when(
+                    $retainedTreatmentImageIds !== [],
+                    static fn ($query) => $query->whereNotIn('id', $retainedTreatmentImageIds),
+                    static fn ($query) => $query
+                )
+                ->get();
+
+            foreach ($imagesToDelete as $image) {
+                $path = trim((string) $image->path);
+                if ($path !== '') {
+                    $this->deleteFileUseCase->execute($path);
+                }
+
+                $image->delete();
+            }
+        }
+
+        if ($treatmentImagesData === null || $treatmentImagesData === []) {
+            if (!$visitTreatment->treatmentImages()->exists()) {
+                $visitTreatment->forceFill([
+                    'image_modality' => null,
+                    'image_source' => null,
+                ])->save();
+            }
+
+            return;
+        }
+
+        $actorId = auth()->id() ?: ($visitTreatment->updated_by ?? $visitTreatment->created_by);
+        $stampCreatedBy = $visitTreatment->created_by;
+        $stampUpdatedBy = $visitTreatment->updated_by;
+
+        $rowsToCreate = array_map(function (UploadedFile $uploadedFile) use ($actorId, $stampCreatedBy, $stampUpdatedBy): array {
+            $fileUpload = $this->fileUploadUseCase->execute(
+                $uploadedFile,
+                self::FILE_UPLOAD_MODULE,
+                $actorId !== null ? (int) $actorId : null
+            );
+
+            return [
+                'path' => $fileUpload->path,
+                'original_name' => $uploadedFile->getClientOriginalName(),
+                'mime_type' => $uploadedFile->getMimeType(),
+                'size' => $uploadedFile->getSize(),
+                'created_by' => $stampCreatedBy,
+                'updated_by' => $stampUpdatedBy,
+                'deleted_by' => null,
+            ];
+        }, $treatmentImagesData);
+
+        if ($rowsToCreate !== []) {
+            $visitTreatment->treatmentImages()->createMany($rowsToCreate);
+        }
+
+        if (!$visitTreatment->treatmentImages()->exists()) {
+            $visitTreatment->forceFill([
+                'image_modality' => null,
+                'image_source' => null,
+            ])->save();
+        }
+    }
+
+    private function supportsImagingColumns(): bool
+    {
+        return Schema::hasColumns('visit_treatments', ['image_modality', 'image_source']);
+    }
+
+    private function supportsTreatmentImagesTable(): bool
+    {
+        return Schema::hasTable('visit_treatment_images');
+    }
+
+    private function stripUnsupportedImagingData(array $data): array
+    {
+        if (!$this->supportsImagingColumns()) {
+            unset($data['image_modality'], $data['image_source']);
+        }
+
+        if (!$this->supportsTreatmentImagesTable()) {
+            unset($data['treatment_images']);
+        }
+
+        return $data;
+    }
+
+    private function freshRelations(): array
+    {
+        $relations = ['materialItems', 'prescription.items'];
+
+        if ($this->supportsTreatmentImagesTable()) {
+            $relations[] = 'treatmentImages';
+        }
+
+        return $relations;
+    }
+
+    private function findForAudit(int $id): VisitTreatment
+    {
+        $query = VisitTreatment::query()->with(['materialItems', 'prescription.items']);
+
+        if ($this->supportsTreatmentImagesTable()) {
+            $query->with('treatmentImages');
+        }
+
+        return $query->findOrFail($id);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function auditSnapshot(VisitTreatment $visitTreatment): array
+    {
+        $visitTreatment->loadMissing(['materialItems', 'prescription.items']);
+        if ($this->supportsTreatmentImagesTable()) {
+            $visitTreatment->loadMissing('treatmentImages');
+        }
+
+        $prescriptionItems = $visitTreatment->prescription?->items
+            ? $visitTreatment->prescription->items
+                ->map(static fn (PrescriptionItem $item): array => [
+                    'amount' => (string) ($item->amount ?? ''),
+                    'foodTiming' => (string) ($item->food_timing ?? ''),
+                    'frequency' => (string) ($item->frequency ?? ''),
+                    'name' => (string) ($item->name ?? ''),
+                    'unit' => (string) ($item->unit ?? ''),
+                ])
+                ->values()
+                ->all()
+            : [];
+
+        $materialItems = $visitTreatment->materialItems
+            ->map(static fn (VisitTreatmentMaterial $item): array => [
+                'inventoryItemId' => (int) ($item->inventory_item_id ?? 0),
+                'itemName' => (string) ($item->item_name ?? ''),
+                'quantityUsed' => (int) ($item->quantity_used ?? 0),
+                'unit' => (string) ($item->unit ?? ''),
+            ])
+            ->values()
+            ->all();
+
+        $treatmentImages = $this->supportsTreatmentImagesTable()
+            ? $visitTreatment->treatmentImages
+                ->map(static fn (VisitTreatmentImage $image): array => [
+                    'id' => (int) $image->id,
+                    'originalName' => (string) ($image->original_name ?? ''),
+                    'path' => (string) ($image->path ?? ''),
+                    'size' => (int) ($image->size ?? 0),
+                ])
+                ->values()
+                ->all()
+            : [];
+
+        return [
+            'dentistId' => $visitTreatment->dentist_id !== null ? (int) $visitTreatment->dentist_id : null,
+            'imageModality' => $visitTreatment->image_modality,
+            'imageSource' => $visitTreatment->image_source,
+            'material' => (string) ($visitTreatment->material ?? ''),
+            'materialItems' => $materialItems,
+            'notes' => (string) ($visitTreatment->notes ?? ''),
+            'prescriptionContent' => (string) ($visitTreatment->prescription?->content ?? ''),
+            'prescriptionItems' => $prescriptionItems,
+            'price' => (string) ($visitTreatment->price ?? ''),
+            'toothId' => $visitTreatment->tooth_id !== null ? (int) $visitTreatment->tooth_id : null,
+            'toothNumber' => (string) ($visitTreatment->tooth_number ?? ''),
+            'treatmentId' => (int) ($visitTreatment->treatment_id ?? 0),
+            'treatmentImages' => $treatmentImages,
+            'visitId' => (int) ($visitTreatment->visit_id ?? 0),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed>|null $beforeSnapshot
+     * @param array<string, mixed>|null $afterSnapshot
+     * @return array<int, array<string, string>>
+     */
+    private function auditDiff(?array $beforeSnapshot, ?array $afterSnapshot): array
+    {
+        if ($beforeSnapshot === null || $afterSnapshot === null) {
+            return [];
+        }
+
+        $labels = [
+            'dentistId' => 'Dentist',
+            'imageModality' => 'Image modality',
+            'imageSource' => 'Image source',
+            'material' => 'Material summary',
+            'materialItems' => 'Material items',
+            'notes' => 'Notes',
+            'prescriptionContent' => 'Prescription summary',
+            'prescriptionItems' => 'Prescription items',
+            'price' => 'Price',
+            'toothId' => 'Tooth',
+            'toothNumber' => 'Tooth number',
+            'treatmentId' => 'Treatment',
+            'treatmentImages' => 'Treatment images',
+            'visitId' => 'Visit',
+        ];
+
+        $diff = [];
+        foreach ($labels as $field => $label) {
+            $before = $beforeSnapshot[$field] ?? null;
+            $after = $afterSnapshot[$field] ?? null;
+            if ($before === $after) {
+                continue;
+            }
+
+            $diff[] = [
+                'after' => $this->stringifyAuditValue($after),
+                'before' => $this->stringifyAuditValue($before),
+                'field' => $field,
+                'label' => $label,
+            ];
+        }
+
+        return $diff;
+    }
+
+    private function stringifyAuditValue(mixed $value): string
+    {
+        if ($value === null) {
+            return '-';
+        }
+
+        if (is_scalar($value)) {
+            $stringValue = trim((string) $value);
+
+            return $stringValue !== '' ? $stringValue : '-';
+        }
+
+        if (is_array($value)) {
+            if ($value === []) {
+                return '-';
+            }
+
+            return (string) json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        }
+
+        return trim((string) json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * @param array<string, mixed>|null $beforeSnapshot
+     * @param array<string, mixed>|null $afterSnapshot
+     */
+    private function recordVisitTreatmentActivity(
+        string $event,
+        VisitTreatment $visitTreatment,
+        ?array $beforeSnapshot = null,
+        ?array $afterSnapshot = null,
+        ?string $reason = null,
+    ): void
+    {
+        $diff = $this->auditDiff($beforeSnapshot, $afterSnapshot);
+        if ($event === 'corrected' && $diff === [] && $reason === null) {
+            return;
+        }
+
+        $actorId = $visitTreatment->updated_by ?? $visitTreatment->created_by;
+        $description = match ($event) {
+            'corrected' => 'VisitTreatment corrected',
+            'deleted' => 'VisitTreatment deleted',
+            'force_deleted' => 'VisitTreatment permanently deleted',
+            default => 'VisitTreatment created',
+        };
+
+        DB::table(config('activitylog.table_name'))->insert([
+            'log_name' => class_basename(VisitTreatment::class),
+            'description' => $description,
+            'subject_type' => VisitTreatment::class,
+            'subject_id' => (int) $visitTreatment->id,
+            'event' => $event,
+            'causer_type' => $actorId ? User::class : null,
+            'causer_id' => $actorId ?: null,
+            'properties' => json_encode(array_filter([
+                'after' => $afterSnapshot,
+                'before' => $beforeSnapshot,
+                'correctionReason' => $reason,
+                'diff' => $diff,
+            ], static fn (mixed $value): bool => $value !== null && $value !== []), JSON_THROW_ON_ERROR),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     private function normalizeMaterialItems(array $materialItemsData): array

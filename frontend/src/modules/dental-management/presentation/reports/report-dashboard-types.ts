@@ -54,10 +54,15 @@ export type FinancialData = {
   };
   summary: {
     billed: number;
+    closeCount: number;
     collectionRate: number;
+    discrepancyTotal: number;
     expenses: number;
+    latestCloseDifference: number;
     net: number;
+    openDebtCount: number;
     outstanding: number;
+    overdueDebtCount: number;
     paid: number;
     safeBalance: number;
     safeIn: number;
@@ -69,6 +74,9 @@ export type FinancialData = {
     thirdCompanyUnpaid: number;
   };
   tables: {
+    collectorPerformance: Array<Record<string, unknown>>;
+    dailyCloseRows: Array<Record<string, unknown>>;
+    debtWatchlist: Array<Record<string, unknown>>;
     implantCompanyRecords: Array<Record<string, unknown>>;
     implantInstallments: Array<Record<string, unknown>>;
     outstandingInvoices: Array<Record<string, unknown>>;
@@ -91,16 +99,25 @@ export type ClinicalData = {
   summary: {
     appointments: number;
     completedAppointments: number;
+    correctedTreatments: number;
     implantCases: number;
+    inChairAppointments: number;
+    lateAppointments: number;
     patients: number;
     prescriptions: number;
+    timelineEvents: number;
+    timelinePatients: number;
     visitTreatments: number;
     visits: number;
+    waitingAppointments: number;
   };
   tables: {
     dentistPerformance: Array<Record<string, unknown>>;
     implantCases: Array<Record<string, unknown>>;
+    patientTimeline: Array<Record<string, unknown>>;
     prescriptions: Array<Record<string, unknown>>;
+    queueSnapshot: Array<Record<string, unknown>>;
+    treatmentCorrections: Array<Record<string, unknown>>;
     treatmentPerformance: Array<Record<string, unknown>>;
   };
 };
@@ -109,17 +126,24 @@ export type InventoryData = {
   charts: {
     availabilityBreakdown: Array<{ count: number; status: string }>;
     categoryBreakdown: Array<{ category: string; count: number }>;
+    wasteLossTrend: Array<{ key: string; label: string; lossQuantity: number; valueImpact: number; wasteQuantity: number }>;
     usageByTreatment: Array<{ quantityUsed: number; treatmentName: string }>;
   };
   summary: {
+    criticalStockCount: number;
     lowStockCount: number;
     outOfStockCount: number;
+    stockPressureCount: number;
     totalItems: number;
     totalQuantity: number;
     totalValue: number;
+    wasteLossQuantity: number;
+    wasteLossValue: number;
   };
   tables: {
+    adjustmentRows: Array<Record<string, unknown>>;
     implantStockRows: Array<Record<string, unknown>>;
+    stockPressureRows: Array<Record<string, unknown>>;
     stockRows: Array<Record<string, unknown>>;
     usageRows: Array<Record<string, unknown>>;
   };
@@ -127,12 +151,19 @@ export type InventoryData = {
 
 export type AuditData = {
   financialModifications: Array<{ action: string; afterValue: string; beforeValue: string; changedBy: string; entity: string; timestamp: string }>;
+  healthChecks: Array<{ action: string; details: string; label: string; status: string; value: string }>;
+  recentBackups: Array<{ completedAt: string; fileSizeBytes: number; id: number; mode: string; notes: string; status: string }>;
   summary: {
     accessCount: number;
+    backupStatus: string;
+    failedBackupCount: number;
+    healthWarningCount: number;
+    lastSuccessfulBackupAt: string | null;
+    lowDiskWarning: boolean;
     modificationCount: number;
     snapshotCount: number;
   };
-  timeline: Array<{ action: string; changedBy: string; entity: string; timestamp: string; type: string }>;
+  timeline: Array<{ action: string; actorRightLevel?: string; actorRoles?: string; changedBy: string; entity: string; timestamp: string; type: string }>;
 };
 
 export type SnapshotRecord = {

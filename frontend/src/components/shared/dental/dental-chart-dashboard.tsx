@@ -137,6 +137,17 @@ type DentalChartDashboardProps = {
         };
         patients: { total: number; new30d: number; returning: number };
         performance: { completionRate: number; calendarCoverageDays: number };
+        operations: {
+          criticalDiskWarning: boolean;
+          diskFreePercent: number;
+          failedBackupCount: number;
+          healthWarningCount: number;
+          lastSuccessfulBackupAt: string | null;
+          latestBackupStatus: string;
+          lowDiskWarning: boolean;
+          nextScheduledRunAt: string | null;
+          status: string;
+        };
         charts: {
           revenueRange: '7d' | '30d' | '90d';
           revenueSeries: Array<{ date: string; billed: number; paid: number }>;
@@ -303,6 +314,17 @@ const formatClock = (date: Date): string =>
     minute: '2-digit',
   }).format(date);
 
+const formatDateTimeLabel = (value: string | null | undefined): string => {
+  if (!value) return 'Never';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+
+  return new Intl.DateTimeFormat('en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(parsed);
+};
+
 const buildNameFromRelation = (value: unknown): string => {
   if (!value || typeof value !== 'object') return '';
   const relation = value as Record<string, unknown>;
@@ -345,6 +367,14 @@ const extractFirstVisitId = (value: unknown): string | number | null => {
 
 const normalizeStatus = (status: string): string =>
   status.trim().toLowerCase().replace(/\s+/g, '_');
+
+const formatStatusLabel = (status: string): string =>
+  normalizeStatus(status)
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+
 const isCompletedStatus = (status: string): boolean => {
   const normalized = normalizeStatus(status);
   return normalized === 'completed' || normalized === 'done';
@@ -371,7 +401,7 @@ const toCalendarStatusBucket = (status: string): CalendarStatusBucket => {
 
   if (normalized === 'cancelled' || normalized === 'canceled' || normalized === 'rejected')
     return 'cancelled';
-  if (normalized === 'in_progress' || normalized === 'ongoing') return 'in_progress';
+  if (['checked_in', 'waiting', 'in_chair', 'in_progress', 'ongoing'].includes(normalized)) return 'in_progress';
   if (normalized === 'scheduled' || normalized === 'confirmed') return 'scheduled';
   if (normalized === 'completed' || normalized === 'done') return 'completed';
   return 'other';
@@ -404,7 +434,7 @@ const statusTheme = (status: string): StatusMeta => {
     };
   }
 
-  if (normalized === 'in_progress' || normalized === 'ongoing') {
+  if (['checked_in', 'waiting', 'in_chair', 'in_progress', 'ongoing'].includes(normalized)) {
     return {
       badge: 'border-violet-300 bg-violet-100 text-violet-800',
       chip: 'border-violet-300 bg-violet-50 text-violet-700',
@@ -756,6 +786,55 @@ export const DentalChartDashboard = ({
   const formatDualCurrency = (usdValue: number): string => formatDualFromUsd(usdValue, afnPerUsd);
   const topSafePickups = overview?.safe.topPickups ?? [];
   const recentSafeTransactions = overview?.safe.recentTransactions ?? [];
+  const todayQueueEvents = useMemo(() => {
+    const todayKey = overview?.schedule.todayKey;
+    if (!todayKey) return [] as ScheduleEvent[];
+
+    return (eventsByDate[todayKey] ?? []).filter((event) => event.type === 'appointment');
+  }, [eventsByDate, overview?.schedule.todayKey]);
+
+  const waitingRoomSummary = useMemo(() => {
+    let arrivals = 0;
+    let waiting = 0;
+    let inChair = 0;
+    let closed = 0;
+    let late = 0;
+
+    const activeEvents = [...todayQueueEvents]
+      .filter((event) => !['completed', 'cancelled', 'canceled', 'rejected'].includes(normalizeStatus(event.status)))
+      .sort((left, right) => (left.timestamp ?? 0) - (right.timestamp ?? 0));
+
+    for (const event of todayQueueEvents) {
+      const status = normalizeStatus(event.status);
+
+      if (status === 'scheduled' || status === 'checked_in') arrivals += 1;
+      if (status === 'waiting') waiting += 1;
+      if (status === 'in_chair') inChair += 1;
+      if (['completed', 'cancelled', 'canceled', 'rejected'].includes(status)) {
+        closed += 1;
+      }
+
+      if (
+        (status === 'scheduled' || status === 'checked_in' || status === 'waiting')
+        && typeof event.timestamp === 'number'
+        && event.timestamp < Date.now()
+      ) {
+        late += 1;
+      }
+    }
+
+    return {
+      activeEvents,
+      activeTotal: activeEvents.length,
+      arrivals,
+      closed,
+      inChair,
+      late,
+      waiting,
+    };
+  }, [todayQueueEvents]);
+
+  const waitingRoomSpotlight = waitingRoomSummary.activeEvents.slice(0, 3);
 
   const upcomingEvents = useMemo(() => {
     const events = overview?.schedule.upcomingEvents ?? [];
@@ -938,6 +1017,186 @@ export const DentalChartDashboard = ({
                 </div>
 
                 <ToothSurfaceInspector />
+              </section>
+
+              <section className="overflow-hidden rounded-[1.9rem] border border-sky-200/80 bg-[radial-gradient(circle_at_top_left,_rgba(186,230,253,0.95),_rgba(239,246,255,0.9)_36%,_rgba(255,255,255,0.98)_72%)] p-5 shadow-[0_22px_45px_-28px_rgba(14,116,144,0.55)]">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.26em] text-sky-700/80">
+                      Waiting Room
+                    </p>
+                    <p className="mt-1 text-xl font-semibold text-slate-900">
+                      Live queue for today
+                    </p>
+                    <p className="text-sm text-slate-600">
+                      {waitingRoomSummary.activeTotal} active patient(s), {waitingRoomSummary.late} needing attention
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full border-sky-300 bg-white/80 text-sky-900 hover:bg-sky-100"
+                    onClick={() => {
+                      router.push(`/${locale}/dental-management/queue`);
+                    }}
+                  >
+                    Open Queue
+                    <ChevronRight className="size-4" />
+                  </Button>
+                </div>
+
+                <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1.2fr)]">
+                  <div className="rounded-[1.45rem] border border-white/80 bg-white/75 p-4 backdrop-blur-sm">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      {[
+                        {
+                          accent: 'from-amber-200 to-amber-50 text-amber-900',
+                          label: 'Arrivals',
+                          value: waitingRoomSummary.arrivals,
+                        },
+                        {
+                          accent: 'from-sky-200 to-sky-50 text-sky-900',
+                          label: 'Waiting',
+                          value: waitingRoomSummary.waiting,
+                        },
+                        {
+                          accent: 'from-violet-200 to-violet-50 text-violet-900',
+                          label: 'In Chair',
+                          value: waitingRoomSummary.inChair,
+                        },
+                        {
+                          accent: 'from-emerald-200 to-emerald-50 text-emerald-900',
+                          label: 'Closed',
+                          value: waitingRoomSummary.closed,
+                        },
+                      ].map((metric, index) => (
+                        <div key={metric.label} className="relative">
+                          {index < 3 ? (
+                            <div className="pointer-events-none absolute left-[calc(100%-0.35rem)] top-5 z-0 hidden h-[2px] w-[calc(100%+0.7rem)] bg-gradient-to-r from-sky-300/70 to-transparent sm:block" />
+                          ) : null}
+                          <div className="relative z-10 flex flex-col items-center text-center">
+                            <div
+                              className={cn(
+                                'grid size-11 place-items-center rounded-full border border-white/80 bg-gradient-to-br text-sm font-semibold shadow-sm',
+                                metric.accent
+                              )}
+                            >
+                              {metric.value}
+                            </div>
+                            <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600">
+                              {metric.label}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-4 rounded-2xl border border-slate-200/80 bg-slate-950/[0.03] p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-semibold text-slate-900">Queue pulse</p>
+                          <p className="text-[11px] text-slate-600">
+                            Front desk and chair occupancy at a glance
+                          </p>
+                        </div>
+                        <span className="rounded-full border border-sky-200 bg-sky-100 px-2 py-1 text-[11px] font-semibold text-sky-800">
+                          {overview?.schedule.todayKey ?? 'Today'}
+                        </span>
+                      </div>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        <div className="rounded-xl border border-amber-200 bg-amber-50/90 p-2.5">
+                          <p className="text-[11px] uppercase tracking-[0.16em] text-amber-700">
+                            Needs attention
+                          </p>
+                          <p className="mt-1 text-xl font-semibold text-amber-950">
+                            {waitingRoomSummary.late}
+                          </p>
+                          <p className="text-[11px] text-amber-800">
+                            Patients past their booked time
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 bg-white/90 p-2.5">
+                          <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                            Flow right now
+                          </p>
+                          <p className="mt-1 text-xl font-semibold text-slate-950">
+                            {waitingRoomSummary.activeTotal}
+                          </p>
+                          <p className="text-[11px] text-slate-600">
+                            Still moving through the queue
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[1.45rem] border border-sky-100/80 bg-white/78 p-4 backdrop-blur-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">Next up</p>
+                        <p className="text-[11px] text-slate-600">
+                          Patients closest to the current queue flow
+                        </p>
+                      </div>
+                      <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-600">
+                        {waitingRoomSpotlight.length} shown
+                      </span>
+                    </div>
+
+                    <div className="mt-3 space-y-2.5">
+                      {waitingRoomSpotlight.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-slate-200 bg-white/80 px-4 py-5 text-sm text-slate-500">
+                          No active patients are in the waiting room flow yet.
+                        </div>
+                      ) : (
+                        waitingRoomSpotlight.map((event) => {
+                          const theme = statusTheme(event.status);
+                          return (
+                            <div
+                              key={`waiting-room-${event.key}`}
+                              className="rounded-2xl border border-slate-200/80 bg-white/92 p-3 shadow-[0_14px_28px_-24px_rgba(15,23,42,0.55)]"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-semibold text-slate-950">
+                                    {event.patientName || event.title}
+                                  </p>
+                                  <p className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-500">
+                                    <Clock3 className="size-3.5" />
+                                    {event.timeLabel || 'Time pending'}
+                                    <span className="text-slate-300">•</span>
+                                    {event.dentistName || 'Dentist pending'}
+                                  </p>
+                                </div>
+                                <span className={cn('rounded-full border px-2.5 py-1 text-[11px] font-semibold', theme.badge)}>
+                                  {formatStatusLabel(event.status)}
+                                </span>
+                              </div>
+                              <div className="mt-3 flex items-center justify-between gap-3">
+                                <p className="min-w-0 truncate text-[11px] text-slate-600">
+                                  {event.note || event.tag || event.title}
+                                </p>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="shrink-0 rounded-full px-3 text-sky-800 hover:bg-sky-50 hover:text-sky-900"
+                                  onClick={() => {
+                                    router.push(`/${locale}/dental-management/queue`);
+                                  }}
+                                >
+                                  Manage
+                                  <ChevronRight className="size-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                </div>
               </section>
 
               <section className="grid gap-3 lg:grid-cols-[1fr_1fr]">

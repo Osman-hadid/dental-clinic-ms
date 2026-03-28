@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import { fetchAllRows } from '@/modules/common/infrastructure/api/fetch-all-rows';
+import { type PaginatedApiResponse } from '@/types/ApiResponse';
 import { toast } from 'sonner';
 
 type InventoryCategory = 'consumable' | 'implant' | 'instrument' | 'medicine' | 'other' | 'ppe';
@@ -34,6 +35,24 @@ type InventoryItem = {
   totalCost: number;
   unit: InventoryUnit;
   unitCost: number;
+  availableQuantity?: number;
+  stockValue?: number;
+  stockState?: 'in_stock' | 'low_stock' | 'out_of_stock';
+};
+
+type InventoryAdjustmentType = 'loss' | 'waste';
+
+type InventoryAdjustment = {
+  adjustmentDate: string;
+  adjustmentType: InventoryAdjustmentType;
+  createdBy: string;
+  id: string;
+  inventoryItemId: string;
+  itemName: string;
+  notes: string;
+  quantity: number;
+  totalCostImpact: number;
+  unitCostSnapshot: number;
 };
 
 type InventoryFormState = {
@@ -51,6 +70,14 @@ type InventoryFormState = {
   supplier: string;
   unit: InventoryUnit;
   unitCost: string;
+};
+
+type AdjustmentFormState = {
+  adjustmentDate: string;
+  adjustmentType: InventoryAdjustmentType;
+  inventoryItemId: string;
+  notes: string;
+  quantity: string;
 };
 
 const apiClient = new AxiosClient();
@@ -95,6 +122,13 @@ const normalizeUnit = (value: unknown): InventoryUnit => {
 };
 
 const getStockState = (item: InventoryItem): 'in_stock' | 'low' | 'out' => (item.quantity <= 0 ? 'out' : item.quantity <= item.minStock ? 'low' : 'in_stock');
+const normalizeInventoryStockState = (value: unknown, quantity: number, minStock: number): NonNullable<InventoryItem['stockState']> => {
+  const raw = asText(value);
+  if (raw === 'in_stock' || raw === 'low_stock' || raw === 'out_of_stock') return raw;
+  if (quantity <= 0) return 'out_of_stock';
+  if (quantity <= minStock) return 'low_stock';
+  return 'in_stock';
+};
 const isExpiringSoon = (expiryDate: string): boolean => {
   if (!expiryDate) return false;
   const now = new Date(toInputDate(new Date()));
@@ -121,6 +155,14 @@ const emptyForm = (): InventoryFormState => ({
   unitCost: '',
 });
 
+const emptyAdjustmentForm = (): AdjustmentFormState => ({
+  adjustmentDate: toInputDate(new Date()),
+  adjustmentType: 'waste',
+  inventoryItemId: '',
+  notes: '',
+  quantity: '1',
+});
+
 const extractApiErrorMessage = (error: unknown, fallback: string): string => {
   const payload = (error as { response?: { data?: { error?: { code?: string; details?: Record<string, unknown>; message?: string } } } })?.response?.data?.error;
   if (payload?.code === 'SAFE_BALANCE_INSUFFICIENT') {
@@ -133,6 +175,7 @@ const toInventoryItem = (row: Record<string, unknown>): InventoryItem => {
   const quantity = asNumber(row.quantity);
   const unitCost = asNumber(row.unitCost ?? row.unit_cost);
   const totalCost = asNumber(row.totalCost ?? row.total_cost) || (quantity * unitCost);
+  const minStock = asNumber(row.minStock ?? row.min_stock);
   return {
     acquisitionSource: normalizeSource(row.acquisitionSource ?? row.acquisition_source),
     category: normalizeCategory(row.category),
@@ -142,26 +185,46 @@ const toInventoryItem = (row: Record<string, unknown>): InventoryItem => {
     itemName: asText(row.itemName ?? row.item_name),
     location: asText(row.location),
     lotNumber: asText(row.lotNumber ?? row.lot_number),
-    minStock: asNumber(row.minStock ?? row.min_stock),
+    minStock,
     notes: asText(row.notes),
     quantity,
     supplier: asText(row.supplier),
     totalCost,
     unit: normalizeUnit(row.unit),
     unitCost,
+    availableQuantity: asNumber(row.availableQuantity ?? row.quantity),
+    stockValue: asNumber(row.stockValue ?? (quantity * unitCost)),
+    stockState: normalizeInventoryStockState(row.stockState ?? row.stock_state, quantity, minStock),
   };
 };
+
+const toInventoryAdjustment = (row: Record<string, unknown>): InventoryAdjustment => ({
+  adjustmentDate: asText(row.adjustmentDate),
+  adjustmentType: (asText(row.adjustmentType) === 'loss' ? 'loss' : 'waste'),
+  createdBy: asText(row.createdBy),
+  id: asText(row.id),
+  inventoryItemId: asText(row.inventoryItemId),
+  itemName: asText(row.itemName),
+  notes: asText(row.notes),
+  quantity: asNumber(row.quantity),
+  totalCostImpact: asNumber(row.totalCostImpact),
+  unitCostSnapshot: asNumber(row.unitCostSnapshot),
+});
 
 // eslint-disable-next-line react/function-component-definition
 export default function InventoryManagementPage(): JSX.Element {
   const tInventory = useTranslations('sidebar.inventoryManagement');
 
   const [items, setItems] = useState<InventoryItem[]>([]);
+  const [adjustments, setAdjustments] = useState<InventoryAdjustment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isRecordingAdjustment, setIsRecordingAdjustment] = useState(false);
   const [form, setForm] = useState<InventoryFormState>(emptyForm());
+  const [adjustmentForm, setAdjustmentForm] = useState<AdjustmentFormState>(emptyAdjustmentForm());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formError, setFormError] = useState('');
+  const [adjustmentError, setAdjustmentError] = useState('');
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<'all' | InventoryCategory>('all');
   const [stockFilter, setStockFilter] = useState<StockFilter>('all');
@@ -181,6 +244,13 @@ export default function InventoryManagementPage(): JSX.Element {
     try {
       const rows = await fetchInventoryRows();
       setItems(rows.map((row) => toInventoryItem(row)));
+      const adjustmentsResponse = await apiClient.get<PaginatedApiResponse<Array<Record<string, unknown>>>>('/api/v1/dental-management/inventory-adjustments', {
+        params: { perPage: 20 },
+      });
+      const adjustmentRows = Array.isArray(adjustmentsResponse.data?.data)
+        ? adjustmentsResponse.data.data
+        : [];
+      setAdjustments(adjustmentRows.map((row: Record<string, unknown>) => toInventoryAdjustment(row)));
     } catch (error: unknown) {
       toast.error(extractApiErrorMessage(error, 'Failed to fetch inventory items.'));
     } finally {
@@ -205,13 +275,19 @@ export default function InventoryManagementPage(): JSX.Element {
 
   const summary = useMemo(() => ({
     totalQty: items.reduce((sum, i) => sum + i.quantity, 0),
-    totalValue: items.reduce((sum, i) => sum + i.totalCost, 0),
+    totalValue: items.reduce((sum, i) => sum + (i.stockValue ?? (i.quantity * i.unitCost)), 0),
     lowStockCount: items.filter((i) => getStockState(i) === 'low').length,
     outStockCount: items.filter((i) => getStockState(i) === 'out').length,
     expiringSoonCount: items.filter((i) => isExpiringSoon(i.expiryDate)).length,
-  }), [items]);
+    wasteLossCount: adjustments.reduce((sum, adjustment) => sum + adjustment.quantity, 0),
+    wasteLossValue: adjustments.reduce((sum, adjustment) => sum + adjustment.totalCostImpact, 0),
+  }), [adjustments, items]);
 
   const resetForm = (): void => { setForm(emptyForm()); setEditingId(null); setFormError(''); };
+  const resetAdjustmentForm = (): void => {
+    setAdjustmentForm(emptyAdjustmentForm());
+    setAdjustmentError('');
+  };
 
   const saveItem = async (): Promise<void> => {
     if (isSaving) return;
@@ -298,6 +374,44 @@ export default function InventoryManagementPage(): JSX.Element {
     }
   };
 
+  const recordAdjustment = async (): Promise<void> => {
+    if (isRecordingAdjustment) return;
+
+    const inventoryItemId = adjustmentForm.inventoryItemId.trim();
+    const quantity = asNumber(adjustmentForm.quantity);
+    if (!inventoryItemId) {
+      setAdjustmentError('Choose an inventory item first.');
+      return;
+    }
+    if (quantity <= 0) {
+      setAdjustmentError('Adjustment quantity must be greater than zero.');
+      return;
+    }
+
+    setAdjustmentError('');
+    setIsRecordingAdjustment(true);
+    try {
+      const response = await apiClient.post(`/api/v1/dental-management/inventory-items/${inventoryItemId}/adjustments`, {
+        adjustmentDate: adjustmentForm.adjustmentDate || toInputDate(new Date()),
+        adjustmentType: adjustmentForm.adjustmentType,
+        notes: adjustmentForm.notes.trim() || null,
+        quantity,
+      });
+      if (!response.success) {
+        setAdjustmentError(response.error?.message || 'Failed to record inventory adjustment.');
+        return;
+      }
+
+      toast.success(`${adjustmentForm.adjustmentType === 'loss' ? 'Loss' : 'Waste'} recorded.`);
+      await fetchData();
+      resetAdjustmentForm();
+    } catch (error: unknown) {
+      setAdjustmentError(extractApiErrorMessage(error, 'Failed to record inventory adjustment.'));
+    } finally {
+      setIsRecordingAdjustment(false);
+    }
+  };
+
   return (
     <>
       <Header breadcrumbs={[{ id: 'inventoryManagement', label: tInventory('title') }, { id: 'inventory', isCurrent: true, label: tInventory('inventory') }]} />
@@ -309,12 +423,13 @@ export default function InventoryManagementPage(): JSX.Element {
               <p className="text-xs text-muted-foreground">Purchase source cuts safe balance. Previous stock does not affect safe.</p>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
               <Card className="pt-3"><CardHeader className="pb-1"><CardDescription>Total Stock Units</CardDescription><CardTitle className="text-2xl">{summary.totalQty}</CardTitle></CardHeader></Card>
               <Card className="pt-3"><CardHeader className="pb-1"><CardDescription>Inventory Value</CardDescription><CardTitle className="text-2xl">{formatMoney(summary.totalValue)}</CardTitle></CardHeader></Card>
               <Card className="pt-3"><CardHeader className="pb-1"><CardDescription>Low Stock</CardDescription><CardTitle className="text-2xl text-amber-600">{summary.lowStockCount}</CardTitle></CardHeader></Card>
               <Card className="pt-3"><CardHeader className="pb-1"><CardDescription>Out of Stock</CardDescription><CardTitle className="text-2xl text-rose-600">{summary.outStockCount}</CardTitle></CardHeader></Card>
               <Card className="pt-3"><CardHeader className="pb-1"><CardDescription>Expiring in 30 Days</CardDescription><CardTitle className="text-2xl text-orange-600">{summary.expiringSoonCount}</CardTitle></CardHeader></Card>
+              <Card className="pt-3"><CardHeader className="pb-1"><CardDescription>Waste / Loss Value</CardDescription><CardTitle className="text-2xl text-violet-700">{formatMoney(summary.wasteLossValue)}</CardTitle></CardHeader></Card>
             </div>
 
             <Card className="pt-7"><CardHeader><CardTitle>{editingId ? 'Edit Inventory Item' : 'Add Inventory Item'}</CardTitle><CardDescription>Save full details for each clinic item.</CardDescription></CardHeader><CardContent className="space-y-3">
@@ -362,6 +477,55 @@ export default function InventoryManagementPage(): JSX.Element {
               </div>
             </CardContent></Card>
 
+            <Card className="pt-7">
+              <CardHeader>
+                <CardTitle>Record Waste Or Loss</CardTitle>
+                <CardDescription>Log broken, expired, or missing items so stock and reports stay accurate.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <Select
+                    value={adjustmentForm.inventoryItemId || '__none__'}
+                    onValueChange={(value) => setAdjustmentForm((state) => ({ ...state, inventoryItemId: value === '__none__' ? '' : value }))}
+                  >
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Select item" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Select item</SelectItem>
+                      {items.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {`${item.itemName} (${item.quantity} ${item.unit})`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={adjustmentForm.adjustmentType}
+                    onValueChange={(value) => {
+                      if (value === 'waste' || value === 'loss') {
+                        setAdjustmentForm((state) => ({ ...state, adjustmentType: value }));
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Adjustment type" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="waste">Waste</SelectItem>
+                      <SelectItem value="loss">Loss</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input type="number" min={1} value={adjustmentForm.quantity} onChange={(e) => setAdjustmentForm((state) => ({ ...state, quantity: e.target.value }))} placeholder="Quantity" />
+                  <Input type="date" value={adjustmentForm.adjustmentDate} onChange={(e) => setAdjustmentForm((state) => ({ ...state, adjustmentDate: e.target.value }))} />
+                </div>
+                <textarea value={adjustmentForm.notes} onChange={(e) => setAdjustmentForm((state) => ({ ...state, notes: e.target.value }))} placeholder="Reason or detail" rows={3} className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none" />
+                {adjustmentError ? <p className="text-sm text-rose-600">{adjustmentError}</p> : null}
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" disabled={isRecordingAdjustment} onClick={() => void recordAdjustment()}>
+                    {isRecordingAdjustment ? 'Recording...' : 'Record Adjustment'}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={resetAdjustmentForm}>Reset</Button>
+                </div>
+              </CardContent>
+            </Card>
+
             <Card className="pt-7"><CardHeader><CardTitle>Inventory Data</CardTitle><CardDescription>All clinic items with stock and date details.</CardDescription></CardHeader><CardContent className="space-y-3">
               <div className="grid gap-3 md:grid-cols-3">
                 <Input placeholder="Search by name, date, supplier..." value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -397,6 +561,47 @@ export default function InventoryManagementPage(): JSX.Element {
                 </table>
               </div>
             </CardContent></Card>
+
+            <Card className="pt-7">
+              <CardHeader>
+                <CardTitle>Recent Waste And Loss</CardTitle>
+                <CardDescription>Latest stock reductions recorded outside treatment usage.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto rounded-xl border">
+                  <table className="w-full min-w-[900px] text-sm">
+                    <thead className="bg-muted/40 text-left">
+                      <tr>
+                        <th className="px-3 py-2">Date</th>
+                        <th className="px-3 py-2">Item</th>
+                        <th className="px-3 py-2">Type</th>
+                        <th className="px-3 py-2">Qty</th>
+                        <th className="px-3 py-2">Value</th>
+                        <th className="px-3 py-2">Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {adjustments.length === 0 ? (
+                        <tr><td className="px-3 py-6 text-center text-muted-foreground" colSpan={6}>No waste or loss adjustments recorded yet.</td></tr>
+                      ) : adjustments.map((adjustment) => (
+                        <tr key={adjustment.id} className="border-t">
+                          <td className="px-3 py-2">{adjustment.adjustmentDate}</td>
+                          <td className="px-3 py-2">{adjustment.itemName}</td>
+                          <td className="px-3 py-2">
+                            {adjustment.adjustmentType === 'loss'
+                              ? <Badge className="bg-rose-600 text-white">Loss</Badge>
+                              : <Badge className="bg-violet-600 text-white">Waste</Badge>}
+                          </td>
+                          <td className="px-3 py-2">{adjustment.quantity}</td>
+                          <td className="px-3 py-2">{formatMoney(adjustment.totalCostImpact)}</td>
+                          <td className="px-3 py-2">{adjustment.notes || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>

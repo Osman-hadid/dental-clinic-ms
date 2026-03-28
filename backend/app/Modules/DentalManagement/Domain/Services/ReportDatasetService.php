@@ -67,8 +67,29 @@ final class ReportDatasetService
             ->where('created_at', '<=', $endDate->endOfDay())
             ->get();
 
+        $invoices = Invoice::query()
+            ->select([
+                'id',
+                'patient_id',
+                'visit_id',
+                'total_amount',
+                'total_amount_input',
+                'discount',
+                'discount_input',
+                'net_amount',
+                'net_amount_input',
+                'exchange_rate',
+                'invoice_date',
+                'status',
+            ])
+            ->with(['payments:id,invoice_id,payment_date,amount,amount_input,method,exchange_rate'])
+            ->where('invoice_date', '>=', $startDate->toDateString())
+            ->where('invoice_date', '<=', $endDate->toDateString())
+            ->get();
+
         return [
             'appointments' => $appointments->map(fn (Appointment $appointment): array => $this->appointmentRow($appointment))->values()->all(),
+            'invoiceRows' => $invoices->map(fn (Invoice $invoice): array => $this->invoiceRow($invoice))->values()->all(),
             'patientNameMap' => $this->patientNameMap($patients),
             'patientSessionTasks' => $tasks->map(fn (PatientSessionTask $task): array => $this->taskRow($task))->values()->all(),
             'patients' => $patients->map(fn (Patient $patient): array => $this->patientRow($patient))->values()->all(),
@@ -242,9 +263,12 @@ final class ReportDatasetService
             'createdAt' => $this->dateTimeString($appointment->created_at),
             'dentistId' => (string) ($appointment->dentist_id ?? ''),
             'dentistName' => $this->dentistName($appointment->dentist?->full_name, $appointment->dentist_id),
+            'endTime' => trim((string) ($appointment->end_time ?? '')),
             'id' => (string) $appointment->id,
             'patientId' => (string) ($appointment->patient_id ?? ''),
+            'startTime' => trim((string) ($appointment->start_time ?? '')),
             'status' => (string) ($appointment->status ?? ''),
+            'tag' => (string) ($appointment->tag ?? ''),
             'updatedAt' => $this->dateTimeString($appointment->updated_at),
         ];
     }
@@ -523,6 +547,8 @@ final class ReportDatasetService
             'updatedAt' => $this->dateTimeString($visitTreatment->updated_at),
             'visit' => [
                 'dentistName' => $this->dentistName($visitTreatment->visit?->dentist?->full_name, $visitTreatment->visit?->dentist_id),
+                'patientId' => (string) ($visitTreatment->visit?->patient_id ?? ''),
+                'tag' => (string) ($visitTreatment->visit?->tag ?? ''),
                 'visitDate' => $this->dateString($visitTreatment->visit?->visit_date),
             ],
             'visitId' => (string) ($visitTreatment->visit_id ?? ''),

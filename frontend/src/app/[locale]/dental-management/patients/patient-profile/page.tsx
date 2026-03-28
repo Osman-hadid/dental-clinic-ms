@@ -14,6 +14,11 @@ import { type Tooth } from '@/modules/dental-management/domain/entities/Tooth';
 import { type Treatment } from '@/modules/dental-management/domain/entities/Treatment';
 import { type VisitTreatment } from '@/modules/dental-management/domain/entities/VisitTreatment';
 import {
+  PatientTimelineItem,
+  PatientTimelinePanel,
+} from '@/modules/dental-management/presentation/components/patient-timeline-panel';
+import {
+  useAppointmentList,
   useClinicProfile,
   useGetPatient,
   useInvoiceList,
@@ -508,8 +513,17 @@ export default function PatientProfilePage(): JSX.Element {
     [teeth]
   );
 
+  const appointmentFilters = useMemo(() => ({ patientId: patientId ? [patientId] : ['-1'] }), [patientId]);
+  const { entities: appointments, isFetching: isLoadingAppointments } = useAppointmentList(
+    1,
+    MAX_PER_PAGE,
+    '',
+    [],
+    ['dentist'],
+    appointmentFilters
+  );
   const visitFilters = useMemo(() => ({ patientId: patientId ? [patientId] : ['-1'] }), [patientId]);
-  const { entities: visits } = useVisitList(
+  const { entities: visits, isFetching: isLoadingVisits } = useVisitList(
     1,
     MAX_PER_PAGE,
     '',
@@ -901,6 +915,164 @@ export default function PatientProfilePage(): JSX.Element {
   const latestIncome = incomeTrend.length > 0 ? incomeTrend[incomeTrend.length - 1].income : 0;
   const latestDebt = incomeTrend.length > 0 ? incomeTrend[incomeTrend.length - 1].debt : 0;
   const averageIncome = incomeTrend.length > 0 ? Number((totalIncome / incomeTrend.length).toFixed(2)) : 0;
+  const timelineItems = useMemo<PatientTimelineItem[]>(() => {
+    const items: PatientTimelineItem[] = [];
+
+    appointments.forEach((appointment) => {
+      const status = asText(appointment.status) || 'scheduled';
+      const normalizedStatus = status.toLowerCase();
+      const timeRange = [asText(appointment.startTime), asText(appointment.endTime)].filter(Boolean).join(' - ');
+
+      items.push({
+        badge: status.replaceAll('_', ' '),
+        description: [timeRange ? `Time: ${timeRange}` : '', `Status: ${status.replaceAll('_', ' ')}`]
+          .filter(Boolean)
+          .join(' | '),
+        id: `appointment-${appointment.id}`,
+        kind: 'appointment',
+        occurredAt: appointment.appointmentDate || appointment.createdAt || '',
+        subtitle: appointment.dentistName ? `Dentist: ${appointment.dentistName}` : undefined,
+        title: appointment.tag || `Appointment #${appointment.id}`,
+        tone: normalizedStatus === 'completed'
+          ? 'safe'
+          : (normalizedStatus === 'cancelled' || normalizedStatus === 'canceled' ? 'danger' : 'warning'),
+      });
+    });
+
+    visits.forEach((visit) => {
+      items.push({
+        badge: 'Visit',
+        description: visit.diagnosisNotes || 'Visit recorded in patient history.',
+        id: `visit-${visit.id}`,
+        kind: 'visit',
+        occurredAt: visit.visitDate || visit.createdAt || '',
+        subtitle: visit.dentistName ? `Dentist: ${visit.dentistName}` : undefined,
+        title: visit.tag || visit.appointmentTag || `Visit #${visit.id}`,
+        tone: 'info',
+        visitId: String(visit.id),
+      });
+    });
+
+    typedVisitTreatments.forEach((row) => {
+      const chartTeeth = Object.keys(parseChartConditionMap(row.notes));
+      const listedTeeth = parseToothNumbersFromValue(row.toothNumber);
+      const teeth = chartTeeth.length > 0
+        ? chartTeeth
+        : (
+          listedTeeth.length > 0
+            ? listedTeeth
+            : [row.tooth?.toothNumber, toothById.get(String(row.toothId)), parseLegacyTooth(row.notes)].filter(Boolean)
+        ) as string[];
+      const visit = visitById.get(String(row.visitId));
+      const treatmentName = row.treatment?.name || `Treatment ${row.treatmentId}`;
+      const noteText = stripMetadataPrefixes(row.notes);
+
+      items.push({
+        amountLabel: row.price ? formatCurrency(parseAmount(row.price)) : undefined,
+        badge: 'Treatment',
+        description: [noteText, row.material ? `Material: ${row.material}` : '', visit?.visitDate ? `Visit: ${visit.visitDate}` : '']
+          .filter(Boolean)
+          .join(' | '),
+        id: `treatment-${row.id}`,
+        kind: 'treatment',
+        occurredAt: visit?.visitDate || row.createdAt || '',
+        subtitle: teeth.length > 0 ? `Teeth: ${teeth.join(', ')}` : (visit?.tag ? `Visit: ${visit.tag}` : undefined),
+        title: treatmentName,
+        tone: 'default',
+        visitId: row.visitId ? String(row.visitId) : undefined,
+      });
+    });
+
+    prescriptionRecords.forEach((record) => {
+      items.push({
+        badge: 'Prescription',
+        description: record.content,
+        id: `prescription-${record.id}`,
+        kind: 'prescription',
+        occurredAt: record.visitDate || record.createdAt || '',
+        subtitle: record.dentistName ? `Dentist: ${record.dentistName}` : undefined,
+        title: `Prescription for ${record.treatmentName}`,
+        tone: 'info',
+        visitId: record.visitId || undefined,
+      });
+    });
+
+    paymentSummaries.forEach((invoice) => {
+      const normalizedStatus = invoice.status.toLowerCase();
+      const invoiceTone = normalizedStatus === 'paid'
+        ? 'safe'
+        : normalizedStatus === 'partially_paid'
+          ? 'warning'
+          : (normalizedStatus === 'cancelled' ? 'danger' : 'default');
+
+      items.push({
+        amountLabel: formatCurrency(invoice.totalNet),
+        badge: invoice.status.replaceAll('_', ' '),
+        description: `Net ${formatCurrency(invoice.totalNet)} | Paid ${formatCurrency(invoice.totalPaid)} | Remaining ${formatCurrency(invoice.remainingAmount)}`,
+        id: `invoice-${invoice.id}`,
+        kind: 'invoice',
+        occurredAt: invoice.invoiceDate || '',
+        subtitle: invoice.visitLabel !== '-' ? invoice.visitLabel : undefined,
+        title: `Invoice #${invoice.id}`,
+        tone: invoiceTone,
+        visitId: invoice.visitId || undefined,
+      });
+
+      invoice.payments.forEach((payment) => {
+        items.push({
+          amountLabel: formatCurrency(parseAmount(payment.amount)),
+          badge: 'Payment',
+          description: payment.notes || `Recorded against invoice #${invoice.id}.`,
+          id: `payment-${invoice.id}-${payment.id}`,
+          kind: 'payment',
+          occurredAt: payment.paymentDate || invoice.invoiceDate || '',
+          subtitle: [payment.method ? `Method: ${payment.method}` : '', invoice.visitLabel !== '-' ? invoice.visitLabel : '']
+            .filter(Boolean)
+            .join(' | ') || undefined,
+          title: `Payment for Invoice #${invoice.id}`,
+          tone: 'safe',
+          visitId: invoice.visitId || undefined,
+        });
+      });
+    });
+
+    manualTasks.forEach((task) => {
+      items.push({
+        badge: task.status.replaceAll('_', ' '),
+        description: task.notes || 'Manual follow-up task added for this patient.',
+        id: `task-${task.id}`,
+        kind: 'task',
+        occurredAt: task.createdAt || '',
+        subtitle: task.mark ? `Mark: ${task.mark}` : undefined,
+        title: task.title,
+        tone: task.status === 'done' ? 'safe' : (task.status === 'in_progress' ? 'warning' : 'default'),
+      });
+    });
+
+    return items
+      .filter((item) => item.occurredAt)
+      .sort((left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime());
+  }, [
+    appointments,
+    manualTasks,
+    paymentSummaries,
+    prescriptionRecords,
+    toothById,
+    typedVisitTreatments,
+    visitById,
+    visits,
+  ]);
+  const timelineStats = useMemo(
+    () => ({
+      appointments: appointments.length,
+      events: timelineItems.length,
+      payments: paymentSummaries.reduce((count, invoice) => count + invoice.payments.length, 0),
+      tasks: manualTasks.length,
+      visits: visits.length,
+    }),
+    [appointments.length, manualTasks.length, paymentSummaries, timelineItems.length, visits.length]
+  );
+  const isTimelineLoading = isLoadingAppointments || isLoadingVisits || isLoadingInvoices || isLoadingTreatments || isLoadingManualTasks;
 
   const fetchCsrfClient = async (): Promise<AxiosClient> => {
     const client = new AxiosClient();
@@ -2047,6 +2219,16 @@ export default function PatientProfilePage(): JSX.Element {
                   </div>
                 </CardContent>
               </Card>
+
+              <PatientTimelinePanel
+                isLoading={isTimelineLoading}
+                items={timelineItems}
+                onOpenVisit={(visitId) => {
+                  const encodedVisitId = encodeURIComponent(String(visitId));
+                  router.push(`/${locale}/dental-management/visits/chart?visitId=${encodedVisitId}`);
+                }}
+                stats={timelineStats}
+              />
 
               <Card className="border-border bg-card text-card-foreground">
                 <CardHeader className="pb-2">

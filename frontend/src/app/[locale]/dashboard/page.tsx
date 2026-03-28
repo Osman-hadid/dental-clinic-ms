@@ -50,6 +50,17 @@ type DashboardOverviewResponse = {
   };
   patients: { total: number; new30d: number; returning: number };
   performance: { completionRate: number; calendarCoverageDays: number };
+  operations: {
+    criticalDiskWarning: boolean;
+    diskFreePercent: number;
+    failedBackupCount: number;
+    healthWarningCount: number;
+    lastSuccessfulBackupAt: string | null;
+    latestBackupStatus: string;
+    lowDiskWarning: boolean;
+    nextScheduledRunAt: string | null;
+    status: string;
+  };
   charts: {
     revenueRange: '7d' | '30d' | '90d';
     revenueSeries: Array<{ date: string; billed: number; paid: number }>;

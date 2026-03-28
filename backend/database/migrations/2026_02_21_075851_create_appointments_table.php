@@ -17,7 +17,7 @@ return new class extends Migration
     ];
 
     private const FRONTEND_FILTERS = [
-        'status' => ['scheduled', 'completed', 'cancelled'],
+        'status' => ['scheduled', 'checked_in', 'waiting', 'in_chair', 'completed', 'cancelled'],
         'trashed' => ['with', 'only'],
     ];
 
@@ -62,7 +62,7 @@ return new class extends Migration
             $table->date('appointment_date');
             $table->time('start_time');
             $table->time('end_time')->nullable();
-            $table->enum('status', ['scheduled', 'completed', 'cancelled'])->default('scheduled');
+            $table->enum('status', ['scheduled', 'checked_in', 'waiting', 'in_chair', 'completed', 'cancelled'])->default('scheduled');
             $table->text('notes')->nullable();
             $table->unsignedBigInteger('created_by')->nullable();
             $table->unsignedBigInteger('updated_by')->nullable();

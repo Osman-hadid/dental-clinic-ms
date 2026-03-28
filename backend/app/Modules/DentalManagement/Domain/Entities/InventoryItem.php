@@ -66,4 +66,9 @@ final class InventoryItem extends Model
     {
         return $this->hasMany(VisitTreatmentMaterial::class);
     }
+
+    public function adjustments(): HasMany
+    {
+        return $this->hasMany(InventoryAdjustment::class)->latest('adjustment_date');
+    }
 }

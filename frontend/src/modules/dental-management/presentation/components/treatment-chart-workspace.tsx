@@ -8,9 +8,15 @@ import { fetchAllRows } from '@/modules/common/infrastructure/api/fetch-all-rows
 import { type Staff } from '@/modules/dental-management/domain/entities/Staff';
 import { type Tooth } from '@/modules/dental-management/domain/entities/Tooth';
 import { type Treatment } from '@/modules/dental-management/domain/entities/Treatment';
-import { type VisitTreatment } from '@/modules/dental-management/domain/entities/VisitTreatment';
+import {
+  type VisitTreatment,
+  type VisitTreatmentImage,
+  type VisitTreatmentImageModality,
+  type VisitTreatmentImageSource,
+} from '@/modules/dental-management/domain/entities/VisitTreatment';
 import {
   useCreateVisitTreatment,
+  useUpdateVisitTreatment,
   usePatientList,
   useStaffList,
   useToothList,
@@ -32,7 +38,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utilities';
-import { Eraser, Loader2, Paintbrush, Printer, Stethoscope, UserRound } from 'lucide-react';
+import { Camera, Eraser, ImagePlus, Loader2, Paintbrush, Pencil, Printer, RotateCcw, ScanLine, Stethoscope, UserRound } from 'lucide-react';
 import { toast } from 'sonner';
 
 type ConditionKey =
@@ -64,17 +70,38 @@ type TreatmentChartWorkspaceProps = {
 };
 
 type InventoryMaterialOption = {
+  availableQuantity: number;
   category: string;
   id: string;
   itemName: string;
+  location: string;
+  minStock: number;
   quantity: number;
+  stockState: 'in_stock' | 'low_stock' | 'out_of_stock';
+  supplier: string;
   unit: string;
+  unitCost: number;
 };
 
 type MaterialSelectionRow = {
   key: string;
   inventoryItemId: string;
   quantity: string;
+};
+
+type MaterialReviewRow = {
+  availableQuantity: number;
+  category: string;
+  itemName: string;
+  key: string;
+  location: string;
+  minStock: number;
+  remainingQuantity: number;
+  requestedQuantity: number;
+  status: 'healthy' | 'low_after' | 'shortage';
+  substituteOptions: InventoryMaterialOption[];
+  supplier: string;
+  unit: string;
 };
 
 type PrescriptionFoodTiming = 'before_food' | 'after_food' | 'with_food' | 'anytime';
@@ -85,6 +112,12 @@ type PrescriptionSelectionRow = {
   foodTiming: PrescriptionFoodTiming | '';
   frequency: string;
   name: string;
+};
+
+type ImagePreview = {
+  file: File;
+  key: string;
+  url: string;
 };
 
 const CONDITIONS: Record<ConditionKey, ConditionMeta> = {
@@ -204,6 +237,19 @@ const PRESCRIPTION_FOOD_TIMING_LABELS: Record<PrescriptionFoodTiming, string> = 
   anytime: 'Anytime',
   before_food: 'Before food',
   with_food: 'With food',
+};
+const TREATMENT_IMAGE_MODALITY_LABELS: Record<VisitTreatmentImageModality, string> = {
+  cbct: 'CBCT',
+  intraoral_photo: 'Intraoral Photo',
+  opg: 'OPG / Panoramic',
+  other: 'Other',
+  scanner_export: 'Scanner Export',
+  xray: 'Dental X-Ray',
+};
+const TREATMENT_IMAGE_SOURCE_LABELS: Record<VisitTreatmentImageSource, string> = {
+  camera: 'Captured now',
+  device_import: 'Imported from device/software',
+  upload: 'Uploaded from files',
 };
 const CONDITION_CODES: Record<ConditionKey, string> = {
   caries: 'c',
@@ -472,6 +518,31 @@ const parseImageChargeFromNotes = (value?: string): string => {
   return `${parsed.toFixed(2)} AFN`;
 };
 
+const parseRequiresImageFromNotes = (value?: string): boolean => {
+  if (!value) {
+    return false;
+  }
+
+  const imageRequiredMatch = value.match(/\[image:([01])\]/i);
+
+  return imageRequiredMatch?.[1] === '1';
+};
+
+const parseImagePriceValueFromNotes = (value?: string): string => {
+  if (!value) {
+    return '';
+  }
+
+  const imagePriceMatch = value.match(/\[imagePrice:([0-9]+(?:\.[0-9]+)?)\]/i);
+  if (!imagePriceMatch) {
+    return '';
+  }
+
+  const parsed = Number(imagePriceMatch[1]);
+
+  return Number.isFinite(parsed) ? parsed.toFixed(2) : '';
+};
+
 const parseToothConditionMapFromNotes = (value?: string): Record<string, ConditionKey> => {
   if (!value) {
     return {};
@@ -692,6 +763,7 @@ export const TreatmentChartWorkspace = ({
   const authenticatedUser = useAuthStore((state) => state.user);
   const authenticatedEmail = asText(authenticatedUser?.email).toLowerCase();
   const createVisitTreatment = useCreateVisitTreatment();
+  const updateVisitTreatment = useUpdateVisitTreatment();
   const defaultPatientId = initialPatientId !== undefined && initialPatientId !== null
     ? String(initialPatientId)
     : '';
@@ -700,6 +772,7 @@ export const TreatmentChartWorkspace = ({
     : '';
 
   const [activeCondition, setActiveCondition] = useState<ConditionKey | null>(null);
+  const [editingTreatmentId, setEditingTreatmentId] = useState<number | null>(null);
   const [selectedPatientId, setSelectedPatientId] = useState<string>(defaultPatientId);
   const [selectedVisitId, setSelectedVisitId] = useState<string>(defaultVisitId);
   const [selectedTreatmentId, setSelectedTreatmentId] = useState<string>('');
@@ -707,10 +780,15 @@ export const TreatmentChartWorkspace = ({
   const [price, setPrice] = useState<string>('');
   const [requiresImage, setRequiresImage] = useState<boolean>(false);
   const [imagePrice, setImagePrice] = useState<string>('');
+  const [treatmentImages, setTreatmentImages] = useState<File[]>([]);
+  const [persistedTreatmentImages, setPersistedTreatmentImages] = useState<VisitTreatmentImage[]>([]);
+  const [imageModality, setImageModality] = useState<VisitTreatmentImageModality>('xray');
+  const [imageSource, setImageSource] = useState<VisitTreatmentImageSource>('upload');
   const [materialSelections, setMaterialSelections] = useState<MaterialSelectionRow[]>([]);
   const [inventoryMaterials, setInventoryMaterials] = useState<InventoryMaterialOption[]>([]);
   const [isLoadingInventoryMaterials, setIsLoadingInventoryMaterials] = useState<boolean>(false);
   const [notes, setNotes] = useState<string>('');
+  const [correctionReason, setCorrectionReason] = useState<string>('');
   const [prescriptionSelections, setPrescriptionSelections] = useState<PrescriptionSelectionRow[]>([]);
   const [conditionOverrides, setConditionOverrides] = useState<Record<string, ConditionKey | null>>({});
 
@@ -729,7 +807,7 @@ export const TreatmentChartWorkspace = ({
     100,
     '',
     [],
-    ['treatment', 'tooth', 'dentist', 'prescription', 'prescription.items', 'materialItems'],
+    ['treatment', 'tooth', 'dentist', 'prescription', 'prescription.items', 'materialItems', 'treatmentImages', 'activityLogs', 'activityLogs.causer'],
     visitTreatmentFilters
   );
 
@@ -773,6 +851,8 @@ export const TreatmentChartWorkspace = ({
 
   const selectedTreatment = selectedTreatmentId ? treatmentById.get(selectedTreatmentId) : undefined;
   const selectedVisit = selectedVisitId ? visitById.get(selectedVisitId) : undefined;
+  const uploadInputId = useId();
+  const captureInputId = useId();
   const visitOrderIndexById = useMemo(() => {
     const sortedVisits = visits.slice().sort((left, right) => {
       const leftDate = new Date(left.visitDate || '').getTime();
@@ -956,12 +1036,32 @@ export const TreatmentChartWorkspace = ({
     });
   }, [toothConditions]);
 
+  const treatmentImagePreviews = useMemo<ImagePreview[]>(
+    () =>
+      treatmentImages.map((file) => ({
+        file,
+        key: `${file.name}-${file.size}-${file.lastModified}`,
+        url: URL.createObjectURL(file),
+      })),
+    [treatmentImages]
+  );
+
+  useEffect(() => {
+    return () => {
+      treatmentImagePreviews.forEach((preview) => {
+        URL.revokeObjectURL(preview.url);
+      });
+    };
+  }, [treatmentImagePreviews]);
+
+  const isSubmitting = createVisitTreatment.isPending || updateVisitTreatment.isPending;
+  const attachedImageCount = treatmentImages.length + persistedTreatmentImages.length;
   const canSave =
     !!selectedPatientId &&
     !!selectedTreatmentId &&
     !!selectedToothNumber &&
     price.trim().length > 0 &&
-    !createVisitTreatment.isPending;
+    !isSubmitting;
 
   const doctorName = useMemo(() => {
     const visitDentistName = asText(selectedVisit?.dentistName);
@@ -1003,6 +1103,56 @@ export const TreatmentChartWorkspace = ({
 
     return parts.join(', ');
   }, [inventoryMaterialsById, materialSelections]);
+  const materialReviewRows = useMemo<MaterialReviewRow[]>(() => {
+    return materialSelections
+      .map((selection) => {
+        const inventoryItemId = selection.inventoryItemId.trim();
+        const requestedQuantity = Number.parseInt(selection.quantity.trim(), 10);
+
+        if (!inventoryItemId || !Number.isFinite(requestedQuantity) || requestedQuantity <= 0) {
+          return null;
+        }
+
+        const item = inventoryMaterialsById.get(inventoryItemId);
+        if (!item) {
+          return null;
+        }
+
+        const availableQuantity = item.availableQuantity;
+        const remainingQuantity = availableQuantity - requestedQuantity;
+        const status: MaterialReviewRow['status'] = remainingQuantity < 0
+          ? 'shortage'
+          : remainingQuantity <= item.minStock
+            ? 'low_after'
+            : 'healthy';
+        const substituteOptions = inventoryMaterials
+          .filter((candidate) =>
+            candidate.id !== item.id &&
+            candidate.category === item.category &&
+            candidate.availableQuantity >= requestedQuantity
+          )
+          .sort((left, right) => right.availableQuantity - left.availableQuantity)
+          .slice(0, 3);
+
+        return {
+          availableQuantity,
+          category: item.category,
+          itemName: item.itemName,
+          key: selection.key,
+          location: item.location,
+          minStock: item.minStock,
+          remainingQuantity,
+          requestedQuantity,
+          status,
+          substituteOptions,
+          supplier: item.supplier,
+          unit: item.unit,
+        };
+      })
+      .filter((row): row is MaterialReviewRow => row !== null);
+  }, [inventoryMaterials, inventoryMaterialsById, materialSelections]);
+  const hasBlockingMaterialIssue = materialReviewRows.some((row) => row.status === 'shortage');
+  const hasLowStockMaterialIssue = materialReviewRows.some((row) => row.status === 'low_after');
   const prescriptionDraftSummary = useMemo(() => {
     const items = prescriptionSelections
       .map((item) => ({
@@ -1016,16 +1166,35 @@ export const TreatmentChartWorkspace = ({
     return formatPrescriptionSummary({ items });
   }, [prescriptionSelections]);
 
+  const resetEditor = useCallback((): void => {
+    setEditingTreatmentId(null);
+    setActiveCondition(null);
+    setSelectedTreatmentId('');
+    setSelectedToothNumber('');
+    setPrice('');
+    setRequiresImage(false);
+    setImagePrice('');
+    setTreatmentImages([]);
+    setPersistedTreatmentImages([]);
+    setImageModality('xray');
+    setImageSource('upload');
+    setMaterialSelections([]);
+    setNotes('');
+    setCorrectionReason('');
+    setPrescriptionSelections([]);
+    setConditionOverrides({});
+  }, []);
+
   const handlePatientChange = (value: string): void => {
     if (lockPatientSelection) {
       return;
     }
 
+    resetEditor();
     setSelectedPatientId(value);
     if (!lockVisitSelection) {
       setSelectedVisitId('');
     }
-    setConditionOverrides({});
   };
 
   const handleTreatmentChange = (value: string): void => {
@@ -1057,6 +1226,10 @@ export const TreatmentChartWorkspace = ({
     setMaterialSelections((previous) => previous.filter((selection) => selection.key !== key));
   };
 
+  const applyMaterialSubstitute = (key: string, inventoryItemId: string): void => {
+    updateMaterialSelection(key, { inventoryItemId });
+  };
+
   const addPrescriptionSelection = (): void => {
     setPrescriptionSelections((previous) => [...previous, createPrescriptionSelectionRow()]);
   };
@@ -1072,6 +1245,62 @@ export const TreatmentChartWorkspace = ({
 
   const removePrescriptionSelection = (key: string): void => {
     setPrescriptionSelections((previous) => previous.filter((selection) => selection.key !== key));
+  };
+
+  const addTreatmentImages = (files: File[], source: VisitTreatmentImageSource): void => {
+    if (files.length === 0) {
+      return;
+    }
+
+    const imageFiles = files.filter((file) => file.type.startsWith('image/'));
+    if (imageFiles.length === 0) {
+      toast.error('Only image files can be attached to the treatment chart.');
+      return;
+    }
+
+    setImageSource(source);
+    setTreatmentImages((previous) => {
+      const merged = [...previous];
+      const seen = new Set(previous.map((file) => `${file.name}-${file.size}-${file.lastModified}`));
+      const persistedCount = persistedTreatmentImages.length;
+
+      imageFiles.forEach((file) => {
+        const key = `${file.name}-${file.size}-${file.lastModified}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          merged.push(file);
+        }
+      });
+
+      return merged.slice(0, Math.max(0, 12 - persistedCount));
+    });
+  };
+
+  const handleTreatmentImagesSelected = (
+    files: FileList | null,
+    source: VisitTreatmentImageSource
+  ): void => {
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    addTreatmentImages(Array.from(files), source);
+  };
+
+  const removeTreatmentImage = (key: string): void => {
+    setTreatmentImages((previous) =>
+      previous.filter((file) => `${file.name}-${file.size}-${file.lastModified}` !== key)
+    );
+  };
+
+  const removePersistedTreatmentImage = (imageId: number | undefined): void => {
+    if (!imageId) {
+      return;
+    }
+
+    setPersistedTreatmentImages((previous) =>
+      previous.filter((image) => image.id !== imageId)
+    );
   };
 
   const fetchInventoryMaterials = useCallback(async (): Promise<void> => {
@@ -1091,11 +1320,17 @@ export const TreatmentChartWorkspace = ({
         if (!id || !itemName) continue;
 
         uniqueMaterials.set(id, {
+          availableQuantity: asNumber(row.availableQuantity ?? row.quantity),
           category: asText(row.category),
           id,
           itemName,
+          location: asText(row.location),
+          minStock: asNumber(row.minStock ?? row.min_stock),
           quantity: asNumber(row.quantity),
+          stockState: (asText(row.stockState ?? row.stock_state) as InventoryMaterialOption['stockState']) || 'in_stock',
+          supplier: asText(row.supplier),
           unit: asText(row.unit) || 'unit',
+          unitCost: asNumber(row.unitCost ?? row.unit_cost),
         });
       }
 
@@ -1112,6 +1347,55 @@ export const TreatmentChartWorkspace = ({
   useEffect(() => {
     void fetchInventoryMaterials();
   }, [fetchInventoryMaterials]);
+
+  const startEditingTreatment = useCallback((row: VisitTreatmentWithRelations): void => {
+    const rowTeeth = resolveRowTeeth(row);
+    const rowConditionMap = resolveRowConditionMap(row);
+    const firstCondition = Object.values(rowConditionMap)[0] ?? null;
+    const persistedImagesFromRow = Array.isArray(row.treatmentImages)
+      ? row.treatmentImages.filter((image): image is VisitTreatmentImage => !(image instanceof File))
+      : [];
+    const materialSelectionsFromRow = Array.isArray(row.materialItems)
+      ? row.materialItems.map((item) => {
+          const quantity = 'quantityUsed' in item && typeof item.quantityUsed === 'number'
+            ? item.quantityUsed
+            : Number('quantity' in item ? item.quantity : 1);
+
+          return {
+            inventoryItemId: String(item.inventoryItemId ?? ''),
+            key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            quantity: Number.isFinite(quantity) && quantity > 0 ? String(quantity) : '1',
+          };
+        })
+      : [];
+    const prescriptionSelectionsFromRow = Array.isArray(row.prescription?.items)
+      ? row.prescription.items.map((item) => ({
+          amount: item.amount ?? '',
+          foodTiming: item.foodTiming ?? '',
+          frequency: item.frequency ?? '',
+          key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          name: item.name ?? '',
+        }))
+      : [];
+
+    setEditingTreatmentId(row.id);
+    setSelectedVisitId(String(row.visitId));
+    setSelectedTreatmentId(String(row.treatmentId));
+    setSelectedToothNumber(rowTeeth[0] ?? parseToothNumbersFromValue(row.toothNumber)[0] ?? '');
+    setActiveCondition(firstCondition);
+    setConditionOverrides(Object.keys(rowConditionMap).length > 0 ? rowConditionMap : {});
+    setPrice(asText(row.price));
+    setRequiresImage(parseRequiresImageFromNotes(row.notes));
+    setImagePrice(parseImagePriceValueFromNotes(row.notes));
+    setTreatmentImages([]);
+    setPersistedTreatmentImages(persistedImagesFromRow);
+    setImageModality(row.imageModality ?? 'xray');
+    setImageSource(row.imageSource ?? 'upload');
+    setMaterialSelections(materialSelectionsFromRow);
+    setNotes(stripMetadataPrefixes(row.notes));
+    setCorrectionReason('');
+    setPrescriptionSelections(prescriptionSelectionsFromRow);
+  }, [resolveRowConditionMap, resolveRowTeeth]);
 
   const paintTooth = (toothNumber: string): void => {
     setSelectedToothNumber(toothNumber);
@@ -1152,7 +1436,7 @@ export const TreatmentChartWorkspace = ({
 
     const rawImageCharge = requiresImage ? roundCurrency(parseCurrency(imagePrice)) : 0;
     if (requiresImage && rawImageCharge <= 0) {
-      toast.error('Provide an image price when image is required.');
+      toast.error('Provide an imaging charge when separate imaging billing is enabled.');
       return;
     }
 
@@ -1182,6 +1466,10 @@ export const TreatmentChartWorkspace = ({
     }
 
     const materialItemsPayload = Array.from(normalizedMaterialItemsMap.values());
+    if (hasBlockingMaterialIssue) {
+      toast.error('One or more selected materials do not have enough stock. Use a substitute or lower the requested quantity.');
+      return;
+    }
     const materialSummaryForPayload = materialItemsPayload
       .map((item) => {
         const option = inventoryMaterialsById.get(item.inventoryItemId);
@@ -1240,10 +1528,22 @@ export const TreatmentChartWorkspace = ({
       treatmentId: selectedTreatmentId,
       visitId: visitIdForSave,
     };
-    if (materialSummaryForPayload) {
+    if (attachedImageCount > 0) {
+      payload.imageModality = imageModality;
+      payload.imageSource = imageSource;
+    }
+    if (treatmentImages.length > 0) {
+      payload.treatmentImages = treatmentImages;
+    }
+    if (editingTreatmentId !== null) {
+      payload.retainedTreatmentImageIds = persistedTreatmentImages
+        .filter((image): image is VisitTreatmentImage => typeof image.id === 'number')
+        .map((image) => Number(image.id));
+    }
+    if (materialSummaryForPayload || editingTreatmentId !== null) {
       payload.material = materialSummaryForPayload;
     }
-    if (materialItemsPayload.length > 0) {
+    if (materialItemsPayload.length > 0 || editingTreatmentId !== null) {
       payload.materialItems = materialItemsPayload;
     }
     if (normalizedPrescriptionItems.length > 0) {
@@ -1255,6 +1555,8 @@ export const TreatmentChartWorkspace = ({
           name: item.name,
         })),
       };
+    } else if (editingTreatmentId !== null) {
+      payload.prescription = { content: '', items: [] };
     }
 
     if (targetTooth) {
@@ -1266,25 +1568,38 @@ export const TreatmentChartWorkspace = ({
       payload.dentistId = dentistIdForPayload;
     }
 
-    const response = await createVisitTreatment.mutateAsync(payload);
+    if (editingTreatmentId !== null) {
+      const normalizedCorrectionReason = correctionReason.trim();
+      if (!normalizedCorrectionReason) {
+        toast.error('Add a correction reason before updating a saved treatment.');
+        return;
+      }
+
+      payload.correctionReason = normalizedCorrectionReason;
+    }
+
+    const response = editingTreatmentId !== null
+      ? await updateVisitTreatment.mutateAsync({
+          data: payload,
+          id: editingTreatmentId,
+        })
+      : await createVisitTreatment.mutateAsync(payload);
     if (!response.success) {
       const errorText =
         typeof response.error?.details === 'string'
           ? response.error.details
-          : response.error?.message || 'Failed to save treatment entry.';
+          : response.error?.message || (editingTreatmentId !== null
+            ? 'Failed to update treatment entry.'
+            : 'Failed to save treatment entry.');
       toast.error(errorText);
       return;
     }
 
-    setConditionOverrides({});
-    setNotes('');
-    setMaterialSelections([]);
-    setPrescriptionSelections([]);
-    setRequiresImage(false);
-    setImagePrice('');
+    resetEditor();
     void fetchInventoryMaterials();
 
     const shouldStartBillingFlow =
+      editingTreatmentId === null &&
       hidePatientVisitSelectors && lockPatientSelection && lockVisitSelection;
 
     if (shouldStartBillingFlow) {
@@ -1303,7 +1618,10 @@ export const TreatmentChartWorkspace = ({
       return;
     }
 
-    toast.success('Treatment added to patient chart.');
+    toast.success(editingTreatmentId !== null ? 'Treatment entry updated.' : 'Treatment added to patient chart.');
+    if (hasLowStockMaterialIssue) {
+      toast.warning('Some materials are now at or below minimum stock. Check the inventory panel for reorder planning.');
+    }
   };
 
   const handlePrintRecord = (): void => {
@@ -1618,6 +1936,21 @@ export const TreatmentChartWorkspace = ({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 px-4">
+          {editingTreatmentId !== null ? (
+            <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-amber-900">Editing saved treatment #{editingTreatmentId}</p>
+                <p className="text-xs text-amber-800">
+                  Update the saved entry, keep or remove old images, and add a correction reason so the audit history stays clear.
+                </p>
+              </div>
+              <Button type="button" variant="outline" size="sm" className="gap-2" onClick={resetEditor}>
+                <RotateCcw className="size-4" />
+                Cancel Edit
+              </Button>
+            </div>
+          ) : null}
+
           <div className="grid gap-4 rounded-lg border bg-background p-4 md:grid-cols-2 lg:grid-cols-3">
             {!hidePatientVisitSelectors ? (
               <div className="space-y-2">
@@ -1644,8 +1977,8 @@ export const TreatmentChartWorkspace = ({
                   value={selectedVisitId}
                   onValueChange={(value) => {
                     if (!lockVisitSelection) {
+                      resetEditor();
                       setSelectedVisitId(value);
-                      setConditionOverrides({});
                     }
                   }}
                   disabled={lockVisitSelection || !selectedPatientId || isLoadingVisits}
@@ -1711,6 +2044,175 @@ export const TreatmentChartWorkspace = ({
             </div>
 
             <div className="space-y-2">
+              <Label>Imaging Type</Label>
+              <Select
+                value={imageModality}
+                onValueChange={(value) => {
+                  setImageModality(value as VisitTreatmentImageModality);
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select imaging type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(TREATMENT_IMAGE_MODALITY_LABELS) as VisitTreatmentImageModality[]).map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {TREATMENT_IMAGE_MODALITY_LABELS[value]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2 md:col-span-2 lg:col-span-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Label>Treatment Images (Optional)</Label>
+                <Badge variant="outline">
+                  {attachedImageCount} attached
+                </Badge>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <label htmlFor={uploadInputId}>
+                  <Button type="button" variant="outline" className="gap-2" asChild>
+                    <span>
+                      <ImagePlus className="size-4" />
+                      Upload Images
+                    </span>
+                  </Button>
+                </label>
+                <input
+                  id={uploadInputId}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/bmp,image/tiff"
+                  multiple
+                  className="sr-only"
+                  onChange={(event) => {
+                    handleTreatmentImagesSelected(event.target.files, 'upload');
+                    event.target.value = '';
+                  }}
+                />
+
+                <label htmlFor={captureInputId}>
+                  <Button type="button" variant="outline" className="gap-2" asChild>
+                    <span>
+                      <Camera className="size-4" />
+                      Capture Now
+                    </span>
+                  </Button>
+                </label>
+                <input
+                  id={captureInputId}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  multiple
+                  className="sr-only"
+                  onChange={(event) => {
+                    handleTreatmentImagesSelected(event.target.files, 'camera');
+                    event.target.value = '';
+                  }}
+                />
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => {
+                    setImageSource('device_import');
+                    const input = document.getElementById(uploadInputId) as HTMLInputElement | null;
+                    input?.click();
+                  }}
+                >
+                  <ScanLine className="size-4" />
+                  Import Device Export
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Attach images when available. CBCT and dental X-ray machines can be used by importing their exported
+                images here. Full direct device control needs vendor-specific software or SDK support.
+              </p>
+              {attachedImageCount === 0 ? (
+                <p className="rounded-md border border-dashed border-border/70 px-3 py-3 text-xs text-muted-foreground">
+                  No images attached yet.
+                </p>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {persistedTreatmentImages.map((image) => (
+                      <div key={`persisted-${image.id ?? image.url}`} className="overflow-hidden rounded-lg border bg-background">
+                        {image.url ? (
+                          <img
+                            src={image.url}
+                            alt={image.originalName || 'Saved treatment image'}
+                            className="h-32 w-full bg-muted object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-32 items-center justify-center bg-muted text-xs text-muted-foreground">
+                            Saved image
+                          </div>
+                        )}
+                        <div className="space-y-2 p-3">
+                          <p className="truncate text-xs font-medium">{image.originalName || `Image #${image.id}`}</p>
+                          <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                            <span>Saved on chart</span>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                removePersistedTreatmentImage(image.id);
+                              }}
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  {treatmentImagePreviews.map((preview) => (
+                    <div key={preview.key} className="overflow-hidden rounded-lg border bg-background">
+                      <img
+                        src={preview.url}
+                        alt={preview.file.name}
+                        className="h-32 w-full bg-muted object-cover"
+                      />
+                      <div className="space-y-2 p-3">
+                        <p className="truncate text-xs font-medium">{preview.file.name}</p>
+                        <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                          <span>{TREATMENT_IMAGE_SOURCE_LABELS[imageSource]}</span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              removeTreatmentImage(preview.key);
+                            }}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {editingTreatmentId !== null ? (
+              <div className="space-y-2 md:col-span-2 lg:col-span-3">
+                <Label>Correction Reason</Label>
+                <textarea
+                  value={correctionReason}
+                  onChange={(event) => {
+                    setCorrectionReason(event.target.value);
+                  }}
+                  rows={3}
+                  placeholder="Explain why this saved treatment is being corrected"
+                  className="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 flex min-h-20 w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none"
+                />
+              </div>
+            ) : null}
+
+            <div className="space-y-2">
               <Label className="inline-flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -1722,14 +2224,14 @@ export const TreatmentChartWorkspace = ({
                     }
                   }}
                 />
-                Need Image
+                Add Imaging Charge
               </Label>
               <Input
                 value={imagePrice}
                 onChange={(event) => {
                   setImagePrice(event.target.value);
                 }}
-                placeholder="Image price in AFN"
+                placeholder="Imaging charge in AFN"
                 disabled={!requiresImage}
               />
             </div>
@@ -1800,6 +2302,65 @@ export const TreatmentChartWorkspace = ({
                   ? `Selected: ${materialSummary}`
                   : 'Selected materials will be deducted from inventory after saving this treatment.'}
               </p>
+
+              {materialReviewRows.length > 0 ? (
+                <div className="space-y-2 rounded-lg border border-border/70 bg-muted/20 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold">Material Review</p>
+                    <div className="flex items-center gap-2">
+                      {hasBlockingMaterialIssue ? <Badge className="bg-rose-600 text-white">Stock blocked</Badge> : null}
+                      {!hasBlockingMaterialIssue && hasLowStockMaterialIssue ? <Badge className="bg-amber-500 text-white">Low stock warning</Badge> : null}
+                      {!hasBlockingMaterialIssue && !hasLowStockMaterialIssue ? <Badge className="bg-emerald-600 text-white">Ready</Badge> : null}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {materialReviewRows.map((row) => (
+                      <div key={`review-${row.key}`} className="rounded-md border bg-background p-3">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-medium">{row.itemName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Requested {row.requestedQuantity} {row.unit} | Available {row.availableQuantity} | After save {row.remainingQuantity}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Min stock {row.minStock} {row.unit}{row.location ? ` | Location ${row.location}` : ''}{row.supplier ? ` | Supplier ${row.supplier}` : ''}
+                            </p>
+                          </div>
+                          {row.status === 'shortage' ? (
+                            <Badge className="bg-rose-600 text-white">Shortage</Badge>
+                          ) : row.status === 'low_after' ? (
+                            <Badge className="bg-amber-500 text-white">Low after save</Badge>
+                          ) : (
+                            <Badge className="bg-emerald-600 text-white">Healthy</Badge>
+                          )}
+                        </div>
+                        {row.substituteOptions.length > 0 ? (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {row.substituteOptions.map((option) => (
+                              <Button
+                                key={`${row.key}-${option.id}`}
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2 text-[11px]"
+                                onClick={() => {
+                                  applyMaterialSubstitute(row.key, option.id);
+                                }}
+                              >
+                                Use {option.itemName} ({option.availableQuantity})
+                              </Button>
+                            ))}
+                          </div>
+                        ) : row.status !== 'healthy' ? (
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            No same-category substitute with enough stock is available right now.
+                          </p>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <div className="space-y-2">
@@ -2097,8 +2658,8 @@ export const TreatmentChartWorkspace = ({
               </p>
             </div>
             <Button type="button" onClick={handleSave} disabled={!canSave}>
-              {createVisitTreatment.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-              Save Treatment
+              {isSubmitting ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+              {editingTreatmentId !== null ? 'Update Treatment' : 'Save Treatment'}
             </Button>
           </div>
         </CardContent>
@@ -2165,6 +2726,14 @@ export const TreatmentChartWorkspace = ({
               <span className="font-medium">{materialSummary || '-'}</span>
             </div>
             <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Imaging</span>
+              <span className="font-medium">
+                {treatmentImages.length > 0
+                  ? `${treatmentImages.length} ${TREATMENT_IMAGE_MODALITY_LABELS[imageModality]}`
+                  : '-'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Treatment</span>
               <span className="font-medium">{selectedTreatment?.name || '-'}</span>
             </div>
@@ -2223,14 +2792,35 @@ export const TreatmentChartWorkspace = ({
                   const uniqueConditions = Array.from(new Set(Object.values(rowConditionMap)));
                   const cleanedNotes = stripMetadataPrefixes(row.notes);
                   const visit = visitById.get(String(row.visitId));
+                  const rowImages = (row.treatmentImages ?? []).filter(
+                    (image): image is Exclude<typeof image, File> =>
+                      !(image instanceof File) && typeof image?.url === 'string' && image.url.length > 0
+                  );
+                  const rowImageModalityLabel = row.imageModality
+                    ? TREATMENT_IMAGE_MODALITY_LABELS[row.imageModality]
+                    : 'Image';
 
                   return (
                     <div key={row.id} className="rounded-md border p-2">
-                      <div className="mb-1 flex items-center justify-between">
+                      <div className="mb-1 flex items-center justify-between gap-2">
                         <p className="text-xs font-semibold">
                           {treatmentName}
                         </p>
-                        <Badge variant="outline">Total: {row.price || '-'}</Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline">Total: {row.price || '-'}</Badge>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 gap-1 px-2 text-[11px]"
+                            onClick={() => {
+                              startEditingTreatment(row);
+                            }}
+                          >
+                            <Pencil className="size-3.5" />
+                            Edit
+                          </Button>
+                        </div>
                       </div>
                       <p className="mb-1 text-xs text-muted-foreground">Teeth: {teethLabel}</p>
                       <div className="mb-1 flex items-center gap-2">
@@ -2245,6 +2835,9 @@ export const TreatmentChartWorkspace = ({
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground">Material: {resolveRowMaterialSummary(row)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Imaging: {rowImages.length > 0 ? `${rowImages.length} ${rowImageModalityLabel}` : 'No images'}
+                      </p>
                       <p className="text-xs text-muted-foreground">Note: {cleanedNotes || '-'}</p>
                       <p className="text-xs text-muted-foreground">
                         Prescription: {formatPrescriptionSummary(row.prescription)}
@@ -2256,6 +2849,52 @@ export const TreatmentChartWorkspace = ({
                               : `Visit ${visit.id} (${visit.visitDate})`)
                           : `Visit ${row.visitId}`}
                       </p>
+                      {Array.isArray(row.correctionHistory) && row.correctionHistory.length > 0 ? (
+                        <div className="mt-2 rounded-md border border-dashed border-border/70 bg-muted/20 p-2">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            Correction History
+                          </p>
+                          <div className="mt-2 space-y-2">
+                            {row.correctionHistory.slice(0, 3).map((entry) => (
+                              <div key={`${row.id}-${entry.id ?? entry.createdAt}`} className="rounded-md bg-background/90 p-2 text-xs">
+                                <p className="font-medium text-foreground">
+                                  {entry.event === 'corrected' ? 'Corrected' : (entry.description || entry.event || 'Updated')}
+                                </p>
+                                <p className="text-muted-foreground">
+                                  {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : '-'} by {entry.changedBy || 'System'}
+                                </p>
+                                <p className="mt-1 text-muted-foreground">
+                                  Reason: {entry.correctionReason || '-'}
+                                </p>
+                                {Array.isArray(entry.changes) && entry.changes.length > 0 ? (
+                                  <p className="mt-1 text-muted-foreground">
+                                    Changed: {entry.changes.slice(0, 3).map((change) => change.label || change.field || 'Field').join(', ')}
+                                  </p>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      {rowImages.length > 0 ? (
+                        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                          {rowImages.map((image) => (
+                            <a
+                              key={`${row.id}-${image.id ?? image.url}`}
+                              href={image.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="overflow-hidden rounded-md border bg-muted/30"
+                            >
+                              <img
+                                src={image.url}
+                                alt={image.originalName || `${treatmentName} image`}
+                                className="h-20 w-full object-cover"
+                              />
+                            </a>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   );
                 })}

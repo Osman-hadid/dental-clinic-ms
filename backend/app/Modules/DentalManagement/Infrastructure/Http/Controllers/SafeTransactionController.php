@@ -9,6 +9,7 @@ use App\Modules\Common\Infrastructure\Http\Controllers\BaseApiController;
 use App\Modules\Common\Infrastructure\Resources\PaginatedResource;
 use App\Modules\DentalManagement\Domain\Entities\SafeTransaction;
 use App\Modules\DentalManagement\Domain\Services\CurrencyService;
+use App\Modules\DentalManagement\Domain\Services\WorkflowAccessService;
 use App\Modules\DentalManagement\Infrastructure\Http\Requests\SafeTransaction\ListSafeTransactionsRequest;
 use App\Modules\DentalManagement\Infrastructure\Http\Requests\SafeTransaction\StoreSafeTransactionRequest;
 use App\Modules\DentalManagement\Infrastructure\Http\Requests\SafeTransaction\UpdateSafeTransactionRequest;
@@ -18,10 +19,15 @@ use Illuminate\Support\Facades\DB;
 
 final class SafeTransactionController extends BaseApiController
 {
-    public function __construct(private readonly CurrencyService $currencyService) {}
+    public function __construct(
+        private readonly CurrencyService $currencyService,
+        private readonly WorkflowAccessService $workflowAccessService,
+    ) {}
 
     public function index(ListSafeTransactionsRequest $request): JsonResponse
     {
+        abort_unless($this->workflowAccessService->canViewSafeLedger($request->user()), 403);
+
         $queryData = $request->validated();
         $filters = $queryData['filters'] ?? [];
 
@@ -65,6 +71,8 @@ final class SafeTransactionController extends BaseApiController
 
     public function store(StoreSafeTransactionRequest $request): JsonResponse
     {
+        abort_unless($this->workflowAccessService->canManageSafeLedger($request->user()), 403);
+
         $payload = $this->toDatabasePayload($request->validated());
 
         $entry = DB::transaction(function () use ($payload): SafeTransaction {
@@ -87,6 +95,8 @@ final class SafeTransactionController extends BaseApiController
 
     public function show(int $id): JsonResponse
     {
+        abort_unless($this->workflowAccessService->canViewSafeLedger(auth()->user()), 403);
+
         $entry = SafeTransaction::query()->with('pickedByStaff')->findOrFail($id);
 
         return $this->successResponse(
@@ -97,6 +107,8 @@ final class SafeTransactionController extends BaseApiController
 
     public function update(UpdateSafeTransactionRequest $request, int $id): JsonResponse
     {
+        abort_unless($this->workflowAccessService->canManageSafeLedger($request->user()), 403);
+
         $payload = $this->toDatabasePayload($request->validated());
 
         $entry = DB::transaction(function () use ($id, $payload): SafeTransaction {
@@ -130,6 +142,8 @@ final class SafeTransactionController extends BaseApiController
 
     public function destroy(int $id): JsonResponse
     {
+        abort_unless($this->workflowAccessService->canManageSafeLedger(auth()->user()), 403);
+
         DB::transaction(function () use ($id): void {
             $entry = SafeTransaction::query()->findOrFail($id);
             if ($entry->source_type !== null) {
@@ -150,6 +164,8 @@ final class SafeTransactionController extends BaseApiController
 
     public function balance(): JsonResponse
     {
+        abort_unless($this->workflowAccessService->canViewSafeLedger(auth()->user()), 403);
+
         $sumIn = (float) SafeTransaction::query()->where('direction', 'in')->sum('amount');
         $sumOut = (float) SafeTransaction::query()->where('direction', 'out')->sum('amount');
         $balance = round($sumIn - $sumOut, 2);

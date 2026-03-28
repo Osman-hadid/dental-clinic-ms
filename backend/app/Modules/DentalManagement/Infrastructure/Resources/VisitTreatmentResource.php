@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\DentalManagement\Infrastructure\Resources;
 
+use App\Models\ActivityLog;
+use App\Modules\DentalManagement\Domain\Entities\VisitTreatment;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use App\Modules\Common\Infrastructure\Resources\Concerns\ResolvesUserStamps;
@@ -24,6 +26,8 @@ class VisitTreatmentResource extends JsonResource
             'dentistId' => $this->dentist_id,
             'price' => $this->price,
             'material' => $this->material,
+            'imageModality' => $this->image_modality,
+            'imageSource' => $this->image_source,
             'notes' => $this->notes,
             'prescription' => $this->prescription !== null ? [
                 'id' => $this->prescription->id,
@@ -70,6 +74,24 @@ class VisitTreatmentResource extends JsonResource
                 'createdAt' => $item->created_at?->toIso8601String(),
                 'updatedAt' => $item->updated_at?->toIso8601String(),
             ])->values()->all() : null,
+            'treatmentImages' => $this->whenLoaded(
+                'treatmentImages',
+                fn () => $this->treatmentImages->map(fn ($image): array => [
+                    'id' => $image->id,
+                    'visitTreatmentId' => $image->visit_treatment_id,
+                    'path' => $image->path,
+                    'url' => $this->fileUrl($image->path),
+                    'originalName' => $image->original_name,
+                    'mimeType' => $image->mime_type,
+                    'size' => $image->size,
+                    'createdBy' => $this->resolveUserStampName($image->created_by),
+                    'updatedBy' => $this->resolveUserStampName($image->updated_by),
+                    'deletedBy' => $image->deleted_by,
+                    'createdAt' => $image->created_at?->toIso8601String(),
+                    'updatedAt' => $image->updated_at?->toIso8601String(),
+                ])->values()->all()
+            ),
+            'correctionHistory' => $this->correctionHistory(),
             'createdBy' => $this->resolveUserStampName($this->created_by),
             'updatedBy' => $this->resolveUserStampName($this->updated_by),
             'deletedBy' => $this->deleted_by,
@@ -82,8 +104,41 @@ class VisitTreatmentResource extends JsonResource
         ]);
     }
 
+    private function fileUrl(?string $path): ?string
+    {
+        return $path ? asset("storage/{$path}") : null;
+    }
+
     private function filterEmpty(array $data): array
     {
         return array_filter($data, fn ($value): bool => !\in_array($value, [null, '', []], true) && !($value instanceof Collection && $value->isEmpty()));
+    }
+
+    private function correctionHistory(): array
+    {
+        return ActivityLog::query()
+            ->with('causer')
+            ->where('subject_type', VisitTreatment::class)
+            ->where('subject_id', $this->id)
+            ->orderByDesc('created_at')
+            ->limit(10)
+            ->get()
+            ->map(function ($activity): array {
+                $properties = is_array($activity->properties) ? $activity->properties : [];
+
+                return [
+                    'id' => $activity->id,
+                    'changes' => is_array($properties['diff'] ?? null) ? array_values($properties['diff']) : [],
+                    'changedBy' => $activity->causer?->first_name && $activity->causer?->last_name
+                        ? trim($activity->causer->first_name.' '.$activity->causer->last_name)
+                        : ($activity->causer?->email ?? 'System'),
+                    'correctionReason' => $properties['correctionReason'] ?? null,
+                    'description' => $activity->description,
+                    'event' => $activity->event,
+                    'createdAt' => $activity->created_at?->toIso8601String(),
+                ];
+            })
+            ->values()
+            ->all();
     }
 }

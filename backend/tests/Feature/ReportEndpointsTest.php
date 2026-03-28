@@ -7,6 +7,8 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Modules\DentalManagement\Domain\Entities\Appointment;
 use App\Modules\DentalManagement\Domain\Entities\Debt;
+use App\Modules\DentalManagement\Domain\Entities\DentalBackup;
+use App\Modules\DentalManagement\Domain\Entities\DentalBackupSchedule;
 use App\Modules\DentalManagement\Domain\Entities\Expense;
 use App\Modules\DentalManagement\Domain\Entities\InventoryItem;
 use App\Modules\DentalManagement\Domain\Entities\Invoice;
@@ -22,10 +24,13 @@ use App\Modules\DentalManagement\Domain\Entities\Treatment;
 use App\Modules\DentalManagement\Domain\Entities\Visit;
 use App\Modules\DentalManagement\Domain\Entities\VisitTreatment;
 use App\Modules\DentalManagement\Domain\Entities\VisitTreatmentMaterial;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
+use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
 final class ReportEndpointsTest extends TestCase
@@ -54,7 +59,11 @@ final class ReportEndpointsTest extends TestCase
 
         $this->getJson('/api/v1/dental-management/reports/clinical'.$query)
             ->assertOk()
-            ->assertJsonPath('data.summary.prescriptions', 1);
+            ->assertJsonPath('data.summary.prescriptions', 1)
+            ->assertJsonPath('data.summary.waitingAppointments', 1)
+            ->assertJsonPath('data.summary.lateAppointments', 1)
+            ->assertJsonPath('data.tables.queueSnapshot.0.statusKey', 'waiting')
+            ->assertJsonPath('data.tables.patientTimeline.0.eventType', 'appointment');
 
         $this->getJson('/api/v1/dental-management/reports/inventory'.$query)
             ->assertOk()
@@ -86,7 +95,9 @@ final class ReportEndpointsTest extends TestCase
 
         $this->getJson('/api/v1/dental-management/reports/audit'.$query)
             ->assertOk()
-            ->assertJsonPath('data.summary.modificationCount', 1);
+            ->assertJsonPath('data.summary.modificationCount', 1)
+            ->assertJsonPath('data.summary.failedBackupCount', 1)
+            ->assertJsonCount(2, 'data.recentBackups');
     }
 
     public function test_report_exports_stream_csv_from_backend(): void
@@ -156,6 +167,181 @@ final class ReportEndpointsTest extends TestCase
         ]);
     }
 
+    public function test_financial_control_endpoints_return_close_day_data(): void
+    {
+        $this->actingAsSuperAdmin();
+        $this->seedReportDataset();
+
+        $this->getJson('/api/v1/dental-management/reports/financial-control?closingDate=2026-02-12')
+            ->assertOk()
+            ->assertJsonPath('data.summary.expectedBalance', 1900)
+            ->assertJsonPath('data.summary.openDebtCount', 1)
+            ->assertJsonPath('data.summary.openDebtTotal', 300);
+
+        $this->postJson('/api/v1/dental-management/reports/financial-control/close-day', [
+            'closingDate' => '2026-02-12',
+            'countedBalance' => 1850,
+            'notes' => 'Short by cash drawer recount',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.currentClose.closingDate', '2026-02-12')
+            ->assertJsonPath('data.currentClose.countedBalance', 1850)
+            ->assertJsonPath('data.currentClose.discrepancyAmount', -50)
+            ->assertJsonPath('data.closeHistory.0.notes', 'Short by cash drawer recount');
+
+        $this->getJson('/api/v1/dental-management/reports/financial?startDate=2026-02-01&endDate=2026-02-28&granularity=month')
+            ->assertOk()
+            ->assertJsonPath('data.summary.closeCount', 1)
+            ->assertJsonPath('data.summary.latestCloseDifference', -50)
+            ->assertJsonPath('data.tables.dailyCloseRows.0.closingDate', '2026-02-12');
+    }
+
+    public function test_clinical_report_surfaces_treatment_correction_history(): void
+    {
+        $this->actingAsSuperAdmin();
+        $this->seedReportDataset();
+
+        $visitTreatment = VisitTreatment::query()->firstOrFail();
+
+        $this->putJson("/api/v1/dental-management/visit-treatments/{$visitTreatment->id}", [
+            'visitId' => $visitTreatment->visit_id,
+            'treatmentId' => $visitTreatment->treatment_id,
+            'toothNumber' => '27,28',
+            'price' => '1350.00',
+            'notes' => '[chart:27=i,28=i][priceInput:1350.00] Correction note',
+            'correctionReason' => 'Adjusted treatment pricing after chart review',
+            'materialItems' => [],
+            'prescription' => ['content' => '', 'items' => []],
+            'retainedTreatmentImageIds' => [],
+        ])
+            ->assertOk();
+
+        $this->getJson('/api/v1/dental-management/visit-treatments?include[]=activityLogs&include[]=activityLogs.causer')
+            ->assertOk()
+            ->assertJsonPath('data.data.0.correctionHistory.0.event', 'corrected')
+            ->assertJsonPath('data.data.0.correctionHistory.0.correctionReason', 'Adjusted treatment pricing after chart review');
+
+        $this->getJson('/api/v1/dental-management/reports/clinical?startDate=2026-02-01&endDate=2026-03-31&granularity=month')
+            ->assertOk()
+            ->assertJsonPath('data.summary.correctedTreatments', 1)
+            ->assertJsonPath('data.tables.treatmentCorrections.0.correctionReason', 'Adjusted treatment pricing after chart review')
+            ->assertJsonPath('data.tables.treatmentCorrections.0.treatmentName', 'Implant Crown');
+    }
+
+    public function test_inventory_adjustments_feed_inventory_report_pressure_and_waste_metrics(): void
+    {
+        $this->actingAsSuperAdmin();
+        $this->seedReportDataset();
+
+        $inventoryItem = InventoryItem::query()->firstOrFail();
+
+        $this->postJson("/api/v1/dental-management/inventory-items/{$inventoryItem->id}/adjustments", [
+            'adjustmentType' => 'waste',
+            'quantity' => 8,
+            'adjustmentDate' => '2026-02-18',
+            'notes' => 'Damaged while sterilizing',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.adjustmentType', 'waste')
+            ->assertJsonPath('data.quantity', 8);
+
+        $this->getJson('/api/v1/dental-management/inventory-adjustments?perPage=10')
+            ->assertOk()
+            ->assertJsonPath('data.data.0.adjustmentType', 'waste')
+            ->assertJsonPath('data.data.0.itemName', 'Implant Screw');
+
+        $this->getJson('/api/v1/dental-management/reports/inventory?startDate=2026-02-01&endDate=2026-02-28&granularity=month')
+            ->assertOk()
+            ->assertJsonPath('data.summary.stockPressureCount', 1)
+            ->assertJsonPath('data.summary.wasteLossQuantity', 8)
+            ->assertJsonPath('data.tables.adjustmentRows.0.adjustmentType', 'waste');
+    }
+
+    public function test_backup_settings_surface_health_and_restore_readiness(): void
+    {
+        $this->actingAsSuperAdmin();
+        $this->seedReportDataset();
+
+        $settingsResponse = $this->getJson('/api/v1/dental-management/backups/settings')
+            ->assertOk()
+            ->assertJsonPath('data.health.summary.failedBackupCount', 1)
+            ->assertJsonPath('data.lastSuccessfulBackup.status', 'completed');
+
+        $backupId = (int) data_get($settingsResponse->json(), 'data.lastSuccessfulBackup.id');
+
+        $this->getJson("/api/v1/dental-management/backups/{$backupId}/restore-readiness")
+            ->assertOk()
+            ->assertJsonPath('data.backup.id', $backupId)
+            ->assertJsonPath('data.readiness.fileExists', true)
+            ->assertJsonPath('data.readiness.restorable', true);
+    }
+
+    public function test_workflow_rights_restrict_financial_close_audit_and_safe_mutation(): void
+    {
+        $this->actingAsWorkflowUser('review', [
+            'dental-management.view',
+            'dental-management.backups.view',
+            'dental-management.backups.create',
+            'dental-management.payments.delete',
+            'dental-management.payments.update',
+            'dental-management.invoices.delete',
+        ]);
+
+        $this->seedReportDataset();
+
+        $this->getJson('/api/v1/dental-management/workflow/access-summary')
+            ->assertOk()
+            ->assertJsonPath('data.user.rightLevel', 'review')
+            ->assertJsonPath('data.capabilities.canAccessFinancialReports', true)
+            ->assertJsonPath('data.capabilities.canAccessAuditReports', false)
+            ->assertJsonPath('data.capabilities.canCloseFinancialDay', false)
+            ->assertJsonPath('data.capabilities.canDeletePayments', false)
+            ->assertJsonPath('data.capabilities.canRunBackups', true);
+
+        $this->getJson('/api/v1/dental-management/reports/financial?startDate=2026-02-01&endDate=2026-02-28&granularity=month')
+            ->assertOk();
+
+        $this->getJson('/api/v1/dental-management/reports/audit?startDate=2026-02-01&endDate=2026-02-28&granularity=month')
+            ->assertForbidden();
+
+        $this->postJson('/api/v1/dental-management/reports/financial-control/close-day', [
+            'closingDate' => '2026-02-12',
+            'countedBalance' => 1850,
+        ])->assertForbidden();
+
+        $this->postJson('/api/v1/dental-management/safe-transactions', [
+            'transactionDate' => '2026-02-20',
+            'entryType' => 'deposit',
+            'direction' => 'in',
+            'amount' => 10,
+            'amountInput' => 10,
+        ])->assertForbidden();
+
+        $this->deleteJson('/api/v1/dental-management/payments/1')
+            ->assertForbidden();
+
+        $this->actingAsWorkflowUser('approval', [
+            'dental-management.view',
+            'dental-management.backups.view',
+            'dental-management.backups.create',
+            'dental-management.backups.update',
+            'dental-management.payments.delete',
+            'dental-management.payments.update',
+            'dental-management.invoices.delete',
+        ]);
+
+        $this->getJson('/api/v1/dental-management/workflow/access-summary')
+            ->assertOk()
+            ->assertJsonPath('data.user.rightLevel', 'approval')
+            ->assertJsonPath('data.capabilities.canAccessAuditReports', true)
+            ->assertJsonPath('data.capabilities.canCloseFinancialDay', true)
+            ->assertJsonPath('data.capabilities.canDeletePayments', true)
+            ->assertJsonPath('data.capabilities.canManageBackupSettings', true);
+
+        $this->getJson('/api/v1/dental-management/reports/audit?startDate=2026-02-01&endDate=2026-02-28&granularity=month')
+            ->assertOk();
+    }
+
     private function actingAsSuperAdmin(): User
     {
         $user = User::create([
@@ -182,6 +368,41 @@ final class ReportEndpointsTest extends TestCase
         return $user;
     }
 
+    /**
+     * @param array<int, string> $permissions
+     */
+    private function actingAsWorkflowUser(string $rights, array $permissions): User
+    {
+        $user = User::create([
+            'email' => "{$rights}-user@example.test",
+            'first_name' => ucfirst($rights),
+            'last_name' => 'Workflow',
+            'job_title' => 'Staff',
+            'password' => Hash::make('password'),
+            'rights' => $rights,
+        ]);
+
+        foreach ($permissions as $permission) {
+            DB::table('permissions')->updateOrInsert(
+                ['guard_name' => 'web', 'name' => $permission],
+                [
+                    'display_name_dr' => $permission,
+                    'display_name_en' => $permission,
+                    'display_name_ps' => $permission,
+                    'module_id' => null,
+                    'updated_at' => now(),
+                    'created_at' => now(),
+                ]
+            );
+        }
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+        $user->givePermissionTo($permissions);
+        Sanctum::actingAs($user);
+
+        return $user;
+    }
+
     private function seedReportDataset(): void
     {
         $patient = Patient::create([
@@ -202,6 +423,15 @@ final class ReportEndpointsTest extends TestCase
             'start_time' => '10:00',
             'end_time' => '10:30',
             'status' => 'completed',
+        ]);
+
+        Appointment::create([
+            'patient_id' => $patient->id,
+            'dentist_id' => $dentist->id,
+            'appointment_date' => '2026-02-20',
+            'start_time' => '11:00',
+            'end_time' => '11:30',
+            'status' => 'waiting',
         ]);
 
         $visit = Visit::create([
@@ -387,6 +617,47 @@ final class ReportEndpointsTest extends TestCase
             ], JSON_THROW_ON_ERROR),
             'created_at' => '2026-02-20 10:00:00',
             'updated_at' => '2026-02-20 10:00:00',
+        ]);
+
+        Storage::disk('local')->makeDirectory('dental-backups');
+        Storage::disk('local')->put('dental-backups/report-test-success.sql', 'select 1;');
+        Storage::disk('local')->put('dental-backups/report-test-failed.sql', 'broken backup');
+
+        DentalBackupSchedule::create([
+            'frequency' => 'daily',
+            'run_at_time' => '02:00',
+            'is_active' => true,
+            'last_run_at' => now()->subDay(),
+        ]);
+
+        DentalBackup::create([
+            'mode' => 'full',
+            'status' => 'completed',
+            'file_path' => 'dental-backups/report-test-success.sql',
+            'file_size_bytes' => 9,
+            'summary' => [
+                'format' => 'sql_inserts',
+                'tables' => [
+                    'patients' => ['count' => 1],
+                    'visits' => ['count' => 1],
+                ],
+            ],
+            'notes' => 'Successful backup',
+            'completed_at' => now()->subHours(12),
+            'created_at' => now()->subHours(12),
+            'updated_at' => now()->subHours(12),
+        ]);
+
+        DentalBackup::create([
+            'mode' => 'full',
+            'status' => 'failed',
+            'file_path' => 'dental-backups/report-test-failed.sql',
+            'file_size_bytes' => 13,
+            'summary' => ['format' => 'sql_inserts'],
+            'notes' => 'Disk space warning during backup',
+            'completed_at' => now()->subHours(3),
+            'created_at' => now()->subHours(3),
+            'updated_at' => now()->subHours(3),
         ]);
     }
 }

@@ -46,15 +46,21 @@ const statusTheme = (status: string): string => {
 
   if (normalized === 'completed') return 'border-emerald-300 bg-emerald-100 text-emerald-800';
   if (normalized === 'cancelled' || normalized === 'canceled') return 'border-rose-300 bg-rose-100 text-rose-800';
+  if (normalized === 'in_chair') return 'border-violet-300 bg-violet-100 text-violet-800';
+  if (normalized === 'waiting') return 'border-blue-300 bg-blue-100 text-blue-800';
+  if (normalized === 'checked_in') return 'border-sky-300 bg-sky-100 text-sky-800';
   return 'border-blue-300 bg-blue-100 text-blue-800';
 };
 
 const statusPriority = (status: string): number => {
   const normalized = normalizeStatus(status);
   if (normalized === 'scheduled') return 0;
-  if (normalized === 'completed') return 1;
-  if (normalized === 'cancelled' || normalized === 'canceled') return 2;
-  return 3;
+  if (normalized === 'checked_in') return 1;
+  if (normalized === 'waiting') return 2;
+  if (normalized === 'in_chair') return 3;
+  if (normalized === 'completed') return 4;
+  if (normalized === 'cancelled' || normalized === 'canceled') return 5;
+  return 6;
 };
 
 const toDateLabel = (value: string): string => {

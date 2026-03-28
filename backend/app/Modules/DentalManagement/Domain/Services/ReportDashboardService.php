@@ -7,12 +7,14 @@ namespace App\Modules\DentalManagement\Domain\Services;
 use App\Models\ActivityLog;
 use App\Models\User;
 use App\Modules\DentalManagement\Domain\Entities\Expense;
+use App\Modules\DentalManagement\Domain\Entities\InventoryAdjustment;
 use App\Modules\DentalManagement\Domain\Entities\InventoryItem;
 use App\Modules\DentalManagement\Domain\Entities\ReportAccessLog;
 use App\Modules\DentalManagement\Domain\Entities\ReportSnapshot;
 use App\Modules\DentalManagement\Domain\Entities\SafeTransaction;
 use App\Modules\DentalManagement\Domain\Entities\Shareholder;
 use App\Modules\DentalManagement\Domain\Entities\Staff;
+use App\Modules\DentalManagement\Domain\Entities\VisitTreatment;
 use App\Modules\DentalManagement\Domain\Entities\VisitTreatmentMaterial;
 use App\Modules\DentalManagement\Domain\Services\Concerns\InteractsWithReportData;
 use Carbon\CarbonImmutable;
@@ -24,6 +26,8 @@ final class ReportDashboardService
     public function __construct(
         private readonly ExecutiveReportSummaryService $executiveReportSummaryService,
         private readonly ReportDatasetService $reportDatasetService,
+        private readonly FinancialControlService $financialControlService,
+        private readonly OperationsHealthService $operationsHealthService,
     ) {}
 
     /**
@@ -402,14 +406,22 @@ final class ReportDashboardService
         usort($revenueTrendRows, static fn (array $left, array $right): int => $left['sort'] <=> $right['sort']);
         $safeFlowRows = array_values($safeFlow);
         usort($safeFlowRows, static fn (array $left, array $right): int => $left['sort'] <=> $right['sort']);
+        $financialControlInsights = $this->financialControlService->buildRangeInsights($startDate, $endDate);
+        $financialControlSummary = (array) ($financialControlInsights['summary'] ?? []);
+        $financialControlTables = (array) ($financialControlInsights['tables'] ?? []);
 
         $payload = [
             'summary' => [
                 'billed' => $this->decimal($billed),
+                'closeCount' => (int) ($financialControlSummary['closeCount'] ?? 0),
                 'collectionRate' => $collectionRate,
+                'discrepancyTotal' => $this->decimal($financialControlSummary['discrepancyTotal'] ?? 0),
                 'expenses' => $this->decimal($expenseTotal),
+                'latestCloseDifference' => $this->decimal($financialControlSummary['latestCloseDifference'] ?? 0),
                 'net' => $this->decimal($net),
+                'openDebtCount' => (int) ($financialControlSummary['openDebtCount'] ?? count($outstandingRows)),
                 'outstanding' => $this->decimal($outstandingTotal),
+                'overdueDebtCount' => (int) ($financialControlSummary['overdueDebtCount'] ?? 0),
                 'paid' => $this->decimal($paid),
                 'safeBalance' => $this->decimal(max(0, $safeBalance)),
                 'safeIn' => $this->decimal($safeIn),
@@ -443,6 +455,9 @@ final class ReportDashboardService
                 ], $safeFlowRows),
             ],
             'tables' => [
+                'collectorPerformance' => array_slice((array) ($financialControlTables['collectorPerformance'] ?? []), 0, 12),
+                'dailyCloseRows' => array_slice((array) ($financialControlTables['dailyCloseRows'] ?? []), 0, 20),
+                'debtWatchlist' => array_slice((array) ($financialControlTables['debtWatchlist'] ?? []), 0, 20),
                 'implantCompanyRecords' => array_slice($this->sortRows(array_values($implantCompanyRecords), 'supplierRemaining'), 0, 50),
                 'implantInstallments' => array_slice($this->sortRows($implantInstallments, 'createdAt'), 0, 25),
                 'outstandingInvoices' => array_slice($this->sortRows($outstandingRows, 'debtAmount'), 0, 25),
@@ -465,6 +480,7 @@ final class ReportDashboardService
         $dataset = $this->reportDatasetService->buildClinical($filters);
         $executive = $this->executiveReportSummaryService->build($filters);
         $patientNameMap = (array) ($dataset['patientNameMap'] ?? []);
+        [$reportStartDate, $reportEndDate] = $this->resolveDateRange($filters);
 
         $appointmentStatusBreakdown = [];
         foreach (($dataset['appointments'] ?? []) as $appointment) {
@@ -486,6 +502,7 @@ final class ReportDashboardService
             $prescriptionRows[] = [
                 'createdAt' => $this->dateTimeString($prescription['createdAt'] ?? ''),
                 'medicineName' => $this->text($prescription['name'] ?? '', 'Custom prescription'),
+                'patientId' => $patientId,
                 'patientName' => $patientNameMap[$patientId] ?? $this->patientName(null, $patientId),
                 'treatmentName' => $this->text($visitTreatment['treatment']['name'] ?? '', 'Unknown Treatment'),
                 'visitDate' => $this->text($visit['visitDate'] ?? ''),
@@ -513,15 +530,48 @@ final class ReportDashboardService
             ];
         }
 
+        $patientTimelineRows = $this->buildClinicalTimelineRows($dataset, $patientNameMap, $prescriptionRows);
+        $queueSnapshotRows = $this->buildClinicalQueueRows($dataset, $patientNameMap, $reportEndDate);
+        $treatmentCorrectionRows = $this->buildTreatmentCorrectionRows($reportStartDate, $reportEndDate, $patientNameMap);
+        $timelinePatients = [];
+        foreach ($patientTimelineRows as $row) {
+            $patientId = (string) ($row['patientId'] ?? '');
+            if ($patientId !== '') {
+                $timelinePatients[$patientId] = true;
+            }
+        }
+
+        $waitingAppointments = 0;
+        $inChairAppointments = 0;
+        $lateAppointments = 0;
+        foreach ($queueSnapshotRows as $row) {
+            $status = $this->text($row['statusKey'] ?? '');
+            if (\in_array($status, ['checked_in', 'waiting'], true)) {
+                $waitingAppointments += 1;
+            }
+            if ($status === 'in_chair') {
+                $inChairAppointments += 1;
+            }
+            if ((bool) ($row['late'] ?? false)) {
+                $lateAppointments += 1;
+            }
+        }
+
         return [
             'summary' => [
                 'appointments' => count($dataset['appointments'] ?? []),
                 'completedAppointments' => (int) (($appointmentStatusBreakdown['completed']['count'] ?? 0)),
                 'implantCases' => count($implantCases),
+                'inChairAppointments' => $inChairAppointments,
+                'lateAppointments' => $lateAppointments,
                 'patients' => count($dataset['patients'] ?? []),
                 'prescriptions' => count($prescriptionRows),
+                'correctedTreatments' => count($treatmentCorrectionRows),
+                'timelineEvents' => count($patientTimelineRows),
+                'timelinePatients' => count($timelinePatients),
                 'visitTreatments' => count($dataset['visitTreatments'] ?? []),
                 'visits' => count($dataset['visits'] ?? []),
+                'waitingAppointments' => $waitingAppointments,
             ],
             'charts' => [
                 'appointmentStatusBreakdown' => array_values($appointmentStatusBreakdown),
@@ -532,10 +582,250 @@ final class ReportDashboardService
             'tables' => [
                 'dentistPerformance' => array_slice($executive['dentistProductivity'] ?? [], 0, 25),
                 'implantCases' => array_slice($this->sortRows($implantCases, 'updatedAt'), 0, 25),
+                'patientTimeline' => array_slice($this->sortRows($patientTimelineRows, 'occurredAt'), 0, 30),
                 'prescriptions' => array_slice($this->sortRows($prescriptionRows, 'createdAt'), 0, 25),
+                'queueSnapshot' => array_slice($this->sortRows($queueSnapshotRows, 'scheduledAt'), 0, 30),
+                'treatmentCorrections' => array_slice($treatmentCorrectionRows, 0, 25),
                 'treatmentPerformance' => array_slice($executive['treatmentVolume'] ?? [], 0, 25),
             ],
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $dataset
+     * @param array<string, string> $patientNameMap
+     * @param array<int, array<string, mixed>> $prescriptionRows
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildClinicalTimelineRows(array $dataset, array $patientNameMap, array $prescriptionRows): array
+    {
+        $rows = [];
+
+        foreach (($dataset['appointments'] ?? []) as $appointment) {
+            $patientId = (string) ($appointment['patientId'] ?? '');
+            $status = $this->humanizeStatus($this->text($appointment['status'] ?? 'scheduled', 'scheduled'));
+            $timeRange = trim(implode(' - ', array_filter([
+                $this->text($appointment['startTime'] ?? ''),
+                $this->text($appointment['endTime'] ?? ''),
+            ])));
+
+            $rows[] = [
+                'details' => implode(' | ', array_filter([
+                    $this->text($appointment['dentistName'] ?? ''),
+                    $timeRange,
+                ])),
+                'eventLabel' => "Appointment {$status}",
+                'eventType' => 'appointment',
+                'occurredAt' => $this->text($appointment['appointmentDate'] ?? $appointment['createdAt'] ?? ''),
+                'patientId' => $patientId,
+                'patientName' => $patientNameMap[$patientId] ?? $this->patientName(null, $patientId),
+            ];
+        }
+
+        foreach (($dataset['visits'] ?? []) as $visit) {
+            $patientId = (string) ($visit['patientId'] ?? '');
+            $rows[] = [
+                'details' => implode(' | ', array_filter([
+                    $this->text($visit['tag'] ?? ''),
+                    $this->text($visit['dentistName'] ?? ''),
+                ])),
+                'eventLabel' => 'Visit recorded',
+                'eventType' => 'visit',
+                'occurredAt' => $this->text($visit['visitDate'] ?? $visit['createdAt'] ?? ''),
+                'patientId' => $patientId,
+                'patientName' => $patientNameMap[$patientId] ?? $this->patientName(null, $patientId),
+            ];
+        }
+
+        foreach (($dataset['visitTreatments'] ?? []) as $visitTreatment) {
+            $visit = (array) ($visitTreatment['visit'] ?? []);
+            $patientId = (string) ($visit['patientId'] ?? '');
+            $rows[] = [
+                'details' => implode(' | ', array_filter([
+                    $this->text($visit['tag'] ?? ''),
+                    $this->text($visitTreatment['toothNumber'] ?? ''),
+                    $this->text($visit['visitDate'] ?? ''),
+                ])),
+                'eventLabel' => $this->text($visitTreatment['treatment']['name'] ?? '', 'Treatment recorded'),
+                'eventType' => 'treatment',
+                'occurredAt' => $this->text($visit['visitDate'] ?? $visitTreatment['createdAt'] ?? ''),
+                'patientId' => $patientId,
+                'patientName' => $patientNameMap[$patientId] ?? $this->patientName(null, $patientId),
+            ];
+        }
+
+        foreach ($prescriptionRows as $prescriptionRow) {
+            $patientId = (string) ($prescriptionRow['patientId'] ?? '');
+            $rows[] = [
+                'details' => implode(' | ', array_filter([
+                    $this->text($prescriptionRow['medicineName'] ?? ''),
+                    $this->text($prescriptionRow['treatmentName'] ?? ''),
+                ])),
+                'eventLabel' => 'Prescription issued',
+                'eventType' => 'prescription',
+                'occurredAt' => $this->text($prescriptionRow['visitDate'] ?? $prescriptionRow['createdAt'] ?? ''),
+                'patientId' => $patientId,
+                'patientName' => $patientNameMap[$patientId] ?? $this->patientName(null, $patientId),
+            ];
+        }
+
+        foreach (($dataset['invoiceRows'] ?? []) as $invoice) {
+            $patientId = (string) ($invoice['patientId'] ?? '');
+            $rows[] = [
+                'details' => implode(' | ', array_filter([
+                    "Invoice #".$this->text($invoice['id'] ?? ''),
+                    $this->humanizeStatus($this->text($invoice['status'] ?? 'pending', 'pending')),
+                    'Net '.$this->decimal($invoice['netAmountInput'] ?? $invoice['netAmount'] ?? 0),
+                ])),
+                'eventLabel' => 'Invoice generated',
+                'eventType' => 'invoice',
+                'occurredAt' => $this->text($invoice['invoiceDate'] ?? ''),
+                'patientId' => $patientId,
+                'patientName' => $patientNameMap[$patientId] ?? $this->patientName(null, $patientId),
+            ];
+
+            foreach (($invoice['payments'] ?? []) as $payment) {
+                $rows[] = [
+                    'details' => implode(' | ', array_filter([
+                        "Invoice #".$this->text($invoice['id'] ?? ''),
+                        $this->text($payment['method'] ?? ''),
+                        'Amount '.$this->decimal($payment['amountInput'] ?? $payment['amount'] ?? 0),
+                    ])),
+                    'eventLabel' => 'Payment received',
+                    'eventType' => 'payment',
+                    'occurredAt' => $this->text($payment['paymentDate'] ?? $invoice['invoiceDate'] ?? ''),
+                    'patientId' => $patientId,
+                    'patientName' => $patientNameMap[$patientId] ?? $this->patientName(null, $patientId),
+                ];
+            }
+        }
+
+        foreach (($dataset['patientSessionTasks'] ?? []) as $task) {
+            $patientId = (string) ($task['patientId'] ?? '');
+            $rows[] = [
+                'details' => implode(' | ', array_filter([
+                    $this->text($task['title'] ?? ''),
+                    $this->humanizeStatus($this->text($task['status'] ?? 'pending', 'pending')),
+                ])),
+                'eventLabel' => 'Session task updated',
+                'eventType' => 'task',
+                'occurredAt' => $this->text($task['updatedAt'] ?? $task['createdAt'] ?? ''),
+                'patientId' => $patientId,
+                'patientName' => $patientNameMap[$patientId] ?? $this->patientName(null, $patientId),
+            ];
+        }
+
+        return array_values(array_filter($rows, fn (array $row): bool => $this->text($row['occurredAt'] ?? '') !== ''));
+    }
+
+    /**
+     * @param array<string, mixed> $dataset
+     * @param array<string, string> $patientNameMap
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildClinicalQueueRows(array $dataset, array $patientNameMap, CarbonImmutable $referenceDate): array
+    {
+        $rows = [];
+
+        foreach (($dataset['appointments'] ?? []) as $appointment) {
+            $patientId = (string) ($appointment['patientId'] ?? '');
+            $statusKey = str_replace(' ', '_', mb_strtolower($this->text($appointment['status'] ?? 'scheduled', 'scheduled')));
+            $appointmentDate = $this->text($appointment['appointmentDate'] ?? '');
+            $startTime = $this->text($appointment['startTime'] ?? '');
+            $endTime = $this->text($appointment['endTime'] ?? '');
+            $scheduledAt = $appointmentDate !== ''
+                ? $this->parseDate(trim($appointmentDate.' '.($startTime !== '' ? $startTime : '00:00')))
+                : null;
+
+            $rows[] = [
+                'appointmentTag' => $this->text($appointment['tag'] ?? '', 'Appointment #'.$this->text($appointment['id'] ?? '')),
+                'date' => $appointmentDate,
+                'dentistName' => $this->text($appointment['dentistName'] ?? '', 'Unknown Dentist'),
+                'late' => $scheduledAt !== null
+                    && $scheduledAt->lt($referenceDate)
+                    && \in_array($statusKey, ['scheduled', 'checked_in', 'waiting'], true),
+                'patientId' => $patientId,
+                'patientName' => $patientNameMap[$patientId] ?? $this->patientName(null, $patientId),
+                'scheduledAt' => $scheduledAt?->format(DATE_ATOM) ?? $appointmentDate,
+                'status' => $this->humanizeStatus($statusKey),
+                'statusKey' => $statusKey,
+                'timeRange' => trim(implode(' - ', array_filter([$startTime, $endTime]))),
+            ];
+        }
+
+        return $rows;
+    }
+
+    private function humanizeStatus(string $value): string
+    {
+        $normalized = str_replace('_', ' ', mb_strtolower(trim($value)));
+
+        return $normalized !== '' ? ucfirst($normalized) : 'Pending';
+    }
+
+    /**
+     * @param array<string, string> $patientNameMap
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildTreatmentCorrectionRows(
+        CarbonImmutable $reportStartDate,
+        CarbonImmutable $reportEndDate,
+        array $patientNameMap
+    ): array
+    {
+        $activityRows = ActivityLog::query()
+            ->where('subject_type', VisitTreatment::class)
+            ->where('event', 'corrected')
+            ->where('created_at', '>=', $reportStartDate->startOfDay())
+            ->where('created_at', '<=', $reportEndDate->endOfDay())
+            ->orderByDesc('created_at')
+            ->limit(50)
+            ->get();
+
+        if ($activityRows->isEmpty()) {
+            return [];
+        }
+
+        $visitTreatmentIds = $activityRows
+            ->pluck('subject_id')
+            ->filter(static fn ($id): bool => (int) $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        $visitTreatments = VisitTreatment::query()
+            ->with(['visit:id,patient_id,visit_date,tag', 'treatment:id,name'])
+            ->whereIn('id', $visitTreatmentIds)
+            ->get()
+            ->keyBy('id');
+
+        $rows = [];
+        foreach ($activityRows as $activity) {
+            $visitTreatment = $visitTreatments->get((int) ($activity->subject_id ?? 0));
+            $properties = is_array($activity->properties) ? $activity->properties : [];
+            $patientId = (string) ($visitTreatment?->visit?->patient_id ?? '');
+            $diff = is_array($properties['diff'] ?? null) ? $properties['diff'] : [];
+            $changeSummary = $diff === []
+                ? '-'
+                : implode(', ', array_map(
+                    static fn (array $change): string => (string) ($change['label'] ?? $change['field'] ?? 'Change'),
+                    array_slice($diff, 0, 3)
+                ));
+
+            $rows[] = [
+                'changedAt' => $this->dateTimeString($activity->created_at),
+                'changedBy' => $this->resolveAuditUserLabel((int) ($activity->causer_id ?? 0), $activity->causer_type),
+                'changeSummary' => $changeSummary,
+                'correctionReason' => $this->text($properties['correctionReason'] ?? ''),
+                'patientName' => $patientNameMap[$patientId] ?? $this->patientName(null, $patientId),
+                'treatmentName' => $this->text($visitTreatment?->treatment?->name, 'Unknown Treatment'),
+                'visitLabel' => $visitTreatment?->visit?->tag
+                    ? $this->text($visitTreatment->visit->tag).' | '.$this->text($visitTreatment->visit->visit_date)
+                    : $this->text($visitTreatment?->visit?->visit_date, 'Visit #'.(string) ($visitTreatment?->visit_id ?? '-')),
+            ];
+        }
+
+        return $rows;
     }
 
     /**
@@ -566,11 +856,20 @@ final class ReportDashboardService
             ->orderByDesc('created_at')
             ->get();
 
+        $adjustments = InventoryAdjustment::query()
+            ->with('inventoryItem:id,item_name,category,unit,supplier,quantity,min_stock,unit_cost')
+            ->where('adjustment_date', '>=', $startDate->toDateString())
+            ->where('adjustment_date', '<=', $endDate->toDateString())
+            ->orderByDesc('adjustment_date')
+            ->orderByDesc('created_at')
+            ->get();
+
         $stockRows = [];
         $availabilityBreakdown = [];
         $categoryBreakdown = [];
         $totalQuantity = 0;
         $totalValue = 0.0;
+        $stockPressureRows = [];
 
         foreach ($inventoryItems as $item) {
             $consumedQuantity = max(0, (int) round((float) ($item->consumed_quantity ?? 0)));
@@ -606,6 +905,28 @@ final class ReportDashboardService
             $category = $row['category'];
             $categoryBreakdown[$category] ??= ['category' => $category, 'count' => 0];
             $categoryBreakdown[$category]['count'] += 1;
+
+            if (\in_array($availability, ['low_stock', 'out_of_stock'], true)) {
+                $substitute = InventoryItem::query()
+                    ->where('id', '!=', $item->id)
+                    ->where('category', $item->category)
+                    ->where('quantity', '>', 0)
+                    ->orderByDesc('quantity')
+                    ->orderBy('item_name')
+                    ->first(['item_name', 'quantity']);
+
+                $stockPressureRows[] = [
+                    'availableQuantity' => $availableQuantity,
+                    'category' => $row['category'],
+                    'itemName' => $row['itemName'],
+                    'minStock' => $row['minStock'],
+                    'recommendedAction' => $availability === 'out_of_stock' ? 'Reorder now' : 'Top up soon',
+                    'status' => $availability,
+                    'substituteItemName' => $this->text($substitute?->item_name),
+                    'substituteQuantity' => (int) ($substitute?->quantity ?? 0),
+                    'supplier' => $row['supplier'],
+                ];
+            }
         }
 
         $usageTable = [];
@@ -628,27 +949,85 @@ final class ReportDashboardService
             $usageByTreatment[$treatmentName]['quantityUsed'] += $quantityUsed;
         }
 
+        $adjustmentRows = [];
+        $adjustmentTrend = [];
+        $wasteQuantity = 0;
+        $lossQuantity = 0;
+        $wasteValue = 0.0;
+        $lossValue = 0.0;
+
+        foreach ($adjustments as $adjustment) {
+            $adjustmentType = $this->text($adjustment->adjustment_type, 'waste');
+            $quantity = (int) ($adjustment->quantity ?? 0);
+            $valueImpact = $this->decimal($adjustment->total_cost_impact ?? 0);
+            $date = $this->dateString($adjustment->adjustment_date);
+            $bucketDate = $this->parseDate($date);
+
+            if ($adjustmentType === 'loss') {
+                $lossQuantity += $quantity;
+                $lossValue += $valueImpact;
+            } else {
+                $wasteQuantity += $quantity;
+                $wasteValue += $valueImpact;
+            }
+
+            if ($bucketDate !== null) {
+                $bucket = $this->granularityBucket($bucketDate, 'month');
+                $adjustmentTrend[$bucket['key']] ??= [
+                    'key' => $bucket['key'],
+                    'label' => $bucket['label'],
+                    'lossQuantity' => 0,
+                    'sort' => $bucket['sort'],
+                    'wasteQuantity' => 0,
+                    'valueImpact' => 0.0,
+                ];
+                $adjustmentTrend[$bucket['key']][$adjustmentType === 'loss' ? 'lossQuantity' : 'wasteQuantity'] += $quantity;
+                $adjustmentTrend[$bucket['key']]['valueImpact'] = $this->decimal($adjustmentTrend[$bucket['key']]['valueImpact'] + $valueImpact);
+            }
+
+            $adjustmentRows[] = [
+                'adjustmentDate' => $date,
+                'adjustmentType' => $adjustmentType,
+                'itemName' => $this->text($adjustment->inventoryItem?->item_name, "Item #{$adjustment->inventory_item_id}"),
+                'notes' => $this->text($adjustment->notes),
+                'quantity' => $quantity,
+                'supplier' => $this->text($adjustment->inventoryItem?->supplier),
+                'totalCostImpact' => $valueImpact,
+                'unit' => $this->text($adjustment->inventoryItem?->unit, 'unit'),
+            ];
+        }
+
         $implantStockRows = array_values(array_filter($stockRows, static function (array $row): bool {
             $haystack = mb_strtolower(($row['itemName'] ?? '').' '.($row['category'] ?? ''));
 
             return str_contains($haystack, 'implant');
         }));
 
+        $adjustmentTrendRows = array_values($adjustmentTrend);
+        usort($adjustmentTrendRows, static fn (array $left, array $right): int => $left['sort'] <=> $right['sort']);
+
         return [
             'summary' => [
+                'criticalStockCount' => (int) (($availabilityBreakdown['out_of_stock']['count'] ?? 0)),
                 'lowStockCount' => (int) (($availabilityBreakdown['low_stock']['count'] ?? 0)),
                 'outOfStockCount' => (int) (($availabilityBreakdown['out_of_stock']['count'] ?? 0)),
+                'stockPressureCount' => count($stockPressureRows),
                 'totalItems' => count($stockRows),
                 'totalQuantity' => $totalQuantity,
                 'totalValue' => $this->decimal($totalValue),
+                'wasteLossQuantity' => $wasteQuantity + $lossQuantity,
+                'wasteLossValue' => $this->decimal($wasteValue + $lossValue),
             ],
             'charts' => [
                 'availabilityBreakdown' => array_values($availabilityBreakdown),
                 'categoryBreakdown' => array_values($categoryBreakdown),
+                'wasteLossTrend' => $adjustmentTrendRows,
                 'usageByTreatment' => array_slice($this->sortRows(array_values($usageByTreatment), 'quantityUsed'), 0, 20),
             ],
             'tables' => [
+                'adjustmentRows' => array_slice($adjustmentRows, 0, 30),
                 'implantStockRows' => array_slice($this->sortRows($implantStockRows, 'availableQuantity'), 0, 25),
+                'stockPressureRows' => array_slice($this->sortRows($stockPressureRows, 'availableQuantity'), 0, 25),
                 'stockRows' => array_slice($this->sortRows($stockRows, 'stockValue'), 0, 50),
                 'usageRows' => array_slice($this->sortRows($usageTable, 'usedOn'), 0, 50),
             ],
@@ -663,6 +1042,29 @@ final class ReportDashboardService
     {
         [$startDate, $endDate] = $this->resolveDateRange($filters);
         $search = mb_strtolower($this->text($filters['search'] ?? ''));
+        $operationsSnapshot = $this->operationsHealthService->buildSnapshot(8);
+        $healthSummary = (array) ($operationsSnapshot['summary'] ?? []);
+        $healthChecks = array_map(
+            static fn (array $row): array => [
+                'action' => (string) ($row['action'] ?? ''),
+                'details' => (string) ($row['details'] ?? ''),
+                'label' => (string) ($row['label'] ?? ''),
+                'status' => (string) ($row['status'] ?? 'ok'),
+                'value' => (string) ($row['value'] ?? ''),
+            ],
+            (array) ($operationsSnapshot['checks'] ?? [])
+        );
+        $recentBackups = array_map(
+            static fn (array $row): array => [
+                'completedAt' => (string) ($row['completedAt'] ?? ''),
+                'fileSizeBytes' => (int) ($row['fileSizeBytes'] ?? 0),
+                'id' => (int) ($row['id'] ?? 0),
+                'mode' => (string) ($row['mode'] ?? ''),
+                'notes' => (string) ($row['notes'] ?? ''),
+                'status' => (string) ($row['status'] ?? ''),
+            ],
+            (array) ($operationsSnapshot['recentBackups'] ?? [])
+        );
 
         $activityRows = ActivityLog::query()
             ->where('created_at', '>=', $startDate)
@@ -712,8 +1114,13 @@ final class ReportDashboardService
 
         $accessEntries = [];
         foreach ($accessRows as $access) {
+            $meta = is_array($access->meta) ? $access->meta : [];
+            $actorRoles = array_values(array_filter((array) ($meta['roles'] ?? []), static fn (mixed $value): bool => is_string($value) && $value !== ''));
+            $actorRightLevel = $this->text($meta['rightLevel'] ?? '');
             $row = [
                 'action' => $this->text($access->action, 'view'),
+                'actorRightLevel' => $actorRightLevel,
+                'actorRoles' => implode(', ', $actorRoles),
                 'changedBy' => $this->personName($access->user),
                 'entity' => 'Report/'.(string) $access->report_key,
                 'timestamp' => $this->dateTimeString($access->created_at),
@@ -748,10 +1155,17 @@ final class ReportDashboardService
         return [
             'summary' => [
                 'accessCount' => count($accessEntries),
+                'backupStatus' => (string) ($healthSummary['status'] ?? 'warning'),
+                'failedBackupCount' => (int) ($healthSummary['failedBackupCount'] ?? 0),
+                'healthWarningCount' => (int) ($healthSummary['healthWarningCount'] ?? 0),
+                'lastSuccessfulBackupAt' => $healthSummary['lastSuccessfulBackupAt'] ?? null,
+                'lowDiskWarning' => (bool) ($healthSummary['lowDiskWarning'] ?? false),
                 'modificationCount' => count($financialModifications),
                 'snapshotCount' => count(array_filter($accessEntries, static fn (array $row): bool => $row['type'] === 'snapshot')),
             ],
             'financialModifications' => array_slice($financialModifications, 0, 100),
+            'healthChecks' => $healthChecks,
+            'recentBackups' => $recentBackups,
             'timeline' => array_slice($timeline, 0, 200),
         ];
     }

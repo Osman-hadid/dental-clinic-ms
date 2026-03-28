@@ -48,6 +48,16 @@ type SafeReportResponse = {
   };
 };
 
+type WorkflowAccessSummary = {
+  capabilities: {
+    canManageSafeLedger: boolean;
+    canViewSafeLedger: boolean;
+  };
+  user: {
+    rightLevel: string;
+  };
+};
+
 type SafeForm = {
   amount: string;
   direction: 'in' | 'out';
@@ -116,6 +126,19 @@ export default function SafePage(): JSX.Element {
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [workflowAccess, setWorkflowAccess] = useState<WorkflowAccessSummary | null>(null);
+
+  useEffect(() => {
+    void client.get<WorkflowAccessSummary>('/api/v1/dental-management/workflow/access-summary')
+      .then((response) => {
+        if (response.success && response.data) {
+          setWorkflowAccess(response.data);
+        }
+      })
+      .catch(() => {
+        setWorkflowAccess(null);
+      });
+  }, []);
 
   const fetchData = useCallback(async (pageNumber: number): Promise<void> => {
     setIsLoading(true);
@@ -164,6 +187,10 @@ export default function SafePage(): JSX.Element {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
+    if (!workflowAccess?.capabilities.canManageSafeLedger) {
+      toast.error('Approval access is required to create or edit safe transactions.');
+      return;
+    }
 
     const rawAmount = parseMoney(form.amount);
     if (!form.transactionDate || rawAmount <= 0) {
@@ -197,6 +224,11 @@ export default function SafePage(): JSX.Element {
   };
 
   const removeRow = (id: number): void => {
+    if (!workflowAccess?.capabilities.canManageSafeLedger) {
+      toast.error('Approval access is required to delete safe transactions.');
+      return;
+    }
+
     void client
       .delete(`/api/v1/dental-management/safe-transactions/${id}`)
       .then(async () => {
@@ -227,6 +259,11 @@ export default function SafePage(): JSX.Element {
                 </CardTitle>
               </CardHeader>
               <CardContent className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
+                {workflowAccess && !workflowAccess.capabilities.canManageSafeLedger ? (
+                  <div className="lg:col-span-2 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+                    You are viewing the safe ledger with `{workflowAccess.user.rightLevel}` rights. Creating or deleting manual safe entries requires `approval` access.
+                  </div>
+                ) : null}
                 <form onSubmit={handleSubmit} className="grid gap-3 rounded-2xl border bg-background/85 p-4">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-1.5">
@@ -272,7 +309,7 @@ export default function SafePage(): JSX.Element {
                     <Label>Notes</Label>
                     <Input value={form.notes} onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))} placeholder="Optional note" />
                   </div>
-                  <Button type="submit" disabled={isSubmitting}>
+                  <Button type="submit" disabled={isSubmitting || !workflowAccess?.capabilities.canManageSafeLedger}>
                     <HandCoins className="mr-2 size-4" />
                     {isSubmitting ? 'Saving...' : 'Save Safe Transaction'}
                   </Button>
@@ -381,7 +418,7 @@ export default function SafePage(): JSX.Element {
                                 {row.sourceType ? (
                                   <span className="text-xs text-muted-foreground">System</span>
                                 ) : (
-                                  <Button type="button" variant="ghost" size="icon" onClick={() => removeRow(row.id)}>
+                                  <Button type="button" variant="ghost" size="icon" disabled={!workflowAccess?.capabilities.canManageSafeLedger} onClick={() => removeRow(row.id)}>
                                     <Trash2 className="size-4" />
                                   </Button>
                                 )}

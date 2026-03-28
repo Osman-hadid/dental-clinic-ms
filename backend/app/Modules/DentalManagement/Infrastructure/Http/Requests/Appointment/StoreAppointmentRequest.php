@@ -24,7 +24,7 @@ final class StoreAppointmentRequest extends BaseFormRequest
             'appointmentDate' => 'required|date_format:Y-m-d',
             'startTime' => 'required|date_format:H:i',
             'endTime' => 'required|date_format:H:i|after:startTime',
-            'status' => 'nullable|string|in:scheduled,completed,cancelled',
+            'status' => 'nullable|string|in:scheduled,checked_in,waiting,in_chair,completed,cancelled',
             'notes' => 'nullable|string|max:255',
             'createdBy' => 'nullable|integer',
             'updatedBy' => 'nullable|integer',

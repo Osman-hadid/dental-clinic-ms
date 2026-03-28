@@ -7,13 +7,17 @@ namespace App\Modules\DentalManagement\Infrastructure\Http\Controllers;
 use App\Modules\Common\Application\Exceptions\ApiException;
 use App\Modules\Common\Infrastructure\Http\Controllers\BaseApiController;
 use App\Modules\Common\Infrastructure\Resources\PaginatedResource;
+use App\Modules\DentalManagement\Domain\Entities\InventoryAdjustment;
 use App\Modules\DentalManagement\Domain\Entities\InventoryItem;
 use App\Modules\DentalManagement\Domain\Entities\SafeTransaction;
+use App\Modules\DentalManagement\Infrastructure\Http\Requests\InventoryItem\StoreInventoryAdjustmentRequest;
 use App\Modules\DentalManagement\Infrastructure\Http\Requests\InventoryItem\ListInventoryItemsRequest;
 use App\Modules\DentalManagement\Infrastructure\Http\Requests\InventoryItem\StoreInventoryItemRequest;
 use App\Modules\DentalManagement\Infrastructure\Http\Requests\InventoryItem\UpdateInventoryItemRequest;
+use App\Modules\DentalManagement\Infrastructure\Resources\InventoryAdjustmentResource;
 use App\Modules\DentalManagement\Infrastructure\Resources\InventoryItemResource;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 final class InventoryItemController extends BaseApiController
@@ -116,6 +120,79 @@ final class InventoryItemController extends BaseApiController
         return $this->successResponse(
             data: null,
             message: 'Inventory item deleted successfully.'
+        );
+    }
+
+    public function adjustments(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'inventoryItemId' => 'nullable|integer|exists:inventory_items,id',
+            'perPage' => 'nullable|integer|min:1|max:100',
+        ]);
+
+        $query = InventoryAdjustment::query()
+            ->with('inventoryItem:id,item_name')
+            ->orderByDesc('adjustment_date')
+            ->orderByDesc('created_at');
+
+        if (isset($validated['inventoryItemId'])) {
+            $query->where('inventory_item_id', (int) $validated['inventoryItemId']);
+        }
+
+        $paginated = $query->paginate((int) ($validated['perPage'] ?? 20));
+
+        return $this->successResponse(
+            data: new PaginatedResource($paginated, InventoryAdjustmentResource::class),
+            message: 'Inventory adjustments fetched successfully.'
+        );
+    }
+
+    public function recordAdjustment(StoreInventoryAdjustmentRequest $request, int $id): JsonResponse
+    {
+        $validated = $request->validated();
+        $userId = $request->user()?->id;
+
+        $adjustment = DB::transaction(function () use ($id, $validated, $userId): InventoryAdjustment {
+            $item = InventoryItem::query()->lockForUpdate()->findOrFail($id);
+            $quantity = max(1, (int) ($validated['quantity'] ?? 0));
+
+            if ((int) $item->quantity < $quantity) {
+                throw new ApiException(
+                    errorCode: 'INVENTORY_ADJUSTMENT_EXCEEDS_STOCK',
+                    message: 'Cannot record waste or loss above the current stock level.',
+                    details: [
+                        'availableQuantity' => (int) $item->quantity,
+                        'requestedQuantity' => $quantity,
+                        'itemName' => (string) $item->item_name,
+                    ],
+                    httpCode: 422,
+                );
+            }
+
+            $item->quantity = max(0, (int) $item->quantity - $quantity);
+            $item->updated_by = $userId !== null ? (int) $userId : $item->updated_by;
+            $item->save();
+
+            return InventoryAdjustment::query()->create([
+                'inventory_item_id' => $item->id,
+                'adjustment_type' => (string) $validated['adjustmentType'],
+                'quantity' => $quantity,
+                'unit_cost_snapshot' => round((float) ($item->unit_cost ?? 0), 2),
+                'total_cost_impact' => round($quantity * (float) ($item->unit_cost ?? 0), 2),
+                'adjustment_date' => (string) $validated['adjustmentDate'],
+                'notes' => $validated['notes'] ?? null,
+                'created_by' => $userId,
+                'updated_by' => $userId,
+                'deleted_by' => null,
+            ]);
+        });
+
+        $adjustment->load('inventoryItem:id,item_name');
+
+        return $this->successResponse(
+            data: new InventoryAdjustmentResource($adjustment),
+            message: 'Inventory adjustment recorded successfully.',
+            code: 201
         );
     }
 

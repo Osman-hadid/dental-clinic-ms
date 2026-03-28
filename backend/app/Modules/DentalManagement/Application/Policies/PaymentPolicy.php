@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\DentalManagement\Application\Policies;
 
 use App\Models\User;
+use App\Modules\DentalManagement\Domain\Services\WorkflowAccessService;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
 final class PaymentPolicy
@@ -28,12 +29,14 @@ final class PaymentPolicy
 
     public function update(User $user): bool
     {
-        return $user->can('dental-management.payments.update');
+        return $user->can('dental-management.payments.update')
+            && app(WorkflowAccessService::class)->canUpdatePayments($user);
     }
 
     public function delete(User $user): bool
     {
-        return $user->can('dental-management.payments.delete');
+        return $user->can('dental-management.payments.delete')
+            && app(WorkflowAccessService::class)->canDeletePayments($user);
     }
 
     public function restore(User $user): bool
@@ -43,11 +46,13 @@ final class PaymentPolicy
 
     public function forceDelete(User $user): bool
     {
-        return $user->can('dental-management.payments.force-delete');
+        return $user->can('dental-management.payments.force-delete')
+            && app(WorkflowAccessService::class)->canDeletePayments($user);
     }
 
     public function bulkDelete(User $user): bool
     {
-        return $user->can('dental-management.payments.bulk-delete');
+        return $user->can('dental-management.payments.bulk-delete')
+            && app(WorkflowAccessService::class)->canDeletePayments($user);
     }
 }

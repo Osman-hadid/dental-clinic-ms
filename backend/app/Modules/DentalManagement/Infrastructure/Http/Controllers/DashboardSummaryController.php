@@ -13,6 +13,7 @@ use App\Modules\DentalManagement\Domain\Entities\PatientSessionTask;
 use App\Modules\DentalManagement\Domain\Entities\SafeTransaction;
 use App\Modules\DentalManagement\Domain\Entities\Visit;
 use App\Modules\DentalManagement\Domain\Services\CurrencyService;
+use App\Modules\DentalManagement\Domain\Services\OperationsHealthService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -20,7 +21,10 @@ use Illuminate\Support\Facades\DB;
 
 final class DashboardSummaryController extends BaseApiController
 {
-    public function __construct(private readonly CurrencyService $currencyService) {}
+    public function __construct(
+        private readonly CurrencyService $currencyService,
+        private readonly OperationsHealthService $operationsHealthService,
+    ) {}
 
     public function overview(Request $request): JsonResponse
     {
@@ -308,6 +312,7 @@ final class DashboardSummaryController extends BaseApiController
                     'recentTransactions' => $recentSafeTransactions,
                 ],
                 'implantSupplier' => $implantSummary,
+                'operations' => $this->operationsHealthService->dashboardSummary(),
                 'radialSafeSummary' => $safeBalancePayload,
             ],
             message: 'Dashboard overview fetched successfully.'
@@ -592,4 +597,3 @@ final class DashboardSummaryController extends BaseApiController
         ];
     }
 }
-

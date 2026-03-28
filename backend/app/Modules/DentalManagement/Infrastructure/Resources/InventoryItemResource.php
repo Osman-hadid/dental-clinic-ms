@@ -19,10 +19,15 @@ final class InventoryItemResource extends JsonResource
             'itemName' => $this->item_name,
             'category' => $this->category,
             'quantity' => $this->quantity,
+            'availableQuantity' => $this->quantity,
             'unit' => $this->unit,
             'minStock' => $this->min_stock,
             'unitCost' => $this->unit_cost,
             'totalCost' => $this->total_cost,
+            'stockValue' => round((float) ($this->quantity ?? 0) * (float) ($this->unit_cost ?? 0), 2),
+            'stockState' => (int) ($this->quantity ?? 0) <= 0
+                ? 'out_of_stock'
+                : ((int) ($this->quantity ?? 0) <= (int) ($this->min_stock ?? 0) ? 'low_stock' : 'in_stock'),
             'supplier' => $this->supplier,
             'lotNumber' => $this->lot_number,
             'expiryDate' => $this->formatDate($this->expiry_date),
@@ -51,4 +56,3 @@ final class InventoryItemResource extends JsonResource
         return $value instanceof \DateTimeInterface ? $value->format('Y-m-d') : (string) $value;
     }
 }
-

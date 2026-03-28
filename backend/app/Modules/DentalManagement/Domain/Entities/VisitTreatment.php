@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Modules\DentalManagement\Domain\Entities;
 
+use App\Models\ActivityLog;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
@@ -27,6 +29,8 @@ final class VisitTreatment extends Model
         'dentist_id',
         'price',
         'material',
+        'image_modality',
+        'image_source',
         'notes',
         'created_by',
         'updated_by',
@@ -92,8 +96,19 @@ final class VisitTreatment extends Model
         return $this->hasMany(VisitTreatmentMaterial::class);
     }
 
+    public function treatmentImages(): HasMany
+    {
+        return $this->hasMany(VisitTreatmentImage::class);
+    }
+
+    public function activityLogs(): MorphMany
+    {
+        return $this->morphMany(ActivityLog::class, 'subject')->latest('created_at');
+    }
+
     public function hasRelatedRecords(): bool
     {
-        return $this->prescription()->exists() || $this->materialItems()->exists();
+        return $this->prescription()->exists()
+            || $this->materialItems()->exists();
     }
 }

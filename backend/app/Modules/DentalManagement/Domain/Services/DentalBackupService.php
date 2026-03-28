@@ -87,6 +87,26 @@ final class DentalBackupService
         return DentalBackup::query()->latest('created_at')->first();
     }
 
+    public function lastSuccessfulBackup(): ?DentalBackup
+    {
+        return DentalBackup::query()
+            ->where('status', 'completed')
+            ->latest('completed_at')
+            ->latest('created_at')
+            ->first();
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Collection<int, DentalBackup>
+     */
+    public function recentBackups(int $limit = 10): \Illuminate\Database\Eloquent\Collection
+    {
+        return DentalBackup::query()
+            ->latest('created_at')
+            ->limit(max(1, $limit))
+            ->get();
+    }
+
     /**
      * @param array<string, mixed> $input
      */
@@ -173,6 +193,30 @@ final class DentalBackupService
             'completedAt' => $backup->completed_at?->toIso8601String(),
             'createdAt' => $backup->created_at?->toIso8601String(),
         ];
+    }
+
+    public function nextScheduledRunAt(?DentalBackupSchedule $schedule = null): ?CarbonImmutable
+    {
+        $resolvedSchedule = $schedule ?? $this->getSchedule();
+        if (!$resolvedSchedule->is_active || $resolvedSchedule->frequency === 'none') {
+            return null;
+        }
+
+        $now = CarbonImmutable::now();
+        $candidate = $this->anchorFor($resolvedSchedule, $now);
+        if ($candidate !== null && $candidate->greaterThan($now)) {
+            return $candidate;
+        }
+
+        $nextBase = match ((string) $resolvedSchedule->frequency) {
+            'daily' => $now->addDay(),
+            'weekly' => $now->addWeek(),
+            'monthly' => $now->addMonthNoOverflow(),
+            'yearly' => $now->addYearNoOverflow(),
+            default => null,
+        };
+
+        return $nextBase !== null ? $this->anchorFor($resolvedSchedule, $nextBase) : null;
     }
 
     private function isDue(DentalBackupSchedule $schedule, CarbonImmutable $now): bool

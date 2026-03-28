@@ -7,6 +7,7 @@ namespace App\Modules\DentalManagement\Infrastructure\Http\Controllers;
 use App\Modules\Common\Infrastructure\Http\Controllers\BaseApiController;
 use App\Modules\DentalManagement\Domain\Services\ExecutiveReportSummaryService;
 use App\Modules\DentalManagement\Domain\Services\ReportDatasetService;
+use App\Modules\DentalManagement\Domain\Services\WorkflowAccessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -14,12 +15,13 @@ final class ReportSummaryController extends BaseApiController
 {
     public function __construct(
         private readonly ExecutiveReportSummaryService $executiveReportSummaryService,
-        private readonly ReportDatasetService $reportDatasetService
+        private readonly ReportDatasetService $reportDatasetService,
+        private readonly WorkflowAccessService $workflowAccessService,
     ) {}
 
     public function executive(Request $request): JsonResponse
     {
-        abort_unless(auth()->user()?->can('dental-management.view'), 403);
+        abort_unless($this->workflowAccessService->canAccessReport($request->user(), 'executive'), 403);
 
         $validated = $this->validateSummaryFilters($request);
 
@@ -31,7 +33,7 @@ final class ReportSummaryController extends BaseApiController
 
     public function financial(Request $request): JsonResponse
     {
-        abort_unless(auth()->user()?->can('dental-management.view'), 403);
+        abort_unless($this->workflowAccessService->canAccessReport($request->user(), 'financial'), 403);
 
         $validated = $this->validateSummaryFilters($request);
 
@@ -43,7 +45,7 @@ final class ReportSummaryController extends BaseApiController
 
     public function clinical(Request $request): JsonResponse
     {
-        abort_unless(auth()->user()?->can('dental-management.view'), 403);
+        abort_unless($this->workflowAccessService->canAccessReport($request->user(), 'clinical'), 403);
 
         $validated = $this->validateSummaryFilters($request);
 

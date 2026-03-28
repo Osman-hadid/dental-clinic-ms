@@ -49,6 +49,11 @@ export const FinancialReportPanel = ({ data }: { data: FinancialData }): JSX.Ele
       <MetricCard label="Shareholder contribution" value={formatCurrency(data.summary.shareholderContribution, 'AFN')} />
       <MetricCard label="Shareholder distribution" value={formatCurrency(data.summary.shareholderDistribution, 'AFN')} />
       <MetricCard label="Salaries paid" value={formatCurrency(data.summary.salaryPaid, 'AFN')} />
+      <MetricCard label="Days closed" value={data.summary.closeCount} />
+      <MetricCard label="Latest close difference" value={formatCurrency(data.summary.latestCloseDifference, 'AFN')} />
+      <MetricCard label="Discrepancies logged" value={formatCurrency(data.summary.discrepancyTotal, 'AFN')} />
+      <MetricCard label="Open debt count" value={data.summary.openDebtCount} />
+      <MetricCard label="Overdue debt count" value={data.summary.overdueDebtCount} />
     </div>
 
     <div className="grid gap-4 xl:grid-cols-2">
@@ -261,6 +266,107 @@ export const FinancialReportPanel = ({ data }: { data: FinancialData }): JSX.Ele
                 )) : (
                   <tr className="border-t">
                     <td colSpan={4} className="px-3 py-6 text-center text-muted-foreground">No safe activity was found for the selected filters.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+
+    <div className="grid gap-4 xl:grid-cols-3">
+      <Card className="rounded-3xl border">
+        <CardHeader>
+          <CardTitle>Recent day closes</CardTitle>
+          <CardDescription>Expected vs counted safe balance and the latest discrepancy logs.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto rounded-2xl border">
+            <table className="min-w-full text-sm">
+              <thead className="bg-muted/30 text-left text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2">Date</th>
+                  <th className="px-3 py-2">Difference</th>
+                  <th className="px-3 py-2">Closed By</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.tables.dailyCloseRows.length > 0 ? data.tables.dailyCloseRows.map((row, index) => (
+                  <tr key={`${String(row.closingDate ?? 'close')}-${index}`} className="border-t">
+                    <td className="px-3 py-2">{String(row.closingDate ?? '-')}</td>
+                    <td className="px-3 py-2">{formatCurrency(Number(row.discrepancyAmount ?? 0), 'AFN')}</td>
+                    <td className="px-3 py-2">{String(row.closedBy ?? '-')}</td>
+                  </tr>
+                )) : (
+                  <tr className="border-t">
+                    <td colSpan={3} className="px-3 py-6 text-center text-muted-foreground">No day closes were saved in the selected range.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-3xl border">
+        <CardHeader>
+          <CardTitle>Collector performance</CardTitle>
+          <CardDescription>Payment totals grouped by the staff member who recorded them.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto rounded-2xl border">
+            <table className="min-w-full text-sm">
+              <thead className="bg-muted/30 text-left text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2">Collector</th>
+                  <th className="px-3 py-2">Payments</th>
+                  <th className="px-3 py-2">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.tables.collectorPerformance.length > 0 ? data.tables.collectorPerformance.map((row, index) => (
+                  <tr key={`${String(row.collector ?? 'collector')}-${index}`} className="border-t">
+                    <td className="px-3 py-2">{String(row.collector ?? '-')}</td>
+                    <td className="px-3 py-2">{Number(row.paymentsCount ?? 0)}</td>
+                    <td className="px-3 py-2">{formatCurrency(Number(row.totalAmount ?? 0), 'AFN')}</td>
+                  </tr>
+                )) : (
+                  <tr className="border-t">
+                    <td colSpan={3} className="px-3 py-6 text-center text-muted-foreground">No collector activity matched the selected filters.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-3xl border">
+        <CardHeader>
+          <CardTitle>Debt watchlist</CardTitle>
+          <CardDescription>Older unpaid balances that deserve faster follow-up.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto rounded-2xl border">
+            <table className="min-w-full text-sm">
+              <thead className="bg-muted/30 text-left text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2">Patient</th>
+                  <th className="px-3 py-2">Bucket</th>
+                  <th className="px-3 py-2">Debt</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.tables.debtWatchlist.length > 0 ? data.tables.debtWatchlist.map((row, index) => (
+                  <tr key={`${String(row.invoiceId ?? 'debt')}-${index}`} className="border-t">
+                    <td className="px-3 py-2">{String(row.patientName ?? '-')}</td>
+                    <td className="px-3 py-2">{String(row.agingBucket ?? '-')}</td>
+                    <td className="px-3 py-2">{formatCurrency(Number(row.debtAmount ?? 0), 'AFN')}</td>
+                  </tr>
+                )) : (
+                  <tr className="border-t">
+                    <td colSpan={3} className="px-3 py-6 text-center text-muted-foreground">No debt watchlist rows were found for the selected range.</td>
                   </tr>
                 )}
               </tbody>

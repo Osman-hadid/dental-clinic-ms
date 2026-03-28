@@ -10,6 +10,12 @@ final class UpdateVisitTreatmentRequest extends BaseFormRequest
 {
     protected array $booleanFields = [];
 
+    protected function prepareForValidation(): void
+    {
+        $this->merge($this->decodeJsonPayloadFields($this->all()));
+        parent::prepareForValidation();
+    }
+
     public function authorize(): bool
     {
         return true;
@@ -25,10 +31,17 @@ final class UpdateVisitTreatmentRequest extends BaseFormRequest
             'dentistId' => 'nullable|integer|exists:staff,id',
             'price' => 'required|string|max:255',
             'material' => 'nullable|string|max:255',
+            'imageModality' => 'nullable|string|in:xray,opg,cbct,intraoral_photo,scanner_export,other',
+            'imageSource' => 'nullable|string|in:upload,camera,device_import',
             'notes' => 'nullable|string|max:255',
+            'correctionReason' => 'nullable|string|max:500',
             'materialItems' => 'nullable|array',
             'materialItems.*.inventoryItemId' => 'required_with:materialItems|integer|exists:inventory_items,id',
             'materialItems.*.quantity' => 'required_with:materialItems|integer|min:1',
+            'treatmentImages' => 'nullable|array|max:12',
+            'treatmentImages.*' => 'file|image|mimes:jpg,jpeg,png,webp,bmp,tiff|max:10240',
+            'retainedTreatmentImageIds' => 'nullable|array',
+            'retainedTreatmentImageIds.*' => 'integer|min:1',
             'prescription' => 'nullable|array',
             'prescription.name' => 'nullable|string|max:160',
             'prescription.amount' => 'nullable|string|max:64',
@@ -44,5 +57,22 @@ final class UpdateVisitTreatmentRequest extends BaseFormRequest
             'updatedBy' => 'nullable|integer',
             'deletedBy' => 'nullable|integer',
         ];
+    }
+
+    private function decodeJsonPayloadFields(array $payload): array
+    {
+        foreach (['materialItems', 'prescription', 'retainedTreatmentImageIds'] as $key) {
+            $value = $payload[$key] ?? null;
+            if (!is_string($value) || trim($value) === '') {
+                continue;
+            }
+
+            $decoded = json_decode($value, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $payload[$key] = $decoded;
+            }
+        }
+
+        return $payload;
     }
 }

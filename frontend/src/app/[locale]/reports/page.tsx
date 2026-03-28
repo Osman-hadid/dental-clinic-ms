@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { Header } from '@/components/header';
 import { LoadingState } from '@/components/shared/loading-state';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -36,6 +37,23 @@ import { toast } from 'sonner';
 const client = new AxiosClient();
 type ReportFilterKey = 'dateRange' | 'dentist' | 'granularity' | 'patient' | 'paymentMethod' | 'search' | 'status' | 'treatment';
 type RangePreset = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom';
+type WorkflowAccessSummary = {
+  capabilities: {
+    canAccessAuditReports: boolean;
+    canAccessClinicalReports: boolean;
+    canAccessExecutiveReports: boolean;
+    canAccessFinancialReports: boolean;
+    canAccessFinancialSubreports: boolean;
+    canAccessInventoryReports: boolean;
+    canManageSnapshots: boolean;
+  };
+  requirements: Array<{ action: string; allowed: boolean; reason: string; requiredRight: string }>;
+  user: {
+    permissionCount: number;
+    rightLevel: string;
+    roles: string[];
+  };
+};
 
 const reportExperience: Record<
   ReportTab,
@@ -184,12 +202,23 @@ const ReportsPage = (): JSX.Element => {
   const [snapshots, setSnapshots] = useState<SnapshotRecord[]>([]);
   const [snapshotSchedule, setSnapshotSchedule] = useState<SnapshotScheduleResponse | null>(null);
   const [csvExportType, setCsvExportType] = useState<CsvExportType>('executive_summary');
+  const [workflowAccess, setWorkflowAccess] = useState<WorkflowAccessSummary | null>(null);
   const [isLoadingFilters, setIsLoadingFilters] = useState(false);
   const [isLoadingTab, setIsLoadingTab] = useState(false);
   const [isLoadingRangeSummary, setIsLoadingRangeSummary] = useState(false);
   const [isSavingSnapshot, setIsSavingSnapshot] = useState(false);
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
   const activeReport = reportExperience[activeTab];
+  const availableTabs = useMemo(() => {
+    const capabilities = workflowAccess?.capabilities;
+    return ([
+      capabilities?.canAccessExecutiveReports !== false ? 'executive' : null,
+      capabilities?.canAccessFinancialReports ? 'financial' : null,
+      capabilities?.canAccessClinicalReports !== false ? 'clinical' : null,
+      capabilities?.canAccessInventoryReports !== false ? 'inventory' : null,
+      capabilities?.canAccessAuditReports ? 'audit' : null,
+    ].filter(Boolean) as ReportTab[]);
+  }, [workflowAccess]);
 
   const reportParams = useMemo(() => buildReportParams(appliedFilters), [appliedFilters]);
   const draftReportParams = useMemo(() => buildReportParams(draftFilters), [draftFilters]);
@@ -233,12 +262,36 @@ const ReportsPage = (): JSX.Element => {
   }, [fetchFilterOptions]);
 
   useEffect(() => {
+    void client.get<WorkflowAccessSummary>('/api/v1/dental-management/workflow/access-summary')
+      .then((response) => {
+        if (response.success && response.data) {
+          setWorkflowAccess(response.data);
+        }
+      })
+      .catch(() => {
+        setWorkflowAccess(null);
+      });
+  }, []);
+
+  useEffect(() => {
     void fetchTab(activeTab);
   }, [activeTab, fetchTab, reportParams]);
 
   useEffect(() => {
+    if (availableTabs.length === 0) return;
+    if (!availableTabs.includes(activeTab)) {
+      setActiveTab(availableTabs[0]);
+    }
+  }, [activeTab, availableTabs]);
+
+  useEffect(() => {
+    if (!workflowAccess?.capabilities.canManageSnapshots) {
+      setSnapshots([]);
+      setSnapshotSchedule(null);
+      return;
+    }
     void Promise.all([fetchSnapshots(), fetchSnapshotSchedule()]);
-  }, [fetchSnapshotSchedule, fetchSnapshots]);
+  }, [fetchSnapshotSchedule, fetchSnapshots, workflowAccess]);
 
   useEffect(() => {
     if (!activeReport.exportOptions.some((option) => option.value === csvExportType)) {
@@ -247,6 +300,12 @@ const ReportsPage = (): JSX.Element => {
   }, [activeReport, csvExportType]);
 
   useEffect(() => {
+    if (workflowAccess && !workflowAccess.capabilities.canAccessFinancialReports) {
+      setRangeSummary(null);
+      setIsLoadingRangeSummary(false);
+      return;
+    }
+
     let isActive = true;
     const preset = rangePresets[summaryRange];
     const fallbackRange = createDefaultReportRange(preset.days ?? 30);
@@ -286,7 +345,7 @@ const ReportsPage = (): JSX.Element => {
     return () => {
       isActive = false;
     };
-  }, [summaryRange, summaryRangeEnd, summaryRangeStart]);
+  }, [summaryRange, summaryRangeEnd, summaryRangeStart, workflowAccess]);
 
   const applyFilters = (): void => {
     setAppliedFilters(draftFilters);
@@ -515,6 +574,10 @@ const ReportsPage = (): JSX.Element => {
   };
 
   const captureSnapshot = (): void => {
+    if (!workflowAccess?.capabilities.canManageSnapshots) {
+      toast.error('Approval access is required to manage report snapshots.');
+      return;
+    }
     setIsSavingSnapshot(true);
     void client
       .post('/api/v1/dental-management/reports/snapshots', {
@@ -536,6 +599,10 @@ const ReportsPage = (): JSX.Element => {
 
   const saveSnapshotSchedule = (): void => {
     if (!snapshotSchedule) return;
+    if (!workflowAccess?.capabilities.canManageSnapshots) {
+      toast.error('Approval access is required to manage report snapshots.');
+      return;
+    }
 
     setIsSavingSchedule(true);
     void client
@@ -646,7 +713,11 @@ const ReportsPage = (): JSX.Element => {
                   </p>
                 </div>
 
-                {isLoadingRangeSummary && !rangeSummary ? (
+                {!workflowAccess?.capabilities.canAccessFinancialReports && workflowAccess ? (
+                  <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+                    Financial summary widgets are hidden until a user has at least `review` access.
+                  </div>
+                ) : isLoadingRangeSummary && !rangeSummary ? (
                   <LoadingState compact title="Loading summary" description="Fetching totals for the selected range." />
                 ) : (
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -802,6 +873,12 @@ const ReportsPage = (): JSX.Element => {
                     <p className="text-sm font-semibold text-foreground">{activeReport.label}</p>
                     <p className="text-sm text-muted-foreground">{activeReport.description}</p>
                     <p className="text-xs text-muted-foreground">{activeReport.helperText}</p>
+                    {workflowAccess ? (
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <Badge variant="outline">Right: {workflowAccess.user.rightLevel}</Badge>
+                        {workflowAccess.user.roles.length > 0 ? <Badge variant="outline">Roles: {workflowAccess.user.roles.join(', ')}</Badge> : null}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="flex flex-col gap-0.5">
                     <FilterLabel>Download this report</FilterLabel>
@@ -818,18 +895,34 @@ const ReportsPage = (): JSX.Element => {
                   <Button type="button" variant="outline" onClick={applyFilters} disabled={isLoadingFilters || isLoadingTab}>
                     {isLoadingFilters || isLoadingTab ? 'Updating report...' : 'Update report'}
                   </Button>
-                  <p className="text-xs text-muted-foreground">Filters apply across Clinic Overview, Money and Collections, Clinical Care, and Stock and Supplies.</p>
+                  <p className="text-xs text-muted-foreground">Filters apply across the report tabs you are allowed to access.</p>
                 </div>
               </CardContent>
             </Card>
 
+            {workflowAccess ? (
+              <Card className="rounded-3xl border border-slate-200 bg-slate-50/70">
+                <CardContent className="flex flex-wrap items-start justify-between gap-3 p-4 text-sm">
+                  <div className="space-y-1">
+                    <p className="font-semibold text-foreground">Workflow restrictions</p>
+                    <p className="text-muted-foreground">Financial reports need `review` access. Audit reports, snapshot controls, and close-day style approvals need `approval` access.</p>
+                  </div>
+                  <div className="space-y-1 text-muted-foreground">
+                    {workflowAccess.requirements.slice(0, 3).map((item) => (
+                      <p key={item.action}>{item.action}: {item.allowed ? 'Allowed' : `Needs ${item.requiredRight}`}</p>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null}
+
             <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as ReportTab)} className="space-y-4">
               <TabsList className="w-full justify-start overflow-auto">
-                <TabsTrigger value="executive">{reportExperience.executive.label}</TabsTrigger>
-                <TabsTrigger value="financial">{reportExperience.financial.label}</TabsTrigger>
-                <TabsTrigger value="clinical">{reportExperience.clinical.label}</TabsTrigger>
-                <TabsTrigger value="inventory">{reportExperience.inventory.label}</TabsTrigger>
-                <TabsTrigger value="audit">{reportExperience.audit.label}</TabsTrigger>
+                {availableTabs.includes('executive') ? <TabsTrigger value="executive">{reportExperience.executive.label}</TabsTrigger> : null}
+                {availableTabs.includes('financial') ? <TabsTrigger value="financial">{reportExperience.financial.label}</TabsTrigger> : null}
+                {availableTabs.includes('clinical') ? <TabsTrigger value="clinical">{reportExperience.clinical.label}</TabsTrigger> : null}
+                {availableTabs.includes('inventory') ? <TabsTrigger value="inventory">{reportExperience.inventory.label}</TabsTrigger> : null}
+                {availableTabs.includes('audit') ? <TabsTrigger value="audit">{reportExperience.audit.label}</TabsTrigger> : null}
               </TabsList>
 
               <TabsContent value={activeTab}>

@@ -5,13 +5,32 @@ import { ClinicalData, pieColors } from '@/modules/dental-management/presentatio
 import { MetricCard } from '@/modules/dental-management/presentation/reports/report-dashboard-utils';
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
+const formatTimelineDate = (value: string): string => {
+  if (!value) return '-';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+
+  const hasTime = value.includes('T') || value.includes(':');
+
+  return new Intl.DateTimeFormat('en-US', {
+    dateStyle: 'medium',
+    ...(hasTime ? { timeStyle: 'short' } : {}),
+  }).format(parsed);
+};
+
 export const ClinicalReportPanel = ({ data }: { data: ClinicalData }): JSX.Element => (
   <div className="space-y-4">
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-8">
       <MetricCard label="Appointments booked" value={data.summary.appointments} />
       <MetricCard label="Visits completed" value={data.summary.visits} />
       <MetricCard label="Treatments done" value={data.summary.visitTreatments} />
+      <MetricCard label="Treatments corrected" value={data.summary.correctedTreatments} />
       <MetricCard label="Prescriptions given" value={data.summary.prescriptions} />
+      <MetricCard label="Waiting now" value={data.summary.waitingAppointments} />
+      <MetricCard label="In chair" value={data.summary.inChairAppointments} />
+      <MetricCard label="Late arrivals" value={data.summary.lateAppointments} />
+      <MetricCard label="Timeline events" value={data.summary.timelineEvents} />
+      <MetricCard label="Patients with activity" value={data.summary.timelinePatients} />
     </div>
 
     <div className="grid gap-4 xl:grid-cols-2">
@@ -106,7 +125,150 @@ export const ClinicalReportPanel = ({ data }: { data: ClinicalData }): JSX.Eleme
       </Card>
     </div>
 
+    <div className="grid gap-4 xl:grid-cols-3">
+      <Card className="rounded-3xl border">
+        <CardHeader>
+          <CardTitle>Queue snapshot</CardTitle>
+          <CardDescription>Review waiting-room progress, chair occupancy, and late arrivals inside the report period.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto rounded-2xl border">
+            <table className="min-w-full text-sm">
+              <thead className="bg-muted/30 text-left text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2">Patient</th>
+                  <th className="px-3 py-2">Dentist</th>
+                  <th className="px-3 py-2">Time</th>
+                  <th className="px-3 py-2">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.tables.queueSnapshot.length > 0 ? data.tables.queueSnapshot.map((row, index) => (
+                  <tr
+                    key={`${String(row.scheduledAt ?? 'queue')}-${String(row.patientName ?? 'patient')}-${index}`}
+                    className="border-t"
+                  >
+                    <td className="px-3 py-2">
+                      <div className="space-y-1">
+                        <p>{String(row.patientName ?? '-')}</p>
+                        <p className="text-xs text-muted-foreground">{String(row.appointmentTag ?? '-')}</p>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">{String(row.dentistName ?? '-')}</td>
+                    <td className="px-3 py-2">
+                      <div className="space-y-1">
+                        <p>{String(row.date ?? '-')}</p>
+                        <p className="text-xs text-muted-foreground">{String(row.timeRange ?? '-')}</p>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="space-y-1">
+                        <p>{String(row.status ?? '-')}</p>
+                        {Boolean(row.late) ? <p className="text-xs text-amber-700">Late arrival</p> : null}
+                      </div>
+                    </td>
+                  </tr>
+                )) : (
+                  <tr className="border-t">
+                    <td colSpan={4} className="px-3 py-6 text-center text-muted-foreground">No queue activity was found for the selected filters.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-3xl border xl:col-span-2">
+        <CardHeader>
+          <CardTitle>Recent patient journey</CardTitle>
+          <CardDescription>Review the latest appointments, visits, treatments, invoices, payments, and tasks in one report table.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto rounded-2xl border">
+            <table className="min-w-full text-sm">
+              <thead className="bg-muted/30 text-left text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2">Date</th>
+                  <th className="px-3 py-2">Patient</th>
+                  <th className="px-3 py-2">Event</th>
+                  <th className="px-3 py-2">Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.tables.patientTimeline.length > 0 ? data.tables.patientTimeline.map((row, index) => (
+                  <tr
+                    key={`${String(row.occurredAt ?? 'timeline')}-${String(row.patientName ?? 'patient')}-${String(row.eventType ?? index)}`}
+                    className="border-t"
+                  >
+                    <td className="px-3 py-2">{formatTimelineDate(String(row.occurredAt ?? '-'))}</td>
+                    <td className="px-3 py-2">{String(row.patientName ?? '-')}</td>
+                    <td className="px-3 py-2">{String(row.eventLabel ?? row.eventType ?? '-')}</td>
+                    <td className="px-3 py-2">{String(row.details ?? '-')}</td>
+                  </tr>
+                )) : (
+                  <tr className="border-t">
+                    <td colSpan={4} className="px-3 py-6 text-center text-muted-foreground">No patient journey events were found for the selected filters.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+
     <div className="grid gap-4 xl:grid-cols-2">
+      <Card className="rounded-3xl border">
+        <CardHeader>
+          <CardTitle>Treatment correction history</CardTitle>
+          <CardDescription>Recent treatment edits with reason, editor, and the fields that changed.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto rounded-2xl border">
+            <table className="min-w-full text-sm">
+              <thead className="bg-muted/30 text-left text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2">When</th>
+                  <th className="px-3 py-2">Patient</th>
+                  <th className="px-3 py-2">Treatment</th>
+                  <th className="px-3 py-2">Reason</th>
+                  <th className="px-3 py-2">Changed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.tables.treatmentCorrections.length > 0 ? data.tables.treatmentCorrections.map((row, index) => (
+                  <tr
+                    key={`${String(row.changedAt ?? 'correction')}-${String(row.treatmentName ?? 'treatment')}-${index}`}
+                    className="border-t"
+                  >
+                    <td className="px-3 py-2">
+                      <div className="space-y-1">
+                        <p>{formatTimelineDate(String(row.changedAt ?? '-'))}</p>
+                        <p className="text-xs text-muted-foreground">{String(row.changedBy ?? '-')}</p>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">{String(row.patientName ?? '-')}</td>
+                    <td className="px-3 py-2">
+                      <div className="space-y-1">
+                        <p>{String(row.treatmentName ?? '-')}</p>
+                        <p className="text-xs text-muted-foreground">{String(row.visitLabel ?? '-')}</p>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">{String(row.correctionReason ?? '-')}</td>
+                    <td className="px-3 py-2">{String(row.changeSummary ?? '-')}</td>
+                  </tr>
+                )) : (
+                  <tr className="border-t">
+                    <td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">No treatment corrections were found for the selected filters.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card className="rounded-3xl border">
         <CardHeader>
           <CardTitle>Recent prescriptions</CardTitle>

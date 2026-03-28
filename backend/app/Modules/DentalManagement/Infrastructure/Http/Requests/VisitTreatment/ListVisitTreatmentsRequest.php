@@ -5,10 +5,32 @@ declare(strict_types=1);
 namespace App\Modules\DentalManagement\Infrastructure\Http\Requests\VisitTreatment;
 
 use App\Modules\Common\Infrastructure\Http\Requests\BaseListRequest;
+use Illuminate\Support\Facades\Schema;
 use Spatie\QueryBuilder\AllowedFilter;
 
 final class ListVisitTreatmentsRequest extends BaseListRequest
 {
+    protected function prepareForValidation(): void
+    {
+        parent::prepareForValidation();
+
+        if (Schema::hasTable('visit_treatment_images')) {
+            return;
+        }
+
+        $includes = $this->input('include', []);
+        if (!is_array($includes)) {
+            return;
+        }
+
+        $filteredIncludes = array_values(array_filter(
+            $includes,
+            static fn (mixed $include): bool => $include !== 'treatmentImages'
+        ));
+
+        $this->merge(['include' => $filteredIncludes]);
+    }
+
     protected static function sortableColumns(): array
     {
         return [
@@ -29,6 +51,9 @@ final class ListVisitTreatmentsRequest extends BaseListRequest
             'prescription.items',
             'materialItems',
             'materialItems.inventoryItem',
+            'treatmentImages',
+            'activityLogs',
+            'activityLogs.causer',
         ];
     }
 
@@ -83,6 +108,8 @@ final class ListVisitTreatmentsRequest extends BaseListRequest
             'dentistId' => 'dentist_id',
             'price' => 'price',
             'material' => 'material',
+            'imageModality' => 'image_modality',
+            'imageSource' => 'image_source',
             'notes' => 'notes',
             'createdBy' => 'created_by',
             'updatedBy' => 'updated_by',
