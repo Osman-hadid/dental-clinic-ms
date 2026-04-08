@@ -9,6 +9,9 @@
       "update": "تازه لیدنه"
     },
     "form": {
+      "id": {
+        "label": "ID"
+      },
       "appointmentId": {
         "label": "د ملاقات پیژندنه",
         "validation": {

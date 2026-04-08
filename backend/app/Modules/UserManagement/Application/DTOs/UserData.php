@@ -38,7 +38,22 @@ final readonly class UserData
 
     public static function fromArray(array $data): self
     {
-        $ids = self::castIds(['reportToId', 'mainOrganizationId', 'createdBy', 'updatedBy', 'roleIds.*', 'permissionIds.*'], $data);
+        $ids = self::castIds(
+            [
+                'reportToId',
+                'mainOrganizationId',
+                'createdBy',
+                'updatedBy',
+                'roleIds.*',
+                'permissionIds.*',
+                'roles.*',
+                'permissions.*',
+            ],
+            $data
+        );
+
+        $roleIds = $ids['roleIds'] ?? $ids['roles'] ?? $data['roleIds'] ?? $data['roles'] ?? [];
+        $permissionIds = $ids['permissionIds'] ?? $ids['permissions'] ?? $data['permissionIds'] ?? $data['permissions'] ?? [];
 
         return new self(
             firstName: $data['firstName'] ?? '',
@@ -57,8 +72,8 @@ final readonly class UserData
             userFormPath: $data['userFormPath'] ?? null,
             createdBy: $ids['createdBy'] ?? 0,
             updatedBy: $ids['updatedBy'] ?? 0,
-            roleIds: $data['roleIds'] ?? [],
-            permissionIds: $data['permissionIds'] ?? [],
+            roleIds: $roleIds,
+            permissionIds: $permissionIds,
             locale: $data['locale'] ?? 'en',
             rights: $data['rights'] ?? 'review',
             notifications: $data['notifications'] ?? true,

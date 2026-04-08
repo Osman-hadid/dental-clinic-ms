@@ -10,6 +10,7 @@ use App\Modules\DentalManagement\Domain\Entities\FinancialSetting;
 final class CurrencyService
 {
     private const DEFAULT_AFN_PER_USD = 1.0;
+    private const SUPPORTED_CURRENCIES = ['AFN', 'USD'];
 
     public function getDefaultAfnPerUsd(): float
     {
@@ -44,22 +45,52 @@ final class CurrencyService
     public function normalizeCurrency(string $currency, ?float $exchangeRate = null): array
     {
         $normalizedCurrency = strtoupper(trim($currency));
-        if ($normalizedCurrency !== 'AFN') {
+        if ($normalizedCurrency === '') {
+            $normalizedCurrency = 'AFN';
+        }
+
+        if (!\in_array($normalizedCurrency, self::SUPPORTED_CURRENCIES, true)) {
             throw new ApiException(
                 errorCode: 'UNSUPPORTED_CURRENCY',
-                message: 'Only AFN is supported.',
+                message: 'Only AFN and USD are supported.',
                 httpCode: 422,
             );
         }
 
+        if ($normalizedCurrency === 'AFN') {
+            return [
+                'currency' => 'AFN',
+                'exchangeRate' => 1.0,
+            ];
+        }
+
         return [
-            'currency' => 'AFN',
-            'exchangeRate' => 1.0,
+            'currency' => 'USD',
+            'exchangeRate' => $this->normalizeExchangeRate($exchangeRate ?? $this->getDefaultAfnPerUsd()),
         ];
     }
 
     public function toUsd(float $amountInput, string $currency, float $exchangeRate): float
     {
+        // Legacy method name kept for compatibility. This returns the AFN base amount.
+        if (strtoupper(trim($currency)) === 'USD') {
+            return round($amountInput * $this->normalizeExchangeRate($exchangeRate), 2);
+        }
+
         return round($amountInput, 2);
+    }
+
+    private function normalizeExchangeRate(float $value): float
+    {
+        $rate = round($value, 6);
+        if ($rate <= 0) {
+            throw new ApiException(
+                errorCode: 'INVALID_EXCHANGE_RATE',
+                message: 'Exchange rate must be greater than zero.',
+                httpCode: 422,
+            );
+        }
+
+        return $rate;
     }
 }

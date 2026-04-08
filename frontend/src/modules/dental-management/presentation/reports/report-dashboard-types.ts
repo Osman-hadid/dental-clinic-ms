@@ -1,3 +1,5 @@
+import type { CurrencyCode } from '@/lib/currency-utils';
+
 export type ReportTab = 'audit' | 'clinical' | 'executive' | 'financial' | 'inventory';
 export type CsvExportType =
   | 'audit_log'
@@ -27,6 +29,19 @@ export type ExecutiveData = {
   bankBalance: number;
   cashInSafe: number;
   chairUtilizationRate: number;
+  currencySections: Record<CurrencyCode, {
+    bankBalance: number;
+    billed: number;
+    cashInSafe: number;
+    debt: number;
+    expenses: number;
+    paid: number;
+    profitLoss: number;
+    safeOut: number;
+    salaryPaid: number;
+    thirdCompanyPaid: number;
+    thirdCompanyUnpaid: number;
+  }>;
   dentistProductivity: Array<{ dentist: string; revenue: number; visits: number }>;
   expenseSummary: {
     byCategory: Array<{ amount: number; category: string }>;
@@ -56,6 +71,21 @@ export type FinancialData = {
     billed: number;
     closeCount: number;
     collectionRate: number;
+    currencySections: Record<CurrencyCode, {
+      billed: number;
+      expenses: number;
+      net: number;
+      outstanding: number;
+      paid: number;
+      safeBalance: number;
+      safeIn: number;
+      safeOut: number;
+      salaryPaid: number;
+      shareholderContribution: number;
+      shareholderDistribution: number;
+      thirdCompanyPaid: number;
+      thirdCompanyUnpaid: number;
+    }>;
     discrepancyTotal: number;
     expenses: number;
     latestCloseDifference: number;

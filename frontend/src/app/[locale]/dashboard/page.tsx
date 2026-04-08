@@ -68,15 +68,17 @@ type DashboardOverviewResponse = {
   };
   safe: {
     balance: number;
+    currencySections?: Record<'AFN' | 'USD', { balance: number; totalIn: number; totalOut: number }>;
     totalIn: number;
     totalOut: number;
     afnPerUsd: number;
-    topPickups: Array<{ name: string; amount: number }>;
+    topPickups: Array<{ name: string; amount: number; currency: 'AFN' | 'USD' }>;
     recentTransactions: Array<{
       id: string;
       entryType: string;
       direction: string;
       amount: number;
+      currency: 'AFN' | 'USD';
       transactionDate: string;
       pickedByStaffId: string;
       pickedByStaffName: string;

@@ -166,7 +166,15 @@ const emptyAdjustmentForm = (): AdjustmentFormState => ({
 const extractApiErrorMessage = (error: unknown, fallback: string): string => {
   const payload = (error as { response?: { data?: { error?: { code?: string; details?: Record<string, unknown>; message?: string } } } })?.response?.data?.error;
   if (payload?.code === 'SAFE_BALANCE_INSUFFICIENT') {
-    return `Safe balance is not enough. Current: ${formatMoney(Number(payload?.details?.currentBalance ?? 0))}. Requested: ${formatMoney(Number(payload?.details?.requestedAmount ?? 0))}.`;
+    const currency = String(payload?.details?.currency ?? 'AFN') === 'USD' ? 'USD' : 'AFN';
+    const formatter = (value: number): string =>
+      new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency,
+        minimumFractionDigits: currency === 'USD' ? 2 : 2,
+        maximumFractionDigits: currency === 'USD' ? 2 : 2,
+      }).format(value);
+    return `Safe balance is not enough. Current: ${formatter(Number(payload?.details?.currentBalance ?? 0))}. Requested: ${formatter(Number(payload?.details?.requestedAmount ?? 0))}.`;
   }
   return payload?.message || fallback;
 };

@@ -8,7 +8,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { formatCurrency, parseMoney } from '@/lib/currency-utils';
+import {
+  DEFAULT_AFN_PER_USD,
+  type CurrencyCode,
+  formatCurrency,
+  getExchangeRate,
+  parseMoney,
+} from '@/lib/currency-utils';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import { fetchAllRows } from '@/modules/common/infrastructure/api/fetch-all-rows';
 import { PencilLine, Trash2 } from 'lucide-react';
@@ -22,15 +28,19 @@ type ShareholderRow = {
   distributedAmount: number;
   email: string;
   fullName: string;
+  initialCapital: number;
   id: string;
   initialCapitalInput: number;
   joinedDate: string;
   notes: string;
   ownershipPercentage: number;
   status: 'active' | 'inactive';
+  currency: CurrencyCode;
+  exchangeRate: number;
 };
 
 type TransactionRow = {
+  amount: number;
   amountInput: number;
   id: string;
   notes: string;
@@ -38,7 +48,31 @@ type TransactionRow = {
   shareholderId: string;
   transactionDate: string;
   transactionType: 'contribution' | 'distribution';
+  currency: CurrencyCode;
+  exchangeRate: number;
 };
+
+type ShareholderMoneySections = Record<CurrencyCode, {
+  balanceAmount: number;
+  contributedAmount: number;
+  distributedAmount: number;
+  initialCapital: number;
+}>;
+
+const emptyMoneySections = (): ShareholderMoneySections => ({
+  AFN: {
+    balanceAmount: 0,
+    contributedAmount: 0,
+    distributedAmount: 0,
+    initialCapital: 0,
+  },
+  USD: {
+    balanceAmount: 0,
+    contributedAmount: 0,
+    distributedAmount: 0,
+    initialCapital: 0,
+  },
+});
 
 const client = new AxiosClient();
 
@@ -68,9 +102,10 @@ const extractApiErrorMessage = (error: unknown, fallback: string): string => {
   )?.response?.data?.error;
   if (!payload) return fallback;
   if (payload.code === 'SAFE_BALANCE_INSUFFICIENT') {
+    const currency = String(payload.details?.currency ?? 'AFN') === 'USD' ? 'USD' : 'AFN';
     const currentBalance = Number(payload.details?.currentBalance ?? 0);
     const requestedAmount = Number(payload.details?.requestedAmount ?? 0);
-    return `Safe balance is not enough. Current: ${formatCurrency(currentBalance, 'AFN')}. Requested: ${formatCurrency(requestedAmount, 'AFN')}.`;
+    return `Safe balance is not enough. Current: ${formatCurrency(currentBalance, currency)}. Requested: ${formatCurrency(requestedAmount, currency)}.`;
   }
   return payload.message || fallback;
 };
@@ -103,13 +138,26 @@ export default function ShareholdersPage(): JSX.Element {
   const [joinedDate, setJoinedDate] = useState('');
   const [status, setStatus] = useState<'active' | 'inactive'>('active');
   const [shareholderNotes, setShareholderNotes] = useState('');
+  const [shareholderCurrency, setShareholderCurrency] = useState<CurrencyCode>('AFN');
+  const [shareholderExchangeRate, setShareholderExchangeRate] = useState('1');
   const [transactionType, setTransactionType] = useState<'contribution' | 'distribution'>(
     'contribution'
   );
   const [transactionAmount, setTransactionAmount] = useState('');
   const [transactionDate, setTransactionDate] = useState(toInputDate(new Date()));
   const [transactionNotes, setTransactionNotes] = useState('');
+  const [transactionCurrency, setTransactionCurrency] = useState<CurrencyCode>('AFN');
+  const [transactionExchangeRate, setTransactionExchangeRate] = useState('1');
+  const [defaultExchangeRate, setDefaultExchangeRate] = useState(DEFAULT_AFN_PER_USD);
   const [showAllTransactions, setShowAllTransactions] = useState(false);
+
+  useEffect(() => {
+    void getExchangeRate(client)
+      .then((rate) => setDefaultExchangeRate(rate))
+      .catch(() => {
+        setDefaultExchangeRate(DEFAULT_AFN_PER_USD);
+      });
+  }, []);
 
   const fetchData = useCallback(async (): Promise<void> => {
     setIsLoading(true);
@@ -134,7 +182,10 @@ export default function ShareholdersPage(): JSX.Element {
         distributedAmount: parseAmount(row.distributedAmount ?? row.distributed_amount),
         email: asText(row.email),
         fullName: asText(row.fullName ?? row.full_name),
+        currency: (asText(row.currency).toUpperCase() === 'USD' ? 'USD' : 'AFN') as CurrencyCode,
+        exchangeRate: parseAmount(row.exchangeRate ?? row.exchange_rate) || DEFAULT_AFN_PER_USD,
         id: asText(row.id),
+        initialCapital: parseAmount(row.initialCapital ?? row.initial_capital),
         initialCapitalInput: parseAmount(row.initialCapitalInput ?? row.initial_capital_input),
         joinedDate: asText(row.joinedDate ?? row.joined_date),
         notes: asText(row.notes),
@@ -144,7 +195,10 @@ export default function ShareholdersPage(): JSX.Element {
           | 'inactive',
       }));
       const transactionRows = transactionItems.map((row) => ({
+        amount: parseAmount(row.amount),
         amountInput: parseAmount(row.amountInput ?? row.amount_input ?? row.amount),
+        currency: (asText(row.currency).toUpperCase() === 'USD' ? 'USD' : 'AFN') as CurrencyCode,
+        exchangeRate: parseAmount(row.exchangeRate ?? row.exchange_rate) || DEFAULT_AFN_PER_USD,
         id: asText(row.id),
         notes: asText(row.notes),
         safeTransactionId: asText(row.safeTransactionId ?? row.safe_transaction_id),
@@ -206,9 +260,72 @@ export default function ShareholdersPage(): JSX.Element {
       totalBalance: shareholders.reduce((sum, row) => sum + row.balanceAmount, 0),
       totalContributed: shareholders.reduce((sum, row) => sum + row.contributedAmount, 0),
       totalDistributed: shareholders.reduce((sum, row) => sum + row.distributedAmount, 0),
-      totalInitial: shareholders.reduce((sum, row) => sum + row.initialCapitalInput, 0),
+      totalInitial: shareholders.reduce((sum, row) => sum + row.initialCapital, 0),
     }),
     [shareholders]
+  );
+
+  const shareholderMoneySectionsById = useMemo(() => {
+    const map = new Map<string, ShareholderMoneySections>();
+
+    shareholders.forEach((row) => {
+      const sections = emptyMoneySections();
+      sections[row.currency].initialCapital = row.initialCapitalInput;
+      sections[row.currency].balanceAmount = row.initialCapitalInput;
+      map.set(row.id, sections);
+    });
+
+    transactions.forEach((row) => {
+      const sections = map.get(row.shareholderId) ?? emptyMoneySections();
+      if (!map.has(row.shareholderId)) {
+        map.set(row.shareholderId, sections);
+      }
+
+      if (row.transactionType === 'distribution') {
+        sections[row.currency].distributedAmount += row.amountInput;
+        sections[row.currency].balanceAmount -= row.amountInput;
+      } else {
+        sections[row.currency].contributedAmount += row.amountInput;
+        sections[row.currency].balanceAmount += row.amountInput;
+      }
+    });
+
+    return map;
+  }, [shareholders, transactions]);
+
+  const currencySummary = useMemo(() => {
+    const totals = emptyMoneySections();
+
+    shareholders.forEach((row) => {
+      totals[row.currency].initialCapital += row.initialCapitalInput;
+      totals[row.currency].balanceAmount += row.initialCapitalInput;
+    });
+
+    transactions.forEach((row) => {
+      if (row.transactionType === 'distribution') {
+        totals[row.currency].distributedAmount += row.amountInput;
+        totals[row.currency].balanceAmount -= row.amountInput;
+      } else {
+        totals[row.currency].contributedAmount += row.amountInput;
+        totals[row.currency].balanceAmount += row.amountInput;
+      }
+    });
+
+    return totals;
+  }, [shareholders, transactions]);
+
+  const renderOriginalMoney = (amountInput: number, currency: CurrencyCode, amountAfn: number): JSX.Element => (
+    <div>{formatCurrency(amountInput, currency)}</div>
+  );
+
+  const renderCurrencyPair = (
+    sections: ShareholderMoneySections,
+    field: keyof ShareholderMoneySections['AFN']
+  ): JSX.Element => (
+    <div className="space-y-1 text-xs">
+      <div className="font-medium text-foreground">{formatCurrency(sections.AFN[field], 'AFN')}</div>
+      <div className="font-medium text-foreground">{formatCurrency(sections.USD[field], 'USD')}</div>
+    </div>
   );
 
   const resetShareholderForm = (): void => {
@@ -222,6 +339,8 @@ export default function ShareholdersPage(): JSX.Element {
     setJoinedDate('');
     setStatus('active');
     setShareholderNotes('');
+    setShareholderCurrency('AFN');
+    setShareholderExchangeRate('1');
   };
 
   const resetTransactionForm = (): void => {
@@ -230,7 +349,16 @@ export default function ShareholdersPage(): JSX.Element {
     setTransactionAmount('');
     setTransactionDate(toInputDate(new Date()));
     setTransactionNotes('');
+    setTransactionCurrency('AFN');
+    setTransactionExchangeRate('1');
   };
+
+  const shareholderResolvedExchangeRate = shareholderCurrency === 'USD'
+    ? Math.max(parseAmount(shareholderExchangeRate) || defaultExchangeRate, DEFAULT_AFN_PER_USD)
+    : 1;
+  const transactionResolvedExchangeRate = transactionCurrency === 'USD'
+    ? Math.max(parseAmount(transactionExchangeRate) || defaultExchangeRate, DEFAULT_AFN_PER_USD)
+    : 1;
 
   const submitShareholder = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
@@ -245,9 +373,9 @@ export default function ShareholdersPage(): JSX.Element {
     const payload = {
       address: address.trim() || undefined,
       contactNumber: contactNumber.trim() || undefined,
-      currency: 'AFN',
+      currency: shareholderCurrency,
       email: email.trim() || undefined,
-      exchangeRate: 1,
+      exchangeRate: shareholderResolvedExchangeRate,
       fullName: fullName.trim(),
       initialCapital: parsedCapital,
       joinedDate: joinedDate || undefined,
@@ -281,8 +409,8 @@ export default function ShareholdersPage(): JSX.Element {
     setIsSavingTransaction(true);
     const payload = {
       amount: parsedAmount,
-      currency: 'AFN',
-      exchangeRate: 1,
+      currency: transactionCurrency,
+      exchangeRate: transactionResolvedExchangeRate,
       notes: transactionNotes.trim() || undefined,
       shareholderId: Number(selectedShareholderId),
       transactionDate,
@@ -322,6 +450,10 @@ export default function ShareholdersPage(): JSX.Element {
     setJoinedDate(row.joinedDate);
     setStatus(row.status);
     setShareholderNotes(row.notes);
+    setShareholderCurrency(row.currency);
+    setShareholderExchangeRate(
+      String(row.currency === 'USD' ? row.exchangeRate : 1)
+    );
   };
 
   const startEditTransaction = (row: TransactionRow): void => {
@@ -331,6 +463,10 @@ export default function ShareholdersPage(): JSX.Element {
     setTransactionAmount(String(row.amountInput));
     setTransactionDate(row.transactionDate);
     setTransactionNotes(row.notes);
+    setTransactionCurrency(row.currency);
+    setTransactionExchangeRate(
+      String(row.currency === 'USD' ? row.exchangeRate : 1)
+    );
   };
 
   const removeShareholder = (id: string): void => {
@@ -374,42 +510,67 @@ export default function ShareholdersPage(): JSX.Element {
               <CardHeader className="pb-2">
                 <CardTitle>Shareholder Summary</CardTitle>
               </CardHeader>
-              <CardContent className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-                <div className="rounded-lg border bg-muted/20 p-3">
-                  <p className="text-xs text-muted-foreground">Shareholders</p>
-                  <p className="text-lg font-semibold">{summary.total}</p>
-                  <p className="text-xs text-muted-foreground">Active: {summary.active}</p>
-                </div>
-                <div className="rounded-lg border bg-muted/20 p-3">
-                  <p className="text-xs text-muted-foreground">Ownership</p>
-                  <p className="text-lg font-semibold">{summary.ownership.toFixed(2)}%</p>
-                  <Badge variant={summary.ownership > 100 ? 'destructive' : 'secondary'}>
-                    {summary.ownership > 100 ? 'Over 100%' : 'OK'}
-                  </Badge>
-                </div>
-                <div className="rounded-lg border bg-muted/20 p-3">
-                  <p className="text-xs text-muted-foreground">Initial Capital</p>
-                  <p className="text-lg font-semibold">
-                    {formatCurrency(summary.totalInitial, 'AFN')}
-                  </p>
-                </div>
-                <div className="rounded-lg border bg-emerald-100/70 p-3 text-emerald-900">
-                  <p className="text-xs">Contributed</p>
-                  <p className="text-lg font-semibold">
-                    {formatCurrency(summary.totalContributed, 'AFN')}
-                  </p>
-                </div>
-                <div className="rounded-lg border bg-rose-100/70 p-3 text-rose-900">
-                  <p className="text-xs">Distributed</p>
-                  <p className="text-lg font-semibold">
-                    {formatCurrency(summary.totalDistributed, 'AFN')}
-                  </p>
-                </div>
-                <div className="rounded-lg border bg-indigo-100/70 p-3 text-indigo-900">
-                  <p className="text-xs">Net Position</p>
-                  <p className="text-lg font-semibold">
-                    {formatCurrency(summary.totalBalance, 'AFN')}
-                  </p>
+              <CardContent className="grid gap-3 xl:grid-cols-[1fr_1fr_1.1fr]">
+                {(['AFN', 'USD'] as CurrencyCode[]).map((currency) => (
+                  <div key={currency} className="rounded-lg border bg-muted/20 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">{currency} Summary</p>
+                    <div className="mt-3 grid gap-3">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Initial Capital</p>
+                        <p className="text-lg font-semibold">{formatCurrency(currencySummary[currency].initialCapital, currency)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Contributed</p>
+                        <p className="text-lg font-semibold text-emerald-700">{formatCurrency(currencySummary[currency].contributedAmount, currency)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Distributed</p>
+                        <p className="text-lg font-semibold text-rose-700">{formatCurrency(currencySummary[currency].distributedAmount, currency)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Net Position</p>
+                        <p className="text-lg font-semibold text-indigo-700">{formatCurrency(currencySummary[currency].balanceAmount, currency)}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <p className="text-xs text-muted-foreground">Shareholders</p>
+                    <p className="text-lg font-semibold">{summary.total}</p>
+                    <p className="text-xs text-muted-foreground">Active: {summary.active}</p>
+                  </div>
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <p className="text-xs text-muted-foreground">Ownership</p>
+                    <p className="text-lg font-semibold">{summary.ownership.toFixed(2)}%</p>
+                    <Badge variant={summary.ownership > 100 ? 'destructive' : 'secondary'}>
+                      {summary.ownership > 100 ? 'Over 100%' : 'OK'}
+                    </Badge>
+                  </div>
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <p className="text-xs text-muted-foreground">AFN Base Initial Capital</p>
+                    <p className="text-lg font-semibold">
+                      {formatCurrency(summary.totalInitial, 'AFN')}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border bg-emerald-100/70 p-3 text-emerald-900">
+                    <p className="text-xs">AFN Base Contributed</p>
+                    <p className="text-lg font-semibold">
+                      {formatCurrency(summary.totalContributed, 'AFN')}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border bg-rose-100/70 p-3 text-rose-900">
+                    <p className="text-xs">AFN Base Distributed</p>
+                    <p className="text-lg font-semibold">
+                      {formatCurrency(summary.totalDistributed, 'AFN')}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border bg-indigo-100/70 p-3 text-indigo-900">
+                    <p className="text-xs">AFN Base Net Position</p>
+                    <p className="text-lg font-semibold">
+                      {formatCurrency(summary.totalBalance, 'AFN')}
+                    </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -500,6 +661,40 @@ export default function ShareholdersPage(): JSX.Element {
                         </select>
                       </div>
                     </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="grid gap-1.5">
+                        <Label>Currency</Label>
+                        <select
+                          className="h-9 rounded-md border bg-background px-3 text-sm"
+                          value={shareholderCurrency}
+                          onChange={(event) => {
+                            const nextCurrency = event.target.value as CurrencyCode;
+                            setShareholderCurrency(nextCurrency);
+                            setShareholderExchangeRate(
+                              nextCurrency === 'USD' ? String(defaultExchangeRate) : '1'
+                            );
+                          }}
+                        >
+                          <option value="AFN">AFN</option>
+                          <option value="USD">USD</option>
+                        </select>
+                      </div>
+                      <div className="grid gap-1.5">
+                        <Label>Exchange Rate</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={shareholderExchangeRate}
+                          onChange={(event) => setShareholderExchangeRate(event.target.value)}
+                          disabled={shareholderCurrency === 'AFN'}
+                          placeholder="AFN per 1 USD"
+                        />
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-dashed bg-slate-50/80 p-3 text-xs text-muted-foreground">
+                      This shareholder record is tracked only inside the selected currency section.
+                    </div>
                     <div className="grid gap-1.5">
                       <Label>Notes</Label>
                       <textarea
@@ -587,6 +782,40 @@ export default function ShareholdersPage(): JSX.Element {
                         required
                       />
                     </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="grid gap-1.5">
+                        <Label>Currency</Label>
+                        <select
+                          className="h-9 rounded-md border bg-background px-3 text-sm"
+                          value={transactionCurrency}
+                          onChange={(event) => {
+                            const nextCurrency = event.target.value as CurrencyCode;
+                            setTransactionCurrency(nextCurrency);
+                            setTransactionExchangeRate(
+                              nextCurrency === 'USD' ? String(defaultExchangeRate) : '1'
+                            );
+                          }}
+                        >
+                          <option value="AFN">AFN</option>
+                          <option value="USD">USD</option>
+                        </select>
+                      </div>
+                      <div className="grid gap-1.5">
+                        <Label>Exchange Rate</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={transactionExchangeRate}
+                          onChange={(event) => setTransactionExchangeRate(event.target.value)}
+                          disabled={transactionCurrency === 'AFN'}
+                          placeholder="AFN per 1 USD"
+                        />
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-dashed bg-slate-50/80 p-3 text-xs text-muted-foreground">
+                      This transaction affects only the selected currency section.
+                    </div>
                     <div className="grid gap-1.5">
                       <Label>Notes</Label>
                       <textarea
@@ -663,16 +892,16 @@ export default function ShareholdersPage(): JSX.Element {
                             </td>
                             <td className="px-3 py-2">{row.ownershipPercentage.toFixed(2)}%</td>
                             <td className="px-3 py-2">
-                              {formatCurrency(row.initialCapitalInput, 'AFN')}
+                              {renderOriginalMoney(row.initialCapitalInput, row.currency, row.initialCapital)}
                             </td>
                             <td className="px-3 py-2 text-emerald-700">
-                              {formatCurrency(row.contributedAmount, 'AFN')}
+                              {renderCurrencyPair(shareholderMoneySectionsById.get(row.id) ?? emptyMoneySections(), 'contributedAmount')}
                             </td>
                             <td className="px-3 py-2 text-rose-700">
-                              {formatCurrency(row.distributedAmount, 'AFN')}
+                              {renderCurrencyPair(shareholderMoneySectionsById.get(row.id) ?? emptyMoneySections(), 'distributedAmount')}
                             </td>
                             <td className="px-3 py-2 font-semibold">
-                              {formatCurrency(row.balanceAmount, 'AFN')}
+                              {renderCurrencyPair(shareholderMoneySectionsById.get(row.id) ?? emptyMoneySections(), 'balanceAmount')}
                             </td>
                             <td className="px-3 py-2">
                               <Badge variant={row.status === 'active' ? 'secondary' : 'outline'}>
@@ -779,7 +1008,7 @@ export default function ShareholdersPage(): JSX.Element {
                             <td
                               className={`px-3 py-2 font-semibold ${row.transactionType === 'contribution' ? 'text-emerald-700' : 'text-rose-700'}`}
                             >
-                              {formatCurrency(row.amountInput, 'AFN')}
+                              {renderOriginalMoney(row.amountInput, row.currency, row.amount)}
                             </td>
                             <td className="px-3 py-2">{row.safeTransactionId || '-'}</td>
                             <td className="px-3 py-2">{row.notes || '-'}</td>
@@ -812,8 +1041,9 @@ export default function ShareholdersPage(): JSX.Element {
                 {!showAllTransactions && selectedShareholder ? (
                   <p className="mt-3 text-xs text-muted-foreground">
                     Selected: {selectedShareholder.fullName} | Joined:{' '}
-                    {formatDate(selectedShareholder.joinedDate)} | Balance:{' '}
-                    {formatCurrency(selectedShareholder.balanceAmount, 'AFN')}
+                    {formatDate(selectedShareholder.joinedDate)} | Original balance:{' '}
+                    {formatCurrency((shareholderMoneySectionsById.get(selectedShareholder.id) ?? emptyMoneySections()).AFN.balanceAmount, 'AFN')} / {' '}
+                    {formatCurrency((shareholderMoneySectionsById.get(selectedShareholder.id) ?? emptyMoneySections()).USD.balanceAmount, 'USD')}
                   </p>
                 ) : null}
               </CardContent>

@@ -55,8 +55,12 @@ final class StoreUserRequest extends BaseFormRequest
             'createdBy' => self::NULLABLE_INTEGER,
             'roleIds' => 'array',
             'roleIds.*' => 'integer|exists:roles,id',
+            'roles' => 'array',
+            'roles.*' => 'integer|exists:roles,id',
             'permissionIds' => 'array',
             'permissionIds.*' => 'integer|exists:permissions,id',
+            'permissions' => 'array',
+            'permissions.*' => 'integer|exists:permissions,id',
         ];
     }
 }

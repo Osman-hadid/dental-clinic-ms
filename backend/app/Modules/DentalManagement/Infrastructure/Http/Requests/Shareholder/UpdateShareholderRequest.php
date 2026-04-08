@@ -24,7 +24,7 @@ final class UpdateShareholderRequest extends BaseFormRequest
             'address' => 'nullable|string|max:255',
             'ownershipPercentage' => 'required|numeric|min:0|max:100',
             'initialCapital' => 'required|numeric|min:0',
-            'currency' => 'nullable|string|in:AFN',
+            'currency' => 'nullable|string|in:AFN,USD',
             'exchangeRate' => 'nullable|numeric|gt:0',
             'joinedDate' => 'nullable|date_format:Y-m-d',
             'status' => 'nullable|string|in:active,inactive',

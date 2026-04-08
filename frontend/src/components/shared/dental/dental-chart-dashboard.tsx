@@ -155,15 +155,17 @@ type DentalChartDashboardProps = {
         };
         safe: {
           balance: number;
+          currencySections?: Record<'AFN' | 'USD', { balance: number; totalIn: number; totalOut: number }>;
           totalIn: number;
           totalOut: number;
           afnPerUsd: number;
-          topPickups: Array<{ name: string; amount: number }>;
+          topPickups: Array<{ name: string; amount: number; currency: 'AFN' | 'USD' }>;
           recentTransactions: Array<{
             id: string;
             entryType: string;
             direction: string;
             amount: number;
+            currency: 'AFN' | 'USD';
             transactionDate: string;
             pickedByStaffId: string;
             pickedByStaffName: string;
@@ -222,6 +224,8 @@ const roundCurrency = (value: number): number => Math.round(value * 100) / 100;
 
 const formatCurrency = (value: number): string =>
   formatMoneyByCurrency(roundCurrency(value), 'AFN');
+const formatMoney = (value: number, currency: 'AFN' | 'USD'): string =>
+  formatMoneyByCurrency(roundCurrency(value), currency);
 
 const toDateKey = (date: Date): string => {
   const year = date.getFullYear();
@@ -1385,8 +1389,7 @@ export const DentalChartDashboard = ({
                       <TrendingUp className="h-4 w-4" />
                     </div>
                     <div className="leading-none text-muted-foreground">
-                      Safe {formatDualCurrency(safeBalance)} | Debts{' '}
-                      {formatCurrency(debtOutstanding)} | Unpaids {formatCurrency(supplierUnpaids)}
+                      Safe {formatCurrency(safeBalance)} | Debts {formatCurrency(debtOutstanding)} | Unpaids {formatCurrency(supplierUnpaids)}
                     </div>
                   </CardFooter>
                 </Card>
@@ -1680,21 +1683,15 @@ export const DentalChartDashboard = ({
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="rounded-xl border border-blue-200 bg-blue-100/70 p-3">
                   <p className="text-xs text-blue-900">Total Supplier Cost</p>
-                  <p className="text-sm font-semibold text-blue-900">
-                    {formatDualCurrency(implantSupplierData.totalSupplierCost)}
-                  </p>
+                  <p className="text-sm font-semibold text-blue-900">{formatCurrency(implantSupplierData.totalSupplierCost)}</p>
                 </div>
                 <div className="rounded-xl border border-emerald-200 bg-emerald-100/70 p-3">
                   <p className="text-xs text-emerald-900">Paid to Supplier</p>
-                  <p className="text-sm font-semibold text-emerald-900">
-                    {formatDualCurrency(implantSupplierData.totalPaid)}
-                  </p>
+                  <p className="text-sm font-semibold text-emerald-900">{formatCurrency(implantSupplierData.totalPaid)}</p>
                 </div>
                 <div className="rounded-xl border border-orange-200 bg-orange-100/70 p-3">
                   <p className="text-xs text-orange-900">Unpaid to Supplier</p>
-                  <p className="text-sm font-semibold text-orange-900">
-                    {formatDualCurrency(implantSupplierData.totalUnpaid)}
-                  </p>
+                  <p className="text-sm font-semibold text-orange-900">{formatCurrency(implantSupplierData.totalUnpaid)}</p>
                 </div>
                 <div className="rounded-xl border bg-white/90 p-3">
                   <p className="text-xs text-muted-foreground">Unpaid Teeth</p>
@@ -1716,7 +1713,7 @@ export const DentalChartDashboard = ({
                       tickLine={false}
                     />
                     <YAxis tick={{ fill: '#64748b', fontSize: 10 }} tickLine={false} width={70} />
-                    <Tooltip formatter={(value) => formatDualCurrency(Number(value ?? 0))} />
+                    <Tooltip formatter={(value) => formatCurrency(Number(value ?? 0))} />
                     <Bar dataKey="unpaid" fill="#f97316" radius={[8, 8, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -1739,25 +1736,25 @@ export const DentalChartDashboard = ({
               <div className="mb-4 flex items-center justify-between">
                 <div>
                   <p className="text-sm font-semibold">Safe Overview</p>
-                  <p className="text-xs text-muted-foreground">All income and outflow summary</p>
+                  <p className="text-xs text-muted-foreground">AFN safe section on the main dashboard</p>
                 </div>
                 <Vault className="size-5 text-emerald-700" />
               </div>
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-xl border bg-white/90 p-3">
-                  <p className="text-xs text-muted-foreground">Current Balance</p>
-                  <p className="text-lg font-semibold">{formatDualCurrency(safeBalance)}</p>
+                  <p className="text-xs text-muted-foreground">Current AFN Balance</p>
+                  <p className="text-lg font-semibold">{formatCurrency(safeBalance)}</p>
                 </div>
                 <div className="rounded-xl border border-emerald-200 bg-emerald-100/70 p-3">
-                  <p className="text-xs text-emerald-900">Total In</p>
+                  <p className="text-xs text-emerald-900">AFN In</p>
                   <p className="text-lg font-semibold text-emerald-900">
-                    {formatDualCurrency(safeTotalIn)}
+                    {formatCurrency(safeTotalIn)}
                   </p>
                 </div>
                 <div className="rounded-xl border border-orange-200 bg-orange-100/70 p-3">
-                  <p className="text-xs text-orange-900">Total Out</p>
+                  <p className="text-xs text-orange-900">AFN Out</p>
                   <p className="text-lg font-semibold text-orange-900">
-                    {formatDualCurrency(safeTotalOut)}
+                    {formatCurrency(safeTotalOut)}
                   </p>
                 </div>
               </div>
@@ -1770,11 +1767,11 @@ export const DentalChartDashboard = ({
                   ) : (
                     topSafePickups.map((row) => (
                       <div
-                        key={`safe-pickup-${row.name}`}
+                        key={`safe-pickup-${row.currency}-${row.name}`}
                         className="flex items-center justify-between text-xs"
                       >
-                        <span className="truncate text-muted-foreground">{row.name}</span>
-                        <span className="font-semibold">{formatDualCurrency(row.amount)}</span>
+                        <span className="truncate text-muted-foreground">{row.name} ({row.currency})</span>
+                        <span className="font-semibold">{formatMoney(row.amount, row.currency)}</span>
                       </div>
                     ))
                   )}
@@ -1786,26 +1783,26 @@ export const DentalChartDashboard = ({
                       <ArrowDownLeft className="size-3.5" />
                       Inflow
                     </span>
-                    <span className="font-semibold">{formatDualCurrency(safeTotalIn)}</span>
+                    <span className="font-semibold">{formatCurrency(safeTotalIn)}</span>
                   </div>
                   <div className="mt-1 flex items-center justify-between text-xs">
                     <span className="inline-flex items-center gap-1 text-orange-700">
                       <ArrowUpRight className="size-3.5" />
                       Outflow
                     </span>
-                    <span className="font-semibold">{formatDualCurrency(safeTotalOut)}</span>
+                    <span className="font-semibold">{formatCurrency(safeTotalOut)}</span>
                   </div>
                   <div className="mt-2 border-t border-border/70 pt-2 text-xs">
                     <div className="flex items-center justify-between text-muted-foreground">
                       <span>Supplier unpaid</span>
                       <span className="font-semibold text-orange-700">
-                        {formatDualCurrency(implantSupplierData.totalUnpaid)}
+                        {formatCurrency(implantSupplierData.totalUnpaid)}
                       </span>
                     </div>
                     <div className="mt-1 flex items-center justify-between text-muted-foreground">
                       <span>Supplier paid</span>
                       <span className="font-semibold text-emerald-700">
-                        {formatDualCurrency(implantSupplierData.totalPaid)}
+                        {formatCurrency(implantSupplierData.totalPaid)}
                       </span>
                     </div>
                   </div>
@@ -1848,7 +1845,7 @@ export const DentalChartDashboard = ({
                       <div className="mt-1 flex items-center justify-between text-muted-foreground">
                         <span>{entry.transactionDate || '-'}</span>
                         <span className="font-semibold text-foreground">
-                          {formatDualCurrency(entry.amount)}
+                          {formatMoney(entry.amount, entry.currency)}
                         </span>
                       </div>
                       <p className="mt-1 text-muted-foreground">
@@ -1913,7 +1910,7 @@ export const DentalChartDashboard = ({
                 <p className="text-sm font-semibold">Supplier Unpaid</p>
               </div>
               <p className="text-3xl font-semibold">
-                {formatDualCurrency(implantSupplierData.totalUnpaid)}
+                {formatCurrency(implantSupplierData.totalUnpaid)}
               </p>
               <p className="text-xs text-muted-foreground">
                 {implantSupplierData.unpaidCount} implant teeth still unpaid

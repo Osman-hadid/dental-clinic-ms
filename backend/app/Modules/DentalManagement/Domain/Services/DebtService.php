@@ -7,7 +7,6 @@ namespace App\Modules\DentalManagement\Domain\Services;
 use App\Modules\DentalManagement\Domain\Entities\Debt;
 use App\Modules\DentalManagement\Domain\Entities\Invoice;
 use App\Modules\DentalManagement\Domain\Entities\Payment;
-use Illuminate\Support\Facades\DB;
 
 final class DebtService
 {
@@ -25,11 +24,10 @@ final class DebtService
 
     public function syncForInvoice(Invoice $invoice): void
     {
-        $netAmount = round((float) ($invoice->net_amount_input ?? $invoice->net_amount ?? 0), 2);
+        $netAmount = round((float) ($invoice->net_amount ?? 0), 2);
         $paidAmount = round((float) Payment::query()
             ->where('invoice_id', $invoice->id)
-            ->select(DB::raw('COALESCE(SUM(COALESCE(amount_input, amount)), 0) as total_paid'))
-            ->value('total_paid'), 2);
+            ->sum('amount'), 2);
 
         $invoiceStatus = strtolower((string) ($invoice->status ?? 'unpaid'));
         $debtAmount = max(0, round($netAmount - $paidAmount, 2));
@@ -55,7 +53,7 @@ final class DebtService
                 'paid_amount' => $paidAmount,
                 'debt_amount' => $debtAmount,
                 'status' => $debtStatus,
-                'currency' => 'AFN',
+                'currency' => strtoupper((string) ($invoice->currency ?? 'AFN')),
             ]
         );
     }

@@ -8,24 +8,33 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { DEFAULT_AFN_PER_USD, type CurrencyCode, formatCurrency, getExchangeRate, parseMoney } from '@/lib/currency-utils';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import { createDefaultReportRange, fetchReport, toInputDate } from '@/modules/dental-management/presentation/reports/report-client';
-import { formatCurrency, parseMoney } from '@/lib/currency-utils';
 import { Trash2, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 type DailyExpenseRecord = {
+  amount: number;
   amountInput: number;
   category: string;
   createdAt: string;
+  currency: CurrencyCode;
   expenseDate: string;
+  exchangeRate: number;
   id: number;
   method: string;
   notes: string;
   staffName: string;
   title: string;
 };
+
+type DailyExpenseCurrencySections = Record<CurrencyCode, {
+  allTotal: number;
+  monthTotal: number;
+  todayTotal: number;
+}>;
 
 type DailyExpenseReportResponse = {
   chart: Array<{ amount: number; date: string }>;
@@ -40,6 +49,7 @@ type DailyExpenseReportResponse = {
   };
   summary: {
     allTotal: number;
+    currencySections: DailyExpenseCurrencySections;
     monthTotal: number;
     todayTotal: number;
   };
@@ -48,7 +58,9 @@ type DailyExpenseReportResponse = {
 type DailyFormState = {
   amount: string;
   category: string;
+  currency: CurrencyCode;
   date: string;
+  exchangeRate: string;
   method: string;
   notes: string;
   title: string;
@@ -60,10 +72,25 @@ const methodOptions = ['cash', 'card', 'bank_transfer', 'other'];
 const createDefaultForm = (): DailyFormState => ({
   amount: '',
   category: 'Utilities',
+  currency: 'AFN',
   date: toInputDate(new Date()),
+  exchangeRate: '1',
   method: 'cash',
   notes: '',
   title: '',
+});
+
+const emptyCurrencySections = (): DailyExpenseCurrencySections => ({
+  AFN: {
+    allTotal: 0,
+    monthTotal: 0,
+    todayTotal: 0,
+  },
+  USD: {
+    allTotal: 0,
+    monthTotal: 0,
+    todayTotal: 0,
+  },
 });
 
 const extractApiErrorMessage = (error: unknown, fallback: string): string => {
@@ -72,9 +99,10 @@ const extractApiErrorMessage = (error: unknown, fallback: string): string => {
   const code = payload?.code;
 
   if (code === 'SAFE_BALANCE_INSUFFICIENT') {
+    const currency = String(payload?.details?.currency ?? 'AFN') === 'USD' ? 'USD' : 'AFN';
     const currentBalance = Number(payload?.details?.currentBalance ?? 0);
     const requestedAmount = Number(payload?.details?.requestedAmount ?? 0);
-    return `Safe balance is not enough. Current: ${formatCurrency(currentBalance, 'AFN')}. Requested: ${formatCurrency(requestedAmount, 'AFN')}.`;
+    return `Safe balance is not enough. Current: ${formatCurrency(currentBalance, currency)}. Requested: ${formatCurrency(requestedAmount, currency)}.`;
   }
 
   return payload?.message || fallback;
@@ -88,6 +116,7 @@ const DailyExpensesPage = (): JSX.Element => {
   const range = createDefaultReportRange(90);
   const [form, setForm] = useState<DailyFormState>(() => createDefaultForm());
   const [report, setReport] = useState<DailyExpenseReportResponse | null>(null);
+  const [defaultExchangeRate, setDefaultExchangeRate] = useState(DEFAULT_AFN_PER_USD);
   const [startDate, setStartDate] = useState(range.startDate);
   const [endDate, setEndDate] = useState(range.endDate);
   const [category, setCategory] = useState('all');
@@ -120,11 +149,28 @@ const DailyExpensesPage = (): JSX.Element => {
     void fetchExpenses(1);
   }, [fetchExpenses]);
 
+  useEffect(() => {
+    void getExchangeRate(client)
+      .then((rate) => setDefaultExchangeRate(rate))
+      .catch(() => {
+        setDefaultExchangeRate(DEFAULT_AFN_PER_USD);
+      });
+  }, []);
+
+  const resolvedExchangeRate = form.currency === 'USD'
+    ? Math.max(parseMoney(form.exchangeRate) || defaultExchangeRate, DEFAULT_AFN_PER_USD)
+    : 1;
+  const currencySections = report?.summary.currencySections ?? emptyCurrencySections();
+
+  const renderMoney = (amountInput: number, currency: CurrencyCode, amountAfn: number): JSX.Element => (
+    <div>{formatCurrency(amountInput, currency)}</div>
+  );
+
   const handleCreate = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
 
     const amount = parseMoney(form.amount);
-    if (!form.title.trim() || !form.date || amount <= 0) {
+    if (!form.title.trim() || !form.date || amount <= 0 || resolvedExchangeRate <= 0) {
       return;
     }
 
@@ -133,8 +179,8 @@ const DailyExpensesPage = (): JSX.Element => {
       .post('/api/v1/dental-management/expenses', {
         amount,
         category: form.category,
-        currency: 'AFN',
-        exchangeRate: 1,
+        currency: form.currency,
+        exchangeRate: resolvedExchangeRate,
         expenseDate: form.date,
         expenseType: 'daily',
         notes: form.notes.trim() || undefined,
@@ -236,6 +282,27 @@ const DailyExpensesPage = (): JSX.Element => {
                       </select>
                     </div>
                     <div className="grid gap-1.5">
+                      <Label htmlFor="expense-currency">Currency</Label>
+                      <select
+                        id="expense-currency"
+                        className="h-9 rounded-md border bg-background px-3 text-sm"
+                        value={form.currency}
+                        onChange={(event) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            currency: event.target.value as CurrencyCode,
+                            exchangeRate:
+                              event.target.value === 'USD' ? String(defaultExchangeRate) : '1',
+                          }))
+                        }
+                      >
+                        <option value="AFN">AFN</option>
+                        <option value="USD">USD</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-1.5">
                       <Label htmlFor="expense-method">Payment Method</Label>
                       <select
                         id="expense-method"
@@ -248,6 +315,24 @@ const DailyExpensesPage = (): JSX.Element => {
                         ))}
                       </select>
                     </div>
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="expense-rate">Exchange Rate</Label>
+                      <Input
+                        id="expense-rate"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={form.exchangeRate}
+                        onChange={(event) =>
+                          setForm((prev) => ({ ...prev, exchangeRate: event.target.value }))
+                        }
+                        disabled={form.currency === 'AFN'}
+                        placeholder="AFN per 1 USD"
+                      />
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-dashed bg-slate-50/80 p-3 text-xs text-muted-foreground">
+                    This entry is tracked only inside the selected currency section.
                   </div>
                   <div className="grid gap-1.5">
                     <Label htmlFor="expense-notes">Notes</Label>
@@ -264,19 +349,26 @@ const DailyExpensesPage = (): JSX.Element => {
                 </form>
 
                 <div className="grid gap-3">
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-2xl border bg-background/80 p-4">
-                      <p className="text-xs text-muted-foreground">Today</p>
-                      <p className="text-2xl font-semibold">{formatCurrency(report?.summary.todayTotal ?? 0, 'AFN')}</p>
-                    </div>
-                    <div className="rounded-2xl border bg-background/80 p-4">
-                      <p className="text-xs text-muted-foreground">This Month</p>
-                      <p className="text-2xl font-semibold">{formatCurrency(report?.summary.monthTotal ?? 0, 'AFN')}</p>
-                    </div>
-                    <div className="rounded-2xl border bg-background/80 p-4">
-                      <p className="text-xs text-muted-foreground">In Range</p>
-                      <p className="text-2xl font-semibold">{formatCurrency(report?.summary.allTotal ?? 0, 'AFN')}</p>
-                    </div>
+                  <div className="grid gap-3 xl:grid-cols-2">
+                    {(['AFN', 'USD'] as CurrencyCode[]).map((currency) => (
+                      <div key={currency} className="rounded-2xl border bg-background/80 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">{currency} Summary</p>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                          <div>
+                            <p className="text-xs text-muted-foreground">Today</p>
+                            <p className="text-lg font-semibold">{formatCurrency(currencySections[currency].todayTotal, currency)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">This Month</p>
+                            <p className="text-lg font-semibold">{formatCurrency(currencySections[currency].monthTotal, currency)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">In Range</p>
+                            <p className="text-lg font-semibold">{formatCurrency(currencySections[currency].allTotal, currency)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
 
                   <div className="grid gap-3 rounded-2xl border bg-background/80 p-4 md:grid-cols-4">
@@ -355,7 +447,7 @@ const DailyExpensesPage = (): JSX.Element => {
                               <td className="px-3 py-2">{record.category}</td>
                               <td className="px-3 py-2">{record.method}</td>
                               <td className="px-3 py-2">{record.staffName || '-'}</td>
-                              <td className="px-3 py-2">{formatCurrency(record.amountInput, 'AFN')}</td>
+                              <td className="px-3 py-2">{renderMoney(record.amountInput, record.currency, record.amount)}</td>
                               <td className="px-3 py-2">{record.notes || '-'}</td>
                               <td className="px-3 py-2">
                                 <Button type="button" variant="ghost" size="icon" onClick={() => removeRecord(record.id)}>

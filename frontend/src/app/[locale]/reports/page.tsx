@@ -31,7 +31,7 @@ import {
   SnapshotScheduleResponse,
 } from '@/modules/dental-management/presentation/reports/report-dashboard-types';
 import { FilterLabel, MetricCard } from '@/modules/dental-management/presentation/reports/report-dashboard-utils';
-import { formatCurrency } from '@/lib/currency-utils';
+import { type CurrencyCode, formatCurrency } from '@/lib/currency-utils';
 import { toast } from 'sonner';
 
 const client = new AxiosClient();
@@ -720,56 +720,72 @@ const ReportsPage = (): JSX.Element => {
                 ) : isLoadingRangeSummary && !rangeSummary ? (
                   <LoadingState compact title="Loading summary" description="Fetching totals for the selected range." />
                 ) : (
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    <MetricCard
-                      label="Total money received"
-                      value={formatCurrency(rangeSummary?.paid ?? 0, 'AFN')}
-                      tone="safe"
-                    />
-                    <MetricCard
-                      label="Total debts"
-                      value={formatCurrency(rangeSummary?.outstanding ?? 0, 'AFN')}
-                      tone="danger"
-                    />
-                    <MetricCard
-                      label="Total unpaid money"
-                      value={formatCurrency(rangeSummary?.thirdCompanyUnpaid ?? 0, 'AFN')}
-                    />
-                    <div className="space-y-3">
-                      <button
-                        type="button"
-                        className="text-left transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50"
-                        onClick={() => openSafeLedger('balance')}
-                      >
-                        <MetricCard
-                          label="Total safe money"
-                          value={formatCurrency(rangeSummary?.safeBalance ?? 0, 'AFN')}
-                          tone="safe"
-                        />
-                      </button>
-                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                        <button
-                          type="button"
-                          className="text-left transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50"
-                          onClick={() => openSafeLedger('in')}
-                        >
-                          <MetricCard
-                            label="Safe money in"
-                            value={formatCurrency(rangeSummary?.safeIn ?? 0, 'AFN')}
-                          />
-                        </button>
-                        <button
-                          type="button"
-                          className="text-left transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50"
-                          onClick={() => openSafeLedger('out')}
-                        >
-                          <MetricCard
-                            label="Safe money out"
-                            value={formatCurrency(rangeSummary?.safeOut ?? 0, 'AFN')}
-                            tone="danger"
-                          />
-                        </button>
-                      </div>
+                  <div className="space-y-4">
+                    <div className="grid gap-3 xl:grid-cols-2">
+                      {(['AFN', 'USD'] as CurrencyCode[]).map((currency) => {
+                        const section = rangeSummary?.currencySections?.[currency];
+
+                        return (
+                          <div key={currency} className="rounded-2xl border bg-background/80 p-4">
+                            <div className="mb-3 flex items-center justify-between">
+                              <p className="text-sm font-semibold text-foreground">{currency} Report Section</p>
+                              <span className="rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground">Original currency</span>
+                            </div>
+                            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                              <MetricCard
+                                label="Total money received"
+                                value={formatCurrency(section?.paid ?? 0, currency)}
+                                tone="safe"
+                              />
+                              <MetricCard
+                                label="Total debts"
+                                value={formatCurrency(section?.outstanding ?? 0, currency)}
+                                tone="danger"
+                              />
+                              <MetricCard
+                                label="Total unpaid money"
+                                value={formatCurrency(section?.thirdCompanyUnpaid ?? 0, currency)}
+                              />
+                              <button
+                                type="button"
+                                className="text-left transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50"
+                                onClick={() => openSafeLedger('balance')}
+                              >
+                                <MetricCard
+                                  label="Total safe money"
+                                  value={formatCurrency(section?.safeBalance ?? 0, currency)}
+                                  tone="emerald"
+                                />
+                              </button>
+                              <button
+                                type="button"
+                                className="text-left transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50"
+                                onClick={() => openSafeLedger('in')}
+                              >
+                                <MetricCard
+                                  label="Safe money in"
+                                  value={formatCurrency(section?.safeIn ?? 0, currency)}
+                                />
+                              </button>
+                              <button
+                                type="button"
+                                className="text-left transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50"
+                                onClick={() => openSafeLedger('out')}
+                              >
+                                <MetricCard
+                                  label="Safe money out"
+                                  value={formatCurrency(section?.safeOut ?? 0, currency)}
+                                  tone="danger"
+                                />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="rounded-2xl border bg-background/80 p-4 text-sm text-muted-foreground">
+                      These sections follow the original saved currency of each record. Charts and clinic-wide accounting still use AFN base values behind the scenes.
                     </div>
                   </div>
                 )}
@@ -781,121 +797,179 @@ const ReportsPage = (): JSX.Element => {
                 <CardTitle>Reports Center</CardTitle>
                 <CardDescription>Choose a date range, apply the filters you need, and read the results in plain clinic language.</CardDescription>
               </CardHeader>
-              <CardContent className="grid items-start gap-3 lg:grid-cols-[1.6fr_1fr]">
-                <div className="grid auto-rows-min items-start content-start gap-2 md:grid-cols-3 xl:grid-cols-5">
-                  {showsFilter('dateRange') ? (
-                    <>
-                      <div className="flex flex-col gap-0.5 self-start">
-                        <FilterLabel>From</FilterLabel>
-                        <Input className={reportInputClassName} type="date" value={draftFilters.startDate} onChange={(event) => setDraftFilters((prev) => ({ ...prev, startDate: event.target.value }))} />
+              <CardContent className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.75fr)_360px]">
+                <div className="space-y-4 rounded-[28px] border border-slate-200/80 bg-white/80 p-4 shadow-sm backdrop-blur-sm md:p-5">
+                  <div className="flex flex-col gap-3 border-b border-slate-200/70 pb-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className="border-cyan-200 bg-cyan-50 text-cyan-700">Filter workspace</Badge>
+                        {hasPendingFilterChanges ? (
+                          <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">Unsaved filter changes</Badge>
+                        ) : (
+                          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">Filters applied</Badge>
+                        )}
                       </div>
-                      <div className="flex flex-col gap-0.5 self-start">
-                        <FilterLabel>To</FilterLabel>
-                        <Input className={reportInputClassName} type="date" value={draftFilters.endDate} onChange={(event) => setDraftFilters((prev) => ({ ...prev, endDate: event.target.value }))} />
+                      <div>
+                        <p className="text-base font-semibold text-slate-950">Shape this report view before you export or print it</p>
+                        <p className="text-sm text-slate-600">The available filters adapt to the active report tab, so this layout keeps the date range, drill-down filters, and search grouped more clearly.</p>
                       </div>
-                    </>
-                  ) : null}
-                  {showsFilter('granularity') ? (
-                    <div className="flex flex-col gap-0.5 self-start">
-                      <FilterLabel>Show data by</FilterLabel>
-                      <select className={reportSelectClassName} value={draftFilters.granularity} onChange={(event) => setDraftFilters((prev) => ({ ...prev, granularity: event.target.value as FiltersState['granularity'] }))}>
-                        <option value="day">Day</option>
-                        <option value="month">Month</option>
-                        <option value="year">Year</option>
-                      </select>
                     </div>
-                  ) : null}
-                  {showsFilter('status') ? (
-                    <div className="flex flex-col gap-0.5 self-start">
-                      <FilterLabel>Appointment status</FilterLabel>
-                      <select className={reportSelectClassName} value={draftFilters.statusFilter} onChange={(event) => setDraftFilters((prev) => ({ ...prev, statusFilter: event.target.value as FiltersState['statusFilter'] }))}>
-                        <option value="all">All statuses</option>
-                        <option value="completed">Completed</option>
-                        <option value="pending">Pending</option>
-                        <option value="cancelled">Cancelled</option>
-                      </select>
+                    <div className="grid min-w-[220px] gap-2 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3 text-sm">
+                      <div>
+                        <p className="font-medium text-slate-900">Current report</p>
+                        <p className="text-slate-600">{activeReport.label}</p>
+                      </div>
+                      <div>
+                        <p className="font-medium text-slate-900">Active range</p>
+                        <p className="text-slate-600">{draftFilters.startDate} to {draftFilters.endDate}</p>
+                      </div>
                     </div>
-                  ) : null}
-                  {showsFilter('dentist') ? (
-                    <div className="flex flex-col gap-0.5 self-start">
-                      <FilterLabel>Dentist</FilterLabel>
-                      <select className={reportSelectClassName} value={draftFilters.dentistFilter} onChange={(event) => setDraftFilters((prev) => ({ ...prev, dentistFilter: event.target.value }))}>
-                        <option value="all">All dentists</option>
-                        {(filterOptions?.dentists ?? []).map((dentist) => (
-                          <option key={dentist} value={dentist}>{dentist}</option>
-                        ))}
-                      </select>
+                  </div>
+
+                  <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+                    <div className="space-y-3 rounded-3xl border border-slate-200/80 bg-gradient-to-br from-white via-slate-50/90 to-cyan-50/60 p-4">
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-slate-900">Time and structure</p>
+                        <p className="text-xs text-slate-500">Choose the reporting window first, then decide how the data should be grouped.</p>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                        {showsFilter('dateRange') ? (
+                          <>
+                            <div className="flex flex-col gap-1 self-start">
+                              <FilterLabel>From</FilterLabel>
+                              <Input className={reportInputClassName} type="date" value={draftFilters.startDate} onChange={(event) => setDraftFilters((prev) => ({ ...prev, startDate: event.target.value }))} />
+                            </div>
+                            <div className="flex flex-col gap-1 self-start">
+                              <FilterLabel>To</FilterLabel>
+                              <Input className={reportInputClassName} type="date" value={draftFilters.endDate} onChange={(event) => setDraftFilters((prev) => ({ ...prev, endDate: event.target.value }))} />
+                            </div>
+                          </>
+                        ) : null}
+                        {showsFilter('granularity') ? (
+                          <div className="flex flex-col gap-1 self-start">
+                            <FilterLabel>Show data by</FilterLabel>
+                            <select className={reportSelectClassName} value={draftFilters.granularity} onChange={(event) => setDraftFilters((prev) => ({ ...prev, granularity: event.target.value as FiltersState['granularity'] }))}>
+                              <option value="day">Day</option>
+                              <option value="month">Month</option>
+                              <option value="year">Year</option>
+                            </select>
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
-                  ) : null}
-                  {showsFilter('treatment') ? (
-                    <div className="flex flex-col gap-0.5 self-start">
-                      <FilterLabel>Treatment</FilterLabel>
-                      <select className={reportSelectClassName} value={draftFilters.treatmentFilter} onChange={(event) => setDraftFilters((prev) => ({ ...prev, treatmentFilter: event.target.value }))}>
-                        <option value="all">All treatments</option>
-                        {(filterOptions?.treatments ?? []).map((treatment) => (
-                          <option key={treatment} value={treatment}>{treatment}</option>
-                        ))}
-                      </select>
+
+                    <div className="space-y-3 rounded-3xl border border-slate-200/80 bg-white/90 p-4">
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-slate-900">Search and clinic filters</p>
+                        <p className="text-xs text-slate-500">Narrow the report by people, status, treatment, payment method, or a targeted search phrase.</p>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {showsFilter('status') ? (
+                          <div className="flex flex-col gap-1 self-start">
+                            <FilterLabel>Appointment status</FilterLabel>
+                            <select className={reportSelectClassName} value={draftFilters.statusFilter} onChange={(event) => setDraftFilters((prev) => ({ ...prev, statusFilter: event.target.value as FiltersState['statusFilter'] }))}>
+                              <option value="all">All statuses</option>
+                              <option value="completed">Completed</option>
+                              <option value="pending">Pending</option>
+                              <option value="cancelled">Cancelled</option>
+                            </select>
+                          </div>
+                        ) : null}
+                        {showsFilter('dentist') ? (
+                          <div className="flex flex-col gap-1 self-start">
+                            <FilterLabel>Dentist</FilterLabel>
+                            <select className={reportSelectClassName} value={draftFilters.dentistFilter} onChange={(event) => setDraftFilters((prev) => ({ ...prev, dentistFilter: event.target.value }))}>
+                              <option value="all">All dentists</option>
+                              {(filterOptions?.dentists ?? []).map((dentist) => (
+                                <option key={dentist} value={dentist}>{dentist}</option>
+                              ))}
+                            </select>
+                          </div>
+                        ) : null}
+                        {showsFilter('treatment') ? (
+                          <div className="flex flex-col gap-1 self-start">
+                            <FilterLabel>Treatment</FilterLabel>
+                            <select className={reportSelectClassName} value={draftFilters.treatmentFilter} onChange={(event) => setDraftFilters((prev) => ({ ...prev, treatmentFilter: event.target.value }))}>
+                              <option value="all">All treatments</option>
+                              {(filterOptions?.treatments ?? []).map((treatment) => (
+                                <option key={treatment} value={treatment}>{treatment}</option>
+                              ))}
+                            </select>
+                          </div>
+                        ) : null}
+                        {showsFilter('paymentMethod') ? (
+                          <div className="flex flex-col gap-1 self-start">
+                            <FilterLabel>How the patient paid</FilterLabel>
+                            <select className={reportSelectClassName} value={draftFilters.paymentMethodFilter} onChange={(event) => setDraftFilters((prev) => ({ ...prev, paymentMethodFilter: event.target.value }))}>
+                              <option value="all">All payment methods</option>
+                              {(filterOptions?.paymentMethods ?? []).map((method) => (
+                                <option key={method} value={method}>{method}</option>
+                              ))}
+                            </select>
+                          </div>
+                        ) : null}
+                        {showsFilter('patient') ? (
+                          <div className="flex flex-col gap-1 self-start">
+                            <FilterLabel>Patient</FilterLabel>
+                            <select className={reportSelectClassName} value={draftFilters.patientFilter} onChange={(event) => setDraftFilters((prev) => ({ ...prev, patientFilter: event.target.value }))}>
+                              <option value="all">All patients</option>
+                              {(filterOptions?.patients ?? []).map((patient) => (
+                                <option key={String(patient.id)} value={String(patient.id)}>{patient.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        ) : null}
+                        {showsFilter('search') ? (
+                          <div className="flex flex-col gap-1 self-start md:col-span-2">
+                            <FilterLabel>Find something specific</FilterLabel>
+                            <Input className={reportInputClassName} value={draftFilters.search} onChange={(event) => setDraftFilters((prev) => ({ ...prev, search: event.target.value }))} placeholder={activeReport.searchPlaceholder} />
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
-                  ) : null}
-                  {showsFilter('paymentMethod') ? (
-                    <div className="flex flex-col gap-0.5 self-start">
-                      <FilterLabel>How the patient paid</FilterLabel>
-                      <select className={reportSelectClassName} value={draftFilters.paymentMethodFilter} onChange={(event) => setDraftFilters((prev) => ({ ...prev, paymentMethodFilter: event.target.value }))}>
-                        <option value="all">All payment methods</option>
-                        {(filterOptions?.paymentMethods ?? []).map((method) => (
-                          <option key={method} value={method}>{method}</option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : null}
-                  {showsFilter('patient') ? (
-                    <div className="flex flex-col gap-0.5 self-start">
-                      <FilterLabel>Patient</FilterLabel>
-                      <select className={reportSelectClassName} value={draftFilters.patientFilter} onChange={(event) => setDraftFilters((prev) => ({ ...prev, patientFilter: event.target.value }))}>
-                        <option value="all">All patients</option>
-                        {(filterOptions?.patients ?? []).map((patient) => (
-                          <option key={String(patient.id)} value={String(patient.id)}>{patient.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : null}
-                  {showsFilter('search') ? (
-                    <div className="flex flex-col gap-0.5 self-start md:col-span-2">
-                      <FilterLabel>Find something specific</FilterLabel>
-                      <Input className={reportInputClassName} value={draftFilters.search} onChange={(event) => setDraftFilters((prev) => ({ ...prev, search: event.target.value }))} placeholder={activeReport.searchPlaceholder} />
-                    </div>
-                  ) : null}
+                  </div>
                 </div>
 
-                <div className="grid gap-2 self-start rounded-2xl border bg-background/80 p-3">
-                  <div className="space-y-1">
-                    <p className="text-sm font-semibold text-foreground">{activeReport.label}</p>
-                    <p className="text-sm text-muted-foreground">{activeReport.description}</p>
-                    <p className="text-xs text-muted-foreground">{activeReport.helperText}</p>
-                    {workflowAccess ? (
-                      <div className="flex flex-wrap items-center gap-2 pt-1">
-                        <Badge variant="outline">Right: {workflowAccess.user.rightLevel}</Badge>
-                        {workflowAccess.user.roles.length > 0 ? <Badge variant="outline">Roles: {workflowAccess.user.roles.join(', ')}</Badge> : null}
-                      </div>
+                <div className="grid gap-3 self-start rounded-[28px] border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-4 text-slate-900 shadow-lg shadow-sky-200/60">
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline" className="border-sky-200 bg-sky-100 text-sky-700">Action panel</Badge>
+                      {workflowAccess ? <Badge variant="outline" className="border-emerald-200 bg-emerald-100 text-emerald-700">Right: {workflowAccess.user.rightLevel}</Badge> : null}
+                    </div>
+                    <p className="text-lg font-semibold">{activeReport.label}</p>
+                    <p className="text-sm text-slate-700">{activeReport.description}</p>
+                    <p className="text-xs text-slate-500">{activeReport.helperText}</p>
+                    {workflowAccess?.user.roles.length ? (
+                      <p className="text-xs text-slate-500">Roles: {workflowAccess.user.roles.join(', ')}</p>
                     ) : null}
                   </div>
-                  <div className="flex flex-col gap-0.5">
-                    <FilterLabel>Download this report</FilterLabel>
-                    <select className={reportSelectClassName} value={csvExportType} onChange={(event) => setCsvExportType(event.target.value as CsvExportType)}>
-                      {activeReport.exportOptions.map((option) => (
-                        <option key={option.value} value={option.value}>{option.label}</option>
-                      ))}
-                    </select>
+
+                  <div className="rounded-2xl border border-sky-100 bg-white/85 p-3 backdrop-blur-sm">
+                    <div className="flex flex-col gap-1">
+                      <p className="text-sm font-medium text-slate-800">Download this report</p>
+                      <select className={`${reportSelectClassName} border-sky-200 bg-white text-slate-900`} value={csvExportType} onChange={(event) => setCsvExportType(event.target.value as CsvExportType)}>
+                        {activeReport.exportOptions.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                  <Button type="button" onClick={handleExport}>Download CSV</Button>
-                  <Button type="button" variant="outline" onClick={handlePrintReport} disabled={!hasPrintableContent || isLoadingTab}>
-                    Print / Save PDF
-                  </Button>
-                  <Button type="button" variant="outline" onClick={applyFilters} disabled={isLoadingFilters || isLoadingTab}>
-                    {isLoadingFilters || isLoadingTab ? 'Updating report...' : 'Update report'}
-                  </Button>
-                  <p className="text-xs text-muted-foreground">Filters apply across the report tabs you are allowed to access.</p>
+
+                  <div className="grid gap-2">
+                    <Button type="button" className="bg-emerald-500 text-white hover:bg-emerald-600" onClick={applyFilters} disabled={isLoadingFilters || isLoadingTab}>
+                      {isLoadingFilters || isLoadingTab ? 'Updating report...' : 'Apply filters'}
+                    </Button>
+                    <Button type="button" className="bg-sky-500 text-white hover:bg-sky-600" onClick={handleExport}>
+                      Download CSV
+                    </Button>
+                    <Button type="button" variant="outline" className="border-sky-200 bg-white/80 text-slate-800 hover:bg-sky-50 hover:text-slate-900" onClick={handlePrintReport} disabled={!hasPrintableContent || isLoadingTab}>
+                      Print / Save PDF
+                    </Button>
+                  </div>
+
+                  <div className="rounded-2xl border border-sky-100 bg-gradient-to-br from-sky-100/80 to-emerald-100/80 p-3 text-xs text-slate-700">
+                    Filters apply across the report tabs you are allowed to access, so this panel becomes your control center for reading, exporting, and printing the same view.
+                  </div>
                 </div>
               </CardContent>
             </Card>

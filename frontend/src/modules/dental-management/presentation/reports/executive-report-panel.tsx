@@ -1,7 +1,7 @@
 import { JSX } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { formatCurrency } from '@/lib/currency-utils';
+import { type CurrencyCode, formatCurrency } from '@/lib/currency-utils';
 import { ExecutiveData, SnapshotCadence, SnapshotRecord, SnapshotScheduleResponse } from '@/modules/dental-management/presentation/reports/report-dashboard-types';
 import { MetricCard, formatDateTime } from '@/modules/dental-management/presentation/reports/report-dashboard-utils';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -33,45 +33,46 @@ export const ExecutiveReportPanel = ({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-4">
-      <MetricCard
-        emphasize
-        label="Money in safe now"
-        tone="safe"
-        value={formatCurrency(data.cashInSafe ?? 0, 'AFN')}
-      />
-      <MetricCard
-        emphasize
-        label="Total Debts"
-        tone="danger"
-        value={formatCurrency(data.kpis?.debt ?? 0, 'AFN')}
-      />
-      <MetricCard
-        emphasize
-        label="Total unpaid money"
-        tone="danger"
-        value={formatCurrency(totalUnpaidAll, 'AFN')}
-      />
-      <MetricCard
-        emphasize
-        label="Profit after costs"
-        value={formatCurrency(data.profitLoss ?? 0, 'AFN')}
-      />
+      <div className="grid gap-4 xl:grid-cols-2">
+        {(['AFN', 'USD'] as CurrencyCode[]).map((currency) => {
+          const section = data.currencySections[currency];
+
+          return (
+            <Card key={currency} className="rounded-3xl border">
+              <CardHeader>
+                <CardTitle>{currency} Executive Section</CardTitle>
+                <CardDescription>Overview totals grouped by the original saved currency of the record.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <MetricCard emphasize label="Money in safe now" tone="emerald" value={formatCurrency(section.cashInSafe, currency)} />
+                <MetricCard emphasize label="Total Debts" tone="danger" value={formatCurrency(section.debt, currency)} />
+                <MetricCard emphasize label="Total unpaid money" tone="danger" value={formatCurrency(section.thirdCompanyUnpaid, currency)} />
+                <MetricCard emphasize label="Profit after costs" value={formatCurrency(section.profitLoss, currency)} />
+                <MetricCard label="Total billed to patients" value={formatCurrency(section.billed, currency)} />
+                <MetricCard label="Money received" value={formatCurrency(section.paid, currency)} />
+                <MetricCard label="Money in bank" value={formatCurrency(section.bankBalance, currency)} />
+                <MetricCard label="Cash taken from safe" value={formatCurrency(section.safeOut, currency)} />
+                <MetricCard label="Clinic costs" value={formatCurrency(section.expenses, currency)} />
+                <MetricCard label="Salaries paid" value={formatCurrency(section.salaryPaid, currency)} />
+                <MetricCard label="Third company paid" value={formatCurrency(section.thirdCompanyPaid, currency)} />
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      <MetricCard label="Total billed to patients" value={formatCurrency(data.kpis?.billed ?? 0, 'AFN')} />
-      <MetricCard label="Money received" value={formatCurrency(data.kpis?.paid ?? 0, 'AFN')} />
-      <MetricCard label="Money in bank" value={formatCurrency(data.bankBalance ?? 0, 'AFN')} />
-      <MetricCard label="New Patients" value={data.newPatientsCount ?? 0} />
-      <MetricCard label="Patients who accepted treatment" value={`${data.treatmentAcceptanceRate ?? 0}%`} />
-      <MetricCard label="Chair use rate" value={`${data.chairUtilizationRate ?? 0}%`} />
-      <MetricCard label="Implant revenue" value={formatCurrency(data.implantRevenue ?? 0, 'AFN')} />
-      <MetricCard label="Clinical spending" value={formatCurrency(data.expenseSummary.clinical ?? 0, 'AFN')} />
-      <MetricCard label="Daily spending" value={formatCurrency(data.expenseSummary.daily ?? 0, 'AFN')} />
-    </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <MetricCard label="New Patients" value={data.newPatientsCount ?? 0} />
+        <MetricCard label="Patients who accepted treatment" value={`${data.treatmentAcceptanceRate ?? 0}%`} />
+        <MetricCard label="Chair use rate" value={`${data.chairUtilizationRate ?? 0}%`} />
+        <MetricCard label="Implant revenue" value={formatCurrency(data.implantRevenue ?? 0, 'AFN')} />
+        <MetricCard label="Clinical spending" value={formatCurrency(data.expenseSummary.clinical ?? 0, 'AFN')} />
+        <MetricCard label="Daily spending" value={formatCurrency(data.expenseSummary.daily ?? 0, 'AFN')} />
+        <MetricCard label="AFN-base debt total" value={formatCurrency(data.kpis?.debt ?? 0, 'AFN')} />
+        <MetricCard label="AFN-base unpaid total" value={formatCurrency(totalUnpaidAll, 'AFN')} />
+      </div>
 
-    <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid gap-4 xl:grid-cols-3">
       <Card className="rounded-3xl border">
         <CardHeader>
           <CardTitle>Money received over time</CardTitle>
@@ -109,7 +110,7 @@ export const ExecutiveReportPanel = ({
       </Card>
     </div>
 
-    <div className="grid gap-4 xl:grid-cols-[1.3fr_1fr]">
+      <div className="grid gap-4 xl:grid-cols-[1.3fr_1fr]">
       <Card className="rounded-3xl border">
         <CardHeader>
           <CardTitle>Most important treatments</CardTitle>
@@ -144,7 +145,7 @@ export const ExecutiveReportPanel = ({
       </Card>
     </div>
 
-    <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-2">
       <Card className="rounded-3xl border">
         <CardHeader>
           <CardTitle>Income by dentist</CardTitle>
@@ -239,7 +240,7 @@ export const ExecutiveReportPanel = ({
           </div>
         </CardContent>
       </Card>
-    </div>
+      </div>
     </div>
   );
 };

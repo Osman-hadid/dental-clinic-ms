@@ -43,7 +43,7 @@
           "in": "Currency must be one of the allowed values"
         },
         "options": {
-          "usd": "AFN (Afghani)",
+          "usd": "USD (US Dollar)",
           "afn": "AFN (Afghani)"
         }
       },

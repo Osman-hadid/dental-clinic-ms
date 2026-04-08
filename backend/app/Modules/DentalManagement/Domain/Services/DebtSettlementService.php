@@ -68,17 +68,22 @@ final readonly class DebtSettlementService
             }
 
             $paymentDate = (string) ($data['paymentDate'] ?? $data['payment_date'] ?? now()->format('Y-m-d'));
-            $requestedAmount = round((float) ($data['amount'] ?? 0), 2);
+            $requestedAmountInput = round((float) ($data['amount'] ?? 0), 2);
             $method = strtolower((string) ($data['method'] ?? 'cash'));
             $note = trim((string) ($data['notes'] ?? ''));
             $userId = Auth::id();
+            $sourceCurrency = $this->currencyCode((string) ($sourceInvoice->currency ?? 'AFN'));
+            $sourceExchangeRate = $this->exchangeRate((float) ($sourceInvoice->exchange_rate ?? 1));
+            $sourceNetInput = round((float) ($sourceInvoice->net_amount_input ?? $sourceInvoice->net_amount ?? 0), 2);
+            $sourceDiscountInput = round((float) ($sourceInvoice->discount_input ?? $sourceInvoice->discount ?? 0), 2);
+            $sourceTotalInput = round((float) ($sourceInvoice->total_amount_input ?? ($sourceInvoice->net_amount ?? 0) + ($sourceInvoice->discount ?? 0)), 2);
 
             $alreadyPaid = round((float) Payment::query()
                 ->where('invoice_id', $sourceInvoice->id)
-                ->select(DB::raw('COALESCE(SUM(COALESCE(amount_input, amount)), 0) as total_paid'))
-                ->value('total_paid'), 2);
-            $sourceNet = round((float) ($sourceInvoice->net_amount_input ?? $sourceInvoice->net_amount ?? 0), 2);
+                ->sum('amount'), 2);
+            $sourceNet = round((float) ($sourceInvoice->net_amount ?? 0), 2);
             $outstandingAmount = max(0, round($sourceNet - $alreadyPaid, 2));
+            $outstandingAmountInput = $this->toInputAmount($outstandingAmount, $sourceCurrency, $sourceExchangeRate);
 
             if ($outstandingAmount <= 0.01) {
                 throw new ApiException(
@@ -87,56 +92,62 @@ final readonly class DebtSettlementService
                     details: [
                         'debtId' => $debt->id,
                         'outstandingAmount' => $outstandingAmount,
+                        'outstandingAmountInput' => $outstandingAmountInput,
+                        'currency' => $sourceCurrency,
                     ],
                     httpCode: 422,
                 );
             }
 
-            if ($requestedAmount <= 0) {
+            if ($requestedAmountInput <= 0) {
                 throw new ApiException(
                     errorCode: 'INVALID_SETTLEMENT_AMOUNT',
                     message: 'Settlement amount must be greater than zero.',
                     details: [
-                        'requestedAmount' => $requestedAmount,
+                        'currency' => $sourceCurrency,
+                        'requestedAmount' => $requestedAmountInput,
                     ],
                     httpCode: 422,
                 );
             }
 
-            if ($requestedAmount - $outstandingAmount > 0.01) {
+            if ($requestedAmountInput - $outstandingAmountInput > 0.01) {
                 throw new ApiException(
                     errorCode: 'SETTLEMENT_AMOUNT_EXCEEDS_OUTSTANDING',
                     message: 'Settlement amount cannot be greater than the outstanding amount.',
                     details: [
+                        'currency' => $sourceCurrency,
                         'debtId' => $debt->id,
                         'outstandingAmount' => $outstandingAmount,
-                        'requestedAmount' => $requestedAmount,
+                        'outstandingAmountInput' => $outstandingAmountInput,
+                        'requestedAmount' => $requestedAmountInput,
                     ],
                     httpCode: 422,
                 );
             }
 
+            $requestedAmount = $this->toBaseAmount($requestedAmountInput, $sourceCurrency, $sourceExchangeRate);
             $remainingAmount = max(0, round($outstandingAmount - $requestedAmount, 2));
-            $sourceDiscount = round((float) ($sourceInvoice->discount_input ?? $sourceInvoice->discount ?? 0), 2);
-            $sourceTotal = round($sourceNet + $sourceDiscount, 2);
+            $remainingAmountInput = $this->toInputAmount($remainingAmount, $sourceCurrency, $sourceExchangeRate);
 
             $sourceInvoice = $this->invoiceService->updateInvoice($sourceInvoice->id, [
                 'patient_id' => $sourceInvoice->patient_id,
                 'visit_id' => $sourceInvoice->visit_id,
                 'source_visit_ids' => $this->normalizeSourceVisitIds($sourceInvoice),
-                'total_amount' => $sourceTotal,
-                'discount' => $sourceDiscount,
-                'net_amount' => $sourceNet,
-                'currency' => 'AFN',
-                'exchange_rate' => 1,
+                'total_amount' => $sourceTotalInput,
+                'discount' => $sourceDiscountInput,
+                'net_amount' => $sourceNetInput,
+                'currency' => $sourceCurrency,
+                'exchange_rate' => $sourceExchangeRate,
                 'invoice_date' => $sourceInvoice->invoice_date?->format('Y-m-d') ?? now()->format('Y-m-d'),
                 'status' => $remainingAmount <= 0.01 ? 'paid' : 'partially_paid',
                 'payment_type' => $sourceInvoice->payment_type ?: 'cash',
                 'notes' => $this->buildSourceInvoiceNote(
+                    currency: $sourceCurrency,
                     sourceInvoiceId: (int) $sourceInvoice->id,
                     paymentDate: $paymentDate,
-                    settledAmount: $requestedAmount,
-                    remainingAmount: $remainingAmount,
+                    settledAmount: $requestedAmountInput,
+                    remainingAmount: $remainingAmountInput,
                     customNote: $note,
                     existingNote: (string) ($sourceInvoice->notes ?? ''),
                 ),
@@ -147,18 +158,19 @@ final readonly class DebtSettlementService
                 'patient_id' => $sourceInvoice->patient_id,
                 'visit_id' => $sourceInvoice->visit_id,
                 'source_visit_ids' => $this->normalizeSourceVisitIds($sourceInvoice),
-                'total_amount' => $requestedAmount,
+                'total_amount' => $requestedAmountInput,
                 'discount' => 0,
-                'net_amount' => $requestedAmount,
-                'currency' => 'AFN',
-                'exchange_rate' => 1,
+                'net_amount' => $requestedAmountInput,
+                'currency' => $sourceCurrency,
+                'exchange_rate' => $sourceExchangeRate,
                 'invoice_date' => $paymentDate,
                 'status' => 'paid',
                 'payment_type' => $method,
                 'notes' => $this->buildSettlementInvoiceNote(
+                    currency: $sourceCurrency,
                     sourceInvoiceId: (int) $sourceInvoice->id,
-                    settledAmount: $requestedAmount,
-                    remainingAmount: $remainingAmount,
+                    settledAmount: $requestedAmountInput,
+                    remainingAmount: $remainingAmountInput,
                     customNote: $note,
                 ),
                 'created_by' => $userId,
@@ -168,15 +180,16 @@ final readonly class DebtSettlementService
             $payment = $this->paymentService->createPayment([
                 'invoice_id' => $sourceInvoice->id,
                 'payment_date' => $paymentDate,
-                'amount' => $requestedAmount,
-                'currency' => 'AFN',
-                'exchange_rate' => 1,
+                'amount' => $requestedAmountInput,
+                'currency' => $sourceCurrency,
+                'exchange_rate' => $sourceExchangeRate,
                 'method' => $method,
                 'notes' => $this->buildPaymentNote(
+                    currency: $sourceCurrency,
                     sourceInvoiceId: (int) $sourceInvoice->id,
                     settlementInvoiceId: (int) $settlementInvoice->id,
-                    settledAmount: $requestedAmount,
-                    remainingAmount: $remainingAmount,
+                    settledAmount: $requestedAmountInput,
+                    remainingAmount: $remainingAmountInput,
                     customNote: $note,
                 ),
                 'created_by' => $userId,
@@ -207,6 +220,7 @@ final readonly class DebtSettlementService
     }
 
     private function buildSourceInvoiceNote(
+        string $currency,
         int $sourceInvoiceId,
         string $paymentDate,
         float $settledAmount,
@@ -219,7 +233,7 @@ final readonly class DebtSettlementService
             $segments[] = $existingNote;
         }
 
-        $segments[] = "Debt payment recorded from invoice #{$sourceInvoiceId} on {$paymentDate} for {$settledAmount} AFN. Remaining debt: {$remainingAmount} AFN.";
+        $segments[] = "Debt payment recorded from invoice #{$sourceInvoiceId} on {$paymentDate} for {$settledAmount} {$currency}. Remaining debt: {$remainingAmount} {$currency}.";
 
         if ($customNote !== '') {
             $segments[] = $customNote;
@@ -228,9 +242,9 @@ final readonly class DebtSettlementService
         return trim(implode(' | ', $segments));
     }
 
-    private function buildSettlementInvoiceNote(int $sourceInvoiceId, float $settledAmount, float $remainingAmount, string $customNote): string
+    private function buildSettlementInvoiceNote(string $currency, int $sourceInvoiceId, float $settledAmount, float $remainingAmount, string $customNote): string
     {
-        $base = "Settlement invoice generated from invoice #{$sourceInvoiceId} for {$settledAmount} AFN. Remaining debt after payment: {$remainingAmount} AFN.";
+        $base = "Settlement invoice generated from invoice #{$sourceInvoiceId} for {$settledAmount} {$currency}. Remaining debt after payment: {$remainingAmount} {$currency}.";
         if ($customNote === '') {
             return $base;
         }
@@ -238,13 +252,43 @@ final readonly class DebtSettlementService
         return "{$base} {$customNote}";
     }
 
-    private function buildPaymentNote(int $sourceInvoiceId, int $settlementInvoiceId, float $settledAmount, float $remainingAmount, string $customNote): string
+    private function buildPaymentNote(string $currency, int $sourceInvoiceId, int $settlementInvoiceId, float $settledAmount, float $remainingAmount, string $customNote): string
     {
-        $base = "Debt payment of {$settledAmount} AFN settled from invoice #{$sourceInvoiceId} using settlement invoice #{$settlementInvoiceId}. Remaining debt: {$remainingAmount} AFN.";
+        $base = "Debt payment of {$settledAmount} {$currency} settled from invoice #{$sourceInvoiceId} using settlement invoice #{$settlementInvoiceId}. Remaining debt: {$remainingAmount} {$currency}.";
         if ($customNote === '') {
             return $base;
         }
 
         return "{$base} {$customNote}";
+    }
+
+    private function currencyCode(string $currency): string
+    {
+        return strtoupper(trim($currency)) === 'USD' ? 'USD' : 'AFN';
+    }
+
+    private function exchangeRate(float $exchangeRate): float
+    {
+        $normalized = round($exchangeRate, 6);
+
+        return $normalized > 0 ? $normalized : 1.0;
+    }
+
+    private function toBaseAmount(float $amountInput, string $currency, float $exchangeRate): float
+    {
+        if ($this->currencyCode($currency) === 'USD') {
+            return round($amountInput * $this->exchangeRate($exchangeRate), 2);
+        }
+
+        return round($amountInput, 2);
+    }
+
+    private function toInputAmount(float $amount, string $currency, float $exchangeRate): float
+    {
+        if ($this->currencyCode($currency) === 'USD') {
+            return round($amount / $this->exchangeRate($exchangeRate), 2);
+        }
+
+        return round($amount, 2);
     }
 }

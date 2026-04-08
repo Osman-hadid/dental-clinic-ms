@@ -27,6 +27,11 @@ final class ReportSubpageService
         $categoryFilter = $this->normalizedFilter($filters, 'category');
         $staffId = (int) ($filters['staffId'] ?? 0);
         $search = mb_strtolower($this->text($filters['search'] ?? ''));
+        $currencySections = $this->initializeCurrencySections([
+            'allTotal',
+            'monthTotal',
+            'todayTotal',
+        ]);
 
         $rows = Expense::query()
             ->with('staff:id,full_name')
@@ -37,12 +42,17 @@ final class ReportSubpageService
             ->orderByDesc('id')
             ->get()
             ->map(function (Expense $expense): array {
+                $currency = $this->currencyCode($expense->currency);
+                $amount = $this->decimal($expense->amount ?? 0);
+
                 return [
-                    'amount' => $this->decimal($expense->amount ?? 0),
-                    'amountInput' => $this->decimal($expense->amount_input ?? $expense->amount ?? 0),
+                    'amount' => $amount,
+                    'amountInput' => $this->resolveInputAmount($expense->amount_input, $expense->amount, $currency, $expense->exchange_rate),
                     'category' => $this->text($expense->category, 'Other'),
                     'createdAt' => $this->dateTimeString($expense->created_at),
+                    'currency' => $currency,
                     'expenseDate' => $this->dateString($expense->expense_date),
+                    'exchangeRate' => $this->decimal($expense->exchange_rate ?? 1) ?: 1.0,
                     'id' => (int) $expense->id,
                     'method' => $this->text($expense->payment_method, 'cash'),
                     'notes' => $this->text($expense->notes),
@@ -73,22 +83,39 @@ final class ReportSubpageService
         $today = CarbonImmutable::now()->toDateString();
         $monthToken = CarbonImmutable::now()->format('Y-m');
 
+        $allTotal = 0.0;
+        $monthTotal = 0.0;
+        $todayTotal = 0.0;
+        foreach ($rows as $row) {
+            $amount = (float) ($row['amount'] ?? 0);
+            $amountInput = (float) ($row['amountInput'] ?? 0);
+            $currency = $row['currency'] ?? 'AFN';
+
+            $allTotal += $amount;
+            $this->addCurrencySectionValue($currencySections, $currency, 'allTotal', $amountInput);
+
+            if (str_starts_with((string) $row['expenseDate'], $monthToken)) {
+                $monthTotal += $amount;
+                $this->addCurrencySectionValue($currencySections, $currency, 'monthTotal', $amountInput);
+            }
+
+            if ($row['expenseDate'] === $today) {
+                $todayTotal += $amount;
+                $this->addCurrencySectionValue($currencySections, $currency, 'todayTotal', $amountInput);
+            }
+        }
+
         $summary = [
-            'allTotal' => $this->decimal(array_sum(array_column($rows, 'amountInput'))),
-            'monthTotal' => $this->decimal(array_sum(array_map(
-                static fn (array $row): float => str_starts_with((string) $row['expenseDate'], $monthToken) ? (float) $row['amountInput'] : 0.0,
-                $rows
-            ))),
-            'todayTotal' => $this->decimal(array_sum(array_map(
-                static fn (array $row): float => $row['expenseDate'] === $today ? (float) $row['amountInput'] : 0.0,
-                $rows
-            ))),
+            'allTotal' => $this->decimal($allTotal),
+            'currencySections' => $currencySections,
+            'monthTotal' => $this->decimal($monthTotal),
+            'todayTotal' => $this->decimal($todayTotal),
         ];
 
         $grouped = [];
         foreach ($rows as $row) {
             $date = (string) $row['expenseDate'];
-            $grouped[$date] = $this->decimal(($grouped[$date] ?? 0) + (float) $row['amountInput']);
+            $grouped[$date] = $this->decimal(($grouped[$date] ?? 0) + (float) ($row['amount'] ?? 0));
         }
         ksort($grouped);
 
@@ -117,6 +144,9 @@ final class ReportSubpageService
         $categoryFilter = $this->normalizedFilter($filters, 'category');
         $staffId = (int) ($filters['staffId'] ?? 0);
         $search = mb_strtolower($this->text($filters['search'] ?? ''));
+        $currencySections = $this->initializeCurrencySections([
+            'totalSpend',
+        ]);
 
         $rows = Expense::query()
             ->with('staff:id,full_name')
@@ -127,18 +157,25 @@ final class ReportSubpageService
             ->orderByDesc('id')
             ->get()
             ->map(function (Expense $expense): array {
+                $currency = $this->currencyCode($expense->currency);
+                $amount = $this->decimal($expense->amount ?? 0);
+
                 return [
-                    'amountInput' => $this->decimal($expense->amount_input ?? $expense->amount ?? 0),
+                    'amount' => $amount,
+                    'amountInput' => $this->resolveInputAmount($expense->amount_input, $expense->amount, $currency, $expense->exchange_rate),
                     'category' => $this->text($expense->category, 'Other'),
                     'createdAt' => $this->dateTimeString($expense->created_at),
+                    'currency' => $currency,
                     'expenseDate' => $this->dateString($expense->expense_date),
+                    'exchangeRate' => $this->decimal($expense->exchange_rate ?? 1) ?: 1.0,
                     'id' => (int) $expense->id,
                     'itemName' => $this->text($expense->title),
                     'notes' => $this->text($expense->notes),
                     'quantity' => (int) ($expense->quantity ?? 1),
                     'staffId' => (int) ($expense->staff_id ?? 0),
                     'staffName' => $this->text($expense->staff?->full_name, $expense->staff_id ? "Staff #{$expense->staff_id}" : ''),
-                    'unitCost' => $this->decimal($expense->unit_cost_input ?? $expense->unit_cost ?? $expense->amount_input ?? $expense->amount ?? 0),
+                    'unitCost' => $this->decimal($expense->unit_cost ?? $expense->amount ?? 0),
+                    'unitCostInput' => $this->resolveInputAmount($expense->unit_cost_input, $expense->unit_cost ?? $expense->amount, $currency, $expense->exchange_rate),
                     'vendor' => $this->text($expense->vendor),
                 ];
             })
@@ -162,16 +199,20 @@ final class ReportSubpageService
             ->all();
 
         $byCategory = [];
+        $totalSpend = 0.0;
         foreach ($rows as $row) {
             $category = (string) $row['category'];
             $byCategory[$category] ??= ['category' => $category, 'amount' => 0.0];
-            $byCategory[$category]['amount'] = $this->decimal($byCategory[$category]['amount'] + (float) $row['amountInput']);
+            $byCategory[$category]['amount'] = $this->decimal($byCategory[$category]['amount'] + (float) ($row['amount'] ?? 0));
+            $totalSpend += (float) ($row['amount'] ?? 0);
+            $this->addCurrencySectionValue($currencySections, $row['currency'] ?? 'AFN', 'totalSpend', $row['amountInput'] ?? 0);
         }
 
         return [
             'summary' => [
+                'currencySections' => $currencySections,
                 'recordCount' => count($rows),
-                'totalSpend' => $this->decimal(array_sum(array_column($rows, 'amountInput'))),
+                'totalSpend' => $this->decimal($totalSpend),
             ],
             'breakdown' => $this->sortRows(array_values($byCategory), 'amount'),
             'history' => $this->paginateRows(
@@ -193,9 +234,17 @@ final class ReportSubpageService
         $invoiceId = $this->text($filters['invoiceId'] ?? '');
         $agingBucket = $this->normalizedFilter($filters, 'debtAgingBucket');
         $search = mb_strtolower($this->text($filters['search'] ?? ''));
+        $currencySections = $this->initializeCurrencySections([
+            'totalDebt',
+            'totalNet',
+            'totalPaid',
+        ]);
 
         $rows = Debt::query()
-            ->with('patient:id,patient_code,first_name,last_name')
+            ->with([
+                'invoice:id,currency,exchange_rate,net_amount,net_amount_input',
+                'patient:id,patient_code,first_name,last_name',
+            ])
             ->where('debt_amount', '>', 0)
             ->whereHas('invoice', function ($query): void {
                 $query->whereIn('status', ['unpaid', 'partially_paid']);
@@ -207,15 +256,25 @@ final class ReportSubpageService
             ->map(function (Debt $debt): array {
                 $invoiceDate = $this->dateString($debt->invoice_date);
                 $agingDays = (int) round($this->parseDate($invoiceDate)?->diffInDays(CarbonImmutable::now()) ?? 0);
+                $currency = $this->currencyCode($debt->invoice?->currency ?? $debt->currency);
+                $exchangeRate = $this->decimal($debt->invoice?->exchange_rate ?? 1) ?: 1.0;
+                $netAmount = $this->decimal($debt->net_amount ?? $debt->invoice?->net_amount ?? 0);
+                $paidAmount = $this->decimal($debt->paid_amount ?? 0);
+                $debtAmount = $this->decimal($debt->debt_amount ?? max(0, $netAmount - $paidAmount));
 
                 return [
                     'agingBucket' => $this->agingBucket($agingDays),
-                    'debtAmount' => $this->decimal($debt->debt_amount ?? 0),
+                    'currency' => $currency,
+                    'debtAmount' => $debtAmount,
+                    'debtAmountInput' => $this->convertBaseAmountToInputCurrency($debtAmount, $currency, $exchangeRate),
+                    'exchangeRate' => $exchangeRate,
                     'id' => (int) $debt->id,
                     'invoiceDate' => $invoiceDate,
                     'invoiceId' => (string) ($debt->invoice_id ?? ''),
-                    'netAmount' => $this->decimal($debt->net_amount ?? 0),
-                    'paidAmount' => $this->decimal($debt->paid_amount ?? 0),
+                    'netAmount' => $netAmount,
+                    'netAmountInput' => $this->resolveInputAmount($debt->invoice?->net_amount_input, $netAmount, $currency, $exchangeRate),
+                    'paidAmount' => $paidAmount,
+                    'paidAmountInput' => $this->convertBaseAmountToInputCurrency($paidAmount, $currency, $exchangeRate),
                     'patientId' => (string) ($debt->patient_id ?? ''),
                     'patientName' => $this->patientName($debt->patient, $debt->patient_id),
                     'status' => $this->text($debt->status, 'open'),
@@ -271,11 +330,15 @@ final class ReportSubpageService
             $agingBreakdown[$bucket] ??= ['amount' => 0.0, 'bucket' => $bucket, 'count' => 0];
             $agingBreakdown[$bucket]['amount'] = $this->decimal($agingBreakdown[$bucket]['amount'] + (float) $row['debtAmount']);
             $agingBreakdown[$bucket]['count'] += 1;
+            $this->addCurrencySectionValue($currencySections, $row['currency'] ?? 'AFN', 'totalDebt', $row['debtAmountInput'] ?? 0);
+            $this->addCurrencySectionValue($currencySections, $row['currency'] ?? 'AFN', 'totalNet', $row['netAmountInput'] ?? 0);
+            $this->addCurrencySectionValue($currencySections, $row['currency'] ?? 'AFN', 'totalPaid', $row['paidAmountInput'] ?? 0);
         }
 
         return [
             'summary' => [
                 'debtCount' => count($rows),
+                'currencySections' => $currencySections,
                 'totalDebt' => $totalPatientDebt,
                 'totalNet' => $this->decimal(array_sum(array_column($rows, 'netAmount'))),
                 'totalPaid' => $this->decimal(array_sum(array_column($rows, 'paidAmount'))),
@@ -300,6 +363,13 @@ final class ReportSubpageService
         $entryType = $this->normalizedFilter($filters, 'entryType');
         $staffId = (int) ($filters['staffId'] ?? 0);
         $search = mb_strtolower($this->text($filters['search'] ?? ''));
+        $currencySections = $this->initializeCurrencySections([
+            'balance',
+            'previousBalance',
+            'rangeNet',
+            'totalIn',
+            'totalOut',
+        ]);
 
         $rows = SafeTransaction::query()
             ->with('pickedByStaff:id,full_name')
@@ -309,11 +379,17 @@ final class ReportSubpageService
             ->orderByDesc('id')
             ->get()
             ->map(function (SafeTransaction $row): array {
+                $currency = $this->currencyCode($row->currency);
+                $amount = $this->decimal($row->amount ?? 0);
+
                 return [
-                    'amountInput' => $this->decimal($row->amount_input ?? $row->amount ?? 0),
+                    'amount' => $amount,
+                    'amountInput' => $this->resolveInputAmount($row->amount_input, $row->amount, $currency, $row->exchange_rate),
                     'createdAt' => $this->dateTimeString($row->created_at),
+                    'currency' => $currency,
                     'direction' => $this->text($row->direction, 'in'),
                     'entryType' => $this->text($row->entry_type, 'adjustment'),
+                    'exchangeRate' => $this->decimal($row->exchange_rate ?? 1) ?: 1.0,
                     'id' => (int) $row->id,
                     'notes' => $this->text($row->notes),
                     'pickedByStaffId' => (int) ($row->picked_by_staff_id ?? 0),
@@ -348,32 +424,62 @@ final class ReportSubpageService
         $totalOut = 0.0;
         foreach ($rows as $row) {
             if ($row['direction'] === 'out') {
-                $totalOut += (float) $row['amountInput'];
+                $totalOut += (float) $row['amount'];
+                $this->addCurrencySectionValue($currencySections, $row['currency'] ?? 'AFN', 'totalOut', $row['amountInput']);
             } else {
-                $totalIn += (float) $row['amountInput'];
+                $totalIn += (float) $row['amount'];
+                $this->addCurrencySectionValue($currencySections, $row['currency'] ?? 'AFN', 'totalIn', $row['amountInput']);
             }
         }
 
-        $balanceIn = SafeTransaction::query()
-            ->where('direction', 'in')
+        $balanceRows = SafeTransaction::query()
+            ->select(['transaction_date', 'direction', 'amount', 'amount_input', 'currency', 'exchange_rate'])
             ->where('transaction_date', '<=', $endDate->toDateString())
-            ->sum('amount_input');
-        $balanceOut = SafeTransaction::query()
-            ->where('direction', 'out')
-            ->where('transaction_date', '<=', $endDate->toDateString())
-            ->sum('amount_input');
-        $previousBalanceIn = SafeTransaction::query()
-            ->where('direction', 'in')
-            ->where('transaction_date', '<', $startDate->toDateString())
-            ->sum('amount_input');
-        $previousBalanceOut = SafeTransaction::query()
-            ->where('direction', 'out')
-            ->where('transaction_date', '<', $startDate->toDateString())
-            ->sum('amount_input');
+            ->get();
+
+        $balanceIn = 0.0;
+        $balanceOut = 0.0;
+        $previousBalanceIn = 0.0;
+        $previousBalanceOut = 0.0;
+
+        foreach ($balanceRows as $balanceRow) {
+            $currency = $this->currencyCode($balanceRow->currency);
+            $amount = $this->decimal($balanceRow->amount ?? 0);
+            $amountInput = $this->resolveInputAmount($balanceRow->amount_input, $balanceRow->amount, $currency, $balanceRow->exchange_rate);
+            $isOut = $this->text($balanceRow->direction, 'in') === 'out';
+            $transactionDate = $this->dateString($balanceRow->transaction_date);
+
+            if ($isOut) {
+                $balanceOut += $amount;
+                $this->addCurrencySectionValue($currencySections, $currency, 'balance', -$amountInput);
+            } else {
+                $balanceIn += $amount;
+                $this->addCurrencySectionValue($currencySections, $currency, 'balance', $amountInput);
+            }
+
+            if ($transactionDate < $startDate->toDateString()) {
+                if ($isOut) {
+                    $previousBalanceOut += $amount;
+                    $this->addCurrencySectionValue($currencySections, $currency, 'previousBalance', -$amountInput);
+                } else {
+                    $previousBalanceIn += $amount;
+                    $this->addCurrencySectionValue($currencySections, $currency, 'previousBalance', $amountInput);
+                }
+            }
+        }
+
+        foreach (['AFN', 'USD'] as $currency) {
+            $currencySections[$currency]['rangeNet'] = $this->decimal(
+                ($currencySections[$currency]['totalIn'] ?? 0) - ($currencySections[$currency]['totalOut'] ?? 0)
+            );
+            $currencySections[$currency]['balance'] = $this->decimal($currencySections[$currency]['balance'] ?? 0);
+            $currencySections[$currency]['previousBalance'] = $this->decimal($currencySections[$currency]['previousBalance'] ?? 0);
+        }
 
         return [
             'summary' => [
                 'balance' => $this->decimal($balanceIn - $balanceOut),
+                'currencySections' => $currencySections,
                 'previousBalance' => $this->decimal($previousBalanceIn - $previousBalanceOut),
                 'rangeNet' => $this->decimal($totalIn - $totalOut),
                 'totalIn' => $this->decimal($totalIn),
@@ -397,6 +503,9 @@ final class ReportSubpageService
         $staffId = (int) ($filters['staffId'] ?? 0);
         $status = $this->normalizedFilter($filters, 'statusFilter');
         $search = mb_strtolower($this->text($filters['search'] ?? ''));
+        $currencySections = $this->initializeCurrencySections([
+            'paidTotal',
+        ]);
 
         $rows = SalaryPayment::query()
             ->with('staff:id,full_name')
@@ -405,10 +514,16 @@ final class ReportSubpageService
             ->orderByDesc('payment_date')
             ->get()
             ->map(function (SalaryPayment $payment): array {
+                $currency = $this->currencyCode($payment->currency);
+                $netAmount = $this->decimal($payment->net_amount ?? 0);
+
                 return [
                     'createdAt' => $this->dateTimeString($payment->created_at),
+                    'currency' => $currency,
+                    'exchangeRate' => $this->decimal($payment->exchange_rate ?? 1) ?: 1.0,
                     'id' => (int) $payment->id,
-                    'netAmountInput' => $this->decimal($payment->net_amount_input ?? $payment->net_amount ?? 0),
+                    'netAmount' => $netAmount,
+                    'netAmountInput' => $this->resolveInputAmount($payment->net_amount_input, $payment->net_amount, $currency, $payment->exchange_rate),
                     'paymentDate' => $this->dateString($payment->payment_date),
                     'salaryMonth' => $this->text($payment->salary_month),
                     'staffId' => (int) ($payment->staff_id ?? 0),
@@ -439,7 +554,8 @@ final class ReportSubpageService
         $pendingCount = 0;
         foreach ($rows as $row) {
             if (in_array((string) $row['status'], ['paid', 'partial'], true)) {
-                $paidTotal += (float) $row['netAmountInput'];
+                $paidTotal += (float) ($row['netAmount'] ?? 0);
+                $this->addCurrencySectionValue($currencySections, $row['currency'] ?? 'AFN', 'paidTotal', $row['netAmountInput'] ?? 0);
             }
             if ((string) $row['status'] === 'pending') {
                 $pendingCount++;
@@ -448,6 +564,7 @@ final class ReportSubpageService
 
         return [
             'summary' => [
+                'currencySections' => $currencySections,
                 'paidTotal' => $this->decimal($paidTotal),
                 'pendingCount' => $pendingCount,
                 'totalCount' => count($rows),
@@ -470,27 +587,69 @@ final class ReportSubpageService
         $shareholderId = (int) ($filters['shareholderId'] ?? 0);
         $transactionType = $this->normalizedFilter($filters, 'transactionType');
         $search = mb_strtolower($this->text($filters['search'] ?? ''));
+        $currencySections = $this->initializeCurrencySections([
+            'initialCapital',
+            'rangeContribution',
+            'rangeDistribution',
+            'rangeNet',
+        ]);
 
         $shareholders = Shareholder::query()
-            ->withSum(['transactions as total_contribution_amount' => static function ($query): void {
-                $query->where('transaction_type', 'contribution');
-            }], 'amount_input')
-            ->withSum(['transactions as total_distribution_amount' => static function ($query): void {
-                $query->where('transaction_type', 'distribution');
-            }], 'amount_input')
+            ->with(['transactions' => static function ($query): void {
+                $query
+                    ->select(['id', 'shareholder_id', 'transaction_type', 'amount', 'amount_input', 'currency', 'exchange_rate'])
+                    ->orderByDesc('transaction_date')
+                    ->orderByDesc('id');
+            }])
             ->orderBy('full_name')
             ->get()
             ->map(function (Shareholder $shareholder): array {
-                $contributedAmount = $this->decimal($shareholder->total_contribution_amount ?? 0);
-                $distributedAmount = $this->decimal($shareholder->total_distribution_amount ?? 0);
+                $currency = $this->currencyCode($shareholder->currency);
+                $exchangeRate = $this->decimal($shareholder->exchange_rate ?? 1) ?: 1.0;
+                $initialCapital = $this->decimal($shareholder->initial_capital ?? 0);
+                $initialCapitalInput = $this->resolveInputAmount($shareholder->initial_capital_input, $shareholder->initial_capital, $currency, $shareholder->exchange_rate);
+                $positionCurrencySections = $this->initializeCurrencySections([
+                    'balanceAmount',
+                    'contributedAmount',
+                    'distributedAmount',
+                    'initialCapital',
+                ]);
+                $this->addCurrencySectionValue($positionCurrencySections, $currency, 'initialCapital', $initialCapitalInput);
+                $this->addCurrencySectionValue($positionCurrencySections, $currency, 'balanceAmount', $initialCapitalInput);
+
+                $contributedAmount = 0.0;
+                $distributedAmount = 0.0;
+                $balanceAmount = $initialCapital;
+
+                foreach ($shareholder->transactions as $transaction) {
+                    $transactionCurrency = $this->currencyCode($transaction->currency);
+                    $transactionAmount = $this->decimal($transaction->amount ?? 0);
+                    $transactionAmountInput = $this->resolveInputAmount($transaction->amount_input, $transaction->amount, $transactionCurrency, $transaction->exchange_rate);
+
+                    if ($this->text($transaction->transaction_type, 'contribution') === 'distribution') {
+                        $distributedAmount += $transactionAmount;
+                        $balanceAmount -= $transactionAmount;
+                        $this->addCurrencySectionValue($positionCurrencySections, $transactionCurrency, 'distributedAmount', $transactionAmountInput);
+                        $this->addCurrencySectionValue($positionCurrencySections, $transactionCurrency, 'balanceAmount', -$transactionAmountInput);
+                    } else {
+                        $contributedAmount += $transactionAmount;
+                        $balanceAmount += $transactionAmount;
+                        $this->addCurrencySectionValue($positionCurrencySections, $transactionCurrency, 'contributedAmount', $transactionAmountInput);
+                        $this->addCurrencySectionValue($positionCurrencySections, $transactionCurrency, 'balanceAmount', $transactionAmountInput);
+                    }
+                }
 
                 return [
-                    'balanceAmount' => $this->decimal($contributedAmount - $distributedAmount),
-                    'contributedAmount' => $contributedAmount,
-                    'distributedAmount' => $distributedAmount,
+                    'balanceAmount' => $this->decimal($balanceAmount),
+                    'contributedAmount' => $this->decimal($contributedAmount),
+                    'currency' => $currency,
+                    'currencySections' => $positionCurrencySections,
+                    'distributedAmount' => $this->decimal($distributedAmount),
+                    'exchangeRate' => $exchangeRate,
                     'fullName' => $this->text($shareholder->full_name, "Shareholder #{$shareholder->id}"),
                     'id' => (int) $shareholder->id,
-                    'initialCapitalInput' => $this->decimal($shareholder->initial_capital_input ?? 0),
+                    'initialCapital' => $initialCapital,
+                    'initialCapitalInput' => $initialCapitalInput,
                     'ownershipPercentage' => $this->decimal($shareholder->ownership_percentage ?? 0),
                     'status' => $this->text($shareholder->status, 'active'),
                 ];
@@ -505,9 +664,14 @@ final class ReportSubpageService
             ->orderByDesc('transaction_date')
             ->get()
             ->map(function (ShareholderTransaction $transaction): array {
+                $currency = $this->currencyCode($transaction->currency);
+
                 return [
-                    'amountInput' => $this->decimal($transaction->amount_input ?? $transaction->amount ?? 0),
+                    'amount' => $this->decimal($transaction->amount ?? 0),
+                    'amountInput' => $this->resolveInputAmount($transaction->amount_input, $transaction->amount, $currency, $transaction->exchange_rate),
                     'createdAt' => $this->dateTimeString($transaction->created_at),
+                    'currency' => $currency,
+                    'exchangeRate' => $this->decimal($transaction->exchange_rate ?? 1) ?: 1.0,
                     'id' => (int) $transaction->id,
                     'notes' => $this->text($transaction->notes),
                     'shareholderId' => (int) ($transaction->shareholder_id ?? 0),
@@ -537,18 +701,29 @@ final class ReportSubpageService
 
         $contribution = 0.0;
         $distribution = 0.0;
+        foreach ($shareholders as $shareholder) {
+            $this->addCurrencySectionValue($currencySections, $shareholder['currency'] ?? 'AFN', 'initialCapital', $shareholder['initialCapitalInput'] ?? 0);
+        }
         foreach ($transactions as $transaction) {
             if ($transaction['transactionType'] === 'distribution') {
-                $distribution += (float) $transaction['amountInput'];
+                $distribution += (float) ($transaction['amount'] ?? 0);
+                $this->addCurrencySectionValue($currencySections, $transaction['currency'] ?? 'AFN', 'rangeDistribution', $transaction['amountInput'] ?? 0);
             } else {
-                $contribution += (float) $transaction['amountInput'];
+                $contribution += (float) ($transaction['amount'] ?? 0);
+                $this->addCurrencySectionValue($currencySections, $transaction['currency'] ?? 'AFN', 'rangeContribution', $transaction['amountInput'] ?? 0);
             }
+        }
+        foreach (['AFN', 'USD'] as $currency) {
+            $currencySections[$currency]['rangeNet'] = $this->decimal(
+                ($currencySections[$currency]['rangeContribution'] ?? 0) - ($currencySections[$currency]['rangeDistribution'] ?? 0)
+            );
         }
 
         return [
             'summary' => [
                 'activeCount' => count(array_filter($shareholders, static fn (array $row): bool => $row['status'] === 'active')),
-                'initialCapital' => $this->decimal(array_sum(array_column($shareholders, 'initialCapitalInput'))),
+                'currencySections' => $currencySections,
+                'initialCapital' => $this->decimal(array_sum(array_column($shareholders, 'initialCapital'))),
                 'rangeContribution' => $this->decimal($contribution),
                 'rangeDistribution' => $this->decimal($distribution),
                 'rangeNet' => $this->decimal($contribution - $distribution),

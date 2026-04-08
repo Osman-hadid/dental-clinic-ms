@@ -149,17 +149,20 @@ final class ShareholderTransactionController extends BaseApiController
         $direction = $isContribution ? 'in' : 'out';
         $entryType = $isContribution ? 'deposit' : 'withdrawal';
         $amount = round((float) ($transaction->amount ?? 0), 2);
+        $currency = strtoupper((string) ($transaction->currency ?? 'AFN')) === 'USD' ? 'USD' : 'AFN';
+        $requestedAmount = round((float) ($transaction->amount_input ?? $transaction->amount ?? 0), 2);
 
         if ($direction === 'out') {
             $existingId = $entry?->id;
-            $currentBalance = SafeTransaction::currentBalance($existingId);
-            if ($currentBalance < $amount) {
+            $currentBalance = SafeTransaction::currentBalanceForCurrency($currency, $existingId);
+            if ($currentBalance < $requestedAmount) {
                 throw new ApiException(
                     errorCode: 'SAFE_BALANCE_INSUFFICIENT',
                     message: 'Safe balance is not enough for this shareholder distribution.',
                     details: [
                         'currentBalance' => $currentBalance,
-                        'requestedAmount' => $amount,
+                        'currency' => $currency,
+                        'requestedAmount' => $requestedAmount,
                     ],
                     httpCode: 422,
                 );
@@ -174,8 +177,8 @@ final class ShareholderTransactionController extends BaseApiController
             'entry_type' => $entryType,
             'direction' => $direction,
             'amount' => $amount,
-            'amount_input' => round((float) ($transaction->amount_input ?? $transaction->amount ?? 0), 2),
-            'currency' => strtoupper((string) ($transaction->currency ?? 'AFN')),
+            'amount_input' => $requestedAmount,
+            'currency' => $currency,
             'exchange_rate' => round((float) ($transaction->exchange_rate ?? 1), 6),
             'notes' => $transaction->notes ?: "Shareholder {$transaction->transaction_type} - {$shareholder->full_name}",
         ]);

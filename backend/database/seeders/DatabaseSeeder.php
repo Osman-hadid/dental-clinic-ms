@@ -17,7 +17,7 @@ class DatabaseSeeder extends Seeder
             AssignPermissionsToModuleRolesSeeder::class,
             SuperAdminUserSeeder::class,
             AdminUserSeeder::class,
-            ThreeMonthsTestDataSeeder::class,
+            // ThreeMonthsTestDataSeeder::class,
         ]);
     }
 }

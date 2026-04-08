@@ -9,18 +9,21 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { DEFAULT_AFN_PER_USD, type CurrencyCode, formatCurrency, getExchangeRate, parseMoney } from '@/lib/currency-utils';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import { useStaffList } from '@/modules/dental-management/presentation/hooks';
 import { createDefaultReportRange, fetchReport, toInputDate } from '@/modules/dental-management/presentation/reports/report-client';
-import { formatCurrency, parseMoney } from '@/lib/currency-utils';
 import { HandCoins, Trash2, Vault } from 'lucide-react';
 import { toast } from 'sonner';
 
 type SafeRow = {
+  amount: number;
   amountInput: number;
   createdAt: string;
+  currency: CurrencyCode;
   direction: string;
   entryType: string;
+  exchangeRate: number;
   id: number;
   notes: string;
   pickedByStaffId: number;
@@ -28,6 +31,14 @@ type SafeRow = {
   sourceType?: string;
   transactionDate: string;
 };
+
+type SafeCurrencySection = Record<CurrencyCode, {
+  balance: number;
+  previousBalance: number;
+  rangeNet: number;
+  totalIn: number;
+  totalOut: number;
+}>;
 
 type SafeReportResponse = {
   ledger: {
@@ -41,6 +52,7 @@ type SafeReportResponse = {
   };
   summary: {
     balance: number;
+    currencySections: SafeCurrencySection;
     previousBalance: number;
     rangeNet: number;
     totalIn: number;
@@ -60,8 +72,10 @@ type WorkflowAccessSummary = {
 
 type SafeForm = {
   amount: string;
+  currency: CurrencyCode;
   direction: 'in' | 'out';
   entryType: string;
+  exchangeRate: string;
   notes: string;
   pickedByStaffId: string;
   transactionDate: string;
@@ -75,9 +89,10 @@ const extractApiErrorMessage = (error: unknown, fallback: string): string => {
   const code = payload?.code;
 
   if (code === 'SAFE_BALANCE_INSUFFICIENT') {
+    const currency = String(payload?.details?.currency ?? 'AFN') === 'USD' ? 'USD' : 'AFN';
     const currentBalance = Number(payload?.details?.currentBalance ?? 0);
     const requestedAmount = Number(payload?.details?.requestedAmount ?? 0);
-    return `Safe balance is not enough. Current: ${formatCurrency(currentBalance, 'AFN')}. Requested: ${formatCurrency(requestedAmount, 'AFN')}.`;
+    return `Safe balance is not enough. Current: ${formatCurrency(currentBalance, currency)}. Requested: ${formatCurrency(requestedAmount, currency)}.`;
   }
 
   if (code === 'SAFE_TRANSACTION_READ_ONLY') {
@@ -101,11 +116,30 @@ const extractApiErrorMessage = (error: unknown, fallback: string): string => {
 
 const defaultForm = (): SafeForm => ({
   amount: '',
+  currency: 'AFN',
   direction: 'in',
   entryType: 'deposit',
+  exchangeRate: '1',
   notes: '',
   pickedByStaffId: '',
   transactionDate: toInputDate(new Date()),
+});
+
+const emptyCurrencySections = (): SafeCurrencySection => ({
+  AFN: {
+    balance: 0,
+    previousBalance: 0,
+    rangeNet: 0,
+    totalIn: 0,
+    totalOut: 0,
+  },
+  USD: {
+    balance: 0,
+    previousBalance: 0,
+    rangeNet: 0,
+    totalIn: 0,
+    totalOut: 0,
+  },
 });
 
 export default function SafePage(): JSX.Element {
@@ -117,6 +151,7 @@ export default function SafePage(): JSX.Element {
   const range = createDefaultReportRange(90);
   const [form, setForm] = useState<SafeForm>(() => defaultForm());
   const [report, setReport] = useState<SafeReportResponse | null>(null);
+  const [defaultExchangeRate, setDefaultExchangeRate] = useState(DEFAULT_AFN_PER_USD);
   const [startDate, setStartDate] = useState(range.startDate);
   const [endDate, setEndDate] = useState(range.endDate);
   const [direction, setDirection] = useState('all');
@@ -137,6 +172,14 @@ export default function SafePage(): JSX.Element {
       })
       .catch(() => {
         setWorkflowAccess(null);
+      });
+  }, []);
+
+  useEffect(() => {
+    void getExchangeRate(client)
+      .then((rate) => setDefaultExchangeRate(rate))
+      .catch(() => {
+        setDefaultExchangeRate(DEFAULT_AFN_PER_USD);
       });
   }, []);
 
@@ -185,6 +228,11 @@ export default function SafePage(): JSX.Element {
     hasAppliedQuery.current = true;
   }, [searchParams]);
 
+  const resolvedExchangeRate = form.currency === 'USD'
+    ? Math.max(parseMoney(form.exchangeRate) || defaultExchangeRate, DEFAULT_AFN_PER_USD)
+    : 1;
+  const currencySections = report?.summary.currencySections ?? emptyCurrencySections();
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
     if (!workflowAccess?.capabilities.canManageSafeLedger) {
@@ -193,7 +241,7 @@ export default function SafePage(): JSX.Element {
     }
 
     const rawAmount = parseMoney(form.amount);
-    if (!form.transactionDate || rawAmount <= 0) {
+    if (!form.transactionDate || rawAmount <= 0 || resolvedExchangeRate <= 0) {
       return;
     }
 
@@ -201,10 +249,10 @@ export default function SafePage(): JSX.Element {
     void client
       .post('/api/v1/dental-management/safe-transactions', {
         amount: rawAmount,
-        currency: 'AFN',
+        currency: form.currency,
         direction: form.direction,
         entryType: form.entryType,
-        exchangeRate: 1,
+        exchangeRate: resolvedExchangeRate,
         notes: form.notes.trim() || undefined,
         pickedByStaffId: form.pickedByStaffId || undefined,
         sourceType: null,
@@ -294,6 +342,43 @@ export default function SafePage(): JSX.Element {
                       </select>
                     </div>
                   </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-1.5">
+                      <Label>Currency</Label>
+                      <select
+                        className="h-9 rounded-md border bg-background px-3 text-sm"
+                        value={form.currency}
+                        onChange={(event) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            currency: event.target.value as CurrencyCode,
+                            exchangeRate:
+                              event.target.value === 'USD' ? String(defaultExchangeRate) : '1',
+                          }))
+                        }
+                      >
+                        <option value="AFN">AFN</option>
+                        <option value="USD">USD</option>
+                      </select>
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label>Exchange Rate</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={form.exchangeRate}
+                        onChange={(event) =>
+                          setForm((prev) => ({ ...prev, exchangeRate: event.target.value }))
+                        }
+                        disabled={form.currency === 'AFN'}
+                        placeholder="AFN per 1 USD"
+                      />
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-dashed bg-slate-50/80 p-3 text-xs text-muted-foreground">
+                    This safe entry affects only the selected currency section.
+                  </div>
                   <div className="grid gap-1.5">
                     <Label>Picked by staff (optional)</Label>
                     <select className="h-9 rounded-md border bg-background px-3 text-sm" value={form.pickedByStaffId} onChange={(event) => setForm((prev) => ({ ...prev, pickedByStaffId: event.target.value }))}>
@@ -316,20 +401,35 @@ export default function SafePage(): JSX.Element {
                 </form>
 
                 <div className="grid gap-3">
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-2xl border bg-background/80 p-4">
-                    <p className="text-xs text-muted-foreground">Current Balance</p>
-                    <p className="text-2xl font-semibold">{formatCurrency(report?.summary.balance ?? 0, 'AFN')}</p>
+                  <div className="grid gap-3 xl:grid-cols-2">
+                    {(['AFN', 'USD'] as CurrencyCode[]).map((currency) => (
+                      <div key={currency} className="rounded-2xl border bg-background/80 p-4">
+                        <div className="mb-3 flex items-center justify-between">
+                          <p className="text-sm font-semibold text-foreground">{currency} Section</p>
+                          <span className="rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground">Original currency</span>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="rounded-xl border bg-muted/20 p-3">
+                            <p className="text-xs text-muted-foreground">Current Balance</p>
+                            <p className="text-xl font-semibold">{formatCurrency(currencySections[currency].balance, currency)}</p>
+                          </div>
+                          <div className="rounded-xl border bg-muted/20 p-3">
+                            <p className="text-xs text-muted-foreground">Range Net</p>
+                            <p className="text-xl font-semibold">{formatCurrency(currencySections[currency].rangeNet, currency)}</p>
+                          </div>
+                          <div className="rounded-xl border bg-muted/20 p-3">
+                            <p className="text-xs text-muted-foreground">Range In</p>
+                            <p className="text-xl font-semibold">{formatCurrency(currencySections[currency].totalIn, currency)}</p>
+                          </div>
+                          <div className="rounded-xl border bg-muted/20 p-3">
+                            <p className="text-xs text-muted-foreground">Range Out</p>
+                            <p className="text-xl font-semibold">{formatCurrency(currencySections[currency].totalOut, currency)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                    <div className="rounded-2xl border bg-background/80 p-4">
-                      <p className="text-xs text-muted-foreground">Range In</p>
-                      <p className="text-2xl font-semibold">{formatCurrency(report?.summary.totalIn ?? 0, 'AFN')}</p>
-                    </div>
-                    <div className="rounded-2xl border bg-background/80 p-4">
-                    <p className="text-xs text-muted-foreground">Range Out</p>
-                    <p className="text-2xl font-semibold">{formatCurrency(report?.summary.totalOut ?? 0, 'AFN')}</p>
-                  </div>
-                </div>
+
                 {focus ? (
                   <div className="rounded-2xl border bg-background/80 p-3 text-xs text-muted-foreground space-y-1">
                     <p>
@@ -337,7 +437,10 @@ export default function SafePage(): JSX.Element {
                     </p>
                     {startDate === endDate ? (
                       <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
-                        Previous balance before {startDate}: <span className="font-medium text-foreground">{formatCurrency(report?.summary.previousBalance ?? 0, 'AFN')}</span>
+                        Previous balances before {startDate}:{' '}
+                        <span className="font-medium text-foreground">{formatCurrency(currencySections.AFN.previousBalance, 'AFN')}</span>
+                        {' | '}
+                        <span className="font-medium text-foreground">{formatCurrency(currencySections.USD.previousBalance, 'USD')}</span>
                       </p>
                     ) : null}
                   </div>
@@ -372,11 +475,6 @@ export default function SafePage(): JSX.Element {
                       <Button type="button" onClick={() => void fetchData(1)}>Apply Filters</Button>
                     </div>
                   </div>
-
-                  <div className="rounded-2xl border bg-background/80 p-4">
-                    <p className="text-xs text-muted-foreground">Range Net</p>
-                    <p className="text-2xl font-semibold">{formatCurrency(report?.summary.rangeNet ?? 0, 'AFN')}</p>
-                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -410,7 +508,7 @@ export default function SafePage(): JSX.Element {
                               <td className="px-3 py-2">{row.direction}</td>
                               <td className="px-3 py-2">{row.entryType}</td>
                               <td className={`px-3 py-2 font-medium ${row.direction === 'out' ? 'text-rose-600' : 'text-emerald-700'}`}>
-                                {formatCurrency(row.amountInput, 'AFN')}
+                                <div>{formatCurrency(row.amountInput, row.currency)}</div>
                               </td>
                               <td className="px-3 py-2">{row.pickedByStaffName || '-'}</td>
                               <td className="px-3 py-2">{row.notes || '-'}</td>

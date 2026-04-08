@@ -1,5 +1,5 @@
-import { JSX, useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { JSX, KeyboardEvent, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   CalendarDays,
@@ -13,9 +13,11 @@ import {
 export type PatientTimelineItemTone = 'danger' | 'default' | 'info' | 'safe' | 'warning';
 
 export type PatientTimelineItem = {
+  actionLabel?: string;
   amountLabel?: string;
   badge?: string;
   description?: string;
+  href?: string;
   id: string;
   kind: 'appointment' | 'invoice' | 'payment' | 'prescription' | 'task' | 'treatment' | 'visit';
   occurredAt: string;
@@ -76,9 +78,30 @@ export const PatientTimelinePanel = ({
   stats,
 }: Props): JSX.Element => {
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
+  const router = useRouter();
+
+  const openTimelineItem = (item: PatientTimelineItem): void => {
+    if (item.href) {
+      router.push(item.href);
+      return;
+    }
+    if (item.visitId) {
+      onOpenVisit(item.visitId);
+    }
+  };
+
+  const handleTimelineItemKeyDown = (
+    event: KeyboardEvent<HTMLDivElement>,
+    item: PatientTimelineItem
+  ): void => {
+    if (!item.href && !item.visitId) return;
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    openTimelineItem(item);
+  };
 
   return (
-  <Card className="w-full max-w-full overflow-hidden border-border bg-card text-card-foreground lg:max-w-[26rem] xl:max-w-[28rem]">
+  <Card className="min-w-0 w-full overflow-hidden border-border bg-card text-card-foreground">
     <CardHeader className="pb-2">
       <CardTitle className="flex items-center justify-between text-base">
         <span>Unified Timeline</span>
@@ -88,7 +111,7 @@ export const PatientTimelinePanel = ({
         Follow appointments, chairside work, prescriptions, payments, and tasks in one chronological stream.
       </CardDescription>
     </CardHeader>
-    <CardContent className="space-y-4 overflow-x-hidden">
+    <CardContent className="min-w-0 space-y-4 overflow-x-hidden">
       <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/15 p-3 text-xs grid-cols-2">
         <p className="text-muted-foreground">
           Events
@@ -117,35 +140,49 @@ export const PatientTimelinePanel = ({
       ) : items.length === 0 ? (
         <p className="text-sm text-muted-foreground">No timeline activity recorded yet.</p>
       ) : (
-        <div className="max-w-full rounded-xl border border-border/70 bg-background/70 p-2.5">
-          <div className="max-w-full overflow-x-auto overflow-y-visible overscroll-x-contain pb-3">
-            <div className="inline-flex min-w-full px-2 pt-20">
-              <div className="flex items-center gap-0">
-                {items.map((item, index) => {
-                  const meta = kindMeta[item.kind];
-                  const Icon = meta.icon;
-                  const tone = toneClasses[item.tone ?? 'default'];
-                  const isLast = index === items.length - 1;
-                  const isActive = activeItemId === item.id;
+        <div className="max-w-full overflow-hidden rounded-xl border border-border/70 bg-background/70 p-3 sm:p-4">
+          <div className="w-full overflow-x-auto overflow-y-visible overscroll-x-contain pb-3">
+            <div className="relative h-56 w-max min-w-full px-6 sm:px-8">
+                <div className="absolute left-10 right-10 top-[6.1rem] h-1 rounded-full bg-border/80 sm:left-12 sm:right-12" />
+                <div className="relative z-10 flex h-full items-start">
+                  {items.map((item, index) => {
+                    const meta = kindMeta[item.kind];
+                    const Icon = meta.icon;
+                    const tone = toneClasses[item.tone ?? 'default'];
+                    const isActive = activeItemId === item.id;
+                    const isInteractive = Boolean(item.href || item.visitId);
 
-                  return (
-                    <div
-                      key={item.id}
-                      className="relative flex shrink-0 items-center"
-                      onMouseEnter={() => {
-                        setActiveItemId(item.id);
-                      }}
-                      onMouseLeave={() => {
-                        setActiveItemId((current) => (current === item.id ? null : current));
-                      }}
-                    >
-                      <div className="relative flex w-16 flex-col items-center">
+                    return (
+                      <div
+                        key={item.id}
+                        className={`relative flex w-[7rem] shrink-0 flex-col items-center pt-24 sm:w-[8.25rem] ${isInteractive ? 'cursor-pointer' : ''}`}
+                        onMouseEnter={() => {
+                          setActiveItemId(item.id);
+                        }}
+                        onMouseLeave={() => {
+                          setActiveItemId((current) => (current === item.id ? null : current));
+                        }}
+                        onFocus={() => {
+                          setActiveItemId(item.id);
+                        }}
+                        onBlur={() => {
+                          setActiveItemId((current) => (current === item.id ? null : current));
+                        }}
+                        onClick={() => {
+                          openTimelineItem(item);
+                        }}
+                        onKeyDown={(event) => {
+                          handleTimelineItemKeyDown(event, item);
+                        }}
+                        role={isInteractive ? 'button' : undefined}
+                        tabIndex={isInteractive ? 0 : undefined}
+                      >
                         <div
-                          className={`absolute bottom-full left-1/2 z-20 w-56 max-w-[calc(100vw-4rem)] -translate-x-1/2 pb-2 transition-opacity duration-150 ${
+                          className={`absolute bottom-full left-1/2 z-20 w-64 max-w-[calc(100vw-4rem)] -translate-x-1/2 pb-3 transition-opacity duration-150 ${
                             isActive ? 'visible opacity-100 pointer-events-auto' : 'invisible opacity-0 pointer-events-none'
                           }`}
                         >
-                          <div className="rounded-xl border border-border/80 bg-background p-3 shadow-xl">
+                          <div className={`rounded-xl border border-border/80 bg-background p-3 shadow-xl ${isInteractive ? 'transition hover:border-primary/40 hover:bg-accent/10' : ''}`}>
                             <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
                               <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-2">
@@ -178,40 +215,31 @@ export const PatientTimelinePanel = ({
                               </p>
                             ) : null}
 
-                            {item.visitId ? (
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                className="mt-3 h-7 px-2 text-[11px]"
-                                onClick={() => {
-                                  onOpenVisit(item.visitId!);
-                                }}
-                              >
+                            {item.href ? (
+                              <p className="mt-3 text-[11px] font-semibold text-primary">
+                                {item.actionLabel || 'Open details'}
+                              </p>
+                            ) : item.visitId ? (
+                              <p className="mt-3 text-[11px] font-semibold text-primary">
                                 Open Visit
-                              </Button>
+                              </p>
                             ) : null}
 
                             <div className="absolute left-1/2 top-full h-3 w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border-b border-r border-border bg-background" />
                           </div>
                         </div>
 
-                        <div className={`relative z-10 flex size-8 items-center justify-center rounded-full border-2 shadow-sm transition-transform duration-150 ${isActive ? 'scale-110' : ''} ${tone}`}>
-                          <Icon className="size-3.5" />
+                        <div className={`relative z-10 flex size-11 items-center justify-center rounded-full border-[3px] shadow-sm transition-transform duration-150 ${isActive ? 'scale-110' : ''} ${tone}`}>
+                          <Icon className="size-5" />
                         </div>
-                        <p className="mt-2 text-center text-[10px] font-medium text-foreground">{item.badge || meta.label}</p>
-                        <p className="mt-1 max-w-14 text-center text-[9px] text-muted-foreground">
+                        <p className="mt-3 text-center text-xs font-semibold text-foreground">{item.badge || meta.label}</p>
+                        <p className="mt-1 max-w-32 text-center text-[10px] text-muted-foreground">
                           {formatDateTime(item.occurredAt)}
                         </p>
                       </div>
-
-                      {!isLast ? (
-                        <div className="mx-0.5 h-px w-4 bg-border" />
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
             </div>
           </div>
         </div>

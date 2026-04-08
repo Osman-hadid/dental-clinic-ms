@@ -1,62 +1,55 @@
 import { JSX } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { formatCurrency } from '@/lib/currency-utils';
+import { type CurrencyCode, formatCurrency } from '@/lib/currency-utils';
 import { FinancialData, pieColors } from '@/modules/dental-management/presentation/reports/report-dashboard-types';
 import { MetricCard } from '@/modules/dental-management/presentation/reports/report-dashboard-utils';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
-export const FinancialReportPanel = ({ data }: { data: FinancialData }): JSX.Element => (
-  <div className="space-y-4">
-    <div className="grid gap-4 md:grid-cols-5">
-      <MetricCard
-        emphasize
-        label="Money in safe now"
-        tone="safe"
-        value={formatCurrency(data.summary.safeBalance, 'AFN')}
-      />
-      <MetricCard
-        emphasize
-        label="Total Debts"
-        tone="danger"
-        value={formatCurrency(data.summary.outstanding, 'AFN')}
-      />
-      <MetricCard
-        emphasize
-        label="Total unpaid money"
-        tone="danger"
-        value={formatCurrency(data.summary.thirdCompanyUnpaid, 'AFN')}
-      />
-      <MetricCard
-        emphasize
-        label="Total third company paid"
-        value={formatCurrency(data.summary.thirdCompanyPaid ?? 0, 'AFN')}
-      />
-      <MetricCard
-        emphasize
-        label="Cash taken from safe"
-        tone="danger"
-        value={formatCurrency(data.summary.safeOut, 'AFN')}
-      />
-    </div>
+export const FinancialReportPanel = ({ data }: { data: FinancialData }): JSX.Element => {
+  const currencySections = data.summary.currencySections;
 
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      <MetricCard label="Total billed to patients" value={formatCurrency(data.summary.billed, 'AFN')} />
-      <MetricCard label="Money received" value={formatCurrency(data.summary.paid, 'AFN')} />
-      <MetricCard label="Clinic costs" value={formatCurrency(data.summary.expenses, 'AFN')} />
-      <MetricCard label="Cash added to safe" value={formatCurrency(data.summary.safeIn, 'AFN')} />
-      <MetricCard label="Share of bills collected" value={`${data.summary.collectionRate}%`} />
-      <MetricCard label="Net after costs" value={formatCurrency(data.summary.net, 'AFN')} />
-      <MetricCard label="Shareholder contribution" value={formatCurrency(data.summary.shareholderContribution, 'AFN')} />
-      <MetricCard label="Shareholder distribution" value={formatCurrency(data.summary.shareholderDistribution, 'AFN')} />
-      <MetricCard label="Salaries paid" value={formatCurrency(data.summary.salaryPaid, 'AFN')} />
-      <MetricCard label="Days closed" value={data.summary.closeCount} />
-      <MetricCard label="Latest close difference" value={formatCurrency(data.summary.latestCloseDifference, 'AFN')} />
-      <MetricCard label="Discrepancies logged" value={formatCurrency(data.summary.discrepancyTotal, 'AFN')} />
-      <MetricCard label="Open debt count" value={data.summary.openDebtCount} />
-      <MetricCard label="Overdue debt count" value={data.summary.overdueDebtCount} />
-    </div>
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 xl:grid-cols-2">
+        {(['AFN', 'USD'] as CurrencyCode[]).map((currency) => {
+          const section = currencySections[currency];
 
-    <div className="grid gap-4 xl:grid-cols-2">
+          return (
+            <Card key={currency} className="rounded-3xl border">
+              <CardHeader>
+                <CardTitle>{currency} Financial Section</CardTitle>
+                <CardDescription>These totals follow the original transaction currency saved on each record.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <MetricCard emphasize label="Money in safe now" tone="safe" value={formatCurrency(section.safeBalance, currency)} />
+                <MetricCard emphasize label="Total Debts" tone="danger" value={formatCurrency(section.outstanding, currency)} />
+                <MetricCard emphasize label="Total unpaid money" tone="danger" value={formatCurrency(section.thirdCompanyUnpaid, currency)} />
+                <MetricCard label="Total third company paid" value={formatCurrency(section.thirdCompanyPaid, currency)} />
+                <MetricCard label="Cash taken from safe" tone="danger" value={formatCurrency(section.safeOut, currency)} />
+                <MetricCard label="Total billed to patients" value={formatCurrency(section.billed, currency)} />
+                <MetricCard label="Money received" value={formatCurrency(section.paid, currency)} />
+                <MetricCard label="Clinic costs" value={formatCurrency(section.expenses, currency)} />
+                <MetricCard label="Cash added to safe" value={formatCurrency(section.safeIn, currency)} />
+                <MetricCard label="Net after costs" value={formatCurrency(section.net, currency)} />
+                <MetricCard label="Shareholder contribution" value={formatCurrency(section.shareholderContribution, currency)} />
+                <MetricCard label="Shareholder distribution" value={formatCurrency(section.shareholderDistribution, currency)} />
+                <MetricCard label="Salaries paid" value={formatCurrency(section.salaryPaid, currency)} />
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <MetricCard label="Share of bills collected" value={`${data.summary.collectionRate}%`} />
+        <MetricCard label="Days closed" value={data.summary.closeCount} />
+        <MetricCard label="Latest close difference" value={formatCurrency(data.summary.latestCloseDifference, 'AFN')} />
+        <MetricCard label="Discrepancies logged" value={formatCurrency(data.summary.discrepancyTotal, 'AFN')} />
+        <MetricCard label="Open debt count" value={data.summary.openDebtCount} />
+        <MetricCard label="Overdue debt count" value={data.summary.overdueDebtCount} />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
       <Card className="rounded-3xl border">
         <CardHeader>
           <CardTitle>Income over time</CardTitle>
@@ -155,7 +148,12 @@ export const FinancialReportPanel = ({ data }: { data: FinancialData }): JSX.Ele
                   <tr key={`${row.invoiceId ?? index}`} className="border-t">
                     <td className="px-3 py-2">#{String(row.invoiceId ?? '-')}</td>
                     <td className="px-3 py-2">{String(row.patientName ?? '-')}</td>
-                    <td className="px-3 py-2">{formatCurrency(Number(row.debtAmount ?? 0), 'AFN')}</td>
+                    <td className="px-3 py-2">
+                      {formatCurrency(
+                        Number(row.debtAmountInput ?? row.debtAmount ?? 0),
+                        (String(row.currency ?? 'AFN') === 'USD' ? 'USD' : 'AFN') as CurrencyCode
+                      )}
+                    </td>
                   </tr>
                 )) : (
                   <tr className="border-t">
@@ -260,7 +258,10 @@ export const FinancialReportPanel = ({ data }: { data: FinancialData }): JSX.Ele
                     <td className="px-3 py-2">{String(row.direction ?? '-')}</td>
                     <td className="px-3 py-2">{String(row.entryType ?? '-')}</td>
                     <td className={`px-3 py-2 font-medium ${String(row.direction ?? '') === 'out' ? 'text-rose-600' : 'text-emerald-700'}`}>
-                      {formatCurrency(Number(row.amount ?? 0), 'AFN')}
+                      {formatCurrency(
+                        Number(row.amountInput ?? row.amount ?? 0),
+                        (String(row.currency ?? 'AFN') === 'USD' ? 'USD' : 'AFN') as CurrencyCode
+                      )}
                     </td>
                   </tr>
                 )) : (
@@ -422,5 +423,6 @@ export const FinancialReportPanel = ({ data }: { data: FinancialData }): JSX.Ele
         </CardContent>
       </Card>
     </div>
-  </div>
-);
+    </div>
+  );
+};

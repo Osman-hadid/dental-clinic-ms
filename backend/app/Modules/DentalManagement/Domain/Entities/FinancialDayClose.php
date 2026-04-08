@@ -23,6 +23,8 @@ final class FinancialDayClose extends Model
         'open_debt_total',
         'open_debt_count',
         'overdue_debt_count',
+        'summary_currency_sections',
+        'counted_currency_sections',
         'notes',
         'closed_by',
         'closed_at',
@@ -43,6 +45,8 @@ final class FinancialDayClose extends Model
             'open_debt_total' => 'decimal:2',
             'open_debt_count' => 'integer',
             'overdue_debt_count' => 'integer',
+            'summary_currency_sections' => 'array',
+            'counted_currency_sections' => 'array',
             'closed_by' => 'integer',
             'closed_at' => 'datetime',
         ];

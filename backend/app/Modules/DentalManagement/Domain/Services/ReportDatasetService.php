@@ -78,11 +78,12 @@ final class ReportDatasetService
                 'discount_input',
                 'net_amount',
                 'net_amount_input',
+                'currency',
                 'exchange_rate',
                 'invoice_date',
                 'status',
             ])
-            ->with(['payments:id,invoice_id,payment_date,amount,amount_input,method,exchange_rate'])
+            ->with(['payments:id,invoice_id,payment_date,amount,amount_input,currency,method,exchange_rate'])
             ->where('invoice_date', '>=', $startDate->toDateString())
             ->where('invoice_date', '<=', $endDate->toDateString())
             ->get();
@@ -126,11 +127,12 @@ final class ReportDatasetService
                 'discount_input',
                 'net_amount',
                 'net_amount_input',
+                'currency',
                 'exchange_rate',
                 'invoice_date',
                 'status',
             ])
-            ->with(['payments:id,invoice_id,payment_date,amount,amount_input,method,exchange_rate'])
+            ->with(['payments:id,invoice_id,payment_date,amount,amount_input,currency,method,exchange_rate'])
             ->where('invoice_date', '>=', $startDate->toDateString())
             ->where('invoice_date', '<=', $endDate->toDateString())
             ->get();
@@ -155,6 +157,7 @@ final class ReportDatasetService
                 'amount',
                 'amount_input',
                 'category',
+                'currency',
                 'expense_date',
                 'expense_type',
                 'exchange_rate',
@@ -168,6 +171,7 @@ final class ReportDatasetService
                 'id',
                 'amount',
                 'amount_input',
+                'currency',
                 'direction',
                 'entry_type',
                 'notes',
@@ -186,6 +190,7 @@ final class ReportDatasetService
                 'staff_id',
                 'net_amount',
                 'net_amount_input',
+                'currency',
                 'payment_date',
                 'status',
                 'exchange_rate',
@@ -218,6 +223,8 @@ final class ReportDatasetService
                 'shareholder_id',
                 'amount',
                 'amount_input',
+                'currency',
+                'exchange_rate',
                 'notes',
                 'transaction_date',
                 'transaction_type',
@@ -309,6 +316,7 @@ final class ReportDatasetService
             'amount' => $this->toFloat($expense->amount ?? 0),
             'amountInput' => $this->toFloat($expense->amount_input ?? $expense->amount ?? 0),
             'category' => $this->stringOrFallback($expense->category ?? null, 'Other'),
+            'currency' => $this->stringOrFallback($expense->currency ?? null, 'AFN'),
             'exchangeRate' => $this->toFloat($expense->exchange_rate ?? 1) ?: 1.0,
             'expenseDate' => $this->dateString($expense->expense_date),
             'expenseType' => $this->stringOrFallback($expense->expense_type ?? null, 'daily'),
@@ -321,6 +329,7 @@ final class ReportDatasetService
         return [
             'discount' => $this->toFloat($invoice->discount ?? 0),
             'discountInput' => $this->toFloat($invoice->discount_input ?? $invoice->discount ?? 0),
+            'currency' => $this->stringOrFallback($invoice->currency ?? null, 'AFN'),
             'exchangeRate' => $this->toFloat($invoice->exchange_rate ?? 1) ?: 1.0,
             'id' => (string) $invoice->id,
             'invoiceDate' => $this->dateString($invoice->invoice_date),
@@ -330,6 +339,7 @@ final class ReportDatasetService
             'payments' => $invoice->payments->map(fn ($payment): array => [
                 'amount' => $this->toFloat($payment->amount ?? 0),
                 'amountInput' => $this->toFloat($payment->amount_input ?? $payment->amount ?? 0),
+                'currency' => $this->stringOrFallback($payment->currency ?? null, 'AFN'),
                 'exchangeRate' => $this->toFloat($payment->exchange_rate ?? 1) ?: 1.0,
                 'method' => $this->stringOrFallback($payment->method ?? null, 'cash'),
                 'paymentDate' => $this->dateString($payment->payment_date),
@@ -419,6 +429,7 @@ final class ReportDatasetService
         return [
             'amount' => $this->toFloat($safeTransaction->amount ?? 0),
             'amountInput' => $this->toFloat($safeTransaction->amount_input ?? $safeTransaction->amount ?? 0),
+            'currency' => $this->stringOrFallback($safeTransaction->currency ?? null, 'AFN'),
             'direction' => (string) ($safeTransaction->direction ?? ''),
             'entryType' => (string) ($safeTransaction->entry_type ?? ''),
             'exchangeRate' => $this->toFloat($safeTransaction->exchange_rate ?? 1) ?: 1.0,
@@ -436,6 +447,7 @@ final class ReportDatasetService
         $staffName = trim((string) ($staff?->full_name ?? ''));
 
         return [
+            'currency' => $this->stringOrFallback($salaryPayment->currency ?? null, 'AFN'),
             'exchangeRate' => $this->toFloat($salaryPayment->exchange_rate ?? 1) ?: 1.0,
             'id' => (string) $salaryPayment->id,
             'netAmount' => $this->toFloat($salaryPayment->net_amount ?? 0),
@@ -469,6 +481,8 @@ final class ReportDatasetService
         return [
             'amount' => $this->toFloat($transaction->amount ?? 0),
             'amountInput' => $this->toFloat($transaction->amount_input ?? $transaction->amount ?? 0),
+            'currency' => $this->stringOrFallback($transaction->currency ?? null, 'AFN'),
+            'exchangeRate' => $this->toFloat($transaction->exchange_rate ?? 1) ?: 1.0,
             'id' => (string) $transaction->id,
             'notes' => (string) ($transaction->notes ?? ''),
             'shareholderId' => (string) ($transaction->shareholder_id ?? ''),

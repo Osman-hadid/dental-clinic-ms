@@ -22,7 +22,7 @@ final class StoreShareholderTransactionRequest extends BaseFormRequest
             'transactionDate' => 'required|date_format:Y-m-d',
             'transactionType' => 'required|string|in:contribution,distribution',
             'amount' => 'required|numeric|gt:0',
-            'currency' => 'nullable|string|in:AFN',
+            'currency' => 'nullable|string|in:AFN,USD',
             'exchangeRate' => 'nullable|numeric|gt:0',
             'notes' => 'nullable|string|max:255',
             'createdBy' => 'nullable|integer',

@@ -14,7 +14,8 @@ final class ShareholderResource extends JsonResource
     {
         $contributedAmount = round((float) ($this->total_contribution_amount ?? 0), 2);
         $distributedAmount = round((float) ($this->total_distribution_amount ?? 0), 2);
-        $balanceAmount = round($contributedAmount - $distributedAmount, 2);
+        $initialCapital = round((float) ($this->initial_capital ?? 0), 2);
+        $balanceAmount = round($initialCapital + $contributedAmount - $distributedAmount, 2);
 
         return $this->filterEmpty([
             'id' => $this->id,
@@ -23,7 +24,7 @@ final class ShareholderResource extends JsonResource
             'email' => $this->email,
             'address' => $this->address,
             'ownershipPercentage' => $this->ownership_percentage,
-            'initialCapital' => $this->initial_capital,
+            'initialCapital' => $initialCapital,
             'initialCapitalInput' => $this->initial_capital_input,
             'currency' => $this->currency,
             'exchangeRate' => $this->exchange_rate,

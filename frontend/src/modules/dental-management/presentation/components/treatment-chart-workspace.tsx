@@ -29,6 +29,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  DEFAULT_AFN_PER_USD,
+  type CurrencyCode,
+  convertInputToUsd,
+  convertUsdToInput,
+  formatCurrency,
+  getExchangeRate,
+} from '@/lib/currency-utils';
 import { writePendingInvoiceFlow } from '@/modules/dental-management/presentation/components/invoices/invoice-flow-storage';
 import {
   Select,
@@ -515,7 +523,11 @@ const parseImageChargeFromNotes = (value?: string): string => {
     return 'Required';
   }
 
-  return `${parsed.toFixed(2)} AFN`;
+  const imagePriceInput = parseTagNumberFromNotes(value, 'imagePriceInput');
+  const currency = parseCurrencyCodeFromNotes(value);
+  const exchangeRate = parseExchangeRateFromNotes(value, currency);
+
+  return formatStoredAmount(parsed, imagePriceInput, currency, exchangeRate);
 };
 
 const parseRequiresImageFromNotes = (value?: string): boolean => {
@@ -533,6 +545,11 @@ const parseImagePriceValueFromNotes = (value?: string): string => {
     return '';
   }
 
+  const parsedInput = parseTagNumberFromNotes(value, 'imagePriceInput');
+  if (parsedInput > 0) {
+    return parsedInput.toFixed(2);
+  }
+
   const imagePriceMatch = value.match(/\[imagePrice:([0-9]+(?:\.[0-9]+)?)\]/i);
   if (!imagePriceMatch) {
     return '';
@@ -541,6 +558,60 @@ const parseImagePriceValueFromNotes = (value?: string): string => {
   const parsed = Number(imagePriceMatch[1]);
 
   return Number.isFinite(parsed) ? parsed.toFixed(2) : '';
+};
+
+const parseTagTextFromNotes = (value: string | undefined, tag: string): string => {
+  if (!value) {
+    return '';
+  }
+
+  const match = value.match(new RegExp(`\\[${tag}:([^\\]]+)\\]`, 'i'));
+  return match?.[1]?.trim() ?? '';
+};
+
+const parseTagNumberFromNotes = (value: string | undefined, tag: string): number => {
+  const text = parseTagTextFromNotes(value, tag);
+  if (!text) {
+    return 0;
+  }
+
+  const parsed = Number(text);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const parseCurrencyCodeFromNotes = (value?: string): CurrencyCode => {
+  return parseTagTextFromNotes(value, 'currency').toUpperCase() === 'USD' ? 'USD' : 'AFN';
+};
+
+const parseExchangeRateFromNotes = (value: string | undefined, currency: CurrencyCode): number => {
+  if (currency === 'USD') {
+    return Math.max(parseTagNumberFromNotes(value, 'exchangeRate') || DEFAULT_AFN_PER_USD, DEFAULT_AFN_PER_USD);
+  }
+
+  return 1;
+};
+
+const parsePriceValueFromNotes = (value: string | undefined, fallbackPrice: string): string => {
+  const parsedInput = parseTagNumberFromNotes(value, 'priceInput');
+  if (parsedInput > 0) {
+    return parsedInput.toFixed(2);
+  }
+
+  return asText(fallbackPrice);
+};
+
+const formatStoredAmount = (
+  amountAfn: number,
+  amountInput: number,
+  currency: CurrencyCode,
+  exchangeRate: number
+): string => {
+  if (currency === 'USD') {
+    const resolvedInput = amountInput > 0 ? amountInput : convertUsdToInput(amountAfn, currency, exchangeRate);
+    return `${formatCurrency(resolvedInput, 'USD')} (${formatCurrency(amountAfn, 'AFN')})`;
+  }
+
+  return formatCurrency(amountInput > 0 ? amountInput : amountAfn, 'AFN');
 };
 
 const parseToothConditionMapFromNotes = (value?: string): Record<string, ConditionKey> => {
@@ -574,7 +645,7 @@ const stripMetadataPrefixes = (value?: string): string => {
   }
 
   const metadataPrefix =
-    /^(?:\[(?:chart:[^\]]+|image:[01]|imagePrice:[0-9.]+|imagePriceInput:[0-9.]+|currency:(?:AFN)|exchangeRate:[0-9.]+|priceInput:[0-9.]+|condition:[a-z]+|tooth:[0-9]{2})\])+\s*/i;
+    /^(?:\[(?:chart:[^\]]+|image:[01]|imagePrice:[0-9.]+|imagePriceInput:[0-9.]+|currency:(?:AFN|USD)|exchangeRate:[0-9.]+|priceInput:[0-9.]+|condition:[a-z]+|tooth:[0-9]{2})\])+\s*/i;
 
   return value.replace(metadataPrefix, '').trim();
 };
@@ -777,6 +848,9 @@ export const TreatmentChartWorkspace = ({
   const [selectedVisitId, setSelectedVisitId] = useState<string>(defaultVisitId);
   const [selectedTreatmentId, setSelectedTreatmentId] = useState<string>('');
   const [selectedToothNumber, setSelectedToothNumber] = useState<string>('');
+  const [currency, setCurrency] = useState<CurrencyCode>('AFN');
+  const [exchangeRate, setExchangeRate] = useState<string>('1');
+  const [defaultExchangeRate, setDefaultExchangeRate] = useState(DEFAULT_AFN_PER_USD);
   const [price, setPrice] = useState<string>('');
   const [requiresImage, setRequiresImage] = useState<boolean>(false);
   const [imagePrice, setImagePrice] = useState<string>('');
@@ -791,6 +865,7 @@ export const TreatmentChartWorkspace = ({
   const [correctionReason, setCorrectionReason] = useState<string>('');
   const [prescriptionSelections, setPrescriptionSelections] = useState<PrescriptionSelectionRow[]>([]);
   const [conditionOverrides, setConditionOverrides] = useState<Record<string, ConditionKey | null>>({});
+  const [autoHydratedVisitId, setAutoHydratedVisitId] = useState<string>('');
 
   const { entities: patients } = usePatientList(1, 100);
 
@@ -798,6 +873,9 @@ export const TreatmentChartWorkspace = ({
   const { entities: visits, isFetching: isLoadingVisits } = useVisitList(1, 100, '', [], ['patient', 'dentist'], visitFilters);
 
   const patientVisitIds = useMemo(() => visits.map((visit) => String(visit.id)), [visits]);
+  const resolvedExchangeRate = currency === 'USD'
+    ? Math.max(parseCurrency(exchangeRate) || defaultExchangeRate, DEFAULT_AFN_PER_USD)
+    : 1;
   const visitTreatmentFilters = useMemo(
     () => ({ visitId: patientVisitIds.length > 0 ? patientVisitIds : ['-1'] }),
     [patientVisitIds]
@@ -814,6 +892,21 @@ export const TreatmentChartWorkspace = ({
   const { entities: treatments } = useTreatmentList(1, 100, '', [], [], { enabled: ['1'] });
   const { entities: teeth } = useToothList(1, 100);
   const { entities: staff } = useStaffList(1, 100, authenticatedEmail, ['email'], [], { enabled: ['1'] });
+
+  useEffect(() => {
+    const client = new AxiosClient();
+
+    void getExchangeRate(client)
+      .then((rate) => {
+        setDefaultExchangeRate(rate);
+        setExchangeRate((previous) => (currency === 'USD' && (parseCurrency(previous) <= 0 || previous === '1')
+          ? String(rate)
+          : previous));
+      })
+      .catch(() => {
+        setDefaultExchangeRate(DEFAULT_AFN_PER_USD);
+      });
+  }, [currency]);
   const inventoryMaterialsById = useMemo(
     () => new Map(inventoryMaterials.map((item) => [item.id, item])),
     [inventoryMaterials]
@@ -1166,11 +1259,28 @@ export const TreatmentChartWorkspace = ({
     return formatPrescriptionSummary({ items });
   }, [prescriptionSelections]);
 
+  const convertEditorValue = (
+    value: string,
+    nextCurrency: CurrencyCode,
+    nextExchangeRate: number
+  ): string => {
+    const numericValue = roundCurrency(parseCurrency(value));
+    if (numericValue <= 0) {
+      return '';
+    }
+
+    const amountAfn = convertInputToUsd(numericValue, currency, resolvedExchangeRate);
+    const convertedValue = convertUsdToInput(amountAfn, nextCurrency, nextExchangeRate);
+    return convertedValue > 0 ? convertedValue.toFixed(2) : '';
+  };
+
   const resetEditor = useCallback((): void => {
     setEditingTreatmentId(null);
     setActiveCondition(null);
     setSelectedTreatmentId('');
     setSelectedToothNumber('');
+    setCurrency('AFN');
+    setExchangeRate('1');
     setPrice('');
     setRequiresImage(false);
     setImagePrice('');
@@ -1206,7 +1316,10 @@ export const TreatmentChartWorkspace = ({
       return;
     }
 
-    setPrice(defaultPrice.toFixed(2));
+    const defaultPriceInput = currency === 'USD'
+      ? convertUsdToInput(defaultPrice, currency, resolvedExchangeRate)
+      : defaultPrice;
+    setPrice(defaultPriceInput.toFixed(2));
   };
 
   const addMaterialSelection = (): void => {
@@ -1377,6 +1490,8 @@ export const TreatmentChartWorkspace = ({
           name: item.name ?? '',
         }))
       : [];
+    const rowCurrency = parseCurrencyCodeFromNotes(row.notes);
+    const rowExchangeRate = parseExchangeRateFromNotes(row.notes, rowCurrency);
 
     setEditingTreatmentId(row.id);
     setSelectedVisitId(String(row.visitId));
@@ -1384,7 +1499,9 @@ export const TreatmentChartWorkspace = ({
     setSelectedToothNumber(rowTeeth[0] ?? parseToothNumbersFromValue(row.toothNumber)[0] ?? '');
     setActiveCondition(firstCondition);
     setConditionOverrides(Object.keys(rowConditionMap).length > 0 ? rowConditionMap : {});
-    setPrice(asText(row.price));
+    setCurrency(rowCurrency);
+    setExchangeRate(String(rowCurrency === 'USD' ? rowExchangeRate : 1));
+    setPrice(parsePriceValueFromNotes(row.notes, row.price));
     setRequiresImage(parseRequiresImageFromNotes(row.notes));
     setImagePrice(parseImagePriceValueFromNotes(row.notes));
     setTreatmentImages([]);
@@ -1396,6 +1513,26 @@ export const TreatmentChartWorkspace = ({
     setCorrectionReason('');
     setPrescriptionSelections(prescriptionSelectionsFromRow);
   }, [resolveRowConditionMap, resolveRowTeeth]);
+
+  useEffect(() => {
+    if (!hidePatientVisitSelectors || !lockVisitSelection || !selectedVisitId) {
+      return;
+    }
+
+    if (displayedVisitTreatments.length === 0 || autoHydratedVisitId === selectedVisitId) {
+      return;
+    }
+
+    startEditingTreatment(displayedVisitTreatments[0]);
+    setAutoHydratedVisitId(selectedVisitId);
+  }, [
+    autoHydratedVisitId,
+    displayedVisitTreatments,
+    hidePatientVisitSelectors,
+    lockVisitSelection,
+    selectedVisitId,
+    startEditingTreatment,
+  ]);
 
   const paintTooth = (toothNumber: string): void => {
     setSelectedToothNumber(toothNumber);
@@ -1428,17 +1565,21 @@ export const TreatmentChartWorkspace = ({
       return;
     }
 
-    const rawPriceAmount = roundCurrency(parseCurrency(price));
-    if (rawPriceAmount <= 0) {
+    const rawPriceAmountInput = roundCurrency(parseCurrency(price));
+    if (rawPriceAmountInput <= 0) {
       toast.error('Price must be greater than zero.');
       return;
     }
+    const rawPriceAmount = convertInputToUsd(rawPriceAmountInput, currency, resolvedExchangeRate);
 
-    const rawImageCharge = requiresImage ? roundCurrency(parseCurrency(imagePrice)) : 0;
-    if (requiresImage && rawImageCharge <= 0) {
+    const rawImageChargeInput = requiresImage ? roundCurrency(parseCurrency(imagePrice)) : 0;
+    if (requiresImage && rawImageChargeInput <= 0) {
       toast.error('Provide an imaging charge when separate imaging billing is enabled.');
       return;
     }
+    const rawImageCharge = requiresImage
+      ? convertInputToUsd(rawImageChargeInput, currency, resolvedExchangeRate)
+      : 0;
 
     const normalizedMaterialItemsMap = new Map<string, { inventoryItemId: string; quantity: number }>();
     for (const selection of materialSelections) {
@@ -1507,9 +1648,9 @@ export const TreatmentChartWorkspace = ({
       new Map(targets.map((target) => [target.toothNumber, target])).values()
     );
     const chartMetadata = `[chart:${uniqueTargets.map((target) => `${target.toothNumber}=${CONDITION_CODES[target.condition]}`).join(',')}]`;
-    const priceMetadata = `[priceInput:${rawPriceAmount.toFixed(2)}]`;
+    const priceMetadata = `[currency:${currency}][exchangeRate:${resolvedExchangeRate.toFixed(6)}][priceInput:${rawPriceAmountInput.toFixed(2)}]`;
     const imageMetadata = requiresImage
-      ? `[image:1][imagePrice:${rawImageCharge.toFixed(2)}][imagePriceInput:${rawImageCharge.toFixed(2)}]`
+      ? `[image:1][imagePrice:${rawImageCharge.toFixed(2)}][imagePriceInput:${rawImageChargeInput.toFixed(2)}]`
       : '';
     const plainNote = notes.trim();
     const metadataSegments = [chartMetadata, priceMetadata, imageMetadata].filter(Boolean).join('');
@@ -1696,6 +1837,14 @@ export const TreatmentChartWorkspace = ({
         const materialSummary = resolveRowMaterialSummary(row);
         const prescriptionContent = formatPrescriptionSummary(row.prescription);
         const visit = visitById.get(String(row.visitId));
+        const rowCurrency = parseCurrencyCodeFromNotes(row.notes);
+        const rowExchangeRate = parseExchangeRateFromNotes(row.notes, rowCurrency);
+        const rowPriceLabel = formatStoredAmount(
+          parseCurrency(row.price),
+          parseTagNumberFromNotes(row.notes, 'priceInput'),
+          rowCurrency,
+          rowExchangeRate
+        );
         const dentistLabel =
           row.dentist
             ? asText(row.dentist.fullName)
@@ -1720,7 +1869,7 @@ export const TreatmentChartWorkspace = ({
             <td>${escapeHtml(materialSummary)}</td>
             <td>${escapeHtml(resolvedDentist || '-')}</td>
             <td>${escapeHtml(imageCharge)}</td>
-            <td>${escapeHtml(row.price || '-')}</td>
+            <td>${escapeHtml(rowPriceLabel)}</td>
             <td>${escapeHtml(cleanedNotes || '-')}</td>
             <td>${escapeHtml(prescriptionContent)}</td>
             <td>${escapeHtml(visitLabel)}</td>
@@ -2033,14 +2182,55 @@ export const TreatmentChartWorkspace = ({
             </div>
 
             <div className="space-y-2">
-              <Label>Price (AFN)</Label>
+              <Label>Currency</Label>
+              <Select
+                value={currency}
+                onValueChange={(value) => {
+                  const nextCurrency = value as CurrencyCode;
+                  const nextExchangeRate = nextCurrency === 'USD' ? defaultExchangeRate : 1;
+                  setPrice(convertEditorValue(price, nextCurrency, nextExchangeRate));
+                  setImagePrice(requiresImage ? convertEditorValue(imagePrice, nextCurrency, nextExchangeRate) : '');
+                  setCurrency(nextCurrency);
+                  setExchangeRate(String(nextExchangeRate));
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select currency" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="AFN">AFN</SelectItem>
+                  <SelectItem value="USD">USD</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Exchange Rate</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={exchangeRate}
+                onChange={(event) => {
+                  setExchangeRate(event.target.value);
+                }}
+                placeholder="AFN per 1 USD"
+                disabled={currency === 'AFN'}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>{`Price (${currency})`}</Label>
               <Input
                 value={price}
                 onChange={(event) => {
                   setPrice(event.target.value);
                 }}
-                placeholder="e.g. 1000"
+                placeholder={currency === 'USD' ? 'e.g. 25' : 'e.g. 1000'}
               />
+              <p className="text-[11px] text-muted-foreground">
+                Saved in reports as {formatCurrency(convertInputToUsd(parseCurrency(price), currency, resolvedExchangeRate), 'AFN')}.
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -2231,7 +2421,7 @@ export const TreatmentChartWorkspace = ({
                 onChange={(event) => {
                   setImagePrice(event.target.value);
                 }}
-                placeholder="Imaging charge in AFN"
+                placeholder={`Imaging charge in ${currency}`}
                 disabled={!requiresImage}
               />
             </div>
@@ -2792,6 +2982,14 @@ export const TreatmentChartWorkspace = ({
                   const uniqueConditions = Array.from(new Set(Object.values(rowConditionMap)));
                   const cleanedNotes = stripMetadataPrefixes(row.notes);
                   const visit = visitById.get(String(row.visitId));
+                  const rowCurrency = parseCurrencyCodeFromNotes(row.notes);
+                  const rowExchangeRate = parseExchangeRateFromNotes(row.notes, rowCurrency);
+                  const rowPriceLabel = formatStoredAmount(
+                    parseCurrency(row.price),
+                    parseTagNumberFromNotes(row.notes, 'priceInput'),
+                    rowCurrency,
+                    rowExchangeRate
+                  );
                   const rowImages = (row.treatmentImages ?? []).filter(
                     (image): image is Exclude<typeof image, File> =>
                       !(image instanceof File) && typeof image?.url === 'string' && image.url.length > 0
@@ -2807,7 +3005,7 @@ export const TreatmentChartWorkspace = ({
                           {treatmentName}
                         </p>
                         <div className="flex items-center gap-2">
-                          <Badge variant="outline">Total: {row.price || '-'}</Badge>
+                          <Badge variant="outline">Total: {rowPriceLabel}</Badge>
                           <Button
                             type="button"
                             size="sm"

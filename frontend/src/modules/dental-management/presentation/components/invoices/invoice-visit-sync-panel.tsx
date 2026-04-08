@@ -12,6 +12,14 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import {
+  DEFAULT_AFN_PER_USD,
+  type CurrencyCode,
+  convertInputToUsd,
+  convertUsdToInput,
+  formatCurrency,
+  getExchangeRate,
+} from '@/lib/currency-utils';
 import { cn } from '@/lib/utilities';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import { type Visit } from '@/modules/dental-management/domain/entities/Visit';
@@ -32,7 +40,9 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 type VisitInvoiceFormState = {
+  currency: CurrencyCode;
   discount: string;
+  exchangeRate: string;
   invoiceDate: string;
   netAmount: string;
   notes: string;
@@ -41,11 +51,13 @@ type VisitInvoiceFormState = {
 };
 
 type VisitAmountSummary = {
-  inputTotal: number;
+  baseTotal: number;
 };
 
 const createDefaultFormState = (invoiceDate: string): VisitInvoiceFormState => ({
+  currency: 'AFN',
   discount: '0',
+  exchangeRate: '1',
   invoiceDate,
   netAmount: '0',
   notes: '',
@@ -114,6 +126,19 @@ const parseNumericTagFromNotes = (notes: unknown, tag: string): number => {
 };
 
 const formatMoney = (value: number): string => roundCurrency(value).toFixed(2);
+
+const formatDisplayAmount = (
+  amountAfn: number,
+  currency: CurrencyCode,
+  exchangeRate: number
+): string => {
+  if (currency === 'USD') {
+    const amountInput = convertUsdToInput(amountAfn, currency, exchangeRate);
+    return `${formatCurrency(amountInput, 'USD')} (${formatCurrency(amountAfn, 'AFN')})`;
+  }
+
+  return formatCurrency(amountAfn, 'AFN');
+};
 
 const getVisitInvoiceStatuses = (visit: Visit): string[] => {
   if (!Array.isArray(visit.invoices)) {
@@ -209,6 +234,10 @@ const paymentClient = new AxiosClient();
 export const InvoiceVisitSyncPanel = (): JSX.Element => {
   const router = useRouter();
   const pathname = usePathname();
+  const locale = useMemo(() => {
+    const segments = pathname.split('/').filter(Boolean);
+    return segments[0] || 'en';
+  }, [pathname]);
   const searchParameters = useSearchParams();
   const requestedVisitIdFromQuery = asText(searchParameters.get('visitId'));
   const flowSourceFromQuery = asText(searchParameters.get('flow')).toLowerCase();
@@ -221,6 +250,7 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
   const [formState, setFormState] = useState<VisitInvoiceFormState>(() =>
     createDefaultFormState(new Date().toISOString().slice(0, 10))
   );
+  const [defaultExchangeRate, setDefaultExchangeRate] = useState(DEFAULT_AFN_PER_USD);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedVisitIds, setSelectedVisitIds] = useState<number[]>([]);
   const { entities: visits, isFetching: isLoadingVisits, refetch } = useVisitList(
@@ -242,6 +272,21 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
   const createInvoice = useCreateInvoice();
   const [isNetAmountEdited, setIsNetAmountEdited] = useState(false);
   const t = useTranslations('invoice');
+
+  useEffect(() => {
+    void getExchangeRate(paymentClient)
+      .then((rate) => {
+        setDefaultExchangeRate(rate);
+        setFormState((previous) => (
+          previous.currency === 'USD' && (parseCurrency(previous.exchangeRate) <= 0 || previous.exchangeRate === '1')
+            ? { ...previous, exchangeRate: String(rate) }
+            : previous
+        ));
+      })
+      .catch(() => {
+        setDefaultExchangeRate(DEFAULT_AFN_PER_USD);
+      });
+  }, []);
 
   const requestedVisit = requestedVisitResponse?.data;
   const visitPreview = useMemo(() => {
@@ -324,24 +369,15 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
       }
 
       const treatmentCharge = parseCurrency(treatment.price);
-      const treatmentChargeInputFromNotes = parseNumericTagFromNotes(treatment.notes, 'priceInput');
-      const treatmentChargeInput = treatmentChargeInputFromNotes > 0
-        ? treatmentChargeInputFromNotes
-        : treatmentCharge;
-
       const imageCharge = parseImagePriceFromNotes(treatment.notes);
-      const imageChargeInputFromNotes = parseNumericTagFromNotes(treatment.notes, 'imagePriceInput');
-      const imageChargeInput = imageChargeInputFromNotes > 0
-        ? imageChargeInputFromNotes
-        : imageCharge;
 
-      totals.set(visitId, roundCurrency(currentVisitTotal + treatmentChargeInput + imageChargeInput));
+      totals.set(visitId, roundCurrency(currentVisitTotal + treatmentCharge + imageCharge));
     }
 
     const summaryMap = new Map<string, VisitAmountSummary>();
-    for (const [visitId, inputTotal] of totals.entries()) {
+    for (const [visitId, baseTotal] of totals.entries()) {
       summaryMap.set(visitId, {
-        inputTotal: roundCurrency(inputTotal),
+        baseTotal: roundCurrency(baseTotal),
       });
     }
 
@@ -350,7 +386,7 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
   const billableUnpaidVisits = useMemo(
     () =>
       unpaidVisits.filter((visit) => {
-        const amount = visitAmountsById.get(String(visit.id))?.inputTotal ?? 0;
+        const amount = visitAmountsById.get(String(visit.id))?.baseTotal ?? 0;
         return amount > 0;
       }),
     [unpaidVisits, visitAmountsById]
@@ -367,13 +403,17 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
 
   const combinedTotal = useMemo(() => {
     return selectedVisits.reduce((sum, visit) => {
-      const amount = visitAmountsById.get(String(visit.id))?.inputTotal ?? 0;
+      const amount = visitAmountsById.get(String(visit.id))?.baseTotal ?? 0;
       return roundCurrency(sum + amount);
     }, 0);
   }, [selectedVisits, visitAmountsById]);
+  const resolvedExchangeRate = formState.currency === 'USD'
+    ? Math.max(parseCurrency(formState.exchangeRate) || defaultExchangeRate, DEFAULT_AFN_PER_USD)
+    : 1;
+  const combinedTotalInput = convertUsdToInput(combinedTotal, formState.currency, resolvedExchangeRate);
   const selectedCount = selectedVisits.length;
   const appliedDiscount = Math.max(0, roundCurrency(parseCurrency(formState.discount)));
-  const invoiceNetAmount = Math.max(0, roundCurrency(combinedTotal - appliedDiscount));
+  const invoiceNetAmount = Math.max(0, roundCurrency(combinedTotalInput - appliedDiscount));
   const requestedPaidNowAmount = Math.max(0, roundCurrency(parseCurrency(formState.netAmount)));
   const paidNowAmount = Math.min(
     invoiceNetAmount,
@@ -520,7 +560,7 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
 
     const firstSelectedVisit = selectedVisits[0];
 
-    if (appliedDiscount - combinedTotal > 0.01) {
+    if (appliedDiscount - combinedTotalInput > 0.01) {
       toast.error(t('config.sync.discountTooHigh'));
       return;
     }
@@ -540,9 +580,9 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
         ? 'cancelled'
         : (debtAmount <= 0 ? 'paid' : (paidNowAmount > 0 ? 'partially_paid' : 'unpaid'));
       const payload = {
-        currency: 'AFN',
+        currency: formState.currency,
         discount: appliedDiscount,
-        exchangeRate: 1,
+        exchangeRate: resolvedExchangeRate,
         invoiceDate: formState.invoiceDate || new Date().toISOString().slice(0, 10),
         netAmount: invoiceNetAmount,
         notes: mergedNotes.slice(0, 255) || undefined,
@@ -552,7 +592,7 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
         paymentType: formState.paymentType,
         sourceVisitIds: [Number(firstSelectedVisit.id)],
         status: effectiveStatus,
-        totalAmount: combinedTotal,
+        totalAmount: combinedTotalInput,
         visitId: Number(firstSelectedVisit.id),
       };
 
@@ -567,8 +607,8 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
             await paymentClient.get('/sanctum/csrf-cookie');
             await paymentClient.post('/api/v1/dental-management/payments', {
               amount: paidNowAmount.toFixed(2),
-              currency: 'AFN',
-              exchangeRate: 1,
+              currency: formState.currency,
+              exchangeRate: resolvedExchangeRate,
               invoiceId: createdInvoiceId,
               method: paymentMethod,
               notes: 'Initial payment from invoice creation.',
@@ -582,6 +622,11 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
         toast.success(t('config.presentation.createSuccess', { entity: t('config.entity') }));
         handleClearSelection();
         await Promise.all([refetch(), refetchVisitTreatments(), refetchInvoices()]);
+
+        if (effectiveStatus === 'paid') {
+          router.push(`/${locale}/dental-management/appointments`);
+        }
+
         return;
       }
 
@@ -638,7 +683,7 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
                     const visitId = String(visit.id);
                     const isSelected = selectedVisitSet.has(visitId);
                     const visitAmountSummary = visitAmountsById.get(visitId);
-                    const visitAmount = visitAmountSummary?.inputTotal ?? 0;
+                    const visitAmount = visitAmountSummary?.baseTotal ?? 0;
                     return (
                       <div
                         key={`visit-card-unpaid-${visit.id}`}
@@ -661,7 +706,7 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
                         </p>
                         <p className="text-xs font-medium text-foreground">
                           {t('config.sync.visitAmount')}:{' '}
-                          {isLoadingVisitAmounts ? '-' : `${formatMoney(visitAmount)} AFN`}
+                          {isLoadingVisitAmounts ? '-' : formatDisplayAmount(visitAmount, formState.currency, resolvedExchangeRate)}
                         </p>
                         <Button
                           type="button"
@@ -700,23 +745,28 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
               {t('config.sync.selectedCount')}: <span>{selectedCount}</span>
             </p>
             <p className="text-sm font-semibold">
-              {t('config.sync.combinedAmount')}: <span>{formatMoney(combinedTotal)} AFN</span>
+              {t('config.sync.combinedAmount')}: <span>{formatDisplayAmount(combinedTotal, formState.currency, resolvedExchangeRate)}</span>
             </p>
             <p className="text-sm font-semibold">
-              {t('config.sync.form.netAmount')}: <span>{formatMoney(paidNowAmount)} AFN</span>
+              {t('config.sync.form.netAmount')}: <span>{formState.currency === 'USD' ? formatCurrency(paidNowAmount, 'USD') : formatCurrency(paidNowAmount, 'AFN')}</span>
             </p>
             <p className="text-sm font-semibold">
-              Debt: <span>{formatMoney(debtAmount)} AFN</span>
+              Debt: <span>{formState.currency === 'USD' ? formatCurrency(debtAmount, 'USD') : formatCurrency(debtAmount, 'AFN')}</span>
             </p>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Reports stay in AFN. Current AFN equivalent: {formatCurrency(convertInputToUsd(invoiceNetAmount, formState.currency, resolvedExchangeRate), 'AFN')}.
+          </p>
 
           {selectedVisits.length > 0 ? (
             <div className="space-y-2 text-xs text-muted-foreground">
               {selectedVisits.map((visit) => (
                 <p key={`selected-visit-${visit.id}`}>
-                  {formatVisitLabel(visit)} ({formatDate(visit.visitDate)}) - {formatMoney(
-                    visitAmountsById.get(String(visit.id))?.inputTotal ?? 0
-                  )} AFN
+                  {formatVisitLabel(visit)} ({formatDate(visit.visitDate)}) - {formatDisplayAmount(
+                    visitAmountsById.get(String(visit.id))?.baseTotal ?? 0,
+                    formState.currency,
+                    resolvedExchangeRate
+                  )}
                 </p>
               ))}
             </div>
@@ -728,7 +778,7 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
             <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-1 text-xs">
                 <label className="font-semibold">{t('config.sync.form.totalAmount')}</label>
-                <Input type="number" value={formatMoney(combinedTotal)} readOnly />
+                <Input type="number" value={formatMoney(combinedTotalInput)} readOnly />
               </div>
               <div className="space-y-1 text-xs">
                 <label className="font-semibold">{t('config.sync.form.discount')}</label>
@@ -752,12 +802,60 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
                   disabled={selectedVisits.length === 0}
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  This is treated as paid now. Remaining debt: {formatMoney(debtAmount)} AFN.
+                  This is treated as paid now. Remaining debt: {formState.currency === 'USD' ? formatCurrency(debtAmount, 'USD') : formatCurrency(debtAmount, 'AFN')}.
                 </p>
               </div>
             </div>
 
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+              <div className="space-y-1 text-xs">
+                <label className="font-semibold">Currency</label>
+                <select
+                  className={inputClass}
+                  value={formState.currency}
+                  onChange={(event) => {
+                    const nextCurrency = event.target.value as CurrencyCode;
+                    const nextExchangeRate = nextCurrency === 'USD' ? defaultExchangeRate : 1;
+                    const currentExchangeRate = formState.currency === 'USD'
+                      ? Math.max(parseCurrency(formState.exchangeRate) || defaultExchangeRate, DEFAULT_AFN_PER_USD)
+                      : 1;
+                    const discountAfn = convertInputToUsd(
+                      Math.max(0, roundCurrency(parseCurrency(formState.discount))),
+                      formState.currency,
+                      currentExchangeRate
+                    );
+                    const paidNowAfn = convertInputToUsd(
+                      Math.max(0, roundCurrency(parseCurrency(formState.netAmount))),
+                      formState.currency,
+                      currentExchangeRate
+                    );
+                    setFormState((previous) => ({
+                      ...previous,
+                      currency: nextCurrency,
+                      discount: formatMoney(convertUsdToInput(discountAfn, nextCurrency, nextExchangeRate)),
+                      exchangeRate: String(nextExchangeRate),
+                      netAmount: isNetAmountEdited
+                        ? formatMoney(convertUsdToInput(paidNowAfn, nextCurrency, nextExchangeRate))
+                        : previous.netAmount,
+                    }));
+                  }}
+                  disabled={selectedVisits.length === 0}
+                >
+                  <option value="AFN">AFN</option>
+                  <option value="USD">USD</option>
+                </select>
+              </div>
+              <div className="space-y-1 text-xs">
+                <label className="font-semibold">Exchange Rate</label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formState.exchangeRate}
+                  onChange={updateField('exchangeRate')}
+                  disabled={selectedVisits.length === 0 || formState.currency === 'AFN'}
+                />
+              </div>
               <div className="space-y-1 text-xs">
                 <label className="font-semibold">{t('config.form.status.label')}</label>
                 <select

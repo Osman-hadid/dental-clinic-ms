@@ -41,6 +41,67 @@ trait InteractsWithReportData
         return round((float) ($value ?? 0), 2);
     }
 
+    private function currencyCode(mixed $value): string
+    {
+        $currency = strtoupper($this->text($value, 'AFN'));
+
+        return $currency === 'USD' ? 'USD' : 'AFN';
+    }
+
+    /**
+     * @param array<int, string> $keys
+     * @return array{AFN: array<string, float>, USD: array<string, float>}
+     */
+    private function initializeCurrencySections(array $keys): array
+    {
+        $afn = [];
+        $usd = [];
+
+        foreach ($keys as $key) {
+            $afn[$key] = 0.0;
+            $usd[$key] = 0.0;
+        }
+
+        return [
+            'AFN' => $afn,
+            'USD' => $usd,
+        ];
+    }
+
+    /**
+     * @param array{AFN: array<string, float>, USD: array<string, float>} $sections
+     */
+    private function addCurrencySectionValue(array &$sections, mixed $currency, string $key, mixed $amount): void
+    {
+        $code = $this->currencyCode($currency);
+        $sections[$code][$key] = $this->decimal(($sections[$code][$key] ?? 0) + (float) ($amount ?? 0));
+    }
+
+    private function convertBaseAmountToInputCurrency(mixed $amount, mixed $currency, mixed $exchangeRate): float
+    {
+        $value = $this->decimal($amount);
+        if ($this->currencyCode($currency) !== 'USD') {
+            return $value;
+        }
+
+        $rate = (float) ($exchangeRate ?? 0);
+        if ($rate <= 0) {
+            return $value;
+        }
+
+        return $this->decimal($value / $rate);
+    }
+
+    private function resolveInputAmount(mixed $amountInput, mixed $amount, mixed $currency, mixed $exchangeRate): float
+    {
+        $inputText = trim((string) ($amountInput ?? ''));
+        if ($inputText !== '') {
+            return $this->decimal($amountInput);
+        }
+
+        return $this->convertBaseAmountToInputCurrency($amount, $currency, $exchangeRate);
+    }
+
     private function text(mixed $value, string $fallback = ''): string
     {
         $text = trim((string) ($value ?? ''));

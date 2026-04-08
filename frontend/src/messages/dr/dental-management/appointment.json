@@ -9,6 +9,9 @@
       "update": "به روز رسانی قرار ملاقات"
     },
     "form": {
+      "id": {
+        "label": "ID"
+      },
       "patientId": {
         "label": "شناسه بیمار",
         "validation": {

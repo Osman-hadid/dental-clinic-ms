@@ -185,6 +185,37 @@ export const invoiceConfig: EntityModuleConfig = {
       },
     },
     {
+      label: 'config.form.currency.label',
+      name: 'currency',
+      options: [
+        {
+          label: 'config.form.currency.options.afn',
+          value: 'AFN',
+        },
+        {
+          label: 'config.form.currency.options.usd',
+          value: 'USD',
+        },
+      ],
+      required: false,
+      type: 'select',
+      validation: {
+        in: {
+          message: 'config.form.currency.validation.in',
+          value: ['AFN', 'USD'],
+        },
+      },
+    },
+    {
+      label: 'config.form.exchangeRate.label',
+      name: 'exchangeRate',
+      required: false,
+      type: 'number',
+      validation: {
+        maxLength: { message: 'config.form.exchangeRate.validation.maxLength', value: 255 },
+      },
+    },
+    {
       label: 'config.form.invoiceDate.label',
       name: 'invoiceDate',
       required: true,

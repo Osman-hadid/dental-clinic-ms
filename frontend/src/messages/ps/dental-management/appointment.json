@@ -9,6 +9,9 @@
       "update": "د ملاقات تازه کول"
     },
     "form": {
+      "id": {
+        "label": "ID"
+      },
       "patientId": {
         "label": "د ناروغ پیژندنه",
         "validation": {

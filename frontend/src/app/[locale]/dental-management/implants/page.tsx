@@ -38,6 +38,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DEFAULT_AFN_PER_USD,
+  type CurrencyCode,
+  convertInputToUsd,
+  convertUsdToInput,
+  formatCurrency,
+  getExchangeRate,
+  parseMoney,
+} from '@/lib/currency-utils';
 import { ListPatientsUseCase } from '@/modules/dental-management/application/use-cases/patients/list-patients-use-case';
 
 type LoadingProtocol = 'delayed' | 'early' | 'immediate';
@@ -55,7 +64,9 @@ type RiskFactorKey =
 type ImplantPlanningForm = {
   boneHeightMm: string;
   boneWidthMm: string;
+  currency: CurrencyCode;
   dentistId: string;
+  exchangeRate: string;
   imagingType: ImagingType;
   implantCompanyDate: string;
   implantCompanyId: string;
@@ -91,12 +102,18 @@ type ChecklistItem = {
 
 type SaveSummary = {
   createdVisit: boolean;
+  currency: CurrencyCode;
+  exchangeRate: number;
   invoiceId: number;
   paidNowAmount: number;
+  paidNowAmountInput: number;
   paymentId?: number;
+  supplierRemainingAmountInput: number;
   supplierRemainingAmount: number;
+  supplierTotalCostInput: number;
   supplierTotalCost: number;
   remainingDebt: number;
+  remainingDebtInput: number;
   savedAt: string;
   treatmentCount: number;
   visitId: number;
@@ -123,7 +140,9 @@ const RISK_FACTOR_LABELS: Record<RiskFactorKey, string> = {
 const buildDefaultForm = (): ImplantPlanningForm => ({
   boneHeightMm: '',
   boneWidthMm: '',
+  currency: 'AFN',
   dentistId: '',
+  exchangeRate: '1',
   imagingType: 'cbct',
   implantCompanyDate: new Date().toISOString().slice(0, 10),
   implantCompanyId: '',
@@ -166,17 +185,6 @@ const asText = (value: unknown): string => {
 
 const truncate = (value: string, maxLength: number): string => {
   return value.length > maxLength ? value.slice(0, maxLength) : value;
-};
-
-
-
-const formatCurrency = (value: number): string => {
-  return new Intl.NumberFormat('en-US', {
-    currency: 'AFN',
-    maximumFractionDigits: 0,
-    minimumFractionDigits: 0,
-    style: 'currency',
-  }).format(value);
 };
 
 const isToothNumber = (value: string): boolean => /^[0-9]{2}$/.test(value);
@@ -315,6 +323,7 @@ export default function ImplantsPage(): JSX.Element {
   const tSidebar = useTranslations('sidebar.dentalManagement');
   const queryClient = useQueryClient();
   const [form, setForm] = useState<ImplantPlanningForm>(() => buildDefaultForm());
+  const [defaultExchangeRate, setDefaultExchangeRate] = useState(DEFAULT_AFN_PER_USD);
   const [isSavingPlan, setIsSavingPlan] = useState(false);
   const [saveSummary, setSaveSummary] = useState<SaveSummary | null>(null);
   const [selectedTeethByPatient, setSelectedTeethByPatient] = useState<Record<string, string[]>>({});
@@ -329,6 +338,23 @@ export default function ImplantsPage(): JSX.Element {
 
     return () => clearTimeout(timeout);
   }, [patientSearch]);
+
+  useEffect(() => {
+    const client = new AxiosClient();
+
+    void getExchangeRate(client)
+      .then((rate) => {
+        setDefaultExchangeRate(rate);
+        setForm((prev) => (
+          prev.currency === 'USD' && (parseMoney(prev.exchangeRate) <= 0 || prev.exchangeRate === '1')
+            ? { ...prev, exchangeRate: String(rate) }
+            : prev
+        ));
+      })
+      .catch(() => {
+        setDefaultExchangeRate(DEFAULT_AFN_PER_USD);
+      });
+  }, []);
 
   const {
     data: patientPages,
@@ -679,16 +705,47 @@ export default function ImplantsPage(): JSX.Element {
     selectedImplantTeeth.length,
   ]);
 
-  const implantPricePerTooth = toNumber(form.implantPricePerTooth) ?? 0;
-  const totalSelectedImplantsPayment = implantPricePerTooth * selectedImplantTeeth.length;
-  const invoiceNetAmount = totalSelectedImplantsPayment;
-  const requestedPaidNowAmount = Math.max(0, toNumber(form.paidNowAmount) ?? 0);
-  const paidNowAmount = Math.min(invoiceNetAmount, requestedPaidNowAmount);
+  const resolvedExchangeRate = form.currency === 'USD'
+    ? Math.max(parseMoney(form.exchangeRate) || defaultExchangeRate, DEFAULT_AFN_PER_USD)
+    : 1;
+  const implantPricePerToothInput = Math.max(0, toNumber(form.implantPricePerTooth) ?? 0);
+  const totalSelectedImplantsPaymentInput = implantPricePerToothInput * selectedImplantTeeth.length;
+  const invoiceNetAmount = convertInputToUsd(totalSelectedImplantsPaymentInput, form.currency, resolvedExchangeRate);
+  const requestedPaidNowAmountInput = Math.max(0, toNumber(form.paidNowAmount) ?? 0);
+  const paidNowAmountInput = Math.min(totalSelectedImplantsPaymentInput, requestedPaidNowAmountInput);
+  const paidNowAmount = convertInputToUsd(paidNowAmountInput, form.currency, resolvedExchangeRate);
+  const remainingDebtAmountInput = Math.max(0, totalSelectedImplantsPaymentInput - paidNowAmountInput);
   const remainingDebtAmount = Math.max(0, invoiceNetAmount - paidNowAmount);
   const effectiveInvoiceStatus = remainingDebtAmount <= 0 ? 'paid' : paidNowAmount > 0 ? 'partially_paid' : 'unpaid';
-  const supplierCostPerTooth = Math.max(0, toNumber(form.supplierCostPerTooth) ?? 0);
-  const totalSupplierCost = supplierCostPerTooth * selectedImplantTeeth.length;
+  const supplierCostPerToothInput = Math.max(0, toNumber(form.supplierCostPerTooth) ?? 0);
+  const totalSupplierCostInput = supplierCostPerToothInput * selectedImplantTeeth.length;
+  const totalSupplierCost = convertInputToUsd(totalSupplierCostInput, form.currency, resolvedExchangeRate);
   const supplierRemainingAmount = totalSupplierCost;
+  const supplierRemainingAmountInput = totalSupplierCostInput;
+
+  const formatSelectedAmount = (amountInput: number): string => {
+    const amountAfn = convertInputToUsd(amountInput, form.currency, resolvedExchangeRate);
+
+    if (form.currency === 'USD') {
+      return `${formatCurrency(amountInput, 'USD')} (${formatCurrency(amountAfn, 'AFN')})`;
+    }
+
+    return formatCurrency(amountInput, 'AFN');
+  };
+
+  const formatSavedAmount = (
+    amountAfn: number,
+    amountInput: number,
+    currency: CurrencyCode,
+    exchangeRate: number
+  ): string => {
+    if (currency === 'USD') {
+      const resolvedInput = amountInput > 0 ? amountInput : convertUsdToInput(amountAfn, currency, exchangeRate);
+      return `${formatCurrency(resolvedInput, 'USD')} (${formatCurrency(amountAfn, 'AFN')})`;
+    }
+
+    return formatCurrency(amountInput > 0 ? amountInput : amountAfn, 'AFN');
+  };
 
   const allPatients = useMemo(
     () => (patientPages?.pages ?? []).flatMap((page) => page.data),
@@ -867,7 +924,7 @@ export default function ImplantsPage(): JSX.Element {
       return;
     }
 
-    if (implantPricePerTooth <= 0) {
+    if (implantPricePerToothInput <= 0) {
       toast.error('Implant price per tooth must be greater than zero.');
       return;
     }
@@ -877,7 +934,7 @@ export default function ImplantsPage(): JSX.Element {
       return;
     }
 
-    if (requestedPaidNowAmount > invoiceNetAmount) {
+    if (requestedPaidNowAmountInput > totalSelectedImplantsPaymentInput) {
       toast.error('Paid amount cannot exceed net invoice amount.');
       return;
     }
@@ -891,7 +948,9 @@ export default function ImplantsPage(): JSX.Element {
       const planningResponse = await planningClient.post<SaveSummary>(
         '/api/v1/dental-management/implant-planning',
         {
+          currency: form.currency,
           dentistId: form.dentistId ? Number(form.dentistId) : undefined,
+          exchangeRate: resolvedExchangeRate,
           implantArch: form.implantArch,
           implantCompanyDate: form.implantCompanyDate || recordDate,
           implantCompanyId: form.implantCompanyId ? Number(form.implantCompanyId) : undefined,
@@ -900,16 +959,16 @@ export default function ImplantsPage(): JSX.Element {
           implantCompanyType: form.implantCompanyType.trim() || undefined,
           implantDiameterMm: form.implantDiameterMm,
           implantLengthMm: form.implantLengthMm,
-          implantPricePerTooth,
+          implantPricePerTooth: implantPricePerToothInput,
           implantSystem: form.implantSystem.trim() || undefined,
           implantTeeth: selectedImplantTeeth,
           linkedVisitId: form.linkedVisitId ? Number(form.linkedVisitId) : undefined,
           loadingProtocol: form.loadingProtocol,
           notes: form.notes.trim() || undefined,
-          paidNowAmount: paidNowAmount,
+          paidNowAmount: paidNowAmountInput,
           patientId: Number(form.patientId),
           paymentMethod: form.paymentMethod,
-          supplierCostPerTooth,
+          supplierCostPerTooth: supplierCostPerToothInput,
           treatmentId: Number(form.treatmentId),
           visitDate: recordDate,
         }
@@ -1154,7 +1213,48 @@ export default function ImplantsPage(): JSX.Element {
 
               <section className="space-y-3">
                 <h3 className="text-sm font-semibold">Patient Payment</h3>
-                <div className="grid gap-3 md:grid-cols-3">
+                <div className="grid gap-3 md:grid-cols-4">
+                  <select
+                    value={form.currency}
+                    onChange={(event) => {
+                      const nextCurrency = event.target.value as CurrencyCode;
+                      const nextExchangeRate = nextCurrency === 'USD' ? defaultExchangeRate : 1;
+                      const convertValue = (value: string): string => {
+                        const amountInput = Math.max(0, toNumber(value) ?? 0);
+                        if (amountInput <= 0) {
+                          return value.trim() === '' ? '' : '0';
+                        }
+
+                        const amountAfn = convertInputToUsd(amountInput, form.currency, resolvedExchangeRate);
+                        const nextAmount = convertUsdToInput(amountAfn, nextCurrency, nextExchangeRate);
+                        return nextAmount.toFixed(2);
+                      };
+
+                      setForm((prev) => ({
+                        ...prev,
+                        currency: nextCurrency,
+                        exchangeRate: String(nextExchangeRate),
+                        implantPricePerTooth: convertValue(prev.implantPricePerTooth),
+                        paidNowAmount: convertValue(prev.paidNowAmount),
+                        supplierCostPerTooth: convertValue(prev.supplierCostPerTooth),
+                      }));
+                    }}
+                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="AFN">AFN</option>
+                    <option value="USD">USD</option>
+                  </select>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="AFN per 1 USD"
+                    value={form.exchangeRate}
+                    onChange={(event) => {
+                      setField('exchangeRate', event.target.value);
+                    }}
+                    disabled={form.currency === 'AFN'}
+                  />
                   <Input
                     type="number"
                     step="0.01"
@@ -1172,7 +1272,7 @@ export default function ImplantsPage(): JSX.Element {
                   />
                   <Input
                     placeholder="Total invoice amount"
-                    value={formatCurrency(invoiceNetAmount)}
+                    value={formatSelectedAmount(totalSelectedImplantsPaymentInput)}
                     readOnly
                   />
                   <Input
@@ -1198,7 +1298,7 @@ export default function ImplantsPage(): JSX.Element {
                   </select>
                   <Input
                     placeholder="Patient remaining debt"
-                    value={formatCurrency(remainingDebtAmount)}
+                    value={formatSelectedAmount(remainingDebtAmountInput)}
                     readOnly
                   />
                   <Input
@@ -1206,6 +1306,11 @@ export default function ImplantsPage(): JSX.Element {
                     value={effectiveInvoiceStatus}
                     readOnly
                   />
+                </div>
+                <div className="rounded-md border border-dashed border-border/70 bg-muted/20 p-3 text-xs text-muted-foreground">
+                  Reports stay in AFN. This plan will be recorded as{' '}
+                  <span className="font-semibold text-foreground">{formatCurrency(invoiceNetAmount, 'AFN')}</span>
+                  {form.currency === 'USD' ? ` at ${resolvedExchangeRate} AFN per 1 USD.` : '.'}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   When saved, patient paid amount is recorded as payment and moves into safe automatically.
@@ -1227,12 +1332,12 @@ export default function ImplantsPage(): JSX.Element {
                   />
                   <Input
                     placeholder="Total company cost"
-                    value={formatCurrency(totalSupplierCost)}
+                    value={formatSelectedAmount(totalSupplierCostInput)}
                     readOnly
                   />
                   <Input
                     placeholder="Company remaining payable"
-                    value={formatCurrency(supplierRemainingAmount)}
+                    value={formatSelectedAmount(supplierRemainingAmountInput)}
                     readOnly
                   />
                 </div>
@@ -1566,11 +1671,43 @@ export default function ImplantsPage(): JSX.Element {
                   </p>
                   <p>Visit treatments saved: {saveSummary.treatmentCount}</p>
                   <p>Invoice #{saveSummary.invoiceId}</p>
-                  <p>Paid now: {formatCurrency(saveSummary.paidNowAmount)}</p>
-                  <p>Remaining debt: {formatCurrency(saveSummary.remainingDebt)}</p>
+                  <p>
+                    Paid now:{' '}
+                    {formatSavedAmount(
+                      saveSummary.paidNowAmount,
+                      saveSummary.paidNowAmountInput,
+                      saveSummary.currency,
+                      saveSummary.exchangeRate
+                    )}
+                  </p>
+                  <p>
+                    Remaining debt:{' '}
+                    {formatSavedAmount(
+                      saveSummary.remainingDebt,
+                      saveSummary.remainingDebtInput,
+                      saveSummary.currency,
+                      saveSummary.exchangeRate
+                    )}
+                  </p>
                   {saveSummary.paymentId ? <p>Payment #{saveSummary.paymentId}</p> : null}
-                  <p>Third-company total: {formatCurrency(saveSummary.supplierTotalCost)}</p>
-                  <p>Third-company unpaid: {formatCurrency(saveSummary.supplierRemainingAmount)}</p>
+                  <p>
+                    Third-company total:{' '}
+                    {formatSavedAmount(
+                      saveSummary.supplierTotalCost,
+                      saveSummary.supplierTotalCostInput,
+                      saveSummary.currency,
+                      saveSummary.exchangeRate
+                    )}
+                  </p>
+                  <p>
+                    Third-company unpaid:{' '}
+                    {formatSavedAmount(
+                      saveSummary.supplierRemainingAmount,
+                      saveSummary.supplierRemainingAmountInput,
+                      saveSummary.currency,
+                      saveSummary.exchangeRate
+                    )}
+                  </p>
                 </CardContent>
               </Card>
             ) : null}

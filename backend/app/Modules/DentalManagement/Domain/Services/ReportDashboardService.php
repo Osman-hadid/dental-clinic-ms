@@ -122,22 +122,47 @@ final class ReportDashboardService
         $revenueByDentist = [];
         $revenueByTreatment = [];
         $revenueByPaymentMethod = [];
+        $currencySections = $this->initializeCurrencySections([
+            'billed',
+            'expenses',
+            'net',
+            'outstanding',
+            'paid',
+            'safeBalance',
+            'safeIn',
+            'safeOut',
+            'salaryPaid',
+            'shareholderContribution',
+            'shareholderDistribution',
+            'thirdCompanyPaid',
+            'thirdCompanyUnpaid',
+        ]);
 
         foreach (($dataset['invoiceRows'] ?? []) as $invoice) {
             $invoiceId = (string) ($invoice['id'] ?? '');
             $patientId = (string) ($invoice['patientId'] ?? '');
             $visitId = (string) ($invoice['visitId'] ?? '');
             $invoiceDate = $this->text($invoice['invoiceDate'] ?? '');
-            $billedAmount = $this->decimal($invoice['totalAmountInput'] ?? $invoice['totalAmount'] ?? 0);
-            $netAmount = $this->decimal($invoice['netAmountInput'] ?? $invoice['netAmount'] ?? 0);
+            $invoiceCurrency = $this->currencyCode($invoice['currency'] ?? 'AFN');
+            $invoiceExchangeRate = $this->decimal($invoice['exchangeRate'] ?? 1) ?: 1.0;
+            $billedAmount = $this->decimal($invoice['totalAmount'] ?? 0);
+            $netAmount = $this->decimal($invoice['netAmount'] ?? 0);
+            $billedAmountInput = $this->resolveInputAmount($invoice['totalAmountInput'] ?? null, $invoice['totalAmount'] ?? 0, $invoiceCurrency, $invoiceExchangeRate);
+            $netAmountInput = $this->resolveInputAmount($invoice['netAmountInput'] ?? null, $invoice['netAmount'] ?? 0, $invoiceCurrency, $invoiceExchangeRate);
             $billed += $billedAmount;
             $net += $netAmount;
+            $this->addCurrencySectionValue($currencySections, $invoiceCurrency, 'billed', $billedAmountInput);
+            $this->addCurrencySectionValue($currencySections, $invoiceCurrency, 'net', $netAmountInput);
 
             $invoicePaid = 0.0;
             foreach (($invoice['payments'] ?? []) as $payment) {
-                $amount = $this->decimal($payment['amountInput'] ?? $payment['amount'] ?? 0);
+                $amount = $this->decimal($payment['amount'] ?? 0);
+                $paymentCurrency = $this->currencyCode($payment['currency'] ?? 'AFN');
+                $paymentExchangeRate = $this->decimal($payment['exchangeRate'] ?? 1) ?: 1.0;
+                $amountInput = $this->resolveInputAmount($payment['amountInput'] ?? null, $payment['amount'] ?? 0, $paymentCurrency, $paymentExchangeRate);
                 $invoicePaid += $amount;
                 $paid += $amount;
+                $this->addCurrencySectionValue($currencySections, $paymentCurrency, 'paid', $amountInput);
 
                 $method = $this->text($payment['method'] ?? 'cash', 'cash');
                 $bucketDate = $this->parseDate($payment['paymentDate'] ?? $invoiceDate);
@@ -164,17 +189,23 @@ final class ReportDashboardService
             $isDebtInvoice = \in_array($normalizedStatus, ['unpaid', 'partially_paid'], true);
             $debt = $isDebtInvoice ? max(0, $netAmount - $invoicePaid) : 0;
             if ($debt > 0) {
+                $debtInput = $this->convertBaseAmountToInputCurrency($debt, $invoiceCurrency, $invoiceExchangeRate);
                 $outstandingRows[] = [
+                    'currency' => $invoiceCurrency,
                     'debtAmount' => $this->decimal($debt),
+                    'debtAmountInput' => $debtInput,
+                    'exchangeRate' => $invoiceExchangeRate,
                     'invoiceDate' => $invoiceDate,
                     'invoiceId' => $invoiceId,
                     'netAmount' => $netAmount,
+                    'netAmountInput' => $netAmountInput,
                     'paidAmount' => $this->decimal($invoicePaid),
                     'patientId' => $patientId,
                     'patientName' => $patientNameMap[$patientId] ?? $this->patientName(null, $patientId),
                     'status' => $invoiceStatus,
                 ];
                 $outstandingTotal += $debt;
+                $this->addCurrencySectionValue($currencySections, $invoiceCurrency, 'outstanding', $debtInput);
             }
 
             $patientName = $patientNameMap[$patientId] ?? $this->patientName(null, $patientId);
@@ -197,11 +228,14 @@ final class ReportDashboardService
         $expenseTotal = 0.0;
         $expenseByCategory = [];
         foreach (($dataset['expenseRows'] ?? []) as $expense) {
-            $amount = $this->decimal($expense['amountInput'] ?? $expense['amount'] ?? 0);
+            $amount = $this->decimal($expense['amount'] ?? 0);
+            $currency = $this->currencyCode($expense['currency'] ?? 'AFN');
+            $amountInput = $this->resolveInputAmount($expense['amountInput'] ?? null, $expense['amount'] ?? 0, $currency, $expense['exchangeRate'] ?? 1);
             $category = $this->text($expense['category'] ?? 'Other', 'Other');
             $expenseTotal += $amount;
             $expenseByCategory[$category] ??= ['amount' => 0.0, 'category' => $category];
             $expenseByCategory[$category]['amount'] = $this->decimal($expenseByCategory[$category]['amount'] + $amount);
+            $this->addCurrencySectionValue($currencySections, $currency, 'expenses', $amountInput);
         }
 
         $safeIn = 0.0;
@@ -210,13 +244,17 @@ final class ReportDashboardService
         $safeFlow = [];
         $safeLedger = [];
         foreach (($dataset['safeRows'] ?? []) as $row) {
-            $amount = $this->decimal($row['amountInput'] ?? $row['amount'] ?? 0);
+            $amount = $this->decimal($row['amount'] ?? 0);
+            $currency = $this->currencyCode($row['currency'] ?? 'AFN');
+            $amountInput = $this->resolveInputAmount($row['amountInput'] ?? null, $row['amount'] ?? 0, $currency, $row['exchangeRate'] ?? 1);
             $direction = $this->text($row['direction'] ?? 'in', 'in');
             $transactionDate = $this->text($row['transactionDate'] ?? '');
             if ($direction === 'out') {
                 $safeOut += $amount;
+                $this->addCurrencySectionValue($currencySections, $currency, 'safeOut', $amountInput);
             } else {
                 $safeIn += $amount;
+                $this->addCurrencySectionValue($currencySections, $currency, 'safeIn', $amountInput);
             }
 
             $bucketDate = $this->parseDate($transactionDate);
@@ -236,8 +274,11 @@ final class ReportDashboardService
 
             $safeLedger[] = [
                 'amount' => $amount,
+                'amountInput' => $amountInput,
+                'currency' => $currency,
                 'direction' => $direction,
                 'entryType' => $this->text($row['entryType'] ?? '', 'adjustment'),
+                'exchangeRate' => $this->decimal($row['exchangeRate'] ?? 1) ?: 1.0,
                 'notes' => $this->text($row['notes'] ?? ''),
                 'pickedByStaffName' => $this->text($row['pickedByStaffName'] ?? ''),
                 'transactionDate' => $transactionDate,
@@ -245,19 +286,33 @@ final class ReportDashboardService
         }
 
         $safeBalanceRows = SafeTransaction::query()
-            ->select(['direction', 'amount_input', 'amount'])
+            ->select(['direction', 'amount', 'amount_input', 'currency', 'exchange_rate'])
             ->where('transaction_date', '<=', $endDate->toDateString())
             ->get();
 
         foreach ($safeBalanceRows as $balanceRow) {
-            $amount = $this->decimal($balanceRow->amount_input ?? $balanceRow->amount ?? 0);
-            $safeBalance += ($balanceRow->direction ?? 'in') === 'out' ? -$amount : $amount;
+            $amount = $this->decimal($balanceRow->amount ?? 0);
+            $currency = $this->currencyCode($balanceRow->currency);
+            $amountInput = $this->resolveInputAmount($balanceRow->amount_input, $balanceRow->amount, $currency, $balanceRow->exchange_rate);
+            if (($balanceRow->direction ?? 'in') === 'out') {
+                $safeBalance -= $amount;
+                $this->addCurrencySectionValue($currencySections, $currency, 'safeBalance', -$amountInput);
+            } else {
+                $safeBalance += $amount;
+                $this->addCurrencySectionValue($currencySections, $currency, 'safeBalance', $amountInput);
+            }
         }
 
         $salaryPaid = 0.0;
         foreach (($dataset['salaryRows'] ?? []) as $salary) {
             if (in_array((string) ($salary['status'] ?? ''), ['paid', 'partial'], true)) {
-                $salaryPaid += $this->decimal($salary['netAmountInput'] ?? $salary['netAmount'] ?? 0);
+                $salaryPaid += $this->decimal($salary['netAmount'] ?? 0);
+                $this->addCurrencySectionValue(
+                    $currencySections,
+                    $salary['currency'] ?? 'AFN',
+                    'salaryPaid',
+                    $this->resolveInputAmount($salary['netAmountInput'] ?? null, $salary['netAmount'] ?? 0, $salary['currency'] ?? 'AFN', $salary['exchangeRate'] ?? 1)
+                );
             }
         }
 
@@ -265,16 +320,23 @@ final class ReportDashboardService
         $shareholderDistribution = 0.0;
         $shareholderLedger = [];
         foreach (($dataset['shareholderTransactionRows'] ?? []) as $transaction) {
-            $amount = $this->decimal($transaction['amountInput'] ?? $transaction['amount'] ?? 0);
+            $amount = $this->decimal($transaction['amount'] ?? 0);
+            $currency = $this->currencyCode($transaction['currency'] ?? 'AFN');
+            $amountInput = $this->resolveInputAmount($transaction['amountInput'] ?? null, $transaction['amount'] ?? 0, $currency, $transaction['exchangeRate'] ?? 1);
             $type = $this->text($transaction['transactionType'] ?? 'contribution', 'contribution');
             if ($type === 'distribution') {
                 $shareholderDistribution += $amount;
+                $this->addCurrencySectionValue($currencySections, $currency, 'shareholderDistribution', $amountInput);
             } else {
                 $shareholderContribution += $amount;
+                $this->addCurrencySectionValue($currencySections, $currency, 'shareholderContribution', $amountInput);
             }
 
             $shareholderLedger[] = [
                 'amount' => $amount,
+                'amountInput' => $amountInput,
+                'currency' => $currency,
+                'exchangeRate' => $this->decimal($transaction['exchangeRate'] ?? 1) ?: 1.0,
                 'notes' => $this->text($transaction['notes'] ?? ''),
                 'shareholderId' => (string) ($transaction['shareholderId'] ?? ''),
                 'shareholderName' => $this->text($transaction['shareholderName'] ?? '', 'Unknown Shareholder'),
@@ -320,15 +382,27 @@ final class ReportDashboardService
 
             $supplierTotal = $this->taggedAmount($notes, 'supplier_total');
             $supplierPaid = min($supplierTotal, $this->taggedAmount($notes, 'supplier_paid'));
+            $supplierCurrency = $this->currencyCode($this->taggedText($notes, 'currency'));
+            $supplierExchangeRate = $this->decimal($this->taggedText($notes, 'exchangeRate')) ?: 1.0;
+            $supplierTotalInput = $this->taggedInputAmount($notes, 'supplier_total_input', 'supplier_total', $supplierCurrency, $supplierExchangeRate);
+            $supplierPaidInput = min(
+                $supplierTotalInput,
+                $this->taggedInputAmount($notes, 'supplier_paid_input', 'supplier_paid', $supplierCurrency, $supplierExchangeRate)
+            );
             $implantInstallments[] = [
                 'availability' => $availability,
                 'createdAt' => $this->dateTimeString($task['createdAt'] ?? ''),
+                'currency' => $supplierCurrency,
+                'exchangeRate' => $supplierExchangeRate,
                 'implantCompanyId' => (string) ($task['implantCompanyId'] ?? ''),
                 'patientId' => $patientId,
                 'patientName' => $patientNameMap[$patientId] ?? $this->patientName(null, $patientId),
                 'supplierPaid' => $this->decimal($supplierPaid),
+                'supplierPaidInput' => $this->decimal($supplierPaidInput),
                 'supplierRemaining' => $this->decimal(max(0, $supplierTotal - $supplierPaid)),
+                'supplierRemainingInput' => $this->decimal(max(0, $supplierTotalInput - $supplierPaidInput)),
                 'supplierTotal' => $this->decimal($supplierTotal),
+                'supplierTotalInput' => $this->decimal($supplierTotalInput),
                 'toothNumber' => $this->implantToothNumber($notes, $title) ?? '-',
             ];
         }
@@ -360,6 +434,10 @@ final class ReportDashboardService
             static fn (array $row): float => (float) ($row['supplierRemaining'] ?? 0),
             array_values($rowsByToothKey)
         )));
+        foreach ($rowsByToothKey as $row) {
+            $this->addCurrencySectionValue($currencySections, $row['currency'] ?? 'AFN', 'thirdCompanyPaid', $row['supplierPaidInput'] ?? 0);
+            $this->addCurrencySectionValue($currencySections, $row['currency'] ?? 'AFN', 'thirdCompanyUnpaid', $row['supplierRemainingInput'] ?? 0);
+        }
 
         $implantCompanyRecords = [];
         foreach ($rowsByToothKey as $row) {
@@ -415,6 +493,7 @@ final class ReportDashboardService
                 'billed' => $this->decimal($billed),
                 'closeCount' => (int) ($financialControlSummary['closeCount'] ?? 0),
                 'collectionRate' => $collectionRate,
+                'currencySections' => $currencySections,
                 'discrepancyTotal' => $this->decimal($financialControlSummary['discrepancyTotal'] ?? 0),
                 'expenses' => $this->decimal($expenseTotal),
                 'latestCloseDifference' => $this->decimal($financialControlSummary['latestCloseDifference'] ?? 0),
@@ -675,7 +754,7 @@ final class ReportDashboardService
                 'details' => implode(' | ', array_filter([
                     "Invoice #".$this->text($invoice['id'] ?? ''),
                     $this->humanizeStatus($this->text($invoice['status'] ?? 'pending', 'pending')),
-                    'Net '.$this->decimal($invoice['netAmountInput'] ?? $invoice['netAmount'] ?? 0),
+                    'Net '.$this->decimal($invoice['netAmount'] ?? 0),
                 ])),
                 'eventLabel' => 'Invoice generated',
                 'eventType' => 'invoice',
@@ -689,7 +768,7 @@ final class ReportDashboardService
                     'details' => implode(' | ', array_filter([
                         "Invoice #".$this->text($invoice['id'] ?? ''),
                         $this->text($payment['method'] ?? ''),
-                        'Amount '.$this->decimal($payment['amountInput'] ?? $payment['amount'] ?? 0),
+                        'Amount '.$this->decimal($payment['amount'] ?? 0),
                     ])),
                     'eventLabel' => 'Payment received',
                     'eventType' => 'payment',
@@ -1168,6 +1247,25 @@ final class ReportDashboardService
             'recentBackups' => $recentBackups,
             'timeline' => array_slice($timeline, 0, 200),
         ];
+    }
+
+    private function taggedInputAmount(string $notes, string $inputKey, string $baseKey, string $currency, float $exchangeRate): float
+    {
+        $inputValue = $this->taggedText($notes, $inputKey);
+        if ($inputValue !== '') {
+            return $this->decimal($inputValue);
+        }
+
+        return $this->convertBaseAmountToInputCurrency($this->taggedAmount($notes, $baseKey), $currency, $exchangeRate);
+    }
+
+    private function taggedText(string $notes, string $key): string
+    {
+        if (preg_match("/\\[{$key}:([^\\]]+)\\]/i", $notes, $matches) !== 1 || !isset($matches[1])) {
+            return '';
+        }
+
+        return trim((string) $matches[1]);
     }
 
     private function auditRowMatches(array $row, string $search): bool

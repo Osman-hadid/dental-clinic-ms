@@ -9,6 +9,9 @@
       "update": "به روز رسانی بازدید"
     },
     "form": {
+      "id": {
+        "label": "ID"
+      },
       "appointmentId": {
         "label": "شناسه قرار ملاقات",
         "validation": {

@@ -64,6 +64,53 @@ final class SafeTransaction extends Model
         return $this->belongsTo(Staff::class, 'picked_by_staff_id');
     }
 
+    /**
+     * @return array<string, array{balance: float, totalIn: float, totalOut: float}>
+     */
+    public static function balanceSnapshot(?int $excludingId = null): array
+    {
+        $query = self::query()->select([
+            'id',
+            'direction',
+            'amount',
+            'amount_input',
+            'currency',
+            'exchange_rate',
+        ]);
+
+        if ($excludingId !== null) {
+            $query->where('id', '!=', $excludingId);
+        }
+
+        $snapshot = [
+            'AFN' => ['balance' => 0.0, 'totalIn' => 0.0, 'totalOut' => 0.0],
+            'USD' => ['balance' => 0.0, 'totalIn' => 0.0, 'totalOut' => 0.0],
+        ];
+
+        foreach ($query->get() as $transaction) {
+            $currency = self::normalizeCurrencyCode((string) ($transaction->currency ?? 'AFN'));
+            $amountInput = self::resolveAmountInput($transaction);
+            $direction = (string) ($transaction->direction ?? 'in');
+
+            if ($direction === 'out') {
+                $snapshot[$currency]['balance'] -= $amountInput;
+                $snapshot[$currency]['totalOut'] += $amountInput;
+                continue;
+            }
+
+            $snapshot[$currency]['balance'] += $amountInput;
+            $snapshot[$currency]['totalIn'] += $amountInput;
+        }
+
+        foreach (['AFN', 'USD'] as $currency) {
+            $snapshot[$currency]['balance'] = round((float) $snapshot[$currency]['balance'], 2);
+            $snapshot[$currency]['totalIn'] = round((float) $snapshot[$currency]['totalIn'], 2);
+            $snapshot[$currency]['totalOut'] = round((float) $snapshot[$currency]['totalOut'], 2);
+        }
+
+        return $snapshot;
+    }
+
     public static function currentBalance(?int $excludingId = null): float
     {
         $query = self::query();
@@ -76,5 +123,36 @@ final class SafeTransaction extends Model
         $sumOut = (float) (clone $query)->where('direction', 'out')->sum('amount');
 
         return round($sumIn - $sumOut, 2);
+    }
+
+    public static function currentBalanceForCurrency(string $currency, ?int $excludingId = null): float
+    {
+        $snapshot = self::balanceSnapshot($excludingId);
+        $resolvedCurrency = self::normalizeCurrencyCode($currency);
+
+        return (float) ($snapshot[$resolvedCurrency]['balance'] ?? 0.0);
+    }
+
+    private static function normalizeCurrencyCode(string $currency): string
+    {
+        return strtoupper(trim($currency)) === 'USD' ? 'USD' : 'AFN';
+    }
+
+    private static function resolveAmountInput(self $transaction): float
+    {
+        $storedAmountInput = $transaction->amount_input;
+        if ($storedAmountInput !== null && $storedAmountInput !== '') {
+            return round((float) $storedAmountInput, 2);
+        }
+
+        $amount = round((float) ($transaction->amount ?? 0), 2);
+        $currency = self::normalizeCurrencyCode((string) ($transaction->currency ?? 'AFN'));
+        $exchangeRate = round((float) ($transaction->exchange_rate ?? 1), 6);
+
+        if ($currency === 'USD' && $exchangeRate > 0) {
+            return round($amount / $exchangeRate, 2);
+        }
+
+        return $amount;
     }
 }

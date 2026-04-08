@@ -1,6 +1,6 @@
 import { JSX, type ReactNode } from 'react';
 
-type MetricCardTone = 'danger' | 'default' | 'safe';
+type MetricCardTone = 'danger' | 'default' | 'emerald' | 'safe';
 
 const metricCardToneClasses: Record<MetricCardTone, { label: string; shell: string; value: string }> = {
   danger: {
@@ -12,6 +12,11 @@ const metricCardToneClasses: Record<MetricCardTone, { label: string; shell: stri
     label: 'text-muted-foreground',
     shell: 'border bg-background/80',
     value: 'text-foreground',
+  },
+  emerald: {
+    label: 'text-emerald-700',
+    shell: 'border-emerald-200 bg-emerald-50/90 shadow-sm',
+    value: 'text-emerald-950',
   },
   safe: {
     label: 'text-amber-700',

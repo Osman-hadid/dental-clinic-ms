@@ -103,7 +103,7 @@ const staticNavItems: SidebarItem[] = [
         section: 'People',
         url: '/dental-management/shareholders',
       },
-      { key: 'aiImaging', newTab: true, permission: 'page.dental-management.ai-imaging', section: 'Tools', url: '/dental-management/ai-imaging' },
+      // { key: 'aiImaging', newTab: true, permission: 'page.dental-management.ai-imaging', section: 'Tools', url: '/dental-management/ai-imaging' },
     ],
     key: 'dentalManagement',
     url: '/dental-management',

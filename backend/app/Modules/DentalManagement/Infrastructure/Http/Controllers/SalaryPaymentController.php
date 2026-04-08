@@ -134,14 +134,17 @@ final class SalaryPaymentController extends BaseApiController
         }
 
         $existingId = $entry?->id;
-        $currentBalance = SafeTransaction::currentBalance($existingId);
-        if ($currentBalance < (float) $salary->net_amount) {
+        $currency = strtoupper((string) ($salary->currency ?? 'AFN')) === 'USD' ? 'USD' : 'AFN';
+        $requestedAmount = round((float) ($salary->net_amount_input ?? $salary->net_amount ?? 0), 2);
+        $currentBalance = SafeTransaction::currentBalanceForCurrency($currency, $existingId);
+        if ($currentBalance < $requestedAmount) {
             throw new ApiException(
                 errorCode: 'SAFE_BALANCE_INSUFFICIENT',
                 message: 'Safe balance is not enough for this salary payment.',
                 details: [
                     'currentBalance' => $currentBalance,
-                    'requestedAmount' => (float) $salary->net_amount,
+                    'currency' => $currency,
+                    'requestedAmount' => $requestedAmount,
                 ],
                 httpCode: 422,
             );
@@ -155,8 +158,8 @@ final class SalaryPaymentController extends BaseApiController
             'entry_type' => 'salary',
             'direction' => 'out',
             'amount' => $salary->net_amount,
-            'amount_input' => round((float) ($salary->net_amount_input ?? $salary->net_amount), 2),
-            'currency' => strtoupper((string) ($salary->currency ?? 'AFN')),
+            'amount_input' => $requestedAmount,
+            'currency' => $currency,
             'exchange_rate' => round((float) ($salary->exchange_rate ?? 1), 6),
             'picked_by_staff_id' => $salary->staff_id,
             'notes' => "Salary {$salary->salary_month}",

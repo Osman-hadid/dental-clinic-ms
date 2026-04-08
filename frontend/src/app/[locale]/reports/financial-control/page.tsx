@@ -8,15 +8,31 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { formatCurrency, parseMoney } from '@/lib/currency-utils';
+import { type CurrencyCode, formatCurrency, parseMoney } from '@/lib/currency-utils';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import { fetchReport, toInputDate } from '@/modules/dental-management/presentation/reports/report-client';
 import { AlertTriangle, ShieldCheck, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 
+type FinancialControlCurrencySections = Record<CurrencyCode, {
+  cashPaymentTotal: number;
+  countedBalance: number;
+  discrepancyAmount: number;
+  expectedBalance: number;
+  nonCashPaymentTotal: number;
+  openDebtTotal: number;
+  paymentTotal: number;
+  safeInTotal: number;
+  safeOutTotal: number;
+}>;
+
 type CollectorRow = {
   cashAmount: number;
   collector: string;
+  currencySections: Record<CurrencyCode, {
+    cashAmount: number;
+    totalAmount: number;
+  }>;
   paymentsCount: number;
   totalAmount: number;
 };
@@ -33,12 +49,16 @@ type CloseRow = {
   openDebtTotal: number;
   overdueDebtCount: number;
   paymentTotal: number;
+  currencySections: FinancialControlCurrencySections;
 };
 
 type DebtWatchRow = {
   agingBucket: string;
   agingDays: number;
   debtAmount: number;
+  debtAmountInput: number;
+  currency: CurrencyCode;
+  exchangeRate: number;
   invoiceDate: string;
   invoiceId: string;
   patientName: string;
@@ -53,6 +73,7 @@ type FinancialControlResponse = {
   debtWatchlist: DebtWatchRow[];
   summary: {
     cashPaymentTotal: number;
+    currencySections: FinancialControlCurrencySections;
     expectedBalance: number;
     nonCashPaymentTotal: number;
     openDebtCount: number;
@@ -78,12 +99,47 @@ type WorkflowAccessSummary = {
 const client = new AxiosClient();
 
 const defaultCountedValue = (amount: number): string => amount > 0 ? amount.toFixed(2) : '';
+const emptyCurrencySections = (): FinancialControlCurrencySections => ({
+  AFN: {
+    cashPaymentTotal: 0,
+    countedBalance: 0,
+    discrepancyAmount: 0,
+    expectedBalance: 0,
+    nonCashPaymentTotal: 0,
+    openDebtTotal: 0,
+    paymentTotal: 0,
+    safeInTotal: 0,
+    safeOutTotal: 0,
+  },
+  USD: {
+    cashPaymentTotal: 0,
+    countedBalance: 0,
+    discrepancyAmount: 0,
+    expectedBalance: 0,
+    nonCashPaymentTotal: 0,
+    openDebtTotal: 0,
+    paymentTotal: 0,
+    safeInTotal: 0,
+    safeOutTotal: 0,
+  },
+});
+const emptyCollectorSections = (): CollectorRow['currencySections'] => ({
+  AFN: {
+    cashAmount: 0,
+    totalAmount: 0,
+  },
+  USD: {
+    cashAmount: 0,
+    totalAmount: 0,
+  },
+});
 
 export default function FinancialControlPage(): JSX.Element {
   const tSidebar = useTranslations('sidebar');
   const [closingDate, setClosingDate] = useState(() => toInputDate(new Date()));
   const [report, setReport] = useState<FinancialControlResponse | null>(null);
-  const [countedBalance, setCountedBalance] = useState('');
+  const [countedBalanceAfn, setCountedBalanceAfn] = useState('');
+  const [countedBalanceUsd, setCountedBalanceUsd] = useState('');
   const [notes, setNotes] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -123,20 +179,26 @@ export default function FinancialControlPage(): JSX.Element {
     }
 
     if (report.currentClose) {
-      setCountedBalance(defaultCountedValue(report.currentClose.countedBalance));
+      setCountedBalanceAfn(defaultCountedValue(report.currentClose.currencySections?.AFN.countedBalance ?? report.currentClose.countedBalance));
+      setCountedBalanceUsd(defaultCountedValue(report.currentClose.currencySections?.USD.countedBalance ?? 0));
       setNotes(report.currentClose.notes || '');
       return;
     }
 
-    setCountedBalance(defaultCountedValue(report.summary.expectedBalance));
+    setCountedBalanceAfn(defaultCountedValue(report.summary.currencySections?.AFN.expectedBalance ?? report.summary.expectedBalance));
+    setCountedBalanceUsd(defaultCountedValue(report.summary.currencySections?.USD.expectedBalance ?? 0));
     setNotes('');
   }, [report]);
 
-  const parsedCountedBalance = useMemo(() => parseMoney(countedBalance), [countedBalance]);
-  const expectedBalance = report?.summary.expectedBalance ?? 0;
+  const summaryCurrencySections = report?.summary.currencySections ?? emptyCurrencySections();
+  const parsedCountedBalanceAfn = useMemo(() => parseMoney(countedBalanceAfn), [countedBalanceAfn]);
+  const parsedCountedBalanceUsd = useMemo(() => parseMoney(countedBalanceUsd), [countedBalanceUsd]);
   const discrepancyPreview = useMemo(
-    () => Number((parsedCountedBalance - expectedBalance).toFixed(2)),
-    [expectedBalance, parsedCountedBalance],
+    () => ({
+      AFN: Number((parsedCountedBalanceAfn - summaryCurrencySections.AFN.expectedBalance).toFixed(2)),
+      USD: Number((parsedCountedBalanceUsd - summaryCurrencySections.USD.expectedBalance).toFixed(2)),
+    }),
+    [parsedCountedBalanceAfn, parsedCountedBalanceUsd, summaryCurrencySections],
   );
 
   const handleSave = (): void => {
@@ -150,7 +212,7 @@ export default function FinancialControlPage(): JSX.Element {
       return;
     }
 
-    if (parsedCountedBalance < 0) {
+    if (parsedCountedBalanceAfn < 0 || parsedCountedBalanceUsd < 0) {
       toast.error('Counted balance must be zero or higher.');
       return;
     }
@@ -159,7 +221,8 @@ export default function FinancialControlPage(): JSX.Element {
     void client
       .post('/api/v1/dental-management/reports/financial-control/close-day', {
         closingDate,
-        countedBalance: parsedCountedBalance,
+        countedBalanceAfn: parsedCountedBalanceAfn,
+        countedBalanceUsd: parsedCountedBalanceUsd,
         notes: notes.trim() || undefined,
       })
       .then((response) => {
@@ -220,31 +283,46 @@ export default function FinancialControlPage(): JSX.Element {
                   {isLoading && report === null ? (
                     <LoadingState compact title="Loading financial control" description="Preparing close-of-day data." />
                   ) : (
-                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                      <div className="rounded-2xl border bg-background/85 p-4">
-                        <p className="text-xs text-muted-foreground">Expected Safe Balance</p>
-                        <p className="mt-2 text-2xl font-semibold">{formatCurrency(report?.summary.expectedBalance ?? 0, 'AFN')}</p>
-                      </div>
-                      <div className="rounded-2xl border bg-background/85 p-4">
-                        <p className="text-xs text-muted-foreground">Payments Received</p>
-                        <p className="mt-2 text-2xl font-semibold">{formatCurrency(report?.summary.paymentTotal ?? 0, 'AFN')}</p>
-                        <p className="text-xs text-muted-foreground">
-                          Cash {formatCurrency(report?.summary.cashPaymentTotal ?? 0, 'AFN')} / Non-cash {formatCurrency(report?.summary.nonCashPaymentTotal ?? 0, 'AFN')}
-                        </p>
-                      </div>
-                      <div className="rounded-2xl border bg-background/85 p-4">
-                        <p className="text-xs text-muted-foreground">Safe Movement</p>
-                        <p className="mt-2 text-2xl font-semibold">{formatCurrency((report?.summary.safeInTotal ?? 0) - (report?.summary.safeOutTotal ?? 0), 'AFN')}</p>
-                        <p className="text-xs text-muted-foreground">
-                          In {formatCurrency(report?.summary.safeInTotal ?? 0, 'AFN')} / Out {formatCurrency(report?.summary.safeOutTotal ?? 0, 'AFN')}
-                        </p>
-                      </div>
-                      <div className="rounded-2xl border bg-background/85 p-4">
-                        <p className="text-xs text-muted-foreground">Open Debt Snapshot</p>
-                        <p className="mt-2 text-2xl font-semibold">{formatCurrency(report?.summary.openDebtTotal ?? 0, 'AFN')}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {report?.summary.openDebtCount ?? 0} open / {report?.summary.overdueDebtCount ?? 0} overdue
-                        </p>
+                    <div className="space-y-3">
+                      <div className="grid gap-3 xl:grid-cols-2">
+                        {(['AFN', 'USD'] as CurrencyCode[]).map((currency) => {
+                          const section = summaryCurrencySections[currency];
+
+                          return (
+                            <div key={currency} className="rounded-2xl border bg-background/85 p-4">
+                              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">{currency} Close Snapshot</p>
+                              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Expected Safe Balance</p>
+                                  <p className="mt-2 text-2xl font-semibold">{formatCurrency(section.expectedBalance, currency)}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Payments Received</p>
+                                  <p className="mt-2 text-2xl font-semibold">{formatCurrency(section.paymentTotal, currency)}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Cash {formatCurrency(section.cashPaymentTotal, currency)} / Non-cash {formatCurrency(section.nonCashPaymentTotal, currency)}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Safe Movement</p>
+                                  <p className="mt-2 text-2xl font-semibold">
+                                    {formatCurrency(Number((section.safeInTotal - section.safeOutTotal).toFixed(2)), currency)}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    In {formatCurrency(section.safeInTotal, currency)} / Out {formatCurrency(section.safeOutTotal, currency)}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Open Debt Snapshot</p>
+                                  <p className="mt-2 text-2xl font-semibold">{formatCurrency(section.openDebtTotal, currency)}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {report?.summary.openDebtCount ?? 0} open / {report?.summary.overdueDebtCount ?? 0} overdue
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -259,30 +337,39 @@ export default function FinancialControlPage(): JSX.Element {
                   </div>
 
                   <div className="mt-4 grid gap-3">
-                    <div className="grid gap-1.5">
-                      <Label>Counted Balance</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={countedBalance}
-                        onChange={(event) => setCountedBalance(event.target.value)}
-                        placeholder="0.00"
-                      />
-                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {([
+                        { currency: 'AFN' as CurrencyCode, value: countedBalanceAfn, setter: setCountedBalanceAfn },
+                        { currency: 'USD' as CurrencyCode, value: countedBalanceUsd, setter: setCountedBalanceUsd },
+                      ]).map((entry) => (
+                        <div key={entry.currency} className="grid gap-3 rounded-2xl border p-4">
+                          <div className="grid gap-1.5">
+                            <Label>{`Counted ${entry.currency} Balance`}</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={entry.value}
+                              onChange={(event) => entry.setter(event.target.value)}
+                              placeholder="0.00"
+                            />
+                          </div>
 
-                    <div className={`rounded-2xl border p-4 ${discrepancyPreview === 0 ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
-                      <div className="flex items-start gap-3">
-                        <AlertTriangle className={`mt-0.5 size-4 ${discrepancyPreview === 0 ? 'text-emerald-700' : 'text-amber-700'}`} />
-                        <div>
-                          <p className="text-sm font-semibold">
-                            Difference {formatCurrency(discrepancyPreview, 'AFN')}
-                          </p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            Compared against expected safe balance {formatCurrency(expectedBalance, 'AFN')}.
-                          </p>
+                          <div className={`rounded-2xl border p-4 ${discrepancyPreview[entry.currency] === 0 ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+                            <div className="flex items-start gap-3">
+                              <AlertTriangle className={`mt-0.5 size-4 ${discrepancyPreview[entry.currency] === 0 ? 'text-emerald-700' : 'text-amber-700'}`} />
+                              <div>
+                                <p className="text-sm font-semibold">
+                                  Difference {formatCurrency(discrepancyPreview[entry.currency], entry.currency)}
+                                </p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  Compared against expected safe balance {formatCurrency(summaryCurrencySections[entry.currency].expectedBalance, entry.currency)}.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                      ))}
                     </div>
 
                     <div className="grid gap-1.5">
@@ -316,8 +403,10 @@ export default function FinancialControlPage(): JSX.Element {
                         <tr>
                           <th className="px-3 py-2">Collector</th>
                           <th className="px-3 py-2">Payments</th>
-                          <th className="px-3 py-2">Cash</th>
-                          <th className="px-3 py-2">Total</th>
+                          <th className="px-3 py-2">AFN Cash</th>
+                          <th className="px-3 py-2">AFN Total</th>
+                          <th className="px-3 py-2">USD Cash</th>
+                          <th className="px-3 py-2">USD Total</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -325,12 +414,14 @@ export default function FinancialControlPage(): JSX.Element {
                           <tr key={`${row.collector}-${index}`} className="border-t">
                             <td className="px-3 py-2">{row.collector}</td>
                             <td className="px-3 py-2">{row.paymentsCount}</td>
-                            <td className="px-3 py-2">{formatCurrency(row.cashAmount, 'AFN')}</td>
-                            <td className="px-3 py-2">{formatCurrency(row.totalAmount, 'AFN')}</td>
-                          </tr>
+                            <td className="px-3 py-2">{formatCurrency((row.currencySections ?? emptyCollectorSections()).AFN.cashAmount, 'AFN')}</td>
+                            <td className="px-3 py-2">{formatCurrency((row.currencySections ?? emptyCollectorSections()).AFN.totalAmount, 'AFN')}</td>
+                            <td className="px-3 py-2">{formatCurrency((row.currencySections ?? emptyCollectorSections()).USD.cashAmount, 'USD')}</td>
+                            <td className="px-3 py-2">{formatCurrency((row.currencySections ?? emptyCollectorSections()).USD.totalAmount, 'USD')}</td>
+                        </tr>
                         )) : (
                           <tr className="border-t">
-                            <td colSpan={4} className="px-3 py-6 text-center text-muted-foreground">No payments were collected on this date.</td>
+                            <td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">No payments were collected on this date.</td>
                           </tr>
                         )}
                       </tbody>
@@ -361,7 +452,7 @@ export default function FinancialControlPage(): JSX.Element {
                             <td className="px-3 py-2">{row.patientName}</td>
                             <td className="px-3 py-2">#{row.invoiceId}</td>
                             <td className="px-3 py-2">{row.agingBucket}</td>
-                            <td className="px-3 py-2">{formatCurrency(row.debtAmount, 'AFN')}</td>
+                            <td className="px-3 py-2">{formatCurrency(row.debtAmountInput ?? row.debtAmount, row.currency ?? 'AFN')}</td>
                           </tr>
                         )) : (
                           <tr className="border-t">
@@ -386,9 +477,12 @@ export default function FinancialControlPage(): JSX.Element {
                     <thead className="bg-muted/30 text-left text-muted-foreground">
                       <tr>
                         <th className="px-3 py-2">Date</th>
-                        <th className="px-3 py-2">Expected</th>
-                        <th className="px-3 py-2">Counted</th>
-                        <th className="px-3 py-2">Difference</th>
+                        <th className="px-3 py-2">AFN Expected</th>
+                        <th className="px-3 py-2">AFN Counted</th>
+                        <th className="px-3 py-2">AFN Difference</th>
+                        <th className="px-3 py-2">USD Expected</th>
+                        <th className="px-3 py-2">USD Counted</th>
+                        <th className="px-3 py-2">USD Difference</th>
                         <th className="px-3 py-2">Closed By</th>
                         <th className="px-3 py-2">Notes</th>
                       </tr>
@@ -397,17 +491,22 @@ export default function FinancialControlPage(): JSX.Element {
                       {(report?.closeHistory ?? []).length > 0 ? (report?.closeHistory ?? []).map((row, index) => (
                         <tr key={`${row.closingDate}-${index}`} className="border-t">
                           <td className="px-3 py-2">{row.closingDate}</td>
-                          <td className="px-3 py-2">{formatCurrency(row.expectedBalance, 'AFN')}</td>
-                          <td className="px-3 py-2">{formatCurrency(row.countedBalance, 'AFN')}</td>
-                          <td className={`px-3 py-2 font-medium ${row.discrepancyAmount === 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
-                            {formatCurrency(row.discrepancyAmount, 'AFN')}
+                          <td className="px-3 py-2">{formatCurrency(row.currencySections?.AFN.expectedBalance ?? row.expectedBalance, 'AFN')}</td>
+                          <td className="px-3 py-2">{formatCurrency(row.currencySections?.AFN.countedBalance ?? row.countedBalance, 'AFN')}</td>
+                          <td className={`px-3 py-2 font-medium ${(row.currencySections?.AFN.discrepancyAmount ?? row.discrepancyAmount) === 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
+                            {formatCurrency(row.currencySections?.AFN.discrepancyAmount ?? row.discrepancyAmount, 'AFN')}
+                          </td>
+                          <td className="px-3 py-2">{formatCurrency(row.currencySections?.USD.expectedBalance ?? 0, 'USD')}</td>
+                          <td className="px-3 py-2">{formatCurrency(row.currencySections?.USD.countedBalance ?? 0, 'USD')}</td>
+                          <td className={`px-3 py-2 font-medium ${(row.currencySections?.USD.discrepancyAmount ?? 0) === 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
+                            {formatCurrency(row.currencySections?.USD.discrepancyAmount ?? 0, 'USD')}
                           </td>
                           <td className="px-3 py-2">{row.closedBy || '-'}</td>
                           <td className="px-3 py-2">{row.notes || '-'}</td>
                         </tr>
                       )) : (
                         <tr className="border-t">
-                          <td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">No close history has been saved yet.</td>
+                          <td colSpan={9} className="px-3 py-6 text-center text-muted-foreground">No close history has been saved yet.</td>
                         </tr>
                       )}
                     </tbody>

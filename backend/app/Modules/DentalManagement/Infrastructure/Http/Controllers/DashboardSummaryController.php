@@ -233,9 +233,8 @@ final class DashboardSummaryController extends BaseApiController
         $revenueSeries = array_values($revenueByDate);
 
         $safeBalancePayload = $this->radialSafeSummary(request())->getData(true)['data'] ?? null;
-
-        $sumIn = (float) SafeTransaction::query()->where('direction', 'in')->sum('amount');
-        $sumOut = (float) SafeTransaction::query()->where('direction', 'out')->sum('amount');
+        $safeCurrencySections = SafeTransaction::balanceSnapshot();
+        $afnSafeSection = $safeCurrencySections['AFN'] ?? ['balance' => 0.0, 'totalIn' => 0.0, 'totalOut' => 0.0];
 
         $recentSafe = SafeTransaction::query()
             ->with('pickedByStaff:id,full_name')
@@ -246,11 +245,19 @@ final class DashboardSummaryController extends BaseApiController
 
         $recentSafeTransactions = $recentSafe->map(static function ($entry): array {
             $pickedName = $entry->pickedByStaff ? (string) ($entry->pickedByStaff->full_name ?? '') : '';
+            $currency = strtoupper(trim((string) ($entry->currency ?? 'AFN'))) === 'USD' ? 'USD' : 'AFN';
+            $amountInput = $entry->amount_input;
+            if (($amountInput === null || $amountInput === '') && $currency === 'USD') {
+                $exchangeRate = (float) ($entry->exchange_rate ?? 1);
+                $amountInput = $exchangeRate > 0 ? round((float) ($entry->amount ?? 0) / $exchangeRate, 2) : 0;
+            }
+
             return [
                 'id' => (string) $entry->id,
                 'entryType' => (string) ($entry->entry_type ?? ''),
                 'direction' => (string) ($entry->direction ?? ''),
-                'amount' => (float) ($entry->amount ?? 0),
+                'amount' => round((float) ($amountInput ?? $entry->amount ?? 0), 2),
+                'currency' => $currency,
                 'transactionDate' => (string) ($entry->transaction_date ?? ''),
                 'pickedByStaffId' => (string) ($entry->picked_by_staff_id ?? ''),
                 'pickedByStaffName' => $pickedName,
@@ -258,19 +265,40 @@ final class DashboardSummaryController extends BaseApiController
             ];
         })->values()->all();
 
-        $topPickups = DB::table('safe_transactions')
-            ->leftJoin('staff', 'safe_transactions.picked_by_staff_id', '=', 'staff.id')
-            ->whereNull('safe_transactions.deleted_at')
-            ->where('safe_transactions.direction', 'out')
-            ->selectRaw('COALESCE(staff.full_name, CONCAT(\'Staff #\', COALESCE(safe_transactions.picked_by_staff_id::text, \'-\'))) as name')
-            ->selectRaw('ROUND(SUM(safe_transactions.amount)::numeric, 2) as amount')
-            ->groupBy('name')
-            ->orderByDesc('amount')
-            ->limit(4)
-            ->get()
-            ->map(static fn ($row): array => ['name' => (string) $row->name, 'amount' => (float) $row->amount])
-            ->values()
-            ->all();
+        $topPickups = [];
+        $pickupRows = SafeTransaction::query()
+            ->with('pickedByStaff:id,full_name')
+            ->where('direction', 'out')
+            ->orderByDesc('transaction_date')
+            ->get(['id', 'picked_by_staff_id', 'amount', 'amount_input', 'currency', 'exchange_rate']);
+
+        foreach ($pickupRows as $row) {
+            $currency = strtoupper(trim((string) ($row->currency ?? 'AFN'))) === 'USD' ? 'USD' : 'AFN';
+            $amountInput = $row->amount_input;
+            if (($amountInput === null || $amountInput === '') && $currency === 'USD') {
+                $exchangeRate = (float) ($row->exchange_rate ?? 1);
+                $amountInput = $exchangeRate > 0 ? round((float) ($row->amount ?? 0) / $exchangeRate, 2) : 0;
+            }
+
+            $name = $row->pickedByStaff
+                ? (string) ($row->pickedByStaff->full_name ?? '')
+                : '';
+            if ($name === '') {
+                $name = 'Staff #' . ((string) ($row->picked_by_staff_id ?? '-'));
+            }
+
+            $key = $currency . '|' . $name;
+            $topPickups[$key] ??= [
+                'amount' => 0.0,
+                'currency' => $currency,
+                'name' => $name,
+            ];
+            $topPickups[$key]['amount'] = round((float) $topPickups[$key]['amount'] + (float) ($amountInput ?? $row->amount ?? 0), 2);
+        }
+
+        $topPickups = array_values($topPickups);
+        usort($topPickups, static fn (array $left, array $right): int => ((float) $right['amount']) <=> ((float) $left['amount']));
+        $topPickups = array_slice($topPickups, 0, 4);
 
         $implantSummary = $this->buildImplantSupplierSummary();
 
@@ -304,9 +332,10 @@ final class DashboardSummaryController extends BaseApiController
                     ],
                 ],
                 'safe' => [
-                    'balance' => round($sumIn - $sumOut, 2),
-                    'totalIn' => round($sumIn, 2),
-                    'totalOut' => round($sumOut, 2),
+                    'balance' => round((float) ($afnSafeSection['balance'] ?? 0), 2),
+                    'currencySections' => $safeCurrencySections,
+                    'totalIn' => round((float) ($afnSafeSection['totalIn'] ?? 0), 2),
+                    'totalOut' => round((float) ($afnSafeSection['totalOut'] ?? 0), 2),
                     'afnPerUsd' => $this->currencyService->getDefaultAfnPerUsd(),
                     'topPickups' => $topPickups,
                     'recentTransactions' => $recentSafeTransactions,
@@ -323,15 +352,8 @@ final class DashboardSummaryController extends BaseApiController
     {
         $this->authorize('viewAny', Debt::class);
 
-        $sumIn = (float) SafeTransaction::query()
-            ->where('direction', 'in')
-            ->sum('amount');
-
-        $sumOut = (float) SafeTransaction::query()
-            ->where('direction', 'out')
-            ->sum('amount');
-
-        $safeBalance = round($sumIn - $sumOut, 2);
+        $safeSections = SafeTransaction::balanceSnapshot();
+        $safeBalance = round((float) (($safeSections['AFN']['balance'] ?? 0)), 2);
 
         $debtOutstanding = (float) Debt::query()
             ->where('status', 'open')

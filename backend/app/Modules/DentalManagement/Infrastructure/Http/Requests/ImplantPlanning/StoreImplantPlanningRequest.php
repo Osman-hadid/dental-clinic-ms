@@ -33,6 +33,8 @@ final class StoreImplantPlanningRequest extends BaseFormRequest
             'linkedVisitId' => 'nullable|integer|exists:visits,id',
             'dentistId' => 'nullable|integer|exists:staff,id',
             'treatmentId' => 'required|integer|exists:treatments,id',
+            'currency' => 'nullable|string|in:AFN,USD',
+            'exchangeRate' => 'nullable|numeric|gt:0',
             'visitDate' => 'nullable|date',
             'notes' => 'nullable|string|max:255',
             'implantTeeth' => 'required|array|min:1',

@@ -78,7 +78,8 @@ final class SafeTransactionController extends BaseApiController
         $entry = DB::transaction(function () use ($payload): SafeTransaction {
             $this->assertBalanceAllowsOutTransaction(
                 direction: (string) $payload['direction'],
-                amount: (float) $payload['amount']
+                amountInput: (float) $payload['amount_input'],
+                currency: (string) $payload['currency'],
             );
 
             $entry = SafeTransaction::query()->create($payload);
@@ -124,7 +125,8 @@ final class SafeTransactionController extends BaseApiController
 
             $this->assertBalanceAllowsOutTransaction(
                 direction: (string) $payload['direction'],
-                amount: (float) $payload['amount'],
+                amountInput: (float) $payload['amount_input'],
+                currency: (string) $payload['currency'],
                 excludingId: $entry->id
             );
 
@@ -166,35 +168,37 @@ final class SafeTransactionController extends BaseApiController
     {
         abort_unless($this->workflowAccessService->canViewSafeLedger(auth()->user()), 403);
 
-        $sumIn = (float) SafeTransaction::query()->where('direction', 'in')->sum('amount');
-        $sumOut = (float) SafeTransaction::query()->where('direction', 'out')->sum('amount');
-        $balance = round($sumIn - $sumOut, 2);
+        $currencySections = SafeTransaction::balanceSnapshot();
+        $afnSection = $currencySections['AFN'] ?? ['balance' => 0.0, 'totalIn' => 0.0, 'totalOut' => 0.0];
 
         return $this->successResponse(
             data: [
-                'balance' => $balance,
-                'totalIn' => round($sumIn, 2),
-                'totalOut' => round($sumOut, 2),
+                'balance' => round((float) ($afnSection['balance'] ?? 0), 2),
+                'currencySections' => $currencySections,
+                'totalIn' => round((float) ($afnSection['totalIn'] ?? 0), 2),
+                'totalOut' => round((float) ($afnSection['totalOut'] ?? 0), 2),
                 'afnPerUsd' => $this->currencyService->getDefaultAfnPerUsd(),
             ],
             message: 'Safe balance fetched successfully.'
         );
     }
 
-    private function assertBalanceAllowsOutTransaction(string $direction, float $amount, ?int $excludingId = null): void
+    private function assertBalanceAllowsOutTransaction(string $direction, float $amountInput, string $currency, ?int $excludingId = null): void
     {
         if ($direction !== 'out') {
             return;
         }
 
-        $balance = SafeTransaction::currentBalance($excludingId);
-        if ($balance < $amount) {
+        $resolvedCurrency = strtoupper(trim($currency)) === 'USD' ? 'USD' : 'AFN';
+        $balance = SafeTransaction::currentBalanceForCurrency($resolvedCurrency, $excludingId);
+        if ($balance < $amountInput) {
             throw new ApiException(
                 errorCode: 'SAFE_BALANCE_INSUFFICIENT',
                 message: 'Safe balance is not enough for this transaction.',
                 details: [
                     'currentBalance' => $balance,
-                    'requestedAmount' => $amount,
+                    'currency' => $resolvedCurrency,
+                    'requestedAmount' => $amountInput,
                 ],
                 httpCode: 422,
             );

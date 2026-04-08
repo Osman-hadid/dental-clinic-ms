@@ -40,14 +40,19 @@ final class FinancialControlController extends BaseApiController
 
         $validated = $request->validate([
             'closingDate' => 'required|date',
-            'countedBalance' => 'required|numeric|min:0',
+            'countedBalance' => 'nullable|numeric|min:0',
+            'countedBalanceAfn' => 'nullable|numeric|min:0',
+            'countedBalanceUsd' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string|max:2000',
         ]);
 
         $closingDate = CarbonImmutable::parse((string) $validated['closingDate'])->startOfDay();
         $this->financialControlService->closeDay(
             closingDate: $closingDate,
-            countedBalance: (float) $validated['countedBalance'],
+            countedBalances: [
+                'AFN' => (float) ($validated['countedBalanceAfn'] ?? $validated['countedBalance'] ?? 0),
+                'USD' => (float) ($validated['countedBalanceUsd'] ?? 0),
+            ],
             notes: isset($validated['notes']) ? (string) $validated['notes'] : null,
             closedBy: (int) ($request->user()?->id ?? 0) ?: null,
         );

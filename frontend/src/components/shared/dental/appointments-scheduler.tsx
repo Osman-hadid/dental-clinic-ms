@@ -80,7 +80,7 @@ const DEFAULT_TIME_SLOTS = Array.from({ length: 21 }, (_, index) => {
   const minute = totalMinutes % 60;
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 });
-const DAY_STRIP_SIZE = 10;
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
 const asText = (value: unknown): string => {
   if (typeof value === 'number') return String(value).trim();
@@ -129,6 +129,23 @@ const shiftDays = (date: Date, delta: number): Date => {
   const next = new Date(date);
   next.setDate(next.getDate() + delta);
   return startOfDay(next);
+};
+
+const startOfMonth = (date: Date): Date => new Date(date.getFullYear(), date.getMonth(), 1);
+
+const shiftMonths = (date: Date, delta: number): Date => startOfMonth(new Date(date.getFullYear(), date.getMonth() + delta, 1));
+
+const isSameMonth = (left: Date, right: Date): boolean => (
+  left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth()
+);
+
+const getMonthDays = (month: Date): Date[] => {
+  const start = startOfMonth(month);
+  const year = start.getFullYear();
+  const monthIndex = start.getMonth();
+  const totalDays = new Date(year, monthIndex + 1, 0).getDate();
+
+  return Array.from({ length: totalDays }, (_, index) => new Date(year, monthIndex, index + 1));
 };
 
 const normalizeTime = (value: unknown): string => {
@@ -231,7 +248,7 @@ export const AppointmentsScheduler = ({
   patientOptions = [],
 }: AppointmentsSchedulerProps): JSX.Element => {
   const today = useMemo(() => startOfDay(new Date()), []);
-  const [stripStart, setStripStart] = useState<Date>(today);
+  const [selectedMonth, setSelectedMonth] = useState<Date>(startOfMonth(today));
   const [selectedDayKey, setSelectedDayKey] = useState<string>(toDateKey(today));
   const [hoveredDayKey, setHoveredDayKey] = useState<string | null>(null);
   const [quickAddOpen, setQuickAddOpen] = useState<boolean>(false);
@@ -295,15 +312,22 @@ export const AppointmentsScheduler = ({
       });
   }, [appointments]);
 
-  const visibleDays = useMemo(() => {
-    return Array.from({ length: DAY_STRIP_SIZE }, (_, index) => shiftDays(stripStart, index));
-  }, [stripStart]);
+  const visibleDays = useMemo(() => getMonthDays(selectedMonth), [selectedMonth]);
+  const leadingBlankDays = useMemo(() => visibleDays[0]?.getDay() ?? 0, [visibleDays]);
 
   useEffect(() => {
-    const selectedInStrip = visibleDays.some((day) => toDateKey(day) === selectedDayKey);
-    if (selectedInStrip) return;
-    setSelectedDayKey(toDateKey(visibleDays[0] ?? today));
-  }, [selectedDayKey, today, visibleDays]);
+    const selectedDate = parseDateOnly(selectedDayKey);
+    if (selectedDate && isSameMonth(selectedDate, selectedMonth)) {
+      return;
+    }
+
+    const fallbackDay = isSameMonth(today, selectedMonth)
+      ? today
+      : (visibleDays[0] ?? selectedMonth);
+
+    setSelectedDayKey(toDateKey(fallbackDay));
+    setSelectedTime('all');
+  }, [selectedDayKey, selectedMonth, today, visibleDays]);
 
   useEffect(() => {
     setQuickCreateData((current) => ({
@@ -537,7 +561,7 @@ export const AppointmentsScheduler = ({
                     size="icon"
                     className="size-8 rounded-xl"
                     onClick={() => {
-                      setStripStart((current) => shiftDays(current, -7));
+                      setSelectedMonth((current) => shiftMonths(current, -1));
                     }}
                   >
                     <ChevronLeft className="size-4" />
@@ -548,7 +572,7 @@ export const AppointmentsScheduler = ({
                     size="icon"
                     className="size-8 rounded-xl"
                     onClick={() => {
-                      setStripStart((current) => shiftDays(current, 7));
+                      setSelectedMonth((current) => shiftMonths(current, 1));
                     }}
                   >
                     <ChevronRight className="size-4" />
@@ -556,13 +580,25 @@ export const AppointmentsScheduler = ({
                 </div>
               </div>
 
-              <p className="mt-4 text-sm font-medium text-slate-600">{monthLabel(visibleDays[0] ?? today)}</p>
+              <p className="mt-4 text-sm font-medium text-slate-600">{monthLabel(selectedMonth)}</p>
 
-              <div className="mt-2 flex max-w-full gap-2 overflow-x-auto pb-1">
+              <div className="mt-3 grid grid-cols-7 gap-2 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                {WEEKDAY_LABELS.map((label) => (
+                  <div key={label} className="py-1">
+                    {label}
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-2 grid grid-cols-7 gap-2">
+                {Array.from({ length: leadingBlankDays }, (_, index) => (
+                  <div key={`blank-${index}`} aria-hidden="true" className="min-h-20 rounded-2xl border border-dashed border-transparent" />
+                ))}
                 {visibleDays.map((day) => {
                   const key = toDateKey(day);
                   const isSelected = key === selectedDayKey;
                   const isHovered = key === hoveredDayKey;
+                  const isToday = key === toDateKey(today);
                   const dayCount = occupiedAppointmentsByDay.get(key) ?? 0;
                   const isOccupiedDay = dayCount > 0;
                   return (
@@ -580,7 +616,7 @@ export const AppointmentsScheduler = ({
                         setSelectedTime('all');
                       }}
                       className={cn(
-                        'min-w-16 rounded-2xl border px-2 py-2 text-center transition-all duration-200',
+                        'min-h-20 rounded-2xl border px-2 py-2 text-center transition-all duration-200',
                         isSelected
                           ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-md ring-2 ring-blue-200/60'
                           : isOccupiedDay
@@ -590,8 +626,9 @@ export const AppointmentsScheduler = ({
                             : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:bg-blue-50/40 hover:-translate-y-0.5'
                       )}
                     >
-                      <p className="text-xs">{weekdayLabel(day)}</p>
+                      <p className="text-[11px] leading-tight">{weekdayLabel(day)}</p>
                       <p className="text-lg font-semibold leading-tight">{day.getDate()}</p>
+                      <p className="text-[11px] font-medium text-slate-500">{isToday ? 'Today' : monthLabel(day).split(' ')[0]}</p>
                       <p className="text-[11px] text-slate-500">{dayCount}</p>
                     </button>
                   );
@@ -924,7 +961,7 @@ export const AppointmentsScheduler = ({
                   <div className="space-y-1 text-xs text-slate-600">
                     <p className="flex items-center justify-between">
                       <span>Current Month</span>
-                      <span className="font-medium text-slate-800">{monthLabel(visibleDays[0] ?? today)}</span>
+                      <span className="font-medium text-slate-800">{monthLabel(selectedMonth)}</span>
                     </p>
                     <p className="flex items-center justify-between">
                       <span>Selected Time</span>

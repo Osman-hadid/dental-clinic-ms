@@ -13,11 +13,14 @@ use App\Modules\DentalManagement\Domain\Entities\SafeTransaction;
 use App\Modules\DentalManagement\Domain\Entities\SalaryPayment;
 use App\Modules\DentalManagement\Domain\Entities\Visit;
 use App\Modules\DentalManagement\Domain\Entities\VisitTreatment;
+use App\Modules\DentalManagement\Domain\Services\Concerns\InteractsWithReportData;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
 final class ExecutiveReportSummaryService
 {
+    use InteractsWithReportData;
+
     public function build(array $filters): array
     {
         $startDate = CarbonImmutable::parse((string) $filters['startDate'])->startOfDay();
@@ -64,9 +67,9 @@ final class ExecutiveReportSummaryService
             ->get();
 
         $invoices = Invoice::query()
-            ->select(['id', 'patient_id', 'visit_id', 'total_amount', 'discount', 'net_amount', 'invoice_date', 'status'])
+            ->select(['id', 'patient_id', 'visit_id', 'total_amount', 'total_amount_input', 'discount', 'net_amount', 'net_amount_input', 'currency', 'exchange_rate', 'invoice_date', 'status'])
             ->with([
-                'payments:id,invoice_id,payment_date,amount,method',
+                'payments:id,invoice_id,payment_date,amount,amount_input,currency,exchange_rate,method',
                 'visit:id,patient_id,dentist_id,visit_date',
                 'visit.dentist:id,full_name',
             ])
@@ -75,18 +78,18 @@ final class ExecutiveReportSummaryService
             ->get();
 
         $expenses = Expense::query()
-            ->select(['id', 'expense_type', 'category', 'amount', 'expense_date'])
+            ->select(['id', 'expense_type', 'category', 'amount', 'amount_input', 'currency', 'exchange_rate', 'expense_date'])
             ->where('expense_date', '>=', $startDate->toDateString())
             ->where('expense_date', '<=', $endDate->toDateString())
             ->get();
 
         $safeTransactions = SafeTransaction::query()
-            ->select(['id', 'transaction_date', 'direction', 'amount'])
+            ->select(['id', 'transaction_date', 'entry_type', 'direction', 'amount', 'amount_input', 'currency', 'exchange_rate', 'source_type', 'notes'])
             ->where('transaction_date', '<=', $endDate->toDateString())
             ->get();
 
         $salaryPayments = SalaryPayment::query()
-            ->select(['id', 'payment_date', 'net_amount', 'status'])
+            ->select(['id', 'payment_date', 'net_amount', 'net_amount_input', 'currency', 'exchange_rate', 'status'])
             ->where('payment_date', '>=', $startDate->toDateString())
             ->where('payment_date', '<=', $endDate->toDateString())
             ->get();
@@ -141,13 +144,19 @@ final class ExecutiveReportSummaryService
             foreach ($invoice->payments as $payment) {
                 $method = mb_strtolower($this->stringOrFallback($payment->method ?? null, 'cash'));
                 $amount = $this->toFloat($payment->amount ?? 0);
+                $currency = $this->currencyCode($payment->currency);
+                $exchangeRate = $this->toFloat($payment->exchange_rate ?? 1) ?: 1.0;
+                $amountInput = $this->resolveInputAmount($payment->amount_input, $payment->amount, $currency, $exchangeRate);
                 if ($amount <= 0) {
                     continue;
                 }
 
                 $paymentRows->push([
                     'amount' => $amount,
+                    'amountInput' => $amountInput,
+                    'currency' => $currency,
                     'date' => $this->dateString($payment->payment_date),
+                    'exchangeRate' => $exchangeRate,
                     'invoiceId' => $invoiceId,
                     'method' => $method,
                 ]);
@@ -263,32 +272,68 @@ final class ExecutiveReportSummaryService
             return $this->matchesDentistFilter($dentistFilter, $invoice->visit?->dentist?->full_name, $invoice->visit?->dentist_id);
         })->values();
 
-        [$expenseSummary, $dailyExpenses, $clinicalExpenses] = $this->buildExpenseSummary($expenses);
-        $salaryPaid = $this->toTwoDecimals($salaryPayments
-            ->filter(fn (SalaryPayment $salaryPayment): bool => \in_array((string) $salaryPayment->status, ['paid', 'partial'], true))
-            ->sum(fn (SalaryPayment $salaryPayment): float => $this->toFloat($salaryPayment->net_amount ?? 0)));
+        $currencySections = $this->initializeCurrencySections([
+            'bankBalance',
+            'billed',
+            'cashInSafe',
+            'debt',
+            'expenses',
+            'paid',
+            'profitLoss',
+            'safeOut',
+            'salaryPaid',
+            'thirdCompanyPaid',
+            'thirdCompanyUnpaid',
+        ]);
+        $inventorySafePurchases = $safeTransactions->filter(function (SafeTransaction $safeTransaction) use ($startDate, $endDate): bool {
+            $date = $this->parseDate($this->dateString($safeTransaction->transaction_date));
+            if ($date === null || $date->lt($startDate) || $date->gt($endDate)) {
+                return false;
+            }
+
+            return (string) ($safeTransaction->direction ?? '') === 'out'
+                && (string) ($safeTransaction->source_type ?? '') === 'inventory_item'
+                && (string) ($safeTransaction->entry_type ?? '') === 'expense';
+        })->values();
+
+        [$expenseSummary, $dailyExpenses, $clinicalExpenses] = $this->buildExpenseSummary($expenses, $inventorySafePurchases);
         $thirdCompanySummary = $this->buildThirdCompanySummary($patientSessionTasks, $patientFilter, $statusFilter);
 
         $billed = $this->toTwoDecimals($filteredInvoices->sum(fn (Invoice $invoice): float => $this->toFloat($invoice->total_amount ?? 0)));
         $discount = $this->toTwoDecimals($filteredInvoices->sum(fn (Invoice $invoice): float => $this->toFloat($invoice->discount ?? 0)));
         $net = $this->toTwoDecimals($filteredInvoices->sum(fn (Invoice $invoice): float => $this->toFloat($invoice->net_amount ?? 0)));
         $paid = $this->toTwoDecimals($filteredPayments->sum(fn (array $payment): float => (float) $payment['amount']));
-        $debt = $this->toTwoDecimals($filteredInvoices->reduce(
-            function (float $carry, Invoice $invoice) use ($paidByInvoiceId): float {
-                $status = mb_strtolower((string) ($invoice->status ?? 'unpaid'));
-                if (!\in_array($status, ['unpaid', 'partially_paid'], true)) {
-                    return $carry;
-                }
+        $debt = 0.0;
 
-                $invoiceId = (string) $invoice->id;
-                $netAmount = $this->toFloat($invoice->net_amount ?? 0);
-                $paidAmount = (float) ($paidByInvoiceId[$invoiceId] ?? 0);
-                $remaining = max(0, $netAmount - $paidAmount);
+        foreach ($filteredInvoices as $invoice) {
+            $currency = $this->currencyCode($invoice->currency);
+            $exchangeRate = $this->toFloat($invoice->exchange_rate ?? 1) ?: 1.0;
+            $this->addCurrencySectionValue(
+                $currencySections,
+                $currency,
+                'billed',
+                $this->resolveInputAmount($invoice->total_amount_input, $invoice->total_amount, $currency, $exchangeRate)
+            );
 
-                return $carry + $remaining;
-            },
-            0.0
-        ));
+            $status = mb_strtolower((string) ($invoice->status ?? 'unpaid'));
+            if (!\in_array($status, ['unpaid', 'partially_paid'], true)) {
+                continue;
+            }
+
+            $invoiceId = (string) $invoice->id;
+            $netAmount = $this->toFloat($invoice->net_amount ?? 0);
+            $paidAmount = (float) ($paidByInvoiceId[$invoiceId] ?? 0);
+            $remaining = max(0, $netAmount - $paidAmount);
+            $debt += $remaining;
+            $this->addCurrencySectionValue(
+                $currencySections,
+                $currency,
+                'debt',
+                $this->convertBaseAmountToInputCurrency($remaining, $currency, $exchangeRate)
+            );
+        }
+
+        $debt = $this->toTwoDecimals($debt);
 
         $activePatients = [];
         foreach ($filteredVisits as $visit) {
@@ -302,13 +347,72 @@ final class ExecutiveReportSummaryService
             }
         }
 
+        foreach ($filteredPayments as $payment) {
+            $currency = $this->currencyCode($payment['currency'] ?? 'AFN');
+            $amountInput = (float) ($payment['amountInput'] ?? $payment['amount'] ?? 0);
+            $this->addCurrencySectionValue($currencySections, $currency, 'paid', $amountInput);
+
+            if (\in_array((string) ($payment['method'] ?? ''), ['bank', 'bank_transfer', 'transfer', 'card'], true)) {
+                $this->addCurrencySectionValue($currencySections, $currency, 'bankBalance', $amountInput);
+            }
+        }
+
+        foreach ($dailyExpenses->concat($clinicalExpenses) as $expense) {
+            $currency = $this->currencyCode($expense->currency);
+            $this->addCurrencySectionValue(
+                $currencySections,
+                $currency,
+                'expenses',
+                $this->resolveInputAmount($expense->amount_input, $expense->amount, $currency, $expense->exchange_rate)
+            );
+        }
+
+        $salaryPaid = 0.0;
+        foreach ($salaryPayments as $salaryPayment) {
+            if (!\in_array((string) $salaryPayment->status, ['paid', 'partial'], true)) {
+                continue;
+            }
+
+            $amount = $this->toFloat($salaryPayment->net_amount ?? 0);
+            $salaryPaid += $amount;
+            $currency = $this->currencyCode($salaryPayment->currency);
+            $this->addCurrencySectionValue(
+                $currencySections,
+                $currency,
+                'salaryPaid',
+                $this->resolveInputAmount($salaryPayment->net_amount_input, $salaryPayment->net_amount, $currency, $salaryPayment->exchange_rate)
+            );
+        }
+        $salaryPaid = $this->toTwoDecimals($salaryPaid);
+
         $collectionRate = $net > 0 ? round(min(100, ($paid / $net) * 100), 1) : 0.0;
         $appointmentCompletionRate = $filteredAppointments->count() > 0
             ? round(min(100, ($filteredVisits->count() / $filteredAppointments->count()) * 100), 1)
             : 0.0;
-        $safeOut = $this->toTwoDecimals($safeTransactions
-            ->filter(fn (SafeTransaction $safeTransaction): bool => $safeTransaction->direction === 'out' && $this->dateWithin($safeTransaction->transaction_date, $startDate, $endDate))
-            ->sum(fn (SafeTransaction $safeTransaction): float => $this->toFloat($safeTransaction->amount ?? 0)));
+        $safeOut = 0.0;
+        $cashInSafe = 0.0;
+        foreach ($safeTransactions as $safeTransaction) {
+            $date = $this->parseDate($this->dateString($safeTransaction->transaction_date));
+            if ($date === null || $date->gt($endDate)) {
+                continue;
+            }
+
+            $amount = $this->toFloat($safeTransaction->amount ?? 0);
+            $currency = $this->currencyCode($safeTransaction->currency);
+            $amountInput = $this->resolveInputAmount($safeTransaction->amount_input, $safeTransaction->amount, $currency, $safeTransaction->exchange_rate);
+            if ($safeTransaction->direction === 'in') {
+                $cashInSafe += $amount;
+                $this->addCurrencySectionValue($currencySections, $currency, 'cashInSafe', $amountInput);
+            } else {
+                $cashInSafe -= $amount;
+                $this->addCurrencySectionValue($currencySections, $currency, 'cashInSafe', -$amountInput);
+                if (!$date->lt($startDate)) {
+                    $safeOut += $amount;
+                    $this->addCurrencySectionValue($currencySections, $currency, 'safeOut', $amountInput);
+                }
+            }
+        }
+        $safeOut = $this->toTwoDecimals($safeOut);
         $totalOutcome = $this->toTwoDecimals($expenseSummary['total'] + $salaryPaid + $thirdCompanySummary['totalPaid']);
         $profitOrLoss = $this->toTwoDecimals($paid - $totalOutcome);
         $netAfterExpenses = $this->toTwoDecimals($paid - $expenseSummary['total']);
@@ -321,15 +425,19 @@ final class ExecutiveReportSummaryService
         $bankBalance = $this->toTwoDecimals($filteredPayments
             ->filter(fn (array $payment): bool => \in_array($payment['method'], ['bank', 'bank_transfer', 'transfer', 'card'], true))
             ->sum(fn (array $payment): float => (float) $payment['amount']));
-        $cashInSafe = $this->toTwoDecimals($safeTransactions->reduce(function (float $carry, SafeTransaction $safeTransaction) use ($endDate): float {
-            $date = $this->parseDate($this->dateString($safeTransaction->transaction_date));
-            if ($date === null || $date->gt($endDate)) {
-                return $carry;
-            }
-
-            $amount = $this->toFloat($safeTransaction->amount ?? 0);
-            return $safeTransaction->direction === 'in' ? $carry + $amount : $carry - $amount;
-        }, 0));
+        $cashInSafe = $this->toTwoDecimals($cashInSafe);
+        foreach (['AFN', 'USD'] as $currency) {
+            $currencySections[$currency]['thirdCompanyPaid'] = $this->toTwoDecimals((float) ($thirdCompanySummary['currencySummary'][$currency]['paid'] ?? 0));
+            $currencySections[$currency]['thirdCompanyUnpaid'] = $this->toTwoDecimals((float) ($thirdCompanySummary['currencySummary'][$currency]['unpaid'] ?? 0));
+            $currencySections[$currency]['profitLoss'] = $this->toTwoDecimals(
+                (float) ($currencySections[$currency]['paid'] ?? 0)
+                - (
+                    (float) ($currencySections[$currency]['expenses'] ?? 0)
+                    + (float) ($currencySections[$currency]['salaryPaid'] ?? 0)
+                    + (float) ($currencySections[$currency]['thirdCompanyPaid'] ?? 0)
+                )
+            );
+        }
         $newPatientsCount = $patients->filter(function (Patient $patient) use ($endDate, $patientFilter, $startDate): bool {
             if ($patientFilter !== '' && (string) $patient->id !== $patientFilter) {
                 return false;
@@ -353,6 +461,7 @@ final class ExecutiveReportSummaryService
             'bankBalance' => $bankBalance,
             'cashInSafe' => $cashInSafe,
             'chairUtilizationRate' => $chairUtilizationRate,
+            'currencySections' => $currencySections,
             'dentistProductivity' => $dentistProductivity,
             'expenseSummary' => $expenseSummary,
             'filterOptions' => [
@@ -426,13 +535,26 @@ final class ExecutiveReportSummaryService
         return $rows;
     }
 
-    private function buildExpenseSummary(Collection $expenses): array
+    private function buildExpenseSummary(Collection $expenses, ?Collection $inventorySafePurchases = null): array
     {
         $dailyExpenses = $expenses->filter(fn (Expense $expense): bool => (string) $expense->expense_type === 'daily')->values();
-        $clinicalExpenses = $expenses->filter(fn (Expense $expense): bool => (string) $expense->expense_type === 'clinical')->values();
+        $manualClinicalExpenses = $expenses->filter(fn (Expense $expense): bool => (string) $expense->expense_type === 'clinical')->values();
+        $inventoryClinicalExpenses = ($inventorySafePurchases ?? collect())
+            ->map(fn (SafeTransaction $safeTransaction): object => (object) [
+                'amount' => $safeTransaction->amount,
+                'amount_input' => $safeTransaction->amount_input,
+                'category' => 'Inventory Purchase',
+                'currency' => $safeTransaction->currency,
+                'exchange_rate' => $safeTransaction->exchange_rate,
+                'expense_date' => $safeTransaction->transaction_date,
+                'expense_type' => 'clinical',
+                'notes' => $safeTransaction->notes,
+            ])
+            ->values();
+        $clinicalExpenses = $manualClinicalExpenses->concat($inventoryClinicalExpenses)->values();
 
-        $daily = $this->toTwoDecimals($dailyExpenses->sum(fn (Expense $expense): float => $this->toFloat($expense->amount ?? 0)));
-        $clinical = $this->toTwoDecimals($clinicalExpenses->sum(fn (Expense $expense): float => $this->toFloat($expense->amount ?? 0)));
+        $daily = $this->toTwoDecimals($dailyExpenses->sum(fn ($expense): float => $this->toFloat($expense->amount ?? 0)));
+        $clinical = $this->toTwoDecimals($clinicalExpenses->sum(fn ($expense): float => $this->toFloat($expense->amount ?? 0)));
 
         $categories = [];
         foreach ($dailyExpenses as $expense) {
@@ -571,6 +693,10 @@ final class ExecutiveReportSummaryService
     private function buildThirdCompanySummary(Collection $tasks, string $patientFilter, string $statusFilter): array
     {
         $rowsByToothKey = [];
+        $currencySummary = [
+            'AFN' => ['paid' => 0.0, 'unpaid' => 0.0],
+            'USD' => ['paid' => 0.0, 'unpaid' => 0.0],
+        ];
 
         foreach ($tasks as $task) {
             if (!$this->isImplantTask($task)) {
@@ -594,12 +720,23 @@ final class ExecutiveReportSummaryService
 
             $supplierTotal = $this->taggedAmount((string) ($task->notes ?? ''), 'supplier_total');
             $supplierPaid = min($supplierTotal, $this->taggedAmount((string) ($task->notes ?? ''), 'supplier_paid'));
+            $currency = $this->currencyCode($this->taggedText((string) ($task->notes ?? ''), 'currency'));
+            $exchangeRate = $this->toFloat($this->taggedText((string) ($task->notes ?? ''), 'exchangeRate')) ?: 1.0;
+            $supplierTotalInput = $this->taggedInputAmount((string) ($task->notes ?? ''), 'supplier_total_input', 'supplier_total', $currency, $exchangeRate);
+            $supplierPaidInput = min(
+                $supplierTotalInput,
+                $this->taggedInputAmount((string) ($task->notes ?? ''), 'supplier_paid_input', 'supplier_paid', $currency, $exchangeRate)
+            );
             $row = [
                 'createdAt' => $this->dateString($task->created_at),
+                'currency' => $currency,
                 'patientId' => $patientId,
                 'supplierPaid' => $this->toTwoDecimals($supplierPaid),
+                'supplierPaidInput' => $this->toTwoDecimals($supplierPaidInput),
                 'supplierRemaining' => $this->toTwoDecimals(max(0, $supplierTotal - $supplierPaid)),
+                'supplierRemainingInput' => $this->toTwoDecimals(max(0, $supplierTotalInput - $supplierPaidInput)),
                 'supplierTotal' => $this->toTwoDecimals($supplierTotal),
+                'supplierTotalInput' => $this->toTwoDecimals($supplierTotalInput),
                 'taskId' => (string) $task->id,
                 'toothNumber' => $toothNumber,
             ];
@@ -612,11 +749,17 @@ final class ExecutiveReportSummaryService
         }
 
         $rows = array_values($rowsByToothKey);
+        foreach ($rows as $row) {
+            $currency = $this->currencyCode($row['currency'] ?? 'AFN');
+            $currencySummary[$currency]['paid'] = $this->toTwoDecimals($currencySummary[$currency]['paid'] + (float) ($row['supplierPaidInput'] ?? 0));
+            $currencySummary[$currency]['unpaid'] = $this->toTwoDecimals($currencySummary[$currency]['unpaid'] + (float) ($row['supplierRemainingInput'] ?? 0));
+        }
         $totalSupplierCost = $this->toTwoDecimals(array_sum(array_column($rows, 'supplierTotal')));
         $totalPaid = $this->toTwoDecimals(array_sum(array_column($rows, 'supplierPaid')));
         $totalUnpaid = $this->toTwoDecimals(array_sum(array_column($rows, 'supplierRemaining')));
 
         return [
+            'currencySummary' => $currencySummary,
             'totalPaid' => $totalPaid,
             'totalSupplierCost' => $totalSupplierCost,
             'totalUnpaid' => $totalUnpaid,
@@ -821,6 +964,25 @@ final class ExecutiveReportSummaryService
     private function taskStatusToReportStatus(string $availability): string
     {
         return $availability === 'done' ? 'completed' : 'pending';
+    }
+
+    private function taggedInputAmount(string $notes, string $inputKey, string $baseKey, string $currency, float $exchangeRate): float
+    {
+        $inputValue = $this->taggedText($notes, $inputKey);
+        if ($inputValue !== '') {
+            return $this->toTwoDecimals((float) $inputValue);
+        }
+
+        return $this->convertBaseAmountToInputCurrency($this->taggedAmount($notes, $baseKey), $currency, $exchangeRate);
+    }
+
+    private function taggedText(string $notes, string $key): string
+    {
+        if (preg_match("/\\[{$key}:([^\\]]+)\\]/i", $notes, $matches) !== 1 || !isset($matches[1])) {
+            return '';
+        }
+
+        return trim((string) $matches[1]);
     }
 
     private function toFloat(mixed $value): float

@@ -73,30 +73,45 @@ final class FinancialControlService
         ];
     }
 
-    public function closeDay(CarbonImmutable $closingDate, float $countedBalance, ?string $notes, ?int $closedBy): FinancialDayClose
+    /**
+     * @param array<string, float> $countedBalances
+     */
+    public function closeDay(CarbonImmutable $closingDate, array $countedBalances, ?string $notes, ?int $closedBy): FinancialDayClose
     {
         $snapshot = $this->buildDailySnapshot($closingDate);
         $summary = (array) ($snapshot['summary'] ?? []);
-        $expectedBalance = $this->decimal($summary['expectedBalance'] ?? 0);
-        $countedBalance = $this->decimal($countedBalance);
+        $summaryCurrencySections = $this->normalizeStoredCurrencySections(
+            $summary['currencySections'] ?? null,
+            ['cashPaymentTotal', 'expectedBalance', 'nonCashPaymentTotal', 'openDebtTotal', 'paymentTotal', 'safeInTotal', 'safeOutTotal']
+        );
+        $countedCurrencySections = $this->initializeCurrencySections(['countedBalance', 'discrepancyAmount']);
+
+        foreach (['AFN', 'USD'] as $currency) {
+            $countedBalance = $this->decimal($countedBalances[$currency] ?? 0);
+            $expectedBalance = $this->decimal($summaryCurrencySections[$currency]['expectedBalance'] ?? 0);
+            $countedCurrencySections[$currency]['countedBalance'] = $countedBalance;
+            $countedCurrencySections[$currency]['discrepancyAmount'] = $this->decimal($countedBalance - $expectedBalance);
+        }
 
         return FinancialDayClose::query()->updateOrCreate(
             ['closing_date' => $closingDate->toDateString()],
             [
-                'cash_payment_total' => $this->decimal($summary['cashPaymentTotal'] ?? 0),
+                'cash_payment_total' => $this->decimal($summaryCurrencySections['AFN']['cashPaymentTotal'] ?? 0),
                 'closed_at' => now(),
                 'closed_by' => $closedBy,
-                'counted_balance' => $countedBalance,
-                'discrepancy_amount' => $this->decimal($countedBalance - $expectedBalance),
-                'expected_balance' => $expectedBalance,
-                'non_cash_payment_total' => $this->decimal($summary['nonCashPaymentTotal'] ?? 0),
+                'counted_balance' => $this->decimal($countedCurrencySections['AFN']['countedBalance'] ?? 0),
+                'counted_currency_sections' => $countedCurrencySections,
+                'discrepancy_amount' => $this->decimal($countedCurrencySections['AFN']['discrepancyAmount'] ?? 0),
+                'expected_balance' => $this->decimal($summaryCurrencySections['AFN']['expectedBalance'] ?? 0),
+                'non_cash_payment_total' => $this->decimal($summaryCurrencySections['AFN']['nonCashPaymentTotal'] ?? 0),
                 'notes' => $this->text($notes),
                 'open_debt_count' => (int) ($summary['openDebtCount'] ?? 0),
-                'open_debt_total' => $this->decimal($summary['openDebtTotal'] ?? 0),
+                'open_debt_total' => $this->decimal($summaryCurrencySections['AFN']['openDebtTotal'] ?? 0),
                 'overdue_debt_count' => (int) ($summary['overdueDebtCount'] ?? 0),
-                'payment_total' => $this->decimal($summary['paymentTotal'] ?? 0),
-                'safe_in_total' => $this->decimal($summary['safeInTotal'] ?? 0),
-                'safe_out_total' => $this->decimal($summary['safeOutTotal'] ?? 0),
+                'payment_total' => $this->decimal($summaryCurrencySections['AFN']['paymentTotal'] ?? 0),
+                'safe_in_total' => $this->decimal($summaryCurrencySections['AFN']['safeInTotal'] ?? 0),
+                'safe_out_total' => $this->decimal($summaryCurrencySections['AFN']['safeOutTotal'] ?? 0),
+                'summary_currency_sections' => $summaryCurrencySections,
             ]
         );
     }
@@ -106,56 +121,80 @@ final class FinancialControlService
      */
     private function buildDailySnapshot(CarbonImmutable $closingDate): array
     {
-        $safeInTotal = (float) SafeTransaction::query()
-            ->whereDate('transaction_date', $closingDate->toDateString())
-            ->where('direction', 'in')
-            ->sum('amount_input');
+        $currencySections = $this->initializeCurrencySections([
+            'cashPaymentTotal',
+            'expectedBalance',
+            'nonCashPaymentTotal',
+            'openDebtTotal',
+            'paymentTotal',
+            'safeInTotal',
+            'safeOutTotal',
+        ]);
 
-        $safeOutTotal = (float) SafeTransaction::query()
-            ->whereDate('transaction_date', $closingDate->toDateString())
-            ->where('direction', 'out')
-            ->sum('amount_input');
-
-        $balanceIn = (float) SafeTransaction::query()
+        $safeRows = SafeTransaction::query()
             ->whereDate('transaction_date', '<=', $closingDate->toDateString())
-            ->where('direction', 'in')
-            ->sum('amount_input');
+            ->get(['transaction_date', 'direction', 'amount', 'amount_input', 'currency', 'exchange_rate']);
 
-        $balanceOut = (float) SafeTransaction::query()
-            ->whereDate('transaction_date', '<=', $closingDate->toDateString())
-            ->where('direction', 'out')
-            ->sum('amount_input');
+        foreach ($safeRows as $row) {
+            $currency = $this->currencyCode($row->currency);
+            $amountInput = $this->resolveInputAmount($row->amount_input, $row->amount, $currency, $row->exchange_rate);
+            $isOut = $this->text($row->direction, 'in') === 'out';
+            $transactionDate = $this->dateString($row->transaction_date);
+
+            if ($transactionDate === $closingDate->toDateString()) {
+                if ($isOut) {
+                    $this->addCurrencySectionValue($currencySections, $currency, 'safeOutTotal', $amountInput);
+                } else {
+                    $this->addCurrencySectionValue($currencySections, $currency, 'safeInTotal', $amountInput);
+                }
+            }
+
+            $this->addCurrencySectionValue(
+                $currencySections,
+                $currency,
+                'expectedBalance',
+                $isOut ? -$amountInput : $amountInput
+            );
+        }
 
         $paymentRows = Payment::query()
             ->whereDate('payment_date', $closingDate->toDateString())
-            ->get(['amount', 'amount_input', 'created_by', 'method', 'payment_date']);
+            ->get(['amount', 'amount_input', 'currency', 'exchange_rate', 'created_by', 'method', 'payment_date']);
 
-        $paymentTotal = 0.0;
-        $cashPaymentTotal = 0.0;
         foreach ($paymentRows as $payment) {
-            $amount = (float) ($payment->amount_input ?? $payment->amount ?? 0);
-            $paymentTotal += $amount;
+            $currency = $this->currencyCode($payment->currency);
+            $amountInput = $this->resolveInputAmount($payment->amount_input, $payment->amount, $currency, $payment->exchange_rate);
+            $this->addCurrencySectionValue($currencySections, $currency, 'paymentTotal', $amountInput);
             if (mb_strtolower(trim((string) ($payment->method ?? ''))) === 'cash') {
-                $cashPaymentTotal += $amount;
+                $this->addCurrencySectionValue($currencySections, $currency, 'cashPaymentTotal', $amountInput);
+                continue;
             }
+
+            $this->addCurrencySectionValue($currencySections, $currency, 'nonCashPaymentTotal', $amountInput);
         }
 
         $debtRows = $this->openDebtRows($closingDate, 12);
         $debtMetrics = $this->debtMetrics($closingDate);
+        foreach (['AFN', 'USD'] as $currency) {
+            $currencySections[$currency]['openDebtTotal'] = $this->decimal(
+                $debtMetrics['currencySections'][$currency]['openDebtTotal'] ?? 0
+            );
+        }
 
         return [
             'collectors' => $this->collectorPerformance($closingDate->startOfDay(), $closingDate->endOfDay(), 8),
             'debtWatchlist' => $debtRows,
             'summary' => [
-                'cashPaymentTotal' => $this->decimal($cashPaymentTotal),
-                'expectedBalance' => $this->decimal($balanceIn - $balanceOut),
-                'nonCashPaymentTotal' => $this->decimal($paymentTotal - $cashPaymentTotal),
+                'cashPaymentTotal' => $this->decimal($currencySections['AFN']['cashPaymentTotal'] ?? 0),
+                'currencySections' => $currencySections,
+                'expectedBalance' => $this->decimal($currencySections['AFN']['expectedBalance'] ?? 0),
+                'nonCashPaymentTotal' => $this->decimal($currencySections['AFN']['nonCashPaymentTotal'] ?? 0),
                 'openDebtCount' => (int) ($debtMetrics['openDebtCount'] ?? 0),
-                'openDebtTotal' => $this->decimal($debtMetrics['openDebtTotal'] ?? 0),
+                'openDebtTotal' => $this->decimal($currencySections['AFN']['openDebtTotal'] ?? 0),
                 'overdueDebtCount' => (int) ($debtMetrics['overdueDebtCount'] ?? 0),
-                'paymentTotal' => $this->decimal($paymentTotal),
-                'safeInTotal' => $this->decimal($safeInTotal),
-                'safeOutTotal' => $this->decimal($safeOutTotal),
+                'paymentTotal' => $this->decimal($currencySections['AFN']['paymentTotal'] ?? 0),
+                'safeInTotal' => $this->decimal($currencySections['AFN']['safeInTotal'] ?? 0),
+                'safeOutTotal' => $this->decimal($currencySections['AFN']['safeOutTotal'] ?? 0),
             ],
         ];
     }
@@ -168,7 +207,7 @@ final class FinancialControlService
         $payments = Payment::query()
             ->where('payment_date', '>=', $startDate->toDateString())
             ->where('payment_date', '<=', $endDate->toDateString())
-            ->get(['amount', 'amount_input', 'created_by', 'method', 'payment_date']);
+            ->get(['amount', 'amount_input', 'currency', 'exchange_rate', 'created_by', 'method', 'payment_date']);
 
         $userIds = $payments
             ->pluck('created_by')
@@ -183,26 +222,44 @@ final class FinancialControlService
         foreach ($payments as $payment) {
             $collectorId = (int) ($payment->created_by ?? 0);
             $key = $collectorId > 0 ? (string) $collectorId : 'system';
-            $amount = (float) ($payment->amount_input ?? $payment->amount ?? 0);
+            $currency = $this->currencyCode($payment->currency);
+            $amountInput = $this->resolveInputAmount($payment->amount_input, $payment->amount, $currency, $payment->exchange_rate);
 
             if (!isset($rows[$key])) {
                 $user = $collectorId > 0 ? $users->get($collectorId) : null;
                 $rows[$key] = [
                     'cashAmount' => 0.0,
                     'collector' => $this->personName($user, $collectorId > 0 ? $collectorId : null, $collectorId > 0 ? 'User' : 'System'),
+                    'currencySections' => $this->initializeCurrencySections(['cashAmount', 'totalAmount']),
                     'paymentsCount' => 0,
                     'totalAmount' => 0.0,
                 ];
             }
 
             $rows[$key]['paymentsCount'] += 1;
-            $rows[$key]['totalAmount'] = $this->decimal($rows[$key]['totalAmount'] + $amount);
+            $rows[$key]['currencySections'][$currency]['totalAmount'] = $this->decimal(
+                ($rows[$key]['currencySections'][$currency]['totalAmount'] ?? 0) + $amountInput
+            );
+            $rows[$key]['totalAmount'] = $this->decimal($rows[$key]['currencySections']['AFN']['totalAmount'] ?? 0);
             if (mb_strtolower(trim((string) ($payment->method ?? ''))) === 'cash') {
-                $rows[$key]['cashAmount'] = $this->decimal($rows[$key]['cashAmount'] + $amount);
+                $rows[$key]['currencySections'][$currency]['cashAmount'] = $this->decimal(
+                    ($rows[$key]['currencySections'][$currency]['cashAmount'] ?? 0) + $amountInput
+                );
+                $rows[$key]['cashAmount'] = $this->decimal($rows[$key]['currencySections']['AFN']['cashAmount'] ?? 0);
             }
         }
 
-        return array_slice($this->sortRows(array_values($rows), 'totalAmount'), 0, $limit);
+        $rows = array_values($rows);
+        usort($rows, static function (array $left, array $right): int {
+            $paymentSort = ((int) ($right['paymentsCount'] ?? 0)) <=> ((int) ($left['paymentsCount'] ?? 0));
+            if ($paymentSort !== 0) {
+                return $paymentSort;
+            }
+
+            return strcmp((string) ($left['collector'] ?? ''), (string) ($right['collector'] ?? ''));
+        });
+
+        return array_slice($rows, 0, $limit);
     }
 
     private function mapCloseRecord(?FinancialDayClose $close): ?array
@@ -211,11 +268,62 @@ final class FinancialControlService
             return null;
         }
 
+        $summaryCurrencySections = $this->normalizeStoredCurrencySections(
+            $close->summary_currency_sections,
+            ['cashPaymentTotal', 'expectedBalance', 'nonCashPaymentTotal', 'openDebtTotal', 'paymentTotal', 'safeInTotal', 'safeOutTotal']
+        );
+        $countedCurrencySections = $this->normalizeStoredCurrencySections(
+            $close->counted_currency_sections,
+            ['countedBalance', 'discrepancyAmount']
+        );
+
+        if ($summaryCurrencySections['AFN']['expectedBalance'] === 0.0 && $summaryCurrencySections['USD']['expectedBalance'] === 0.0) {
+            $summaryCurrencySections['AFN'] = [
+                'cashPaymentTotal' => $this->decimal($close->cash_payment_total ?? 0),
+                'expectedBalance' => $this->decimal($close->expected_balance ?? 0),
+                'nonCashPaymentTotal' => $this->decimal($close->non_cash_payment_total ?? 0),
+                'openDebtTotal' => $this->decimal($close->open_debt_total ?? 0),
+                'paymentTotal' => $this->decimal($close->payment_total ?? 0),
+                'safeInTotal' => $this->decimal($close->safe_in_total ?? 0),
+                'safeOutTotal' => $this->decimal($close->safe_out_total ?? 0),
+            ];
+        }
+
+        if ($countedCurrencySections['AFN']['countedBalance'] === 0.0 && $countedCurrencySections['USD']['countedBalance'] === 0.0) {
+            $countedCurrencySections['AFN'] = [
+                'countedBalance' => $this->decimal($close->counted_balance ?? 0),
+                'discrepancyAmount' => $this->decimal($close->discrepancy_amount ?? 0),
+            ];
+        }
+
+        $currencySections = $this->initializeCurrencySections([
+            'cashPaymentTotal',
+            'countedBalance',
+            'discrepancyAmount',
+            'expectedBalance',
+            'nonCashPaymentTotal',
+            'openDebtTotal',
+            'paymentTotal',
+            'safeInTotal',
+            'safeOutTotal',
+        ]);
+        foreach (['AFN', 'USD'] as $currency) {
+            foreach (array_keys($currencySections[$currency]) as $key) {
+                if (array_key_exists($key, $summaryCurrencySections[$currency])) {
+                    $currencySections[$currency][$key] = $this->decimal($summaryCurrencySections[$currency][$key]);
+                }
+                if (array_key_exists($key, $countedCurrencySections[$currency])) {
+                    $currencySections[$currency][$key] = $this->decimal($countedCurrencySections[$currency][$key]);
+                }
+            }
+        }
+
         return [
             'closedAt' => $this->dateTimeString($close->closed_at),
             'closedBy' => $this->personName($close->closedBy, $close->closed_by, $close->closed_by ? 'User' : 'System'),
             'closingDate' => $this->dateString($close->closing_date),
             'countedBalance' => $this->decimal($close->counted_balance ?? 0),
+            'currencySections' => $currencySections,
             'discrepancyAmount' => $this->decimal($close->discrepancy_amount ?? 0),
             'expectedBalance' => $this->decimal($close->expected_balance ?? 0),
             'notes' => $this->text($close->notes),
@@ -232,21 +340,29 @@ final class FinancialControlService
     private function openDebtRows(CarbonImmutable $referenceDate, int $limit): array
     {
         $rows = Debt::query()
-            ->with('patient:id,patient_code,first_name,last_name')
+            ->with([
+                'invoice:id,currency,exchange_rate',
+                'patient:id,patient_code,first_name,last_name',
+            ])
             ->where('debt_amount', '>', 0)
             ->where('invoice_date', '<=', $referenceDate->toDateString())
             ->whereHas('invoice', function ($query): void {
                 $query->whereIn('status', ['unpaid', 'partially_paid']);
             })
-            ->get()
+            ->get(['invoice_id', 'patient_id', 'debt_amount', 'invoice_date', 'currency', 'status'])
             ->map(function (Debt $debt) use ($referenceDate): array {
                 $invoiceDate = $this->dateString($debt->invoice_date);
                 $agingDays = (int) round($this->parseDate($invoiceDate)?->diffInDays($referenceDate) ?? 0);
+                $currency = $this->currencyCode($debt->currency ?? $debt->invoice?->currency);
+                $exchangeRate = $this->decimal($debt->invoice?->exchange_rate ?? 1) ?: 1.0;
 
                 return [
                     'agingBucket' => $this->agingBucket($agingDays),
                     'agingDays' => $agingDays,
                     'debtAmount' => $this->decimal($debt->debt_amount ?? 0),
+                    'debtAmountInput' => $this->convertBaseAmountToInputCurrency($debt->debt_amount ?? 0, $currency, $exchangeRate),
+                    'currency' => $currency,
+                    'exchangeRate' => $exchangeRate,
                     'invoiceDate' => $invoiceDate,
                     'invoiceId' => (string) ($debt->invoice_id ?? ''),
                     'patientId' => (string) ($debt->patient_id ?? ''),
@@ -275,18 +391,24 @@ final class FinancialControlService
     private function debtMetrics(CarbonImmutable $referenceDate): array
     {
         $rows = Debt::query()
+            ->with('invoice:id,currency,exchange_rate')
             ->where('debt_amount', '>', 0)
             ->where('invoice_date', '<=', $referenceDate->toDateString())
             ->whereHas('invoice', function ($query): void {
                 $query->whereIn('status', ['unpaid', 'partially_paid']);
             })
-            ->get(['debt_amount', 'invoice_date']);
+            ->get(['invoice_id', 'debt_amount', 'invoice_date']);
 
         $openDebtTotal = 0.0;
         $overdueDebtCount = 0;
+        $currencySections = $this->initializeCurrencySections(['openDebtTotal']);
 
         foreach ($rows as $row) {
             $openDebtTotal += (float) ($row->debt_amount ?? 0);
+            $currency = $this->currencyCode($row->invoice?->currency);
+            $exchangeRate = $this->decimal($row->invoice?->exchange_rate ?? 1) ?: 1.0;
+            $debtInput = $this->convertBaseAmountToInputCurrency($row->debt_amount ?? 0, $currency, $exchangeRate);
+            $this->addCurrencySectionValue($currencySections, $currency, 'openDebtTotal', $debtInput);
             $invoiceDate = $this->parseDate($this->dateString($row->invoice_date));
             $agingDays = (int) round($invoiceDate?->diffInDays($referenceDate) ?? 0);
             if ($agingDays > 30) {
@@ -295,6 +417,7 @@ final class FinancialControlService
         }
 
         return [
+            'currencySections' => $currencySections,
             'openDebtCount' => $rows->count(),
             'openDebtTotal' => $this->decimal($openDebtTotal),
             'overdueDebtCount' => $overdueDebtCount,
@@ -329,5 +452,25 @@ final class FinancialControlService
         }
 
         return '90+ days';
+    }
+
+    /**
+     * @param array<int, string> $keys
+     * @return array{AFN: array<string, float>, USD: array<string, float>}
+     */
+    private function normalizeStoredCurrencySections(mixed $value, array $keys): array
+    {
+        $sections = $this->initializeCurrencySections($keys);
+        if (!is_array($value)) {
+            return $sections;
+        }
+
+        foreach (['AFN', 'USD'] as $currency) {
+            foreach ($keys as $key) {
+                $sections[$currency][$key] = $this->decimal($value[$currency][$key] ?? 0);
+            }
+        }
+
+        return $sections;
     }
 }

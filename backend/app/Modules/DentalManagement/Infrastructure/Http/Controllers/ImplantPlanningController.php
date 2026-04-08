@@ -13,6 +13,7 @@ use App\Modules\DentalManagement\Domain\Entities\PatientSessionTask;
 use App\Modules\DentalManagement\Domain\Entities\Payment;
 use App\Modules\DentalManagement\Domain\Entities\Visit;
 use App\Modules\DentalManagement\Domain\Entities\VisitTreatment;
+use App\Modules\DentalManagement\Domain\Services\CurrencyService;
 use App\Modules\DentalManagement\Domain\Services\InvoiceService;
 use App\Modules\DentalManagement\Domain\Services\PaymentService;
 use App\Modules\DentalManagement\Domain\Services\VisitService;
@@ -31,6 +32,7 @@ final class ImplantPlanningController extends BaseApiController
         private readonly VisitTreatmentService $visitTreatmentService,
         private readonly InvoiceService $invoiceService,
         private readonly PaymentService $paymentService,
+        private readonly CurrencyService $currencyService,
     ) {}
 
     public function store(StoreImplantPlanningRequest $request): JsonResponse
@@ -50,8 +52,15 @@ final class ImplantPlanningController extends BaseApiController
             );
         }
 
-        $implantPricePerTooth = round((float) $validated['implantPricePerTooth'], 2);
-        if ($implantPricePerTooth <= 0) {
+        $resolvedCurrency = $this->currencyService->normalizeCurrency(
+            currency: (string) ($validated['currency'] ?? 'AFN'),
+            exchangeRate: isset($validated['exchangeRate']) ? (float) $validated['exchangeRate'] : null,
+        );
+        $currency = $resolvedCurrency['currency'];
+        $exchangeRate = (float) $resolvedCurrency['exchangeRate'];
+
+        $implantPricePerToothInput = round((float) $validated['implantPricePerTooth'], 2);
+        if ($implantPricePerToothInput <= 0) {
             throw new ApiException(
                 errorCode: 'IMPLANT_PRICE_INVALID',
                 message: 'Implant price per tooth must be greater than zero.',
@@ -59,12 +68,16 @@ final class ImplantPlanningController extends BaseApiController
             );
         }
 
-        $supplierCostPerTooth = round((float) ($validated['supplierCostPerTooth'] ?? 0), 2);
-        $paidNowAmount = round((float) ($validated['paidNowAmount'] ?? 0), 2);
+        $implantPricePerTooth = $this->currencyService->toUsd($implantPricePerToothInput, $currency, $exchangeRate);
+        $supplierCostPerToothInput = round((float) ($validated['supplierCostPerTooth'] ?? 0), 2);
+        $supplierCostPerTooth = $this->currencyService->toUsd($supplierCostPerToothInput, $currency, $exchangeRate);
+        $paidNowAmountInput = round((float) ($validated['paidNowAmount'] ?? 0), 2);
+        $paidNowAmount = $this->currencyService->toUsd($paidNowAmountInput, $currency, $exchangeRate);
         $recordDate = $this->resolveRecordDate($validated['visitDate'] ?? null);
         $treatmentId = (int) $validated['treatmentId'];
 
         $totalSelectedImplantsPayment = round($implantPricePerTooth * count($implantTeeth), 2);
+        $totalSelectedImplantsPaymentInput = round($implantPricePerToothInput * count($implantTeeth), 2);
         $invoiceNetAmount = $totalSelectedImplantsPayment;
 
         if ($paidNowAmount - $invoiceNetAmount > 0.01) {
@@ -108,13 +121,19 @@ final class ImplantPlanningController extends BaseApiController
             $validated,
             $patient,
             $patientId,
+            $currency,
+            $exchangeRate,
             $implantTeeth,
             $implantPricePerTooth,
+            $implantPricePerToothInput,
             $supplierCostPerTooth,
+            $supplierCostPerToothInput,
             $paidNowAmount,
+            $paidNowAmountInput,
             $recordDate,
             $treatmentId,
             $invoiceNetAmount,
+            $totalSelectedImplantsPaymentInput,
             $invoiceStatus,
             $paymentMethod,
             $companyPayload
@@ -182,7 +201,11 @@ final class ImplantPlanningController extends BaseApiController
                 $treatmentNote = $this->buildTreatmentNote(
                     toothNumber: $toothNumber,
                     implantPricePerTooth: $implantPricePerTooth,
+                    implantPricePerToothInput: $implantPricePerToothInput,
                     supplierCostPerTooth: $supplierCostPerTooth,
+                    supplierCostPerToothInput: $supplierCostPerToothInput,
+                    currency: $currency,
+                    exchangeRate: $exchangeRate,
                     diameter: (string) ($validated['implantDiameterMm'] ?? ''),
                     length: (string) ($validated['implantLengthMm'] ?? ''),
                     arch: (string) ($validated['implantArch'] ?? ''),
@@ -211,11 +234,11 @@ final class ImplantPlanningController extends BaseApiController
                 'patient_id' => $patientId,
                 'visit_id' => $visitId,
                 'source_visit_ids' => [$visitId],
-                'total_amount' => $invoiceNetAmount,
+                'total_amount' => $totalSelectedImplantsPaymentInput,
                 'discount' => 0,
-                'net_amount' => $invoiceNetAmount,
-                'currency' => 'AFN',
-                'exchange_rate' => 1,
+                'net_amount' => $totalSelectedImplantsPaymentInput,
+                'currency' => $currency,
+                'exchange_rate' => $exchangeRate,
                 'invoice_date' => $recordDate,
                 'status' => $invoiceStatus,
                 'payment_type' => $paymentMethod,
@@ -229,9 +252,9 @@ final class ImplantPlanningController extends BaseApiController
             if ($paidNowAmount > 0) {
                 $payment = $this->paymentService->createPayment([
                     'invoice_id' => $invoice->id,
-                    'amount' => $paidNowAmount,
-                    'currency' => 'AFN',
-                    'exchange_rate' => 1,
+                    'amount' => $paidNowAmountInput,
+                    'currency' => $currency,
+                    'exchange_rate' => $exchangeRate,
                     'payment_date' => $recordDate,
                     'method' => $paymentMethod,
                     'notes' => 'Initial payment from implant planning flow.',
@@ -246,22 +269,33 @@ final class ImplantPlanningController extends BaseApiController
                 patientId: $patientId,
                 teeth: $implantTeeth,
                 supplierCostPerTooth: $supplierCostPerTooth,
+                supplierCostPerToothInput: $supplierCostPerToothInput,
+                currency: $currency,
+                exchangeRate: $exchangeRate,
                 implantCompanyId: $implantCompanyId,
                 userId: $userId
             );
 
             $supplierTotalCost = round($supplierCostPerTooth * count($implantTeeth), 2);
+            $supplierTotalCostInput = round($supplierCostPerToothInput * count($implantTeeth), 2);
             $remainingDebt = max(0, $invoiceNetAmount - $paidNowAmount);
+            $remainingDebtInput = max(0, $totalSelectedImplantsPaymentInput - $paidNowAmountInput);
 
             return [
                 'createdVisit' => $createdVisit,
+                'currency' => $currency,
+                'exchangeRate' => $exchangeRate,
                 'invoiceId' => (int) $invoice->id,
                 'paidNowAmount' => $paidNowAmount,
+                'paidNowAmountInput' => round(min($totalSelectedImplantsPaymentInput, $paidNowAmountInput), 2),
                 'paymentId' => $paymentId,
                 'remainingDebt' => round($remainingDebt, 2),
+                'remainingDebtInput' => round($remainingDebtInput, 2),
                 'savedAt' => CarbonImmutable::now()->toIso8601String(),
                 'supplierRemainingAmount' => $supplierTotalCost,
+                'supplierRemainingAmountInput' => $supplierTotalCostInput,
                 'supplierTotalCost' => $supplierTotalCost,
+                'supplierTotalCostInput' => $supplierTotalCostInput,
                 'treatmentCount' => count($implantTeeth),
                 'visitId' => (int) $visitId,
             ];
@@ -325,6 +359,9 @@ final class ImplantPlanningController extends BaseApiController
         int $patientId,
         array $teeth,
         float $supplierCostPerTooth,
+        float $supplierCostPerToothInput,
+        string $currency,
+        float $exchangeRate,
         ?int $implantCompanyId,
         ?int $userId
     ): void {
@@ -350,12 +387,29 @@ final class ImplantPlanningController extends BaseApiController
         foreach ($teeth as $toothNumber) {
             $existing = $byTooth[$toothNumber] ?? null;
             if ($existing) {
-                if ($implantCompanyId && (int) ($existing->implant_company_id ?? 0) !== $implantCompanyId) {
-                    $existing->forceFill([
-                        'implant_company_id' => $implantCompanyId,
-                        'updated_by' => $userId,
-                    ])->save();
+                $existingNotes = (string) ($existing->notes ?? '');
+                $supplierPaid = $this->extractTaggedFloat($existingNotes, 'supplier_paid');
+                $supplierPaidInput = $this->extractTaggedFloat($existingNotes, 'supplier_paid_input');
+                if ($supplierPaidInput <= 0) {
+                    $supplierPaidInput = strtoupper($currency) === 'USD' && $exchangeRate > 0
+                        ? round($supplierPaid / $exchangeRate, 2)
+                        : round($supplierPaid, 2);
                 }
+
+                $existing->forceFill([
+                    'implant_company_id' => $implantCompanyId,
+                    'notes' => $this->buildImplantTaskNotes(
+                        toothNumber: $toothNumber,
+                        availability: $this->extractImplantAvailability($existingNotes),
+                        supplierPaid: $supplierPaid,
+                        supplierTotal: $supplierCostPerTooth,
+                        currency: $currency,
+                        exchangeRate: $exchangeRate,
+                        supplierPaidInput: $supplierPaidInput,
+                        supplierTotalInput: $supplierCostPerToothInput,
+                    ),
+                    'updated_by' => $userId,
+                ])->save();
                 continue;
             }
 
@@ -365,29 +419,55 @@ final class ImplantPlanningController extends BaseApiController
                 'title' => "Implant Tooth {$toothNumber}",
                 'mark' => 'red',
                 'status' => 'pending',
-                'notes' => $this->buildImplantTaskNotes($toothNumber, 'not_available', 0, $supplierCostPerTooth),
+                'notes' => $this->buildImplantTaskNotes(
+                    toothNumber: $toothNumber,
+                    availability: 'not_available',
+                    supplierPaid: 0,
+                    supplierTotal: $supplierCostPerTooth,
+                    currency: $currency,
+                    exchangeRate: $exchangeRate,
+                    supplierPaidInput: 0,
+                    supplierTotalInput: $supplierCostPerToothInput,
+                ),
                 'created_by' => $userId,
                 'updated_by' => $userId,
             ]);
         }
     }
 
-    private function buildImplantTaskNotes(string $toothNumber, string $availability, float $supplierPaid, float $supplierTotal): string
+    private function buildImplantTaskNotes(
+        string $toothNumber,
+        string $availability,
+        float $supplierPaid,
+        float $supplierTotal,
+        string $currency,
+        float $exchangeRate,
+        float $supplierPaidInput,
+        float $supplierTotalInput
+    ): string
     {
         return sprintf(
-            '[%s:%s] [implant_availability:%s] [supplier_paid:%.2f] [supplier_total:%.2f]',
+            '[%s:%s] [implant_availability:%s] [currency:%s] [exchangeRate:%.6f] [supplier_paid:%.2f] [supplier_paid_input:%.2f] [supplier_total:%.2f] [supplier_total_input:%.2f]',
             self::IMPLANT_TASK_MARKER,
             $toothNumber,
             $availability,
+            strtoupper($currency),
+            $exchangeRate,
             $supplierPaid,
-            $supplierTotal
+            $supplierPaidInput,
+            $supplierTotal,
+            $supplierTotalInput
         );
     }
 
     private function buildTreatmentNote(
         string $toothNumber,
         float $implantPricePerTooth,
+        float $implantPricePerToothInput,
         float $supplierCostPerTooth,
+        float $supplierCostPerToothInput,
+        string $currency,
+        float $exchangeRate,
         string $diameter,
         string $length,
         string $arch,
@@ -397,8 +477,12 @@ final class ImplantPlanningController extends BaseApiController
         $noteParts = [
             '[condition:implant]',
             "[tooth:{$toothNumber}]",
+            '[currency:'.strtoupper($currency).']',
+            sprintf('[exchangeRate:%.6f]', $exchangeRate),
             sprintf('[patientPrice:%.2f]', $implantPricePerTooth),
+            sprintf('[patientPriceInput:%.2f]', $implantPricePerToothInput),
             sprintf('[supplierCost:%.2f]', $supplierCostPerTooth),
+            sprintf('[supplierCostInput:%.2f]', $supplierCostPerToothInput),
             '[diameter:'.($diameter !== '' ? $diameter : '-').']',
             '[length:'.($length !== '' ? $length : '-').']',
             '[arch:'.$arch.']',
@@ -410,6 +494,24 @@ final class ImplantPlanningController extends BaseApiController
         $note = $this->truncate($note, 255);
 
         return $note !== '' ? $note : null;
+    }
+
+    private function extractImplantAvailability(string $notes): string
+    {
+        if (preg_match('/\[implant_availability:(not_available|in_purchase|available|done)\]/i', $notes, $match) === 1 && isset($match[1])) {
+            return strtolower($match[1]);
+        }
+
+        return 'not_available';
+    }
+
+    private function extractTaggedFloat(string $notes, string $tag): float
+    {
+        if (preg_match('/\['.preg_quote($tag, '/').':([0-9]+(?:\.[0-9]+)?)\]/i', $notes, $match) === 1 && isset($match[1])) {
+            return round((float) $match[1], 2);
+        }
+
+        return 0.0;
     }
 
     private function extractImplantTooth(string $notes, string $title): ?string

@@ -8,16 +8,19 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { DEFAULT_AFN_PER_USD, type CurrencyCode, formatCurrency, getExchangeRate, parseMoney } from '@/lib/currency-utils';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import { useStaffList } from '@/modules/dental-management/presentation/hooks';
 import { createDefaultReportRange, fetchReport, toInputDate } from '@/modules/dental-management/presentation/reports/report-client';
-import { formatCurrency, parseMoney } from '@/lib/currency-utils';
 import { ReceiptText, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 type SalaryRow = {
   createdAt: string;
+  currency: CurrencyCode;
+  exchangeRate: number;
   id: number;
+  netAmount: number;
   netAmountInput: number;
   paymentDate: string;
   salaryMonth: string;
@@ -25,6 +28,10 @@ type SalaryRow = {
   staffName: string;
   status: string;
 };
+
+type SalaryCurrencySections = Record<CurrencyCode, {
+  paidTotal: number;
+}>;
 
 type SalaryReportResponse = {
   rows: {
@@ -37,6 +44,7 @@ type SalaryReportResponse = {
     };
   };
   summary: {
+    currencySections: SalaryCurrencySections;
     paidTotal: number;
     pendingCount: number;
     totalCount: number;
@@ -45,7 +53,9 @@ type SalaryReportResponse = {
 
 type SalaryForm = {
   bonusAmount: string;
+  currency: CurrencyCode;
   deductionAmount: string;
+  exchangeRate: string;
   grossAmount: string;
   notes: string;
   paidFromSafe: boolean;
@@ -85,9 +95,10 @@ const extractApiErrorMessage = (error: unknown, fallback: string): string => {
   const code = payload?.code;
 
   if (code === 'SAFE_BALANCE_INSUFFICIENT') {
+    const currency = String(payload?.details?.currency ?? 'AFN') === 'USD' ? 'USD' : 'AFN';
     const currentBalance = Number(payload?.details?.currentBalance ?? 0);
     const requestedAmount = Number(payload?.details?.requestedAmount ?? 0);
-    return `Safe balance is not enough. Current: ${formatCurrency(currentBalance, 'AFN')}. Requested: ${formatCurrency(requestedAmount, 'AFN')}. Add money to safe or reduce the salary amount.`;
+    return `Safe balance is not enough. Current: ${formatCurrency(currentBalance, currency)}. Requested: ${formatCurrency(requestedAmount, currency)}. Add money to safe or reduce the salary amount.`;
   }
 
   return payload?.message || fallback;
@@ -95,7 +106,9 @@ const extractApiErrorMessage = (error: unknown, fallback: string): string => {
 
 const defaultForm = (): SalaryForm => ({
   bonusAmount: '0',
+  currency: 'AFN',
   deductionAmount: '0',
+  exchangeRate: '1',
   grossAmount: '',
   notes: '',
   paidFromSafe: true,
@@ -105,6 +118,15 @@ const defaultForm = (): SalaryForm => ({
   status: 'paid',
 });
 
+const emptyCurrencySections = (): SalaryCurrencySections => ({
+  AFN: {
+    paidTotal: 0,
+  },
+  USD: {
+    paidTotal: 0,
+  },
+});
+
 export default function SalariesPage(): JSX.Element {
   const tSidebar = useTranslations('sidebar');
   const tReports = useTranslations('sidebar.reports');
@@ -112,6 +134,7 @@ export default function SalariesPage(): JSX.Element {
   const range = createDefaultReportRange(180);
   const [form, setForm] = useState<SalaryForm>(() => defaultForm());
   const [report, setReport] = useState<SalaryReportResponse | null>(null);
+  const [defaultExchangeRate, setDefaultExchangeRate] = useState(DEFAULT_AFN_PER_USD);
   const [startDate, setStartDate] = useState(range.startDate);
   const [endDate, setEndDate] = useState(range.endDate);
   const [staffFilter, setStaffFilter] = useState('');
@@ -145,13 +168,24 @@ export default function SalariesPage(): JSX.Element {
     void fetchData(1);
   }, [fetchData]);
 
+  useEffect(() => {
+    void getExchangeRate(client)
+      .then((rate) => setDefaultExchangeRate(rate))
+      .catch(() => {
+        setDefaultExchangeRate(DEFAULT_AFN_PER_USD);
+      });
+  }, []);
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
 
     const grossAmount = parseMoney(form.grossAmount);
     const bonusAmount = parseMoney(form.bonusAmount);
     const deductionAmount = parseMoney(form.deductionAmount);
-    if (!form.staffId || grossAmount <= 0 || !form.salaryMonth || !form.paymentDate) {
+    const resolvedExchangeRate = form.currency === 'USD'
+      ? Math.max(parseMoney(form.exchangeRate) || defaultExchangeRate, DEFAULT_AFN_PER_USD)
+      : 1;
+    if (!form.staffId || grossAmount <= 0 || !form.salaryMonth || !form.paymentDate || resolvedExchangeRate <= 0) {
       return;
     }
 
@@ -161,9 +195,9 @@ export default function SalariesPage(): JSX.Element {
     void client
       .post('/api/v1/dental-management/salary-payments', {
         bonusAmount,
-        currency: 'AFN',
+        currency: form.currency,
         deductionAmount,
-        exchangeRate: 1,
+        exchangeRate: resolvedExchangeRate,
         grossAmount,
         netAmount,
         notes: form.notes.trim() || undefined,
@@ -197,6 +231,19 @@ export default function SalariesPage(): JSX.Element {
         toast.error(extractApiErrorMessage(error, 'Failed to delete salary payment.'));
       });
   };
+
+  const grossAmount = parseMoney(form.grossAmount);
+  const bonusAmount = parseMoney(form.bonusAmount);
+  const deductionAmount = parseMoney(form.deductionAmount);
+  const netAmount = Math.max(0, grossAmount + bonusAmount - deductionAmount);
+  const resolvedExchangeRate = form.currency === 'USD'
+    ? Math.max(parseMoney(form.exchangeRate) || defaultExchangeRate, DEFAULT_AFN_PER_USD)
+    : 1;
+  const currencySections = report?.summary.currencySections ?? emptyCurrencySections();
+
+  const renderMoney = (amountInput: number, currency: CurrencyCode, amountAfn: number): JSX.Element => (
+    <div>{formatCurrency(amountInput, currency)}</div>
+  );
 
   return (
     <>
@@ -259,6 +306,43 @@ export default function SalariesPage(): JSX.Element {
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-1.5">
+                      <Label>Currency</Label>
+                      <select
+                        className="h-9 rounded-md border bg-background px-3 text-sm"
+                        value={form.currency}
+                        onChange={(event) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            currency: event.target.value as CurrencyCode,
+                            exchangeRate:
+                              event.target.value === 'USD' ? String(defaultExchangeRate) : '1',
+                          }))
+                        }
+                      >
+                        <option value="AFN">AFN</option>
+                        <option value="USD">USD</option>
+                      </select>
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label>Exchange Rate</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={form.exchangeRate}
+                        onChange={(event) =>
+                          setForm((prev) => ({ ...prev, exchangeRate: event.target.value }))
+                        }
+                        disabled={form.currency === 'AFN'}
+                        placeholder="AFN per 1 USD"
+                      />
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-dashed bg-slate-50/80 p-3 text-xs text-muted-foreground">
+                    This salary record affects only the selected currency section.
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-1.5">
                       <Label>Status</Label>
                       <select className="h-9 rounded-md border bg-background px-3 text-sm" value={form.status} onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value as SalaryForm['status'] }))}>
                         <option value="paid">Paid</option>
@@ -284,18 +368,25 @@ export default function SalariesPage(): JSX.Element {
                 </form>
 
                 <div className="grid gap-3">
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-2xl border bg-background/80 p-4">
-                      <p className="text-xs text-muted-foreground">Paid In Range</p>
-                      <p className="text-2xl font-semibold">{formatCurrency(report?.summary.paidTotal ?? 0, 'AFN')}</p>
-                    </div>
-                    <div className="rounded-2xl border bg-background/80 p-4">
-                      <p className="text-xs text-muted-foreground">Pending</p>
-                      <p className="text-2xl font-semibold">{report?.summary.pendingCount ?? 0}</p>
-                    </div>
-                    <div className="rounded-2xl border bg-background/80 p-4">
-                      <p className="text-xs text-muted-foreground">Total Rows</p>
-                      <p className="text-2xl font-semibold">{report?.summary.totalCount ?? 0}</p>
+                  <div className="grid gap-3 xl:grid-cols-2">
+                    {(['AFN', 'USD'] as CurrencyCode[]).map((currency) => (
+                      <div key={currency} className="rounded-2xl border bg-background/80 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">{currency} Paid</p>
+                        <p className="mt-3 text-2xl font-semibold">{formatCurrency(currencySections[currency].paidTotal, currency)}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">Paid and partial salary rows in the selected range.</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="rounded-2xl border bg-background/80 p-4">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Pending</p>
+                        <p className="text-xl font-semibold">{report?.summary.pendingCount ?? 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Total Rows</p>
+                        <p className="text-xl font-semibold">{report?.summary.totalCount ?? 0}</p>
+                      </div>
                     </div>
                   </div>
 
@@ -359,7 +450,7 @@ export default function SalariesPage(): JSX.Element {
                               <td className="px-3 py-2">{row.salaryMonth}</td>
                               <td className="px-3 py-2">{row.staffName}</td>
                               <td className="px-3 py-2">{row.status}</td>
-                              <td className="px-3 py-2 font-medium">{formatCurrency(row.netAmountInput, 'AFN')}</td>
+                              <td className="px-3 py-2 font-medium">{renderMoney(row.netAmountInput, row.currency, row.netAmount)}</td>
                               <td className="px-3 py-2">
                                 <Button type="button" variant="ghost" size="icon" onClick={() => removeRow(row.id)}>
                                   <Trash2 className="size-4" />

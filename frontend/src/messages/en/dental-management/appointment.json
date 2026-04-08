@@ -9,6 +9,9 @@
       "update": "Update Appointment"
     },
     "form": {
+      "id": {
+        "label": "ID"
+      },
       "patientId": {
         "label": "Patient Id",
         "validation": {

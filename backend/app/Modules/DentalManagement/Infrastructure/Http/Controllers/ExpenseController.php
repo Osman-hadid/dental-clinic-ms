@@ -131,14 +131,17 @@ final class ExpenseController extends BaseApiController
                 'source_id' => $expense->id,
             ]);
 
-        $currentBalance = SafeTransaction::currentBalance($entry->exists ? $entry->id : null);
-        if ($currentBalance < (float) $expense->amount) {
+        $currency = strtoupper((string) ($expense->currency ?? 'AFN')) === 'USD' ? 'USD' : 'AFN';
+        $requestedAmount = round((float) ($expense->amount_input ?? $expense->amount ?? 0), 2);
+        $currentBalance = SafeTransaction::currentBalanceForCurrency($currency, $entry->exists ? $entry->id : null);
+        if ($currentBalance < $requestedAmount) {
             throw new ApiException(
                 errorCode: 'SAFE_BALANCE_INSUFFICIENT',
                 message: 'Safe balance is not enough for this expense.',
                 details: [
                     'currentBalance' => $currentBalance,
-                    'requestedAmount' => (float) $expense->amount,
+                    'currency' => $currency,
+                    'requestedAmount' => $requestedAmount,
                 ],
                 httpCode: 422,
             );
@@ -149,8 +152,8 @@ final class ExpenseController extends BaseApiController
             'entry_type' => 'expense',
             'direction' => 'out',
             'amount' => $expense->amount,
-            'amount_input' => round((float) ($expense->amount_input ?? $expense->amount), 2),
-            'currency' => strtoupper((string) ($expense->currency ?? 'AFN')),
+            'amount_input' => $requestedAmount,
+            'currency' => $currency,
             'exchange_rate' => round((float) ($expense->exchange_rate ?? 1), 6),
             'notes' => $expense->title,
             'picked_by_staff_id' => $expense->staff_id,

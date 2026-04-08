@@ -212,14 +212,16 @@ final class InventoryItemController extends BaseApiController
             return;
         }
 
-        $currentBalance = SafeTransaction::currentBalance($entry->exists ? $entry->id : null);
-        if ($currentBalance < (float) $item->total_cost) {
+        $currentBalance = SafeTransaction::currentBalanceForCurrency('AFN', $entry->exists ? $entry->id : null);
+        $requestedAmount = round((float) $item->total_cost, 2);
+        if ($currentBalance < $requestedAmount) {
             throw new ApiException(
                 errorCode: 'SAFE_BALANCE_INSUFFICIENT',
                 message: 'Safe balance is not enough for this inventory purchase.',
                 details: [
                     'currentBalance' => $currentBalance,
-                    'requestedAmount' => (float) $item->total_cost,
+                    'currency' => 'AFN',
+                    'requestedAmount' => $requestedAmount,
                 ],
                 httpCode: 422,
             );

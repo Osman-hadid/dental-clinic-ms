@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { formatCurrency } from '@/lib/currency-utils';
+import { type CurrencyCode, formatCurrency } from '@/lib/currency-utils';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import { createDefaultReportRange, fetchReport, toInputDate } from '@/modules/dental-management/presentation/reports/report-client';
 import { Wallet } from 'lucide-react';
@@ -17,16 +17,27 @@ import { toast } from 'sonner';
 type DebtRow = {
   agingBucket: string;
   debtAmount: number;
+  debtAmountInput: number;
+  currency: CurrencyCode;
+  exchangeRate: number;
   id: number;
   invoiceDate: string;
   invoiceId: string;
   netAmount: number;
+  netAmountInput: number;
   paidAmount: number;
+  paidAmountInput: number;
   patientDebtAmount?: number;
   patientId: string;
   patientName: string;
   status: string;
 };
+
+type DebtCurrencySections = Record<CurrencyCode, {
+  totalDebt: number;
+  totalNet: number;
+  totalPaid: number;
+}>;
 
 type DebtReportResponse = {
   aging: Array<{ amount: number; bucket: string; count: number }>;
@@ -40,6 +51,7 @@ type DebtReportResponse = {
     };
   };
   summary: {
+    currencySections: DebtCurrencySections;
     debtCount: number;
     totalDebt: number;
     totalNet: number;
@@ -66,9 +78,12 @@ const extractApiErrorMessage = (
   })?.response?.data?.error;
 
   if (!payload) return fallback;
-  const amountLimit = payload.details?.outstandingBalance ?? payload.details?.outstandingAmount;
+  const currency = String(payload.details?.currency ?? 'AFN') === 'USD' ? 'USD' : 'AFN';
+  const amountLimit = payload.details?.outstandingAmountInput
+    ?? payload.details?.outstandingBalance
+    ?? payload.details?.outstandingAmount;
   if (typeof amountLimit === 'number') {
-    return remainingTemplate(formatCurrency(amountLimit, 'AFN'));
+    return remainingTemplate(formatCurrency(amountLimit, currency));
   }
   return payload.message || fallback;
 };
@@ -78,6 +93,19 @@ const createDefaultForm = (): SettleFormState => ({
   method: 'cash',
   notes: '',
   paymentDate: toInputDate(new Date()),
+});
+
+const emptyCurrencySections = (): DebtCurrencySections => ({
+  AFN: {
+    totalDebt: 0,
+    totalNet: 0,
+    totalPaid: 0,
+  },
+  USD: {
+    totalDebt: 0,
+    totalNet: 0,
+    totalPaid: 0,
+  },
 });
 
 const getSettledNote = (baseNote: string, row: DebtRow): string => {
@@ -104,6 +132,7 @@ export default function DebtsPage(): JSX.Element {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const totalDebts = report?.summary.debtCount ?? 0;
+  const currencySections = report?.summary.currencySections ?? emptyCurrencySections();
 
   const activePage = report?.rows.meta.currentPage ?? page;
   const lastPage = report?.rows.meta.lastPage ?? 1;
@@ -143,9 +172,15 @@ export default function DebtsPage(): JSX.Element {
   const selectedDebt = selectedRows.length === 1 ? selectedRows[0] : null;
   const enteredAmount = Number.parseFloat(form.amount);
   const normalizedEnteredAmount = Number.isFinite(enteredAmount) ? Math.max(0, enteredAmount) : 0;
-  const totalSelectedDebt = selectedRows.reduce((sum, row) => sum + row.debtAmount, 0);
-  const selectedDebtAmount = selectedDebt ? selectedDebt.debtAmount : totalSelectedDebt;
-  const remainingAfterPayment = Math.max(0, Number((selectedDebtAmount - normalizedEnteredAmount).toFixed(2)));
+  const selectedDebtAmount = selectedDebt?.debtAmountInput ?? 0;
+  const selectedDebtCurrency = selectedDebt?.currency ?? 'AFN';
+  const remainingAfterPayment = selectedDebt
+    ? Math.max(0, Number((selectedDebtAmount - normalizedEnteredAmount).toFixed(2)))
+    : 0;
+
+  const renderMoney = (amountInput: number, currency: CurrencyCode, amountAfn: number): JSX.Element => (
+    <div>{formatCurrency(amountInput, currency)}</div>
+  );
 
   const toggleSelectAll = (checked: boolean): void => {
     if (checked) {
@@ -191,13 +226,13 @@ export default function DebtsPage(): JSX.Element {
       return;
     }
 
-    if (selectedRows.length > 1) {
-      toast.error('Select only one debt when paying a partial amount.');
+    if (selectedRows.length !== 1) {
+      toast.error('Select exactly one invoice. Debt payments are entered in that invoice currency.');
       return;
     }
 
-    if (parsedAmount - selectedRows[0].debtAmount > 0.01) {
-      toast.error(`Amount cannot be greater than remaining debt ${formatCurrency(selectedRows[0].debtAmount, 'AFN')}.`);
+    if (parsedAmount - selectedRows[0].debtAmountInput > 0.01) {
+      toast.error(`Amount cannot be greater than remaining debt ${formatCurrency(selectedRows[0].debtAmountInput, selectedRows[0].currency)}.`);
       return;
     }
 
@@ -258,24 +293,24 @@ export default function DebtsPage(): JSX.Element {
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="rounded-xl border bg-white/90 p-3">
                       <p className="text-xs text-muted-foreground">Selected Debt</p>
-                      <p className="text-lg font-semibold text-rose-600">
-                        {formatCurrency(selectedDebtAmount, 'AFN')}
-                      </p>
+                      <div className="text-lg font-semibold text-rose-600">
+                        {selectedDebt ? renderMoney(selectedDebt.debtAmountInput, selectedDebt.currency, selectedDebt.debtAmount) : formatCurrency(0, 'AFN')}
+                      </div>
                       <p className="text-xs text-muted-foreground">
                         {selectedDebt
-                          ? `Invoice #${selectedDebt.invoiceId} · ${selectedDebt.patientName}`
+                          ? `Invoice #${selectedDebt.invoiceId} - ${selectedDebt.patientName}`
                           : selectedRows.length > 1
-                          ? `${selectedRows.length} invoices selected`
-                          : 'Select one or more invoices to see the debt amount.'}
+                          ? `${selectedRows.length} invoices selected. Select one to pay in its own currency.`
+                          : 'Select one invoice to see the debt amount.'}
                       </p>
                     </div>
                     <div className="rounded-xl border bg-white/90 p-3">
                       <p className="text-xs text-muted-foreground">Remaining After Payment</p>
-                      <p className="text-lg font-semibold text-amber-600">
-                        {selectedRows.length > 0 ? formatCurrency(remainingAfterPayment, 'AFN') : formatCurrency(0, 'AFN')}
-                      </p>
+                      <div className="text-lg font-semibold text-amber-600">
+                        {selectedDebt ? formatCurrency(remainingAfterPayment, selectedDebtCurrency) : formatCurrency(0, 'AFN')}
+                      </div>
                       <p className="text-xs text-muted-foreground">
-                        This updates dynamically as you enter the amount to pay.
+                        This updates in the selected invoice currency.
                       </p>
                     </div>
                   </div>
@@ -286,8 +321,8 @@ export default function DebtsPage(): JSX.Element {
                       <Input id="debt-date" type="date" value={form.paymentDate} onChange={(event) => setForm((previous) => ({ ...previous, paymentDate: event.target.value }))} required />
                     </div>
                     <div className="grid gap-1.5">
-                      <Label htmlFor="debt-amount">Amount To Pay</Label>
-                      <Input id="debt-amount" type="number" min="0" step="0.01" value={form.amount ?? ''} onChange={(event) => setForm((previous) => ({ ...previous, amount: event.target.value }))} placeholder="Enter paid amount" required />
+                      <Label htmlFor="debt-amount">Amount To Pay {selectedDebt ? `(${selectedDebt.currency})` : ''}</Label>
+                      <Input id="debt-amount" type="number" min="0" step="0.01" value={form.amount ?? ''} onChange={(event) => setForm((previous) => ({ ...previous, amount: event.target.value }))} placeholder={selectedDebt ? `Enter paid amount in ${selectedDebt.currency}` : 'Select one invoice first'} required />
                     </div>
                   </div>
                   <div className="grid gap-1.5">
@@ -302,30 +337,51 @@ export default function DebtsPage(): JSX.Element {
                     <Label htmlFor="debt-notes">{tDebts('notes')}</Label>
                     <Input id="debt-notes" value={form.notes} onChange={(event) => setForm((previous) => ({ ...previous, notes: event.target.value }))} placeholder={tDebts('notesPlaceholder')} />
                   </div>
-                  <Button type="submit" disabled={isSubmitting || selectedRows.length === 0}>
+                  <Button type="submit" disabled={isSubmitting || selectedRows.length !== 1}>
                     {isSubmitting ? tDebts('saving') : tDebts('settleSelected', { count: selectedRows.length })}
                   </Button>
                 </form>
 
                 <div className="grid gap-3">
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <div className="rounded-xl border bg-white/85 p-3">
-                      <p className="text-xs text-muted-foreground">Open Debt</p>
-                      <p className="text-lg font-semibold">{formatCurrency(report?.summary.totalDebt ?? 0, 'AFN')}</p>
-                      <p className="text-xs text-muted-foreground">Includes unpaid and partially paid invoice balances.</p>
-                    </div>
-                    <div className="rounded-xl border bg-white/85 p-3">
-                      <p className="text-xs text-muted-foreground">Net Invoices</p>
-                      <p className="text-lg font-semibold">{formatCurrency(report?.summary.totalNet ?? 0, 'AFN')}</p>
-                    </div>
-                    <div className="rounded-xl border bg-white/85 p-3">
-                      <p className="text-xs text-muted-foreground">Paid</p>
-                      <p className="text-lg font-semibold">{formatCurrency(report?.summary.totalPaid ?? 0, 'AFN')}</p>
-                    </div>
-                    <div className="rounded-xl border bg-white/85 p-3">
-                      <p className="text-xs text-muted-foreground">Total Debts</p>
-                      <p className="text-lg font-semibold">{totalDebts.toLocaleString(locale)}</p>
-                      <p className="text-xs text-muted-foreground">Number of outstanding invoices in this range.</p>
+                  <div className="grid gap-3 xl:grid-cols-[1fr_1fr_1.15fr]">
+                    {(['AFN', 'USD'] as CurrencyCode[]).map((currency) => (
+                      <div key={currency} className="rounded-xl border bg-white/85 p-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">{currency} Summary</p>
+                        <div className="mt-3 grid gap-3">
+                          <div>
+                            <p className="text-xs text-muted-foreground">Open Debt</p>
+                            <p className="text-lg font-semibold">{formatCurrency(currencySections[currency].totalDebt, currency)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">Net Invoices</p>
+                            <p className="text-lg font-semibold">{formatCurrency(currencySections[currency].totalNet, currency)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">Paid</p>
+                            <p className="text-lg font-semibold">{formatCurrency(currencySections[currency].totalPaid, currency)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-xl border bg-white/85 p-3">
+                        <p className="text-xs text-muted-foreground">AFN Base Open Debt</p>
+                        <p className="text-lg font-semibold">{formatCurrency(report?.summary.totalDebt ?? 0, 'AFN')}</p>
+                        <p className="text-xs text-muted-foreground">Includes unpaid and partially paid invoice balances.</p>
+                      </div>
+                      <div className="rounded-xl border bg-white/85 p-3">
+                        <p className="text-xs text-muted-foreground">AFN Base Net Invoices</p>
+                        <p className="text-lg font-semibold">{formatCurrency(report?.summary.totalNet ?? 0, 'AFN')}</p>
+                      </div>
+                      <div className="rounded-xl border bg-white/85 p-3">
+                        <p className="text-xs text-muted-foreground">AFN Base Paid</p>
+                        <p className="text-lg font-semibold">{formatCurrency(report?.summary.totalPaid ?? 0, 'AFN')}</p>
+                      </div>
+                      <div className="rounded-xl border bg-white/85 p-3">
+                        <p className="text-xs text-muted-foreground">Total Debts</p>
+                        <p className="text-lg font-semibold">{totalDebts.toLocaleString(locale)}</p>
+                        <p className="text-xs text-muted-foreground">Number of outstanding invoices in this range.</p>
+                      </div>
                     </div>
                   </div>
 
@@ -368,7 +424,7 @@ export default function DebtsPage(): JSX.Element {
                         <div key={row.bucket} className="rounded-xl border bg-background/80 p-3">
                           <p className="text-xs text-muted-foreground">{row.bucket}</p>
                           <p className="text-base font-semibold">{formatCurrency(row.amount, 'AFN')}</p>
-                          <p className="text-xs text-muted-foreground">{row.count} invoices</p>
+                          <p className="text-xs text-muted-foreground">{row.count} invoices · AFN accounting base</p>
                         </div>
                       ))}
                     </div>
@@ -467,9 +523,9 @@ export default function DebtsPage(): JSX.Element {
                                       <td className="px-4 py-3 font-medium text-gray-900">#{row.invoiceId}</td>
                                       <td className="px-4 py-3 text-gray-700">{new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(row.invoiceDate))}</td>
                                       <td className="px-4 py-3 text-gray-700">{row.patientName}</td>
-                                      <td className="px-4 py-3 text-gray-700">{formatCurrency(row.paidAmount, 'AFN')}</td>
+                                      <td className="px-4 py-3 text-gray-700">{renderMoney(row.paidAmountInput, row.currency, row.paidAmount)}</td>
                                       <td className="px-4 py-3 font-semibold text-rose-600">
-                                        {formatCurrency(row.debtAmount, 'AFN')}
+                                        {renderMoney(row.debtAmountInput, row.currency, row.debtAmount)}
                                       </td>
                                       <td className="px-4 py-3">
                                         <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${

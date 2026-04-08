@@ -198,7 +198,7 @@ export const ClinicalReportPanel = ({ data }: { data: ClinicalData }): JSX.Eleme
               <tbody>
                 {data.tables.patientTimeline.length > 0 ? data.tables.patientTimeline.map((row, index) => (
                   <tr
-                    key={`${String(row.occurredAt ?? 'timeline')}-${String(row.patientName ?? 'patient')}-${String(row.eventType ?? index)}`}
+                    key={`${String(row.occurredAt ?? 'timeline')}-${String(row.patientName ?? 'patient')}-${String(row.eventType ?? 'event')}-${String(row.details ?? 'details')}-${index}`}
                     className="border-t"
                   >
                     <td className="px-3 py-2">{formatTimelineDate(String(row.occurredAt ?? '-'))}</td>

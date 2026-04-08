@@ -35,6 +35,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  DEFAULT_AFN_PER_USD,
+  type CurrencyCode,
+  convertInputToUsd,
+  convertUsdToInput,
+  formatCurrency,
+} from '@/lib/currency-utils';
 import { ListPatientsUseCase } from '@/modules/dental-management/application/use-cases/patients/list-patients-use-case';
 import { ListVisitTreatmentsUseCase } from '@/modules/dental-management/application/use-cases/visit-treatments/list-visit-treatments-use-case';
 import { ListVisitsUseCase } from '@/modules/dental-management/application/use-cases/visits/list-visits-use-case';
@@ -89,9 +96,14 @@ const FALLBACK_TASK_STATUS_TO_AVAILABILITY: Record<SessionTaskStatus, ImplantAva
 
 type ImplantCard = {
   availability: ImplantAvailabilityStatus;
+  currency: CurrencyCode;
+  exchangeRate: number;
   supplierPaid: number;
+  supplierPaidInput: number;
   supplierRemaining: number;
+  supplierRemainingInput: number;
   supplierTotal: number;
+  supplierTotalInput: number;
   taskId: number;
   toothNumber: string;
 };
@@ -108,8 +120,12 @@ type ImplantPlanningRecord = {
   notes: string;
   patientId: string;
   patientPrice: number;
+  patientPriceInput: number;
   rawNotes: string;
+  currency: CurrencyCode;
+  exchangeRate: number;
   supplierCost: number;
+  supplierCostInput: number;
   toothNumber: string;
   treatmentId: string;
   updatedAt: string;
@@ -159,6 +175,16 @@ const parseTaggedAmount = (notes: string | undefined, key: 'supplier_paid' | 'su
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 };
 
+const resolveCurrencyCode = (value?: string): CurrencyCode => value?.trim().toUpperCase() === 'USD' ? 'USD' : 'AFN';
+
+const resolveExchangeRate = (currency: CurrencyCode, value: number): number => {
+  if (currency === 'USD') {
+    return value > 0 ? value : DEFAULT_AFN_PER_USD;
+  }
+
+  return 1;
+};
+
 const parseTaggedText = (notes: string | undefined, key: string): string => {
   if (!notes) {
     return '';
@@ -199,20 +225,34 @@ const formatDateTime = (value: string): string => {
   return parsed.toLocaleString();
 };
 
-const formatCurrency = (value: number): string => new Intl.NumberFormat('en-US', {
-  currency: 'AFN',
-  maximumFractionDigits: 0,
-  minimumFractionDigits: 0,
-  style: 'currency',
-}).format(value);
+const formatAmountDisplay = (
+  amountAfn: number,
+  amountInput: number,
+  currency: CurrencyCode,
+  exchangeRate: number
+): string => {
+  if (currency === 'USD') {
+    const resolvedInput = amountInput > 0 ? amountInput : convertUsdToInput(amountAfn, currency, exchangeRate);
+    return `${formatCurrency(resolvedInput, 'USD')} (${formatCurrency(amountAfn, 'AFN')})`;
+  }
+
+  return formatCurrency(amountInput > 0 ? amountInput : amountAfn, 'AFN');
+};
 
 const buildImplantTaskPayload = (
   toothNumber: string,
   availability: ImplantAvailabilityStatus,
-  supplier: { paid: number; total: number }
+  supplier: {
+    currency: CurrencyCode;
+    exchangeRate: number;
+    paid: number;
+    paidInput: number;
+    total: number;
+    totalInput: number;
+  }
 ): Pick<SessionTask, 'mark' | 'notes' | 'status' | 'title'> => ({
   mark: AVAILABILITY_TO_TASK_MARK[availability],
-  notes: `[${IMPLANT_TASK_MARKER}:${toothNumber}] [implant_availability:${availability}] [supplier_paid:${supplier.paid.toFixed(2)}] [supplier_total:${supplier.total.toFixed(2)}]`,
+  notes: `[${IMPLANT_TASK_MARKER}:${toothNumber}] [implant_availability:${availability}] [currency:${supplier.currency}] [exchangeRate:${supplier.exchangeRate.toFixed(6)}] [supplier_paid:${supplier.paid.toFixed(2)}] [supplier_paid_input:${supplier.paidInput.toFixed(2)}] [supplier_total:${supplier.total.toFixed(2)}] [supplier_total_input:${supplier.totalInput.toFixed(2)}]`,
   status: AVAILABILITY_TO_TASK_STATUS[availability],
   title: `Implant Tooth ${toothNumber}`,
 });
@@ -373,19 +413,36 @@ export default function InProcessImplantsPage(): JSX.Element {
         })
         .map((visitTreatment) => {
           const rawNotes = visitTreatment.notes ?? '';
+          const currency = resolveCurrencyCode(parseTaggedText(rawNotes, 'currency'));
+          const exchangeRate = resolveExchangeRate(currency, parseTaggedNumber(rawNotes, 'exchangeRate'));
           const taggedTooth = parseTaggedText(rawNotes, 'tooth');
           const patientPriceFromNotes = parseTaggedNumber(rawNotes, 'patientPrice');
+          const patientPriceInputFromNotes = parseTaggedNumber(rawNotes, 'patientPriceInput');
           const supplierCostFromNotes = parseTaggedNumber(rawNotes, 'supplierCost');
+          const supplierCostInputFromNotes = parseTaggedNumber(rawNotes, 'supplierCostInput');
           const patientPriceFromRow = Number.parseFloat(visitTreatment.price);
           const patientPrice = Number.isFinite(patientPriceFromRow)
             ? patientPriceFromRow
             : patientPriceFromNotes;
+          const patientPriceInput = patientPriceInputFromNotes > 0
+            ? patientPriceInputFromNotes
+            : (currency === 'USD'
+                ? convertUsdToInput(Math.max(0, patientPrice), currency, exchangeRate)
+                : Math.max(0, patientPrice));
+          const supplierCost = supplierCostFromNotes;
+          const supplierCostInput = supplierCostInputFromNotes > 0
+            ? supplierCostInputFromNotes
+            : (currency === 'USD'
+                ? convertUsdToInput(Math.max(0, supplierCost), currency, exchangeRate)
+                : Math.max(0, supplierCost));
 
           return {
             arch: parseTaggedText(rawNotes, 'arch') || '-',
             createdAt: visitTreatment.createdAt,
+            currency,
             dentistId: visitTreatment.dentistId,
             diameterMm: parseTaggedText(rawNotes, 'diameter') || '-',
+            exchangeRate,
             id: visitTreatment.id,
             implantSystem: visitTreatment.material?.trim() || '-',
             lengthMm: parseTaggedText(rawNotes, 'length') || '-',
@@ -393,8 +450,10 @@ export default function InProcessImplantsPage(): JSX.Element {
             notes: stripTaggedTokens(rawNotes) || '-',
             patientId,
             patientPrice: Math.max(0, patientPrice),
+            patientPriceInput,
             rawNotes: rawNotes || '-',
-            supplierCost: supplierCostFromNotes,
+            supplierCost,
+            supplierCostInput,
             toothNumber: visitTreatment.toothNumber || taggedTooth || '-',
             treatmentId: visitTreatment.treatmentId,
             updatedAt: visitTreatment.updatedAt,
@@ -442,16 +501,36 @@ export default function InProcessImplantsPage(): JSX.Element {
         }
 
         const availabilityFromNotes = parseAvailabilityFromTaskNotes(task.notes);
+        const currency = resolveCurrencyCode(parseTaggedText(task.notes, 'currency'));
+        const exchangeRate = resolveExchangeRate(currency, parseTaggedNumber(task.notes, 'exchangeRate'));
         const supplierTotal = parseTaggedAmount(task.notes, 'supplier_total');
         const supplierPaidRaw = parseTaggedAmount(task.notes, 'supplier_paid');
         const supplierPaid = Math.min(supplierTotal, supplierPaidRaw);
+        const supplierTotalInputRaw = parseTaggedNumber(task.notes, 'supplier_total_input');
+        const supplierTotalInput = supplierTotalInputRaw > 0
+          ? supplierTotalInputRaw
+          : (currency === 'USD'
+              ? convertUsdToInput(supplierTotal, currency, exchangeRate)
+              : supplierTotal);
+        const supplierPaidInputRaw = parseTaggedNumber(task.notes, 'supplier_paid_input');
+        const supplierPaidInput = supplierPaidInputRaw > 0
+          ? Math.min(supplierTotalInput, supplierPaidInputRaw)
+          : (currency === 'USD'
+              ? convertUsdToInput(supplierPaid, currency, exchangeRate)
+              : supplierPaid);
         const supplierRemaining = Math.max(0, supplierTotal - supplierPaid);
+        const supplierRemainingInput = Math.max(0, supplierTotalInput - supplierPaidInput);
 
         return {
           availability: availabilityFromNotes ?? FALLBACK_TASK_STATUS_TO_AVAILABILITY[task.status],
+          currency,
+          exchangeRate,
           supplierPaid,
+          supplierPaidInput,
           supplierRemaining,
+          supplierRemainingInput,
           supplierTotal,
+          supplierTotalInput,
           taskId: task.id,
           toothNumber,
         };
@@ -505,15 +584,23 @@ export default function InProcessImplantsPage(): JSX.Element {
 
   const setImplantAvailabilityMutation = useMutation({
     mutationFn: async ({
+      currency,
+      exchangeRate,
       nextAvailability,
       supplierPaid,
+      supplierPaidInput,
       supplierTotal,
+      supplierTotalInput,
       taskId,
       toothNumber,
     }: {
+      currency: CurrencyCode;
+      exchangeRate: number;
       nextAvailability: ImplantAvailabilityStatus;
       supplierPaid: number;
+      supplierPaidInput: number;
       supplierTotal: number;
+      supplierTotalInput: number;
       taskId: number;
       toothNumber: string;
     }) => {
@@ -525,8 +612,12 @@ export default function InProcessImplantsPage(): JSX.Element {
       return client.put<SessionTask>(
         `/api/v1/dental-management/patients/${patientId}/session-tasks/${taskId}`,
         buildImplantTaskPayload(toothNumber, nextAvailability, {
+          currency,
+          exchangeRate,
           paid: supplierPaid,
+          paidInput: supplierPaidInput,
           total: supplierTotal,
+          totalInput: supplierTotalInput,
         })
       );
     },
@@ -552,29 +643,31 @@ export default function InProcessImplantsPage(): JSX.Element {
     }
 
     let supplierPaidNext = card.supplierPaid;
-    const supplierRemainingBefore = Math.max(0, card.supplierTotal - card.supplierPaid);
+    let supplierPaidInputNext = card.supplierPaidInput;
+    const supplierRemainingBeforeInput = Math.max(0, card.supplierTotalInput - card.supplierPaidInput);
     const requestedPayNow = Number.parseFloat(supplierPayNowByTooth[toothNumber] ?? '');
-    const supplierPayNow = Number.isFinite(requestedPayNow)
-      ? Math.min(Math.max(0, requestedPayNow), supplierRemainingBefore)
+    const supplierPayNowInput = Number.isFinite(requestedPayNow)
+      ? Math.min(Math.max(0, requestedPayNow), supplierRemainingBeforeInput)
       : 0;
+    const supplierPayNow = convertInputToUsd(supplierPayNowInput, card.currency, card.exchangeRate);
 
-    if (card.availability === nextAvailability && supplierPayNow <= 0) {
+    if (card.availability === nextAvailability && supplierPayNowInput <= 0) {
       return;
     }
 
     setAvailabilityToothSaving(toothNumber);
     try {
-      if (supplierPayNow > 0) {
+      if (supplierPayNowInput > 0) {
         const safeClient = await fetchCsrfClient();
         const today = new Date().toISOString().slice(0, 10);
         const safeResponse = await safeClient.post<{ id: number }>(
           '/api/v1/dental-management/safe-transactions',
           {
-            amount: supplierPayNow,
-            currency: 'AFN',
+            amount: supplierPayNowInput,
+            currency: card.currency,
             direction: 'out',
             entryType: 'expense',
-            exchangeRate: 1,
+            exchangeRate: card.exchangeRate,
             notes: `Implant supplier payment for tooth ${toothNumber}.`,
             sourceId: taskId,
             sourceType: 'implant_supplier',
@@ -588,12 +681,17 @@ export default function InProcessImplantsPage(): JSX.Element {
         }
 
         supplierPaidNext = Math.min(card.supplierTotal, card.supplierPaid + supplierPayNow);
+        supplierPaidInputNext = Math.min(card.supplierTotalInput, card.supplierPaidInput + supplierPayNowInput);
       }
 
       const response = await setImplantAvailabilityMutation.mutateAsync({
+        currency: card.currency,
+        exchangeRate: card.exchangeRate,
         nextAvailability,
         supplierPaid: supplierPaidNext,
+        supplierPaidInput: supplierPaidInputNext,
         supplierTotal: card.supplierTotal,
+        supplierTotalInput: card.supplierTotalInput,
         taskId,
         toothNumber,
       });
@@ -720,8 +818,18 @@ export default function InProcessImplantsPage(): JSX.Element {
                               <Badge variant="outline">Visit {record.visitId}</Badge>
                             </div>
                             <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-                              <p>Patient price: <span className="font-medium text-foreground">{formatCurrency(record.patientPrice)}</span></p>
-                              <p>Supplier cost: <span className="font-medium text-foreground">{formatCurrency(record.supplierCost)}</span></p>
+                              <p>
+                                Patient price:{' '}
+                                <span className="font-medium text-foreground">
+                                  {formatAmountDisplay(record.patientPrice, record.patientPriceInput, record.currency, record.exchangeRate)}
+                                </span>
+                              </p>
+                              <p>
+                                Supplier cost:{' '}
+                                <span className="font-medium text-foreground">
+                                  {formatAmountDisplay(record.supplierCost, record.supplierCostInput, record.currency, record.exchangeRate)}
+                                </span>
+                              </p>
                               <p>Implant system: <span className="font-medium text-foreground">{record.implantSystem}</span></p>
                               <p>Saved at: <span className="font-medium text-foreground">{formatDateTime(record.createdAt)}</span></p>
                             </div>
@@ -753,16 +861,31 @@ export default function InProcessImplantsPage(): JSX.Element {
                                 <Badge variant="outline">{AVAILABILITY_TITLES[card.availability]}</Badge>
                               </div>
                               <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-                                <p>Total company cost: <span className="font-medium text-foreground">{formatCurrency(card.supplierTotal)}</span></p>
-                                <p>Paid to company: <span className="font-medium text-foreground">{formatCurrency(card.supplierPaid)}</span></p>
-                                <p>Unpaid company amount: <span className="font-medium text-foreground">{formatCurrency(card.supplierRemaining)}</span></p>
+                                <p>
+                                  Total company cost:{' '}
+                                  <span className="font-medium text-foreground">
+                                    {formatAmountDisplay(card.supplierTotal, card.supplierTotalInput, card.currency, card.exchangeRate)}
+                                  </span>
+                                </p>
+                                <p>
+                                  Paid to company:{' '}
+                                  <span className="font-medium text-foreground">
+                                    {formatAmountDisplay(card.supplierPaid, card.supplierPaidInput, card.currency, card.exchangeRate)}
+                                  </span>
+                                </p>
+                                <p>
+                                  Unpaid company amount:{' '}
+                                  <span className="font-medium text-foreground">
+                                    {formatAmountDisplay(card.supplierRemaining, card.supplierRemainingInput, card.currency, card.exchangeRate)}
+                                  </span>
+                                </p>
                               </div>
                               <div className="mt-2 flex items-center gap-2">
                                 <Input
                                   type="number"
                                   step="0.01"
                                   min="0"
-                                  placeholder="Company pay now"
+                                  placeholder={`Company pay now (${card.currency})`}
                                   value={supplierPayNowByTooth[card.toothNumber] ?? ''}
                                   onChange={(event) => {
                                     setSupplierPayNowByTooth((prev) => ({
@@ -828,9 +951,9 @@ export default function InProcessImplantsPage(): JSX.Element {
                           <TableRow key={`unpaid-${row.taskId}-${row.toothNumber}`}>
                             <TableCell>Tooth {row.toothNumber}</TableCell>
                             <TableCell>{AVAILABILITY_TITLES[row.availability]}</TableCell>
-                            <TableCell>{formatCurrency(row.supplierTotal)}</TableCell>
-                            <TableCell>{formatCurrency(row.supplierPaid)}</TableCell>
-                            <TableCell>{formatCurrency(row.supplierRemaining)}</TableCell>
+                            <TableCell>{formatAmountDisplay(row.supplierTotal, row.supplierTotalInput, row.currency, row.exchangeRate)}</TableCell>
+                            <TableCell>{formatAmountDisplay(row.supplierPaid, row.supplierPaidInput, row.currency, row.exchangeRate)}</TableCell>
+                            <TableCell>{formatAmountDisplay(row.supplierRemaining, row.supplierRemainingInput, row.currency, row.exchangeRate)}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -869,8 +992,24 @@ export default function InProcessImplantsPage(): JSX.Element {
               <p><span className="text-muted-foreground">Treatment ID:</span> {selectedPlanningRecord.treatmentId}</p>
               <p><span className="text-muted-foreground">Dentist ID:</span> {selectedPlanningRecord.dentistId || '-'}</p>
               <p><span className="text-muted-foreground">Tooth:</span> {selectedPlanningRecord.toothNumber}</p>
-              <p><span className="text-muted-foreground">Patient price:</span> {formatCurrency(selectedPlanningRecord.patientPrice)}</p>
-              <p><span className="text-muted-foreground">Supplier cost:</span> {formatCurrency(selectedPlanningRecord.supplierCost)}</p>
+              <p>
+                <span className="text-muted-foreground">Patient price:</span>{' '}
+                {formatAmountDisplay(
+                  selectedPlanningRecord.patientPrice,
+                  selectedPlanningRecord.patientPriceInput,
+                  selectedPlanningRecord.currency,
+                  selectedPlanningRecord.exchangeRate
+                )}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Supplier cost:</span>{' '}
+                {formatAmountDisplay(
+                  selectedPlanningRecord.supplierCost,
+                  selectedPlanningRecord.supplierCostInput,
+                  selectedPlanningRecord.currency,
+                  selectedPlanningRecord.exchangeRate
+                )}
+              </p>
               <p><span className="text-muted-foreground">Implant system:</span> {selectedPlanningRecord.implantSystem}</p>
               <p><span className="text-muted-foreground">Diameter (mm):</span> {selectedPlanningRecord.diameterMm}</p>
               <p><span className="text-muted-foreground">Length (mm):</span> {selectedPlanningRecord.lengthMm}</p>

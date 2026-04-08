@@ -293,7 +293,7 @@ export const userConfig: EntityModuleConfig = {
     },
     {
       label: 'config.form.permissions.label',
-      name: 'permissions',
+      name: 'permissionIds',
       render: ({ onChange, value }) => {
         return React.createElement(AssignPermissions, {
           onChange,
