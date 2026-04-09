@@ -33,6 +33,7 @@ import {
 import { FilterLabel, MetricCard } from '@/modules/dental-management/presentation/reports/report-dashboard-utils';
 import { type CurrencyCode, formatCurrency } from '@/lib/currency-utils';
 import { toast } from 'sonner';
+import { BarChart3, FileText, Filter, Download, Printer, TrendingUp, Wallet, Activity, Package, ShieldCheck } from 'lucide-react';
 
 const client = new AxiosClient();
 type ReportFilterKey = 'dateRange' | 'dentist' | 'granularity' | 'patient' | 'paymentMethod' | 'search' | 'status' | 'treatment';
@@ -647,13 +648,28 @@ const ReportsPage = (): JSX.Element => {
   return (
     <>
       <Header breadcrumbs={[{ id: 'reports', isCurrent: true, label: tSidebar('reports.title') }]} />
-      <div className="flex flex-1 flex-col">
-        <div className="@container/main flex flex-1 flex-col gap-2">
-          <div className="flex flex-col gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6">
-            <Card className="rounded-3xl border border-slate-200 bg-white/80">
-              <CardHeader className="pb-3">
-                <CardTitle>Quick Financial Snapshot</CardTitle>
-                <CardDescription>Choose a time range and review the headline money metrics.</CardDescription>
+      <div className="flex flex-1 flex-col px-4 pb-6 lg:px-6 overflow-x-hidden">
+        <div className="rounded-3xl border border-primary/10 bg-gradient-to-br from-primary/5 via-background to-muted/20 p-6 text-foreground shadow-lg overflow-hidden relative">
+          <div className="absolute right-0 top-0 h-48 w-48 translate-x-24 -translate-y-24 rounded-full bg-primary/10 blur-3xl" />
+          <div className="absolute left-0 bottom-0 h-48 w-48 -translate-x-24 translate-y-24 rounded-full bg-emerald-500/10 blur-3xl" />
+          
+          <div className="relative mb-6">
+            <h1 className="text-2xl font-semibold text-foreground">Reports Dashboard</h1>
+            <p className="text-sm text-muted-foreground">Analyze clinic performance, financials, and operations</p>
+          </div>
+
+          <div className="relative space-y-6">
+            <Card className="min-w-0 rounded-2xl border border-border/50 bg-gradient-to-br from-white/80 to-muted/50 shadow-sm">
+              <CardHeader className="pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-xl border border-emerald-200/50 bg-emerald-100/60 p-2.5">
+                    <Wallet className="size-5 text-emerald-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">Quick Financial Snapshot</CardTitle>
+                    <CardDescription className="text-xs">Choose a time range and review headline metrics</CardDescription>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex flex-wrap items-end gap-3">
@@ -714,8 +730,8 @@ const ReportsPage = (): JSX.Element => {
                 </div>
 
                 {!workflowAccess?.capabilities.canAccessFinancialReports && workflowAccess ? (
-                  <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
-                    Financial summary widgets are hidden until a user has at least `review` access.
+                  <div className="rounded-2xl border border-amber-200/60 bg-gradient-to-br from-amber-50/80 to-amber-100/50 p-4 text-sm text-amber-900">
+                    Financial summary widgets require review access.
                   </div>
                 ) : isLoadingRangeSummary && !rangeSummary ? (
                   <LoadingState compact title="Loading summary" description="Fetching totals for the selected range." />
@@ -726,14 +742,14 @@ const ReportsPage = (): JSX.Element => {
                         const section = rangeSummary?.currencySections?.[currency];
 
                         return (
-                          <div key={currency} className="rounded-2xl border bg-background/80 p-4">
+                          <div key={currency} className="rounded-2xl border border-border/50 bg-background/60 p-4">
                             <div className="mb-3 flex items-center justify-between">
-                              <p className="text-sm font-semibold text-foreground">{currency} Report Section</p>
-                              <span className="rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground">Original currency</span>
+                              <p className="text-sm font-semibold text-foreground">{currency} Section</p>
+                              <span className="rounded-full border border-border/40 px-2 py-0.5 text-[11px] text-muted-foreground bg-muted/50">Original currency</span>
                             </div>
                             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                               <MetricCard
-                                label="Total money received"
+                                label="Total received"
                                 value={formatCurrency(section?.paid ?? 0, currency)}
                                 tone="safe"
                               />
@@ -743,7 +759,7 @@ const ReportsPage = (): JSX.Element => {
                                 tone="danger"
                               />
                               <MetricCard
-                                label="Total unpaid money"
+                                label="Unpaid money"
                                 value={formatCurrency(section?.thirdCompanyUnpaid ?? 0, currency)}
                               />
                               <button
@@ -752,7 +768,7 @@ const ReportsPage = (): JSX.Element => {
                                 onClick={() => openSafeLedger('balance')}
                               >
                                 <MetricCard
-                                  label="Total safe money"
+                                  label="Safe balance"
                                   value={formatCurrency(section?.safeBalance ?? 0, currency)}
                                   tone="emerald"
                                 />
@@ -784,53 +800,60 @@ const ReportsPage = (): JSX.Element => {
                       })}
                     </div>
 
-                    <div className="rounded-2xl border bg-background/80 p-4 text-sm text-muted-foreground">
-                      These sections follow the original saved currency of each record. Charts and clinic-wide accounting still use AFN base values behind the scenes.
+                    <div className="rounded-2xl border border-border/50 bg-background/60 p-4 text-xs text-muted-foreground">
+                      These sections follow the original saved currency. Charts use AFN base values.
                     </div>
                   </div>
                 )}
               </CardContent>
             </Card>
 
-            <Card className="rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 via-background to-cyan-50">
-              <CardHeader className="pb-3">
-                <CardTitle>Reports Center</CardTitle>
-                <CardDescription>Choose a date range, apply the filters you need, and read the results in plain clinic language.</CardDescription>
+            <Card className="min-w-0 rounded-2xl border border-border/50 bg-gradient-to-br from-white/80 to-muted/50 shadow-sm">
+              <CardHeader className="pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-xl border border-violet-200/50 bg-violet-100/60 p-2.5">
+                    <BarChart3 className="size-5 text-violet-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">Reports Center</CardTitle>
+                    <CardDescription className="text-xs">Filter, export, and print detailed reports</CardDescription>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.75fr)_360px]">
-                <div className="space-y-4 rounded-[28px] border border-slate-200/80 bg-white/80 p-4 shadow-sm backdrop-blur-sm md:p-5">
-                  <div className="flex flex-col gap-3 border-b border-slate-200/70 pb-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="space-y-4 rounded-2xl border border-border/40 bg-background/60 p-4">
+                  <div className="flex flex-col gap-3 border-b border-border/30 pb-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="outline" className="border-cyan-200 bg-cyan-50 text-cyan-700">Filter workspace</Badge>
+                        <Badge variant="outline" className="border-violet-200/50 bg-violet-50/60 text-violet-700">Filter workspace</Badge>
                         {hasPendingFilterChanges ? (
-                          <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">Unsaved filter changes</Badge>
+                          <Badge variant="outline" className="border-amber-200/50 bg-amber-50/60 text-amber-700">Unsaved changes</Badge>
                         ) : (
-                          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">Filters applied</Badge>
+                          <Badge variant="outline" className="border-emerald-200/50 bg-emerald-50/60 text-emerald-700">Filters applied</Badge>
                         )}
                       </div>
                       <div>
-                        <p className="text-base font-semibold text-slate-950">Shape this report view before you export or print it</p>
-                        <p className="text-sm text-slate-600">The available filters adapt to the active report tab, so this layout keeps the date range, drill-down filters, and search grouped more clearly.</p>
+                        <p className="text-sm font-semibold text-foreground">Shape your report view</p>
+                        <p className="text-xs text-muted-foreground">Filters adapt to the active report tab</p>
                       </div>
                     </div>
-                    <div className="grid min-w-[220px] gap-2 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3 text-sm">
+                    <div className="grid min-w-[220px] gap-2 rounded-xl border border-border/40 bg-muted/50 p-3 text-xs">
                       <div>
-                        <p className="font-medium text-slate-900">Current report</p>
-                        <p className="text-slate-600">{activeReport.label}</p>
+                        <p className="font-medium text-foreground">Current report</p>
+                        <p className="text-muted-foreground">{activeReport.label}</p>
                       </div>
                       <div>
-                        <p className="font-medium text-slate-900">Active range</p>
-                        <p className="text-slate-600">{draftFilters.startDate} to {draftFilters.endDate}</p>
+                        <p className="font-medium text-foreground">Active range</p>
+                        <p className="text-muted-foreground">{draftFilters.startDate} to {draftFilters.endDate}</p>
                       </div>
                     </div>
                   </div>
 
                   <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-                    <div className="space-y-3 rounded-3xl border border-slate-200/80 bg-gradient-to-br from-white via-slate-50/90 to-cyan-50/60 p-4">
+                    <div className="space-y-3 rounded-2xl border border-border/40 bg-gradient-to-br from-white via-muted/50 to-violet-50/30 p-4">
                       <div className="space-y-1">
-                        <p className="text-sm font-semibold text-slate-900">Time and structure</p>
-                        <p className="text-xs text-slate-500">Choose the reporting window first, then decide how the data should be grouped.</p>
+                        <p className="text-sm font-semibold text-foreground">Time and structure</p>
+                        <p className="text-xs text-muted-foreground">Choose reporting window and data grouping</p>
                       </div>
                       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                         {showsFilter('dateRange') ? (
@@ -858,10 +881,10 @@ const ReportsPage = (): JSX.Element => {
                       </div>
                     </div>
 
-                    <div className="space-y-3 rounded-3xl border border-slate-200/80 bg-white/90 p-4">
+                    <div className="space-y-3 rounded-2xl border border-border/40 bg-white/90 p-4">
                       <div className="space-y-1">
-                        <p className="text-sm font-semibold text-slate-900">Search and clinic filters</p>
-                        <p className="text-xs text-slate-500">Narrow the report by people, status, treatment, payment method, or a targeted search phrase.</p>
+                        <p className="text-sm font-semibold text-foreground">Search and clinic filters</p>
+                        <p className="text-xs text-muted-foreground">Narrow by people, status, treatment, payment method</p>
                       </div>
                       <div className="grid gap-3 md:grid-cols-2">
                         {showsFilter('status') ? (
@@ -930,24 +953,24 @@ const ReportsPage = (): JSX.Element => {
                   </div>
                 </div>
 
-                <div className="grid gap-3 self-start rounded-[28px] border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-4 text-slate-900 shadow-lg shadow-sky-200/60">
+                <div className="grid gap-3 self-start rounded-2xl border border-border/50 bg-gradient-to-br from-violet-50/80 via-white to-emerald-50/80 p-4 text-foreground shadow-lg">
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="outline" className="border-sky-200 bg-sky-100 text-sky-700">Action panel</Badge>
-                      {workflowAccess ? <Badge variant="outline" className="border-emerald-200 bg-emerald-100 text-emerald-700">Right: {workflowAccess.user.rightLevel}</Badge> : null}
+                      <Badge variant="outline" className="border-violet-200/50 bg-violet-100/60 text-violet-700">Action panel</Badge>
+                      {workflowAccess ? <Badge variant="outline" className="border-emerald-200/50 bg-emerald-100/60 text-emerald-700">Right: {workflowAccess.user.rightLevel}</Badge> : null}
                     </div>
-                    <p className="text-lg font-semibold">{activeReport.label}</p>
-                    <p className="text-sm text-slate-700">{activeReport.description}</p>
-                    <p className="text-xs text-slate-500">{activeReport.helperText}</p>
+                    <p className="text-base font-semibold">{activeReport.label}</p>
+                    <p className="text-sm text-muted-foreground">{activeReport.description}</p>
+                    <p className="text-xs text-muted-foreground">{activeReport.helperText}</p>
                     {workflowAccess?.user.roles.length ? (
-                      <p className="text-xs text-slate-500">Roles: {workflowAccess.user.roles.join(', ')}</p>
+                      <p className="text-xs text-muted-foreground">Roles: {workflowAccess.user.roles.join(', ')}</p>
                     ) : null}
                   </div>
 
-                  <div className="rounded-2xl border border-sky-100 bg-white/85 p-3 backdrop-blur-sm">
+                  <div className="rounded-xl border border-border/40 bg-white/85 p-3 backdrop-blur-sm">
                     <div className="flex flex-col gap-1">
-                      <p className="text-sm font-medium text-slate-800">Download this report</p>
-                      <select className={`${reportSelectClassName} border-sky-200 bg-white text-slate-900`} value={csvExportType} onChange={(event) => setCsvExportType(event.target.value as CsvExportType)}>
+                      <p className="text-sm font-medium text-foreground">Download this report</p>
+                      <select className={`${reportSelectClassName} border-border/40 bg-white text-foreground`} value={csvExportType} onChange={(event) => setCsvExportType(event.target.value as CsvExportType)}>
                         {activeReport.exportOptions.map((option) => (
                           <option key={option.value} value={option.value}>{option.label}</option>
                         ))}
@@ -959,29 +982,34 @@ const ReportsPage = (): JSX.Element => {
                     <Button type="button" className="bg-emerald-500 text-white hover:bg-emerald-600" onClick={applyFilters} disabled={isLoadingFilters || isLoadingTab}>
                       {isLoadingFilters || isLoadingTab ? 'Updating report...' : 'Apply filters'}
                     </Button>
-                    <Button type="button" className="bg-sky-500 text-white hover:bg-sky-600" onClick={handleExport}>
+                    <Button type="button" className="bg-violet-500 text-white hover:bg-violet-600" onClick={handleExport}>
                       Download CSV
                     </Button>
-                    <Button type="button" variant="outline" className="border-sky-200 bg-white/80 text-slate-800 hover:bg-sky-50 hover:text-slate-900" onClick={handlePrintReport} disabled={!hasPrintableContent || isLoadingTab}>
+                    <Button type="button" variant="outline" className="border-border/40 bg-white/80 text-foreground hover:bg-violet-50/50 hover:text-foreground" onClick={handlePrintReport} disabled={!hasPrintableContent || isLoadingTab}>
                       Print / Save PDF
                     </Button>
                   </div>
 
-                  <div className="rounded-2xl border border-sky-100 bg-gradient-to-br from-sky-100/80 to-emerald-100/80 p-3 text-xs text-slate-700">
-                    Filters apply across the report tabs you are allowed to access, so this panel becomes your control center for reading, exporting, and printing the same view.
+                  <div className="rounded-xl border border-border/40 bg-gradient-to-br from-violet-100/60 to-emerald-100/60 p-3 text-xs text-muted-foreground">
+                    Filters apply across report tabs you can access.
                   </div>
                 </div>
               </CardContent>
             </Card>
 
             {workflowAccess ? (
-              <Card className="rounded-3xl border border-slate-200 bg-slate-50/70">
+              <Card className="min-w-0 rounded-2xl border border-border/50 bg-muted/50">
                 <CardContent className="flex flex-wrap items-start justify-between gap-3 p-4 text-sm">
-                  <div className="space-y-1">
-                    <p className="font-semibold text-foreground">Workflow restrictions</p>
-                    <p className="text-muted-foreground">Financial reports need `review` access. Audit reports, snapshot controls, and close-day style approvals need `approval` access.</p>
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-xl border border-amber-200/50 bg-amber-100/60 p-2.5">
+                      <ShieldCheck className="size-4 text-amber-600" />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="font-semibold text-foreground">Workflow restrictions</p>
+                      <p className="text-xs text-muted-foreground">Financial reports need review access. Audit reports need approval access.</p>
+                    </div>
                   </div>
-                  <div className="space-y-1 text-muted-foreground">
+                  <div className="space-y-1 text-xs text-muted-foreground">
                     {workflowAccess.requirements.slice(0, 3).map((item) => (
                       <p key={item.action}>{item.action}: {item.allowed ? 'Allowed' : `Needs ${item.requiredRight}`}</p>
                     ))}
@@ -992,11 +1020,36 @@ const ReportsPage = (): JSX.Element => {
 
             <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as ReportTab)} className="space-y-4">
               <TabsList className="w-full justify-start overflow-auto">
-                {availableTabs.includes('executive') ? <TabsTrigger value="executive">{reportExperience.executive.label}</TabsTrigger> : null}
-                {availableTabs.includes('financial') ? <TabsTrigger value="financial">{reportExperience.financial.label}</TabsTrigger> : null}
-                {availableTabs.includes('clinical') ? <TabsTrigger value="clinical">{reportExperience.clinical.label}</TabsTrigger> : null}
-                {availableTabs.includes('inventory') ? <TabsTrigger value="inventory">{reportExperience.inventory.label}</TabsTrigger> : null}
-                {availableTabs.includes('audit') ? <TabsTrigger value="audit">{reportExperience.audit.label}</TabsTrigger> : null}
+                {availableTabs.includes('executive') ? (
+                  <TabsTrigger value="executive" className="flex items-center gap-2">
+                    <TrendingUp className="size-4" />
+                    {reportExperience.executive.label}
+                  </TabsTrigger>
+                ) : null}
+                {availableTabs.includes('financial') ? (
+                  <TabsTrigger value="financial" className="flex items-center gap-2">
+                    <Wallet className="size-4" />
+                    {reportExperience.financial.label}
+                  </TabsTrigger>
+                ) : null}
+                {availableTabs.includes('clinical') ? (
+                  <TabsTrigger value="clinical" className="flex items-center gap-2">
+                    <Activity className="size-4" />
+                    {reportExperience.clinical.label}
+                  </TabsTrigger>
+                ) : null}
+                {availableTabs.includes('inventory') ? (
+                  <TabsTrigger value="inventory" className="flex items-center gap-2">
+                    <Package className="size-4" />
+                    {reportExperience.inventory.label}
+                  </TabsTrigger>
+                ) : null}
+                {availableTabs.includes('audit') ? (
+                  <TabsTrigger value="audit" className="flex items-center gap-2">
+                    <FileText className="size-4" />
+                    {reportExperience.audit.label}
+                  </TabsTrigger>
+                ) : null}
               </TabsList>
 
               <TabsContent value={activeTab}>

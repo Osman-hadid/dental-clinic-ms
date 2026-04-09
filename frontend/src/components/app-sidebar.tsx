@@ -40,6 +40,34 @@ import {
   User,
   Users,
   Wallet,
+  Home,
+  Activity,
+  FileText,
+  Database,
+  Settings,
+  FileCheck,
+  CreditCard,
+  PiggyBank,
+  LayoutDashboard,
+  FolderOpen,
+  FileSearch,
+  CalendarClock,
+  UserCircle,
+  Building,
+  Briefcase,
+  GraduationCap,
+  FileSpreadsheet,
+  TrendingUp,
+  PieChart,
+  Package,
+  Layers,
+  FolderKanban,
+  FilePieChart,
+  BadgeCheck,
+  Lock,
+  UserCog,
+  ScrollText,
+  FileBarChart,
 } from 'lucide-react';
 
 export type SidebarSubItem = {
@@ -64,14 +92,14 @@ export type SidebarItem = {
 
 const staticNavItems: SidebarItem[] = [
   {
-    icon: House,
+    icon: Home,
     isActive: true,
     items: [{ key: 'overview', permission: 'page.dashboard', url: '/dashboard' }],
     key: 'dashboard',
     url: '/dashboard',
   },
   {
-    icon: HeartPulse,
+    icon: Activity,
     items: [
       { key: 'patients', permission: 'page.dental-management.patients', section: 'Patients', url: '/dental-management/patients' },
       {
@@ -109,7 +137,7 @@ const staticNavItems: SidebarItem[] = [
     url: '/dental-management',
   },
   {
-    icon: BarChart3,
+    icon: FileBarChart,
     items: [
       { key: 'overview', permission: 'page.reports.overview', url: '/reports' },
       { key: 'debts', permission: 'page.reports.debts', url: '/reports/debts' },
@@ -133,13 +161,13 @@ const staticNavItems: SidebarItem[] = [
     url: '/reports',
   },
   {
-    icon: Boxes,
+    icon: Package,
     items: [{ key: 'inventory', permission: 'page.inventory-management', url: '/inventory-management' }],
     key: 'inventoryManagement',
     url: '/inventory-management',
   },
   {
-    icon: Archive,
+    icon: Database,
     items: [
       {
         key: 'backups',
@@ -151,7 +179,7 @@ const staticNavItems: SidebarItem[] = [
     url: '/dental-management/backups',
   },
   {
-    icon: Building2,
+    icon: Building,
     items: [
       {
         key: 'clinicProfile',
@@ -163,7 +191,7 @@ const staticNavItems: SidebarItem[] = [
     url: '/dental-management/clinic-profile',
   },
   {
-    icon: ShieldUser,
+    icon: UserCog,
     items: [
       { key: 'users', permission: 'page.user-management.users', url: '/user-management/users' },
       { key: 'roles', permission: 'page.user-management.roles', url: '/user-management/roles' },
@@ -186,33 +214,33 @@ const staticNavItems: SidebarItem[] = [
 
 const sidebarSubItemIcons: Record<string, LucideIcon> = {
   aiImaging: Brain,
-  appointments: Calendar,
-  backups: Archive,
-  clinicProfile: Smile,
+  appointments: CalendarClock,
+  backups: Database,
+  clinicProfile: Building,
   clinicalExpenses: ShoppingCart,
   dailyExpenses: CalendarDays,
   debts: HandCoins,
   implants: Stethoscope,
-  implantsInProcess: ClipboardList,
-  inventory: Archive,
+  implantsInProcess: FolderKanban,
+  inventory: Package,
   invoices: Receipt,
-  financialControl: HandCoins,
-  overview: ClipboardList,
-  patientQuestions: ClipboardList,
-  patients: User,
-  payments: Wallet,
-  queue: CalendarDays,
-  permissions: KeyRound,
-  roles: ShieldUser,
-  safe: Shield,
+  financialControl: TrendingUp,
+  overview: FileSpreadsheet,
+  patientQuestions: FileSearch,
+  patients: UserCircle,
+  payments: CreditCard,
+  queue: CalendarClock,
+  permissions: Lock,
+  roles: BadgeCheck,
+  safe: PieChart,
   salaries: BadgeDollarSign,
   shareholders: Landmark,
   staff: Users,
   teeth: Smile,
-  treatments: Stethoscope,
-  users: Users,
-  visits: ClipboardList,
-  visitTreatments: ClipboardList,
+  treatments: FileCheck,
+  users: UserCircle,
+  visits: FileText,
+  visitTreatments: FileCheck,
 };
 
 export const AppSidebar = (props: React.ComponentProps<typeof Sidebar>): React.JSX.Element => {

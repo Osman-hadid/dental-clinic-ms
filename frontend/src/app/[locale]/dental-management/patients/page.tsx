@@ -7,6 +7,7 @@ import { Header } from '@/components/header';
 import { EntityListClient as EntityList } from '@/components/shared/entity/entity-list';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { patientConfig } from '@/modules/dental-management/presentation/config/patient-config';
 import {
@@ -152,10 +153,22 @@ export default function PatientsPage(): JSX.Element {
   const searchParameters = useSearchParams();
 
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [showList, setShowList] = useState(false);
   const [isPreparingList, setIsPreparingList] = useState(false);
 
-  const trimmedSearch = search.trim();
+  // Debounce search to prevent API calls on every keystroke
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [search]);
+
+  const trimmedSearch = debouncedSearch.trim();
   const searchFields = useMemo(
     () => ['id', 'patientCode', 'firstName', 'lastName', 'contactNumber', 'email'],
     []
@@ -285,111 +298,173 @@ export default function PatientsPage(): JSX.Element {
       <div className="flex flex-1 flex-col">
         <div className="@container/main flex flex-1 flex-col gap-2">
           <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
-            <section className="rounded-3xl border border-border bg-card p-5 text-card-foreground shadow-sm">
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Dental Dashboard</p>
-                  <h2 className="mt-1 text-2xl font-semibold">Patient Finder</h2>
-                  <p className="text-sm text-muted-foreground">Search quickly, open profile, and move directly to clinical workflow.</p>
+            <Card className="rounded-3xl border border-primary/10 bg-gradient-to-br from-primary/5 via-background to-muted/20 shadow-lg overflow-hidden">
+              <div className="absolute right-0 top-0 h-48 w-48 translate-x-24 -translate-y-24 rounded-full bg-primary/10 blur-3xl" />
+              <div className="absolute left-0 bottom-0 h-48 w-48 -translate-x-24 translate-y-24 rounded-full bg-emerald-500/10 blur-3xl" />
+              
+              <CardContent className="relative p-6">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-xl border border-primary/20 bg-primary/10 p-3">
+                      <UsersRound className="size-6 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Dental Dashboard</p>
+                      <h2 className="mt-1 text-2xl font-semibold text-foreground">Patient Finder</h2>
+                      <p className="text-sm text-muted-foreground">Search quickly, open profile, and move directly to clinical workflow.</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="rounded-xl border border-emerald-200/60 bg-gradient-to-br from-emerald-50/80 to-emerald-100/50 px-4 py-2">
+                      <div className="flex items-center gap-2">
+                        <UsersRound className="size-4 text-emerald-600" />
+                        <div>
+                          <p className="text-[10px] text-emerald-700">Total</p>
+                          <p className="text-sm font-bold text-emerald-900">{dashboardPatients.length}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-blue-200/60 bg-gradient-to-br from-blue-50/80 to-blue-100/50 px-4 py-2">
+                      <div className="flex items-center gap-2">
+                        <div className="rounded-lg border border-blue-200/50 bg-blue-100/60 p-1.5">
+                          <UsersRound className="size-3 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-blue-700">Active</p>
+                          <p className="text-sm font-bold text-blue-900">{activePatients}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-violet-200/60 bg-gradient-to-br from-violet-50/80 to-violet-100/50 px-4 py-2">
+                      <div className="flex items-center gap-2">
+                        <div className="rounded-lg border border-violet-200/50 bg-violet-100/60 p-1.5">
+                          <UsersRound className="size-3 text-violet-600" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-violet-700">Approved</p>
+                          <p className="text-sm font-bold text-violet-900">{approvedPatients}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge className="border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground">
-                    <UsersRound className="me-1.5 size-3.5" />
-                    Total: {dashboardPatients.length}
-                  </Badge>
-                  <Badge className="border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground">
-                    Active: {activePatients}
-                  </Badge>
-                  <Badge className="border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground">
-                    Approved: {approvedPatients}
-                  </Badge>
-                </div>
-              </div>
 
-              <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
                     <Input
                       value={search}
                       onChange={(event) => {
                         setSearch(event.target.value);
                       }}
-                    placeholder="Search patient by name, ID, code, phone..."
-                    className="h-11 border-input bg-background pl-10 text-foreground placeholder:text-muted-foreground"
-                  />
+                      placeholder="Search patient by name, ID, code, phone..."
+                      className="h-12 border-input bg-background pl-12 text-base text-foreground placeholder:text-muted-foreground rounded-xl"
+                    />
+                  </div>
+
+                  <Button
+                    type="button"
+                    onClick={handleToggleList}
+                    className="h-12 bg-primary text-primary-foreground hover:bg-accent hover:text-accent-foreground rounded-xl px-6 text-base font-medium"
+                  >
+                    {showList ? 'Hide All Patients' : 'List All Patients'}
+                  </Button>
                 </div>
 
-                <Button
-                  type="button"
-                  onClick={handleToggleList}
-                  className="h-11 bg-primary text-primary-foreground hover:bg-accent hover:text-accent-foreground"
-                >
-                  {showList ? 'Hide All Patients' : 'List All Patients'}
-                </Button>
-              </div>
-
-              {trimmedSearch ? (
-                <div className="mt-4 rounded-xl border border-border bg-background p-3">
-                  {isSearching ? (
-                    <p className="text-sm text-muted-foreground">Searching...</p>
-                  ) : filteredSearchResults.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No patients found.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                        {visibleSearchResults.map((patient) => {
-                          const fullName = [patient.firstName, patient.lastName].filter(Boolean).join(' ').trim() || patient.patientCode;
-                          return (
-                            <button
-                              key={patient.id}
-                              type="button"
-                              onClick={() => {
-                                handleOpenPatient(patient.id);
-                              }}
-                              className="group rounded-lg border border-border bg-card p-3 text-left transition hover:border-primary hover:bg-accent/30"
-                            >
-                              <p className="font-semibold text-foreground">{fullName}</p>
-                              <p className="text-xs text-muted-foreground">{patient.patientCode}</p>
-                              <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-                                <span>{patient.contactNumber || 'No phone'}</span>
-                                <ChevronRight className="size-3.5 opacity-80 transition group-hover:translate-x-0.5" />
-                              </div>
-                            </button>
-                          );
-                        })}
+                {trimmedSearch ? (
+                  <div className="mt-6 rounded-2xl border border-border/50 bg-gradient-to-br from-background via-background to-muted/20 p-4">
+                    {isSearching ? (
+                      <div className="flex items-center justify-center py-8 text-center">
+                        <div className="rounded-xl border border-primary/20 bg-primary/10 p-4 mb-3">
+                          <Search className="size-6 text-primary animate-pulse" />
+                        </div>
+                        <p className="text-sm text-muted-foreground">Searching patients...</p>
                       </div>
-
+                    ) : filteredSearchResults.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-8 text-center">
+                        <div className="rounded-xl border border-border/50 bg-muted/30 p-4 mb-3">
+                          <Search className="size-6 text-muted-foreground" />
+                        </div>
+                        <p className="text-sm text-muted-foreground">No patients found matching your search.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <p className="text-sm font-medium text-foreground">{visibleSearchResults.length} patient{visibleSearchResults.length !== 1 ? 's' : ''} found</p>
+                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                          {visibleSearchResults.map((patient) => {
+                            const fullName = [patient.firstName, patient.lastName].filter(Boolean).join(' ').trim() || patient.patientCode;
+                            return (
+                              <button
+                                key={patient.id}
+                                type="button"
+                                onClick={() => {
+                                  handleOpenPatient(patient.id);
+                                }}
+                                className="group rounded-2xl border border-border/50 bg-gradient-to-br from-white/80 to-muted/50 p-4 text-left transition-all hover:border-primary/50 hover:shadow-lg hover:scale-[1.02] hover:from-primary/5 hover:to-muted/30"
+                              >
+                                <div className="flex items-start justify-between mb-2">
+                                  <div className="flex-1">
+                                    <p className="text-base font-semibold text-foreground">{fullName}</p>
+                                    <p className="text-xs text-muted-foreground">{patient.patientCode}</p>
+                                  </div>
+                                  <ChevronRight className="size-5 text-muted-foreground opacity-50 transition group-hover:translate-x-1 group-hover:opacity-100" />
+                                </div>
+                                <div className="flex items-center gap-2 mt-3 text-xs text-muted-foreground">
+                                  <div className="rounded-lg border border-border/50 bg-background/60 px-2 py-1">
+                                    {patient.contactNumber || 'No phone'}
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-6 rounded-2xl border border-dashed border-border/50 bg-gradient-to-br from-background via-background to-muted/20 p-6 text-center">
+                    <div className="rounded-xl border border-border/50 bg-muted/30 p-4 mx-auto mb-3 max-w-fit">
+                      <Search className="size-8 text-muted-foreground" />
                     </div>
-                  )}
-                </div>
-              ) : (
-                <div className="mt-4 rounded-xl border border-border bg-background p-3 text-xs text-muted-foreground">
-                  Start typing in the search bar to open a patient profile dashboard.
-                </div>
-              )}
-            </section>
+                    <p className="text-sm text-muted-foreground">Start typing in the search bar to find and open a patient profile.</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             {showList ? (
-              <section className="rounded-2xl border bg-background p-3 md:p-4">
-                <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
-                  <CalendarDays className="size-4" />
-                  <span>All patients table</span>
-                </div>
-                <EntityList
-                  config={patientConfig}
-                  fetchHook={usePatientList}
-                  useCreate={useCreatePatient}
-                  useUpdate={useUpdatePatient}
-                  useDelete={useDeletePatient}
-                />
-              </section>
+              <Card className="rounded-3xl border border-border/50 bg-gradient-to-br from-background via-background to-muted/20 shadow-sm">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-xl border border-violet-200/50 bg-violet-100/60 p-2">
+                      <CalendarDays className="size-5 text-violet-600" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-base text-foreground">All Patients</CardTitle>
+                      <CardDescription>Complete patient records database</CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <EntityList
+                    config={patientConfig}
+                    fetchHook={usePatientList}
+                    useCreate={useCreatePatient}
+                    useUpdate={useUpdatePatient}
+                    useDelete={useDeletePatient}
+                  />
+                </CardContent>
+              </Card>
             ) : isPreparingList ? (
-              <section className="rounded-2xl border bg-background p-3 md:p-4">
-                <div className="mb-1 flex items-center gap-2 text-sm text-muted-foreground">
-                  <CalendarDays className="size-4" />
-                  <span>Preparing all patients table...</span>
-                </div>
-              </section>
+              <Card className="rounded-3xl border border-border/50 bg-gradient-to-br from-background via-background to-muted/20 shadow-sm">
+                <CardContent className="flex flex-col items-center justify-center p-8 text-center">
+                  <div className="rounded-xl border border-primary/20 bg-primary/10 p-4 mb-4">
+                    <CalendarDays className="size-8 text-primary animate-pulse" />
+                  </div>
+                  <p className="text-sm font-medium text-foreground">Preparing patients table...</p>
+                  <p className="text-xs text-muted-foreground mt-1">Please wait while we load the complete database</p>
+                </CardContent>
+              </Card>
             ) : null}
           </div>
         </div>

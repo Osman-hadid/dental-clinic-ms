@@ -5,7 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Header } from '@/components/header';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
@@ -1992,13 +1992,16 @@ export default function PatientProfilePage(): JSX.Element {
   return (
     <>
       <Header breadcrumbs={breadcrumbs} />
-      <div className="flex flex-1 flex-col px-4 pb-6 lg:px-6">
-        <div className="rounded-3xl border border-border bg-background p-4 text-foreground shadow-sm">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-1 flex-col px-4 pb-6 lg:px-6 overflow-x-hidden">
+        <div className="rounded-3xl border border-primary/10 bg-gradient-to-br from-primary/5 via-background to-muted/20 p-6 text-foreground shadow-lg overflow-hidden">
+          <div className="absolute right-0 top-0 h-48 w-48 translate-x-24 -translate-y-24 rounded-full bg-primary/10 blur-3xl" />
+          <div className="absolute left-0 bottom-0 h-48 w-48 -translate-x-24 translate-y-24 rounded-full bg-emerald-500/10 blur-3xl" />
+          
+          <div className="relative mb-6 flex flex-wrap items-center justify-between gap-3">
             <Button
               type="button"
               variant="outline"
-              className="border-border bg-card text-foreground hover:bg-accent hover:text-accent-foreground"
+              className="border-border/50 bg-background/60 text-foreground hover:bg-accent/50 hover:text-accent-foreground rounded-xl"
               onClick={() => {
                 router.push(`/${locale}/dental-management/patients`);
               }}
@@ -2006,84 +2009,110 @@ export default function PatientProfilePage(): JSX.Element {
               <ArrowLeft className="me-2 size-4" />
               Back To Patients
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="border-border bg-card text-foreground hover:bg-accent hover:text-accent-foreground"
-              onClick={handlePrintPatientRecord}
-            >
-              <Printer className="me-2 size-4" />
-              Print Patient Record
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="border-border bg-card text-foreground hover:bg-accent hover:text-accent-foreground"
-              onClick={handlePrintPrescriptionRecord}
-            >
-              <Printer className="me-2 size-4" />
-              Print Prescriptions
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="border-border/50 bg-background/60 text-foreground hover:bg-accent/50 hover:text-accent-foreground rounded-xl"
+                onClick={handlePrintPatientRecord}
+              >
+                <Printer className="me-2 size-4" />
+                Print Patient Record
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="border-border/50 bg-background/60 text-foreground hover:bg-accent/50 hover:text-accent-foreground rounded-xl"
+                onClick={handlePrintPrescriptionRecord}
+              >
+                <Printer className="me-2 size-4" />
+                Print Prescriptions
+              </Button>
+            </div>
           </div>
 
-          <div className="grid min-w-0 gap-4 xl:grid-cols-[1.4fr_1fr]">
-            <div className="min-w-0 space-y-4">
-              <Card className="border-border bg-card text-card-foreground">
-                <CardContent className="p-4">
+          <div className="grid min-w-0 gap-6 xl:grid-cols-[1.4fr_1fr]">
+            <div className="min-w-0 space-y-6">
+              <Card className="rounded-3xl border border-border/50 bg-gradient-to-br from-white/80 to-muted/50 shadow-sm">
+                <CardContent className="p-6">
                   <div className="grid gap-4 md:grid-cols-[auto_1fr_1fr] md:items-center">
-                    <div className="flex size-16 items-center justify-center rounded-full bg-primary text-xl font-semibold text-primary-foreground">
+                    <div className="flex size-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary/80 text-2xl font-semibold text-primary-foreground shadow-lg">
                       {fullName.slice(0, 1).toUpperCase()}
                     </div>
                     <div>
-                      <p className="text-xl font-semibold">{isLoadingPatient ? 'Loading...' : fullName}</p>
+                      <p className="text-2xl font-semibold text-foreground">{isLoadingPatient ? 'Loading...' : fullName}</p>
                       <p className="text-sm text-muted-foreground">{patient?.patientCode || '-'}</p>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                      <p>Age: <span className="font-semibold text-foreground">{patientAge ?? '-'}</span></p>
-                      <p>Sex: <span className="font-semibold text-foreground">{patient?.gender || '-'}</span></p>
-                      <p>Blood: <span className="font-semibold text-foreground">{patient?.bloodGroup || '-'}</span></p>
-                      <p>Tel: <span className="font-semibold text-foreground">{patient?.contactNumber || '-'}</span></p>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div className="rounded-xl border border-border/50 bg-background/60 px-3 py-2">
+                        <p className="text-xs text-muted-foreground">Age</p>
+                        <p className="font-semibold text-foreground">{patientAge ?? '-'}</p>
+                      </div>
+                      <div className="rounded-xl border border-border/50 bg-background/60 px-3 py-2">
+                        <p className="text-xs text-muted-foreground">Sex</p>
+                        <p className="font-semibold text-foreground">{patient?.gender || '-'}</p>
+                      </div>
+                      <div className="rounded-xl border border-border/50 bg-background/60 px-3 py-2">
+                        <p className="text-xs text-muted-foreground">Blood</p>
+                        <p className="font-semibold text-foreground">{patient?.bloodGroup || '-'}</p>
+                      </div>
+                      <div className="rounded-xl border border-border/50 bg-background/60 px-3 py-2">
+                        <p className="text-xs text-muted-foreground">Tel</p>
+                        <p className="font-semibold text-foreground">{patient?.contactNumber || '-'}</p>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card className="border-border bg-card text-card-foreground">
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center justify-between text-base">
-                    <span>Income Diagram</span>
-                    <Wallet className="size-4 text-primary" />
-                  </CardTitle>
+              <Card className="rounded-3xl border border-border/50 bg-gradient-to-br from-background via-background to-muted/20 shadow-sm">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-xl border border-emerald-200/50 bg-emerald-100/60 p-2">
+                        <Wallet className="size-5 text-emerald-600" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-base text-foreground">Income Diagram</CardTitle>
+                        <CardDescription>Financial overview and trends</CardDescription>
+                      </div>
+                    </div>
+                  </div>
                 </CardHeader>
-                <CardContent className="space-y-3">
+                <CardContent className="space-y-4">
                   {incomeTrend.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No income or debt data available yet.</p>
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                      <div className="rounded-xl border border-border/50 bg-muted/30 p-4 mb-3">
+                        <Wallet className="size-8 text-muted-foreground" />
+                      </div>
+                      <p className="text-sm text-muted-foreground">No income or debt data available yet.</p>
+                    </div>
                   ) : (
                     <>
-                      <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/15 p-3 text-xs sm:grid-cols-5">
-                        <p className="text-muted-foreground">
-                          Total Income
-                          <span className="mt-1 block text-sm font-semibold text-foreground">{formatCurrency(totalIncome)}</span>
-                        </p>
-                        <p className="text-muted-foreground">
-                          Total Debt
-                          <span className="mt-1 block text-sm font-semibold text-foreground">{formatCurrency(totalDebt)}</span>
-                        </p>
-                        <p className="text-muted-foreground">
-                          Latest Month
-                          <span className="mt-1 block text-sm font-semibold text-foreground">{formatCurrency(latestIncome)}</span>
-                        </p>
-                        <p className="text-muted-foreground">
-                          Latest Debt
-                          <span className="mt-1 block text-sm font-semibold text-foreground">{formatCurrency(latestDebt)}</span>
-                        </p>
-                        <p className="text-muted-foreground">
-                          Avg / Month
-                          <span className="mt-1 block text-sm font-semibold text-foreground">{formatCurrency(averageIncome)}</span>
-                        </p>
+                      <div className="grid gap-3 rounded-2xl border border-border/50 bg-gradient-to-br from-background via-background to-muted/20 p-4 text-xs sm:grid-cols-5">
+                        <div className="rounded-xl border border-emerald-200/60 bg-gradient-to-br from-emerald-50/80 to-emerald-100/50 px-3 py-2">
+                          <p className="text-xs text-emerald-700">Total Income</p>
+                          <p className="mt-1 text-sm font-bold text-emerald-900">{formatCurrency(totalIncome)}</p>
+                        </div>
+                        <div className="rounded-xl border border-orange-200/60 bg-gradient-to-br from-orange-50/80 to-orange-100/50 px-3 py-2">
+                          <p className="text-xs text-orange-700">Total Debt</p>
+                          <p className="mt-1 text-sm font-bold text-orange-900">{formatCurrency(totalDebt)}</p>
+                        </div>
+                        <div className="rounded-xl border border-blue-200/60 bg-gradient-to-br from-blue-50/80 to-blue-100/50 px-3 py-2">
+                          <p className="text-xs text-blue-700">Latest Month</p>
+                          <p className="mt-1 text-sm font-bold text-blue-900">{formatCurrency(latestIncome)}</p>
+                        </div>
+                        <div className="rounded-xl border border-red-200/60 bg-gradient-to-br from-red-50/80 to-red-100/50 px-3 py-2">
+                          <p className="text-xs text-red-700">Latest Debt</p>
+                          <p className="mt-1 text-sm font-bold text-red-900">{formatCurrency(latestDebt)}</p>
+                        </div>
+                        <div className="rounded-xl border border-violet-200/60 bg-gradient-to-br from-violet-50/80 to-violet-100/50 px-3 py-2">
+                          <p className="text-xs text-violet-700">Avg / Month</p>
+                          <p className="mt-1 text-sm font-bold text-violet-900">{formatCurrency(averageIncome)}</p>
+                        </div>
                       </div>
 
-                      <div className="h-64 rounded-lg border border-border/70 bg-background p-2">
+                      <div className="h-72 rounded-2xl border border-border/50 bg-gradient-to-br from-background via-background to-muted/20 p-4">
                         <ResponsiveContainer width="100%" height="100%">
                           <AreaChart data={incomeTrend} margin={{ bottom: 8, left: 0, right: 10, top: 8 }}>
                             <defs>
@@ -2322,38 +2351,35 @@ export default function PatientProfilePage(): JSX.Element {
                 </CardContent>
               </Card>
 
-              <Card className="border-border bg-card text-card-foreground">
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center justify-between text-base">
-                    <span>Dental Condition</span>
-                    <HeartPulse className="size-4 text-primary" />
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-4 md:grid-cols-[120px_1fr]">
-                  <div className="mx-auto flex size-28 items-center justify-center rounded-full border-4 border-primary bg-background">
-                    <div className="text-center">
-                      <p className="text-3xl font-bold">{conditionStats.overall}%</p>
-                      <p className="text-xs text-muted-foreground">overall</p>
+              <Card className="rounded-3xl border border-border/50 bg-gradient-to-br from-background via-background to-muted/20 shadow-sm">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-xl border border-rose-200/50 bg-rose-100/60 p-2">
+                      <HeartPulse className="size-5 text-rose-600" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-base text-foreground">Dental Condition</CardTitle>
+                      <CardDescription>Overall dental health status</CardDescription>
                     </div>
                   </div>
-                  <div className="space-y-3">
-                    {conditionStats.entries.map((entry) => (
-                      <div key={entry.key} className="space-y-1">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-foreground">{CONDITIONS[entry.key].label}</span>
-                          <span className="text-muted-foreground">{entry.percent}%</span>
-                        </div>
-                        <div className="h-1.5 rounded-full bg-muted">
-                          <div
-                            className="h-1.5 rounded-full"
-                            style={{
-                              backgroundColor: CONDITIONS[entry.key].color,
-                              width: `${entry.percent}%`,
-                            }}
-                          />
-                        </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="mx-auto flex size-24 items-center justify-center rounded-full border-4 border-rose-200/60 bg-gradient-to-br from-rose-50/80 to-rose-100/50 shadow-lg sm:mx-0">
+                      <div className="text-center">
+                        <p className="text-3xl font-bold text-rose-900">{conditionStats.overall}%</p>
+                        <p className="text-xs text-rose-700 font-medium">overall</p>
                       </div>
-                    ))}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {conditionStats.entries.map((entry) => (
+                        <div key={entry.key} className="flex items-center gap-2 rounded-lg border border-border/50 bg-background px-3 py-2 shadow-sm">
+                          <div className="size-2 rounded-full" style={{ backgroundColor: CONDITIONS[entry.key].color }} />
+                          <span className="text-xs font-medium text-foreground">{CONDITIONS[entry.key].label}</span>
+                          <span className="text-xs font-semibold text-muted-foreground">{entry.percent}%</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -2678,15 +2704,17 @@ export default function PatientProfilePage(): JSX.Element {
               </Card>
             </div>
 
-            <Card className="min-w-0 border-border bg-card text-card-foreground">
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center justify-between text-base">
-                  <span>Dental Scheme</span>
-                  <Stethoscope className="size-4 text-primary" />
+            <Card className="min-w-0 rounded-2xl border border-border/60 bg-gradient-to-b from-card to-card/80 shadow-lg">
+              <CardHeader className="pb-4 border-b border-border/40">
+                <CardTitle className="flex items-center justify-between text-sm font-semibold tracking-tight">
+                  <span className="text-foreground">Dental Scheme</span>
+                  <div className="rounded-lg bg-primary/10 p-2">
+                    <Stethoscope className="size-4 text-primary" />
+                  </div>
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="relative mx-auto h-[360px] w-[360px] max-w-full">
+              <CardContent className="pt-6">
+                <div className="relative mx-auto h-[360px] w-full max-w-[360px] overflow-hidden">
                   {RING_TEETH.map((toothNumber, index) => {
                     const angle = (index / RING_TEETH.length) * Math.PI * 2 - Math.PI / 2;
                     const markerRadius = 38;
@@ -2696,20 +2724,24 @@ export default function PatientProfilePage(): JSX.Element {
                     const labelX = 50 + labelRadius * Math.cos(angle);
                     const labelY = 50 + labelRadius * Math.sin(angle);
                     const condition = toothConditionMap[toothNumber];
+                    const conditionColor = condition ? CONDITIONS[condition].color : '#d6ccc2';
 
                     return (
                       <div key={toothNumber}>
                         <div
-                          className="absolute size-6 -translate-x-1/2 -translate-y-1/2 rounded-full border shadow-sm"
+                          className={`absolute size-7 -translate-x-1/2 -translate-y-1/2 rounded-full transition-all duration-300 hover:scale-125 hover:z-10 ${condition ? 'border-2' : 'border-0'}`}
                           style={{
-                            backgroundColor: condition ? CONDITIONS[condition].color : '#d6ccc2',
-                            borderColor: condition ? CONDITIONS[condition].color : '#c6ac8f',
+                            backgroundColor: condition ? hexToRgba(conditionColor, 0.95) : '#e8e4e0',
+                            borderColor: condition ? conditionColor : '#c6ac8f',
                             left: `${markerX}%`,
                             top: `${markerY}%`,
+                            boxShadow: condition 
+                              ? `0 4px 12px ${hexToRgba(conditionColor, 0.35)}, 0 2px 4px ${hexToRgba(conditionColor, 0.2)}`
+                              : '0 2px 4px rgba(0,0,0,0.08)',
                           }}
                         />
                         <span
-                          className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 text-[10px] font-semibold text-muted-foreground"
+                          className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 text-[11px] font-bold text-foreground/90"
                           style={{
                             left: `${labelX}%`,
                             top: `${labelY}%`,
@@ -2721,25 +2753,30 @@ export default function PatientProfilePage(): JSX.Element {
                     );
                   })}
 
-                  <div className="absolute left-1/2 top-1/2 flex size-28 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full border border-border bg-background">
-                    <Sparkles className="size-5 text-primary" />
-                    <p className="mt-1 text-xs text-muted-foreground">Teeth Map</p>
-                    <p className="text-sm font-semibold text-foreground">{RING_TEETH.length} teeth</p>
+                  <div className="absolute left-1/2 top-1/2 flex size-32 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full border-2 border-border/40 bg-gradient-to-br from-background via-background to-muted/50 shadow-xl">
+                    <div className="rounded-xl bg-primary/5 p-2.5 mb-2">
+                      <Sparkles className="size-6 text-primary" />
+                    </div>
+                    <p className="text-xs font-semibold text-foreground/80">Teeth Map</p>
+                    <p className="text-sm font-bold text-foreground">{RING_TEETH.length} teeth</p>
                   </div>
                 </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                <div className="mt-6 grid grid-cols-2 gap-3 text-xs">
                   {Object.entries(CONDITIONS).map(([key, condition]) => (
-                    <div key={key} className="flex items-center gap-2 rounded-md border border-border bg-background px-2 py-1.5">
+                    <div key={key} className="flex items-center gap-2.5 rounded-lg border border-border/40 bg-background/60 px-3 py-2.5 transition-all hover:border-border/60 hover:bg-background/80">
                       <span
-                        className="size-2.5 rounded-full"
-                        style={{ backgroundColor: condition.color }}
+                        className="size-3 rounded-full shadow-sm"
+                        style={{ 
+                          backgroundColor: condition.color,
+                          boxShadow: `0 2px 4px ${hexToRgba(condition.color, 0.3)}`
+                        }}
                       />
-                      <span className="text-foreground">{condition.label}</span>
+                      <span className="font-medium text-foreground/90">{condition.label}</span>
                     </div>
                   ))}
                 </div>
-                <p className="mt-3 text-xs text-muted-foreground">
+                <p className="mt-4 text-xs text-muted-foreground/80">
                   {isLoadingTreatments ? (
                     <span>Loading treatment chart...</span>
                   ) : (

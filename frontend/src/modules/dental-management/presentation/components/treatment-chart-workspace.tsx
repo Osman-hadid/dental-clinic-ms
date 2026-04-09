@@ -371,56 +371,147 @@ const ToothGlyph = ({
   const crownGradientId = `${uid}-crown`;
   const rootGradientId = `${uid}-root`;
   const glossGradientId = `${uid}-gloss`;
+  const enamelGradientId = `${uid}-enamel`;
+  const highlightGradientId = `${uid}-highlight`;
+  const shadowGradientId = `${uid}-shadow`;
+  const innerHighlightId = `${uid}-inner-highlight`;
   const strokeColor = isActive ? '#e5e7eb' : '#c3ccd8';
-  const crownHighlight = '#f7f8f9';
-  const crownBase = isActive ? '#eef1f4' : '#ebeff3';
-  const crownDepth = isActive ? '#d5dde6' : '#d1d8e0';
-  const rootTop = isActive ? '#e3e8ee' : '#dde3ea';
-  const rootBottom = isActive ? '#bcc7d3' : '#b6c1cd';
-  const detailColor = isActive ? 'rgba(255,255,255,0.56)' : 'rgba(100,116,139,0.3)';
-  const shadowColor = isActive ? 'rgba(88, 28, 135, 0.42)' : 'rgba(15, 23, 42, 0.22)';
+  const crownHighlight = '#fafbfc';
+  const crownMidLight = isActive ? '#f5f9fd' : '#f2f6fa';
+  const crownMid = isActive ? '#f0f4f8' : '#edf1f5';
+  const crownBase = isActive ? '#e8ecf2' : '#e5e9ed';
+  const crownDepth = isActive ? '#dce0e8' : '#d9dde5';
+  const crownShadow = isActive ? '#cfd4da' : '#ccd1d7';
+  const rootTop = isActive ? '#e8ecf2' : '#e5e9ed';
+  const rootMid = isActive ? '#d4dce4' : '#d1d9e1';
+  const rootBottom = isActive ? '#b8c2cc' : '#b5bfd9';
+  const rootShadow = isActive ? '#a8b2be' : '#a5b0bc';
+  const detailColor = isActive ? 'rgba(255,255,255,0.8)' : 'rgba(100,116,139,0.45)';
+  const shadowColor = isActive ? 'rgba(88, 28, 135, 0.32)' : 'rgba(15, 23, 42, 0.16)';
 
   return (
     <svg viewBox="0 0 72 88" className="h-16 w-16" aria-hidden="true">
       <defs>
-        <linearGradient id={crownGradientId} x1="0" y1="0" x2="1" y2="1">
+        <linearGradient id={crownGradientId} x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stopColor={crownHighlight} />
-          <stop offset="55%" stopColor={crownBase} />
-          <stop offset="100%" stopColor={crownDepth} />
+          <stop offset="15%" stopColor={crownMidLight} />
+          <stop offset="30%" stopColor={crownMid} />
+          <stop offset="50%" stopColor={crownBase} />
+          <stop offset="70%" stopColor={crownDepth} />
+          <stop offset="90%" stopColor={crownShadow} />
+          <stop offset="100%" stopColor={crownShadow} stopOpacity={0.95} />
         </linearGradient>
-        <linearGradient id={rootGradientId} x1="0" y1="0" x2="0" y2="1">
+        <linearGradient id={rootGradientId} x1="0%" y1="0%" x2="0%" y2="100%">
           <stop offset="0%" stopColor={rootTop} />
-          <stop offset="100%" stopColor={rootBottom} />
+          <stop offset="30%" stopColor={rootMid} />
+          <stop offset="70%" stopColor={rootBottom} />
+          <stop offset="100%" stopColor={rootShadow} />
         </linearGradient>
-        <radialGradient id={glossGradientId} cx="34%" cy="22%" r="55%">
-          <stop offset="0%" stopColor="rgba(255,255,255,0.78)" />
-          <stop offset="60%" stopColor="rgba(255,255,255,0.16)" />
+        <radialGradient id={glossGradientId} cx="30%" cy="18%" r="65%">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.92)" />
+          <stop offset="30%" stopColor="rgba(255,255,255,0.45)" />
+          <stop offset="60%" stopColor="rgba(255,255,255,0.18)" />
+          <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+        </radialGradient>
+        <radialGradient id={enamelGradientId} cx="45%" cy="35%" r="55%">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.18)" />
+          <stop offset="50%" stopColor="rgba(255,255,255,0.08)" />
+          <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+        </radialGradient>
+        <radialGradient id={highlightGradientId} cx="26%" cy="16%" r="38%">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.95)" />
+          <stop offset="40%" stopColor="rgba(255,255,255,0.5)" />
+          <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+        </radialGradient>
+        <radialGradient id={shadowGradientId} cx="70%" cy="80%" r="60%">
+          <stop offset="0%" stopColor="rgba(0,0,0,0)" />
+          <stop offset="50%" stopColor="rgba(0,0,0,0.05)" />
+          <stop offset="100%" stopColor="rgba(0,0,0,0.12)" />
+        </radialGradient>
+        <radialGradient id={innerHighlightId} cx="35%" cy="25%" r="30%">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.6)" />
           <stop offset="100%" stopColor="rgba(255,255,255,0)" />
         </radialGradient>
       </defs>
+
+      {/* Crown base with multi-stop gradient */}
       <path
         d={spec.crownPath}
         fill={`url(#${crownGradientId})`}
         stroke={strokeColor}
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth={1.7}
-        style={{ filter: `drop-shadow(0 2px 3px ${shadowColor})` }}
+        strokeWidth={1.9}
+        style={{ filter: `drop-shadow(0 3px 5px ${shadowColor})` }}
       />
+
+      {/* Enamel texture overlay */}
+      <path
+        d={spec.crownPath}
+        fill={`url(#${enamelGradientId})`}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity={0.7}
+      />
+
+      {/* Shadow gradient overlay */}
+      <path
+        d={spec.crownPath}
+        fill={`url(#${shadowGradientId})`}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity={0.4}
+      />
+
+      {/* Primary gloss effect */}
       <path
         d={spec.crownPath}
         fill={`url(#${glossGradientId})`}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+
+      {/* Inner highlight spot */}
+      <ellipse
+        cx="26"
+        cy="16"
+        rx="14"
+        ry="9"
+        fill={`url(#${innerHighlightId})`}
+        opacity={0.6}
+      />
+
+      {/* Main highlight ellipse */}
+      <ellipse
+        cx="26"
+        cy="16"
+        rx="13"
+        ry="8.5"
+        fill={`url(#${highlightGradientId})`}
+        opacity={0.55}
+      />
+
+      {/* Secondary highlight */}
+      <ellipse
+        cx="42"
+        cy="22"
+        rx="6"
+        ry="4"
+        fill="rgba(255,255,255,0.25)"
+        opacity={0.5}
+      />
+
+      {/* Crown separation line */}
       <path
         d="M22 34 C28 32 44 32 50 34"
         fill="none"
-        stroke="rgba(148,163,184,0.35)"
+        stroke="rgba(148,163,184,0.45)"
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth={1}
+        strokeWidth={1.3}
       />
+
+      {/* Enhanced surface details */}
       {crownDetailPaths.map((detailPath, index) => (
         <path
           key={`${visualType}-detail-${index}`}
@@ -429,9 +520,12 @@ const ToothGlyph = ({
           stroke={detailColor}
           strokeLinecap="round"
           strokeLinejoin="round"
-          strokeWidth={1.1}
+          strokeWidth={1.3}
+          opacity={0.85}
         />
       ))}
+
+      {/* Roots with enhanced gradient */}
       {rootCenters.map((centerX, index) => (
         <path
           key={`${visualType}-${arch}-root-${index}`}
@@ -447,8 +541,34 @@ const ToothGlyph = ({
           stroke={strokeColor}
           strokeLinecap="round"
           strokeLinejoin="round"
-          strokeWidth={1.8}
-          style={{ filter: `drop-shadow(0 1px 2px ${shadowColor})` }}
+          strokeWidth={2.1}
+          style={{ filter: `drop-shadow(0 2px 4px ${shadowColor})` }}
+        />
+      ))}
+
+      {/* Root texture lines */}
+      {rootCenters.map((centerX, index) => (
+        <path
+          key={`${visualType}-${arch}-root-texture-${index}`}
+          d={`M${centerX - 2.5} 46 Q${centerX} 56 ${centerX + 2.5} 66`}
+          fill="none"
+          stroke="rgba(148,163,184,0.28)"
+          strokeLinecap="round"
+          strokeWidth={0.9}
+          opacity={0.55}
+        />
+      ))}
+
+      {/* Root highlight lines */}
+      {rootCenters.map((centerX, index) => (
+        <path
+          key={`${visualType}-${arch}-root-highlight-${index}`}
+          d={`M${centerX - 1} 48 Q${centerX - 0.5} 54 ${centerX} 60`}
+          fill="none"
+          stroke="rgba(255,255,255,0.15)"
+          strokeLinecap="round"
+          strokeWidth={0.6}
+          opacity={0.5}
         />
       ))}
     </svg>
@@ -2698,143 +2818,210 @@ export const TreatmentChartWorkspace = ({
             </Button>
           </div>
 
-          <div className="rounded-xl border bg-muted/30 p-4">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Maxilla</p>
-            <div className="grid grid-cols-4 gap-2 sm:grid-cols-8 xl:grid-cols-16">
-              {UPPER_ARCH.map((toothNumber) => {
-                const condition = toothConditions[toothNumber];
-                const isSelected = selectedToothNumber === toothNumber;
-                const toothMeta = resolveToothDisplayMeta(toothNumber);
-                const toothCode = resolveToothQuadrantCode(toothNumber);
-                const conditionColor = condition ? CONDITIONS[condition].color : '#d1d5db';
-                const selectionColor = condition ? conditionColor : (activeCondition ? CONDITIONS[activeCondition].color : '#94a3b8');
-                const selectionTextColor = isLightColor(selectionColor) ? '#0f172a' : '#ffffff';
-
-                return (
-                  <button
-                    key={toothNumber}
-                    type="button"
-                    onClick={() => {
-                      paintTooth(toothNumber);
-                    }}
-                    className={cn(
-                      'relative flex h-28 min-w-0 flex-col items-center justify-between overflow-visible rounded-[20px] rounded-br-none border px-1.5 py-2 text-[10px] font-semibold transition hover:scale-[1.03] active:scale-[0.98]',
-                      isSelected ? 'ring-2 ring-offset-1' : ''
-                    )}
-                    style={{
-                      background: isSelected
-                        ? `linear-gradient(180deg, ${hexToRgba(selectionColor, 0.32)} 0%, ${hexToRgba(selectionColor, 0.78)} 100%)`
-                        : condition
-                          ? `linear-gradient(180deg, ${hexToRgba(conditionColor, 0.16)} 0%, #f8fafc 100%)`
-                          : '#f8fafc',
-                      borderColor: isSelected ? selectionColor : condition ? hexToRgba(conditionColor, 0.65) : '#e5e7eb',
-                      boxShadow: isSelected
-                        ? `0 14px 26px ${hexToRgba(selectionColor, 0.28)}`
-                        : '0 8px 16px rgba(15,23,42,0.06)',
-                      color: isSelected ? selectionTextColor : '#1f2937',
-                    }}
-                    aria-label={`Tooth ${toothNumber} ${toothMeta.fullLabel}`}
-                    title={`${toothCode} - ${toothMeta.fullLabel}`}
-                  >
-                    <span className={cn('text-sm leading-none', isSelected ? 'text-white' : 'text-slate-500')}>
-                      {toothCode}
-                    </span>
-                    <ToothGlyph
-                      arch="maxilla"
-                      isActive={isSelected}
-                      visualType={toothMeta.visualType}
-                    />
-                    <span
-                      className="absolute -bottom-2 left-1/2 block size-5 -translate-x-1/2 rounded-full border-2 border-white"
-                      style={{ backgroundColor: conditionColor }}
-                    />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="rounded-xl border bg-muted/30 p-4">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Mandible</p>
-            <div className="grid grid-cols-4 gap-2 sm:grid-cols-8 xl:grid-cols-16">
-              {LOWER_ARCH.map((toothNumber) => {
-                const condition = toothConditions[toothNumber];
-                const isSelected = selectedToothNumber === toothNumber;
-                const toothMeta = resolveToothDisplayMeta(toothNumber);
-                const toothCode = resolveToothQuadrantCode(toothNumber);
-                const conditionColor = condition ? CONDITIONS[condition].color : '#d1d5db';
-                const selectionColor = condition ? conditionColor : (activeCondition ? CONDITIONS[activeCondition].color : '#94a3b8');
-                const selectionTextColor = isLightColor(selectionColor) ? '#0f172a' : '#ffffff';
-
-                return (
-                  <button
-                    key={toothNumber}
-                    type="button"
-                    onClick={() => {
-                      paintTooth(toothNumber);
-                    }}
-                    className={cn(
-                      'relative flex h-28 min-w-0 flex-col items-center justify-between overflow-visible rounded-[20px] rounded-br-none border px-1.5 py-2 text-[10px] font-semibold transition hover:scale-[1.03] active:scale-[0.98]',
-                      isSelected ? 'ring-2 ring-offset-1' : ''
-                    )}
-                    style={{
-                      background: isSelected
-                        ? `linear-gradient(180deg, ${hexToRgba(selectionColor, 0.32)} 0%, ${hexToRgba(selectionColor, 0.78)} 100%)`
-                        : condition
-                          ? `linear-gradient(180deg, ${hexToRgba(conditionColor, 0.16)} 0%, #f8fafc 100%)`
-                          : '#f8fafc',
-                      borderColor: isSelected ? selectionColor : condition ? hexToRgba(conditionColor, 0.65) : '#e5e7eb',
-                      boxShadow: isSelected
-                        ? `0 14px 26px ${hexToRgba(selectionColor, 0.28)}`
-                        : '0 8px 16px rgba(15,23,42,0.06)',
-                      color: isSelected ? selectionTextColor : '#1f2937',
-                    }}
-                    aria-label={`Tooth ${toothNumber} ${toothMeta.fullLabel}`}
-                    title={`${toothCode} - ${toothMeta.fullLabel}`}
-                  >
-                    <span className={cn('text-sm leading-none', isSelected ? 'text-white' : 'text-slate-500')}>
-                      {toothCode}
-                    </span>
-                    <ToothGlyph
-                      arch="mandible"
-                      isActive={isSelected}
-                      visualType={toothMeta.visualType}
-                    />
-                    <span
-                      className="absolute -bottom-2 left-1/2 block size-5 -translate-x-1/2 rounded-full border-2 border-white"
-                      style={{ backgroundColor: conditionColor }}
-                    />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="grid gap-3 rounded-xl border bg-background p-4 sm:grid-cols-2 lg:grid-cols-4">
-            {(Object.keys(CONDITIONS) as ConditionKey[]).map((key) => {
-              const count = conditionStats.find((item) => item.key === key)?.count ?? 0;
-              const percent = conditionStats.find((item) => item.key === key)?.percent ?? 0;
-
-              return (
-                <div key={key}>
-                  <div className="mb-1 flex items-center justify-between text-xs">
-                    <span className="font-medium">{CONDITIONS[key].label}</span>
-                    <span>{percent}%</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-muted">
-                    <div
-                      className="h-2 rounded-full transition-all"
-                      style={{
-                        backgroundColor: CONDITIONS[key].color,
-                        width: `${percent}%`,
-                      }}
-                    />
-                  </div>
-                  <p className="mt-1 text-[11px] text-muted-foreground">{count} teeth</p>
+          <Card className="rounded-2xl border border-emerald-200/60 bg-gradient-to-br from-emerald-50/80 via-background to-cyan-50/40 shadow-sm overflow-hidden">
+            <div className="absolute right-0 top-0 h-32 w-32 translate-x-16 -translate-y-16 rounded-full bg-emerald-500/10 blur-3xl" />
+            <CardHeader className="relative pb-4">
+              <div className="flex items-center gap-2">
+                <div className="rounded-xl border border-emerald-200/50 bg-emerald-100/60 p-2">
+                  <Stethoscope className="size-5 text-emerald-600" />
                 </div>
-              );
-            })}
-          </div>
+                <div>
+                  <CardTitle className="text-base text-foreground">Maxilla (Upper Arch)</CardTitle>
+                  <CardDescription>Upper teeth - click to mark conditions</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="relative">
+              <div className="grid grid-cols-4 gap-2 sm:grid-cols-8 xl:grid-cols-16">
+                {UPPER_ARCH.map((toothNumber) => {
+                  const condition = toothConditions[toothNumber];
+                  const isSelected = selectedToothNumber === toothNumber;
+                  const toothMeta = resolveToothDisplayMeta(toothNumber);
+                  const toothCode = resolveToothQuadrantCode(toothNumber);
+                  const conditionColor = condition ? CONDITIONS[condition].color : '#d1d5db';
+                  const selectionColor = condition ? conditionColor : (activeCondition ? CONDITIONS[activeCondition].color : '#94a3b8');
+                  const selectionTextColor = isLightColor(selectionColor) ? '#0f172a' : '#ffffff';
+
+                  return (
+                    <button
+                      key={toothNumber}
+                      type="button"
+                      onClick={(e) => {
+                        paintTooth(toothNumber);
+                        // Add ripple effect
+                        const ripple = document.createElement('span');
+                        ripple.className = 'absolute rounded-full bg-white/30 animate-ping';
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const size = Math.max(rect.width, rect.height);
+                        ripple.style.width = ripple.style.height = `${size}px`;
+                        ripple.style.left = `${rect.width / 2 - size / 2}px`;
+                        ripple.style.top = `${rect.height / 2 - size / 2}px`;
+                        e.currentTarget.appendChild(ripple);
+                        setTimeout(() => ripple.remove(), 500);
+                      }}
+                      className={cn(
+                        'relative flex h-28 min-w-0 flex-col items-center justify-between overflow-visible rounded-[20px] rounded-br-none border px-1.5 py-2 text-[10px] font-semibold transition-all duration-300 ease-out hover:scale-[1.05] hover:shadow-lg active:scale-[0.95] active:shadow-inner',
+                        'before:absolute before:inset-0 before:rounded-[20px] before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100',
+                        isSelected ? 'ring-2 ring-offset-1' : ''
+                      )}
+                      style={{
+                        background: isSelected
+                          ? `linear-gradient(180deg, ${hexToRgba(selectionColor, 0.32)} 0%, ${hexToRgba(selectionColor, 0.78)} 100%)`
+                          : condition
+                            ? `linear-gradient(180deg, ${hexToRgba(conditionColor, 0.16)} 0%, #f8fafc 100%)`
+                            : '#f8fafc',
+                        borderColor: isSelected ? selectionColor : condition ? hexToRgba(conditionColor, 0.65) : '#e5e7eb',
+                        boxShadow: isSelected
+                          ? `0 14px 26px ${hexToRgba(selectionColor, 0.28)}`
+                          : '0 8px 16px rgba(15,23,42,0.06)',
+                        color: isSelected ? selectionTextColor : '#1f2937',
+                      }}
+                      aria-label={`Tooth ${toothNumber} ${toothMeta.fullLabel}`}
+                      title={`${toothCode} - ${toothMeta.fullLabel}`}
+                    >
+                      <span className={cn('text-sm leading-none', isSelected ? 'text-white' : 'text-slate-500')}>
+                        {toothCode}
+                      </span>
+                      <ToothGlyph
+                        arch="maxilla"
+                        isActive={isSelected}
+                        visualType={toothMeta.visualType}
+                      />
+                      <span
+                        className="absolute -bottom-2 left-1/2 block size-5 -translate-x-1/2 rounded-full border-2 border-white transition-transform duration-300"
+                        style={{ backgroundColor: conditionColor }}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border border-blue-200/60 bg-gradient-to-br from-blue-50/80 via-background to-indigo-50/40 shadow-sm overflow-hidden">
+            <div className="absolute right-0 top-0 h-32 w-32 translate-x-16 -translate-y-16 rounded-full bg-blue-500/10 blur-3xl" />
+            <CardHeader className="relative pb-4">
+              <div className="flex items-center gap-2">
+                <div className="rounded-xl border border-blue-200/50 bg-blue-100/60 p-2">
+                  <Stethoscope className="size-5 text-blue-600" />
+                </div>
+                <div>
+                  <CardTitle className="text-base text-foreground">Mandible (Lower Arch)</CardTitle>
+                  <CardDescription>Lower teeth - click to mark conditions</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="relative">
+              <div className="grid grid-cols-4 gap-2 sm:grid-cols-8 xl:grid-cols-16">
+                {LOWER_ARCH.map((toothNumber) => {
+                  const condition = toothConditions[toothNumber];
+                  const isSelected = selectedToothNumber === toothNumber;
+                  const toothMeta = resolveToothDisplayMeta(toothNumber);
+                  const toothCode = resolveToothQuadrantCode(toothNumber);
+                  const conditionColor = condition ? CONDITIONS[condition].color : '#d1d5db';
+                  const selectionColor = condition ? conditionColor : (activeCondition ? CONDITIONS[activeCondition].color : '#94a3b8');
+                  const selectionTextColor = isLightColor(selectionColor) ? '#0f172a' : '#ffffff';
+
+                  return (
+                    <button
+                      key={toothNumber}
+                      type="button"
+                      onClick={(e) => {
+                        paintTooth(toothNumber);
+                        // Add ripple effect
+                        const ripple = document.createElement('span');
+                        ripple.className = 'absolute rounded-full bg-white/30 animate-ping';
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const size = Math.max(rect.width, rect.height);
+                        ripple.style.width = ripple.style.height = `${size}px`;
+                        ripple.style.left = `${rect.width / 2 - size / 2}px`;
+                        ripple.style.top = `${rect.height / 2 - size / 2}px`;
+                        e.currentTarget.appendChild(ripple);
+                        setTimeout(() => ripple.remove(), 500);
+                      }}
+                      className={cn(
+                        'relative flex h-28 min-w-0 flex-col items-center justify-between overflow-visible rounded-[20px] rounded-br-none border px-1.5 py-2 text-[10px] font-semibold transition-all duration-300 ease-out hover:scale-[1.05] hover:shadow-lg active:scale-[0.95] active:shadow-inner',
+                        'before:absolute before:inset-0 before:rounded-[20px] before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100',
+                        isSelected ? 'ring-2 ring-offset-1' : ''
+                      )}
+                      style={{
+                        background: isSelected
+                          ? `linear-gradient(180deg, ${hexToRgba(selectionColor, 0.32)} 0%, ${hexToRgba(selectionColor, 0.78)} 100%)`
+                          : condition
+                            ? `linear-gradient(180deg, ${hexToRgba(conditionColor, 0.16)} 0%, #f8fafc 100%)`
+                            : '#f8fafc',
+                        borderColor: isSelected ? selectionColor : condition ? hexToRgba(conditionColor, 0.65) : '#e5e7eb',
+                        boxShadow: isSelected
+                          ? `0 14px 26px ${hexToRgba(selectionColor, 0.28)}`
+                          : '0 8px 16px rgba(15,23,42,0.06)',
+                        color: isSelected ? selectionTextColor : '#1f2937',
+                      }}
+                      aria-label={`Tooth ${toothNumber} ${toothMeta.fullLabel}`}
+                      title={`${toothCode} - ${toothMeta.fullLabel}`}
+                    >
+                      <span className={cn('text-sm leading-none', isSelected ? 'text-white' : 'text-slate-500')}>
+                        {toothCode}
+                      </span>
+                      <ToothGlyph
+                        arch="mandible"
+                        isActive={isSelected}
+                        visualType={toothMeta.visualType}
+                      />
+                      <span
+                        className="absolute -bottom-2 left-1/2 block size-5 -translate-x-1/2 rounded-full border-2 border-white transition-transform duration-300"
+                        style={{ backgroundColor: conditionColor }}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border border-border/50 bg-gradient-to-br from-background via-background to-muted/20 shadow-sm">
+            <CardHeader className="pb-4">
+              <div className="flex items-center gap-2">
+                <div className="rounded-xl border border-violet-200/50 bg-violet-100/60 p-2">
+                  <Paintbrush className="size-5 text-violet-600" />
+                </div>
+                <div>
+                  <CardTitle className="text-base text-foreground">Condition Summary</CardTitle>
+                  <CardDescription>Dental conditions distribution across all teeth</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {(Object.keys(CONDITIONS) as ConditionKey[]).map((key) => {
+                  const count = conditionStats.find((item) => item.key === key)?.count ?? 0;
+                  const percent = conditionStats.find((item) => item.key === key)?.percent ?? 0;
+                  const color = CONDITIONS[key].color;
+
+                  return (
+                    <div key={key} className="rounded-xl border border-border/50 bg-background/60 p-3">
+                      <div className="mb-2 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="size-3 rounded-full" style={{ backgroundColor: color }} />
+                          <span className="text-xs font-medium text-foreground">{CONDITIONS[key].label}</span>
+                        </div>
+                        <span className="text-xs font-bold text-foreground">{percent}%</span>
+                      </div>
+                      <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            backgroundColor: color,
+                            width: `${percent}%`,
+                          }}
+                        />
+                      </div>
+                      <p className="mt-2 text-[11px] text-muted-foreground">{count} teeth affected</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
 
           <div className="flex items-center justify-between rounded-lg border bg-background p-4">
             <div className="space-y-1">

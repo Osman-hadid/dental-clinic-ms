@@ -4,6 +4,7 @@ import { JSX } from 'react';
 import { useTranslations } from 'next-intl';
 import { Header } from '@/components/header';
 import { EntityListClient as EntityList } from '@/components/shared/entity/entity-list';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { invoiceConfig } from '@/modules/dental-management/presentation/config/invoice-config';
 import {
   useCreateInvoice,
@@ -12,6 +13,7 @@ import {
   useUpdateInvoice,
 } from '@/modules/dental-management/presentation/hooks';
 import { InvoiceVisitSyncPanel } from '@/modules/dental-management/presentation/components/invoices/invoice-visit-sync-panel';
+import { Receipt, FileText, DollarSign } from 'lucide-react';
 
 // eslint-disable-next-line react/function-component-definition
 export default function InvoicesPage(): JSX.Element {
@@ -25,17 +27,63 @@ export default function InvoicesPage(): JSX.Element {
           { id: 'invoices', isCurrent: true, label: t(invoiceConfig.title) },
         ]}
       />
-      <div className="flex flex-1 flex-col">
-        <div className="@container/main flex flex-1 flex-col gap-2">
-          <div className="flex flex-col gap-6 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
-            <InvoiceVisitSyncPanel />
-            <EntityList
-              config={invoiceConfig}
-              fetchHook={useInvoiceList}
-              useCreate={useCreateInvoice}
-              useUpdate={useUpdateInvoice}
-              useDelete={useDeleteInvoice}
-            />
+      <div className="flex flex-1 flex-col px-4 pb-6 lg:px-6 overflow-x-hidden">
+        <div className="rounded-3xl border border-primary/10 bg-gradient-to-br from-primary/5 via-background to-muted/20 p-6 text-foreground shadow-lg overflow-hidden relative">
+          <div className="absolute right-0 top-0 h-48 w-48 translate-x-24 -translate-y-24 rounded-full bg-primary/10 blur-3xl" />
+          <div className="absolute left-0 bottom-0 h-48 w-48 -translate-x-24 translate-y-24 rounded-full bg-emerald-500/10 blur-3xl" />
+          
+          <div className="relative mb-6">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl border border-emerald-200/50 bg-emerald-100/60 p-2.5">
+                <Receipt className="size-5 text-emerald-600" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-semibold text-foreground">{t(invoiceConfig.title)}</h1>
+                <p className="text-sm text-muted-foreground">Manage invoices and payments</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="relative space-y-6">
+            <Card className="min-w-0 rounded-2xl border border-border/50 bg-gradient-to-br from-white/80 to-muted/50 shadow-sm">
+              <CardHeader className="pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-lg border border-violet-200/50 bg-violet-100/60 p-2">
+                    <DollarSign className="size-4 text-violet-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">Quick Invoice</CardTitle>
+                    <CardDescription className="text-xs">Create invoice from unpaid visits</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-2">
+                <InvoiceVisitSyncPanel />
+              </CardContent>
+            </Card>
+
+            <Card className="min-w-0 rounded-2xl border border-border/50 bg-gradient-to-br from-white/80 to-muted/50 shadow-sm">
+              <CardHeader className="pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-lg border border-blue-200/50 bg-blue-100/60 p-2">
+                    <FileText className="size-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">All Invoices</CardTitle>
+                    <CardDescription className="text-xs">View and manage invoice records</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-2">
+                <EntityList
+                  config={invoiceConfig}
+                  fetchHook={useInvoiceList}
+                  useCreate={useCreateInvoice}
+                  useUpdate={useUpdateInvoice}
+                  useDelete={useDeleteInvoice}
+                />
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>

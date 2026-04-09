@@ -956,45 +956,65 @@ export const DentalChartDashboard = ({
 
           <div className="grid gap-4 xl:grid-cols-[1.8fr_1fr]">
             <div className="space-y-4">
-              <section className="grid gap-4 rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/20 via-background to-background p-5 lg:grid-cols-[1.25fr_0.95fr]">
-                <div>
-                  <p className="text-sm text-muted-foreground">Good morning, Doctor</p>
-                  <h3 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
-                    Today&apos;s Patient Visits
-                  </h3>
-                  <div className="mt-3 flex flex-wrap items-end gap-2">
-                    <span className="text-5xl font-bold leading-none">{todayVisits}</span>
-                    <span className="pb-1 text-sm text-muted-foreground">patients</span>
-                  </div>
-
-                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-xl border border-blue-300 bg-blue-50/80 p-3">
-                      <p className="text-xs text-blue-700">New Patients (30d)</p>
-                      <p className="mt-1 text-2xl font-semibold text-blue-900">{newPatients}</p>
-                    </div>
-                    <div className="rounded-xl border border-violet-300 bg-violet-50/80 p-3">
-                      <p className="text-xs text-violet-700">Returning Patients</p>
-                      <p className="mt-1 text-2xl font-semibold text-violet-900">
-                        {returningPatients}
-                      </p>
-                    </div>
-                    <div className="rounded-xl border border-emerald-300 bg-emerald-50/80 p-3">
-                      <p className="text-xs text-emerald-700">Appointments Today</p>
-                      <p className="mt-1 text-2xl font-semibold text-emerald-900">
-                        {todayAppointments}
-                      </p>
+              <section className="grid gap-4 rounded-3xl border border-primary/15 bg-gradient-to-br from-primary/10 via-background to-background p-5 lg:grid-cols-[1.25fr_0.95fr]">
+                <div className="space-y-5">
+                  <div>
+                    <p className="text-xs font-medium text-primary/70 uppercase tracking-wider">Dashboard Overview</p>
+                    <h3 className="mt-2 text-3xl font-bold tracking-tight text-foreground">
+                      Today&apos;s Visits
+                    </h3>
+                    <div className="mt-3 flex items-baseline gap-2">
+                      <span className="text-6xl font-bold tracking-tight text-primary">{todayVisits}</span>
+                      <span className="text-sm font-medium text-muted-foreground">patients scheduled</span>
                     </div>
                   </div>
 
-                  <div className="mt-4 flex flex-wrap gap-2">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="group relative overflow-hidden rounded-xl border border-blue-200/60 bg-gradient-to-br from-blue-50/80 to-blue-100/40 p-4 transition-all hover:shadow-md">
+                      <div className="absolute right-0 top-0 size-16 translate-x-8 -translate-y-8 rounded-full bg-blue-200/50 blur-2xl transition-all group-hover:translate-x-4 group-hover:translate-y-4" />
+                      <div className="relative">
+                        <div className="flex items-center gap-2">
+                          <UsersRound className="size-4 text-blue-600" />
+                          <p className="text-xs font-semibold text-blue-700">New Patients</p>
+                        </div>
+                        <p className="mt-2 text-3xl font-bold text-blue-900">{newPatients}</p>
+                        <p className="mt-1 text-[10px] text-blue-600/80">Last 30 days</p>
+                      </div>
+                    </div>
+                    <div className="group relative overflow-hidden rounded-xl border border-violet-200/60 bg-gradient-to-br from-violet-50/80 to-violet-100/40 p-4 transition-all hover:shadow-md">
+                      <div className="absolute right-0 top-0 size-16 translate-x-8 -translate-y-8 rounded-full bg-violet-200/50 blur-2xl transition-all group-hover:translate-x-4 group-hover:translate-y-4" />
+                      <div className="relative">
+                        <div className="flex items-center gap-2">
+                          <Activity className="size-4 text-violet-600" />
+                          <p className="text-xs font-semibold text-violet-700">Returning</p>
+                        </div>
+                        <p className="mt-2 text-3xl font-bold text-violet-900">{returningPatients}</p>
+                        <p className="mt-1 text-[10px] text-violet-600/80">Last 30 days</p>
+                      </div>
+                    </div>
+                    <div className="group relative overflow-hidden rounded-xl border border-emerald-200/60 bg-gradient-to-br from-emerald-50/80 to-emerald-100/40 p-4 transition-all hover:shadow-md">
+                      <div className="absolute right-0 top-0 size-16 translate-x-8 -translate-y-8 rounded-full bg-emerald-200/50 blur-2xl transition-all group-hover:translate-x-4 group-hover:translate-y-4" />
+                      <div className="relative">
+                        <div className="flex items-center gap-2">
+                          <CalendarDays className="size-4 text-emerald-600" />
+                          <p className="text-xs font-semibold text-emerald-700">Appointments</p>
+                        </div>
+                        <p className="mt-2 text-3xl font-bold text-emerald-900">{todayAppointments}</p>
+                        <p className="mt-1 text-[10px] text-emerald-600/80">Today</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       type="button"
                       size="sm"
                       onClick={() => {
                         router.push(`/${locale}/dental-management/appointments`);
                       }}
-                      className="bg-primary text-primary-foreground hover:bg-accent hover:text-accent-foreground"
+                      className="bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
                     >
+                      <CalendarDays className="size-4" />
                       New Appointment
                     </Button>
                     <Button
@@ -1004,7 +1024,9 @@ export const DentalChartDashboard = ({
                       onClick={() => {
                         router.push(`/${locale}/dental-management/visits`);
                       }}
+                      className="shadow-sm"
                     >
+                      <Stethoscope className="size-4" />
                       Register Visit
                     </Button>
                     <Button
@@ -1014,212 +1036,91 @@ export const DentalChartDashboard = ({
                       onClick={() => {
                         router.push(`/${locale}/dental-management/patients`);
                       }}
+                      className="shadow-sm"
                     >
-                      Open Patients
+                      <UsersRound className="size-4" />
+                      Patients
                     </Button>
                   </div>
                 </div>
 
-                <ToothSurfaceInspector />
-              </section>
-
-              <section className="overflow-hidden rounded-[1.9rem] border border-sky-200/80 bg-[radial-gradient(circle_at_top_left,_rgba(186,230,253,0.95),_rgba(239,246,255,0.9)_36%,_rgba(255,255,255,0.98)_72%)] p-5 shadow-[0_22px_45px_-28px_rgba(14,116,144,0.55)]">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p className="text-[11px] uppercase tracking-[0.26em] text-sky-700/80">
-                      Waiting Room
-                    </p>
-                    <p className="mt-1 text-xl font-semibold text-slate-900">
-                      Live queue for today
-                    </p>
-                    <p className="text-sm text-slate-600">
-                      {waitingRoomSummary.activeTotal} active patient(s), {waitingRoomSummary.late} needing attention
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="rounded-full border-sky-300 bg-white/80 text-sky-900 hover:bg-sky-100"
-                    onClick={() => {
-                      router.push(`/${locale}/dental-management/queue`);
-                    }}
-                  >
-                    Open Queue
-                    <ChevronRight className="size-4" />
-                  </Button>
-                </div>
-
-                <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1.2fr)]">
-                  <div className="rounded-[1.45rem] border border-white/80 bg-white/75 p-4 backdrop-blur-sm">
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                      {[
-                        {
-                          accent: 'from-amber-200 to-amber-50 text-amber-900',
-                          label: 'Arrivals',
-                          value: waitingRoomSummary.arrivals,
-                        },
-                        {
-                          accent: 'from-sky-200 to-sky-50 text-sky-900',
-                          label: 'Waiting',
-                          value: waitingRoomSummary.waiting,
-                        },
-                        {
-                          accent: 'from-violet-200 to-violet-50 text-violet-900',
-                          label: 'In Chair',
-                          value: waitingRoomSummary.inChair,
-                        },
-                        {
-                          accent: 'from-emerald-200 to-emerald-50 text-emerald-900',
-                          label: 'Closed',
-                          value: waitingRoomSummary.closed,
-                        },
-                      ].map((metric, index) => (
-                        <div key={metric.label} className="relative">
-                          {index < 3 ? (
-                            <div className="pointer-events-none absolute left-[calc(100%-0.35rem)] top-5 z-0 hidden h-[2px] w-[calc(100%+0.7rem)] bg-gradient-to-r from-sky-300/70 to-transparent sm:block" />
-                          ) : null}
-                          <div className="relative z-10 flex flex-col items-center text-center">
-                            <div
-                              className={cn(
-                                'grid size-11 place-items-center rounded-full border border-white/80 bg-gradient-to-br text-sm font-semibold shadow-sm',
-                                metric.accent
-                              )}
-                            >
-                              {metric.value}
-                            </div>
-                            <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600">
-                              {metric.label}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
+                <div className="rounded-2xl border border-sky-200/60 bg-gradient-to-br from-sky-50/50 to-white p-4 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-semibold text-sky-700">Waiting Room</p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        {waitingRoomSummary.activeTotal} active · {waitingRoomSummary.late} need attention
+                      </p>
                     </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 rounded-lg border-sky-200 bg-white text-sky-700 hover:bg-sky-50"
+                      onClick={() => {
+                        router.push(`/${locale}/dental-management/queue`);
+                      }}
+                    >
+                      View Queue
+                      <ChevronRight className="size-4" />
+                    </Button>
+                  </div>
 
-                    <div className="mt-4 rounded-2xl border border-slate-200/80 bg-slate-950/[0.03] p-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <p className="text-xs font-semibold text-slate-900">Queue pulse</p>
-                          <p className="text-[11px] text-slate-600">
-                            Front desk and chair occupancy at a glance
-                          </p>
-                        </div>
-                        <span className="rounded-full border border-sky-200 bg-sky-100 px-2 py-1 text-[11px] font-semibold text-sky-800">
-                          {overview?.schedule.todayKey ?? 'Today'}
-                        </span>
-                      </div>
-                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                        <div className="rounded-xl border border-amber-200 bg-amber-50/90 p-2.5">
-                          <p className="text-[11px] uppercase tracking-[0.16em] text-amber-700">
-                            Needs attention
-                          </p>
-                          <p className="mt-1 text-xl font-semibold text-amber-950">
-                            {waitingRoomSummary.late}
-                          </p>
-                          <p className="text-[11px] text-amber-800">
-                            Patients past their booked time
-                          </p>
-                        </div>
-                        <div className="rounded-xl border border-slate-200 bg-white/90 p-2.5">
-                          <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
-                            Flow right now
-                          </p>
-                          <p className="mt-1 text-xl font-semibold text-slate-950">
-                            {waitingRoomSummary.activeTotal}
-                          </p>
-                          <p className="text-[11px] text-slate-600">
-                            Still moving through the queue
-                          </p>
-                        </div>
-                      </div>
+                  <div className="mt-4 grid grid-cols-4 gap-2">
+                    <div className="rounded-lg border border-amber-200/50 bg-amber-50/50 p-2.5 text-center">
+                      <p className="text-lg font-semibold text-amber-900">{waitingRoomSummary.arrivals}</p>
+                      <p className="text-[10px] uppercase tracking-wide text-amber-700">Arrivals</p>
+                    </div>
+                    <div className="rounded-lg border border-sky-200/50 bg-sky-50/50 p-2.5 text-center">
+                      <p className="text-lg font-semibold text-sky-900">{waitingRoomSummary.waiting}</p>
+                      <p className="text-[10px] uppercase tracking-wide text-sky-700">Waiting</p>
+                    </div>
+                    <div className="rounded-lg border border-violet-200/50 bg-violet-50/50 p-2.5 text-center">
+                      <p className="text-lg font-semibold text-violet-900">{waitingRoomSummary.inChair}</p>
+                      <p className="text-[10px] uppercase tracking-wide text-violet-700">In Chair</p>
+                    </div>
+                    <div className="rounded-lg border border-emerald-200/50 bg-emerald-50/50 p-2.5 text-center">
+                      <p className="text-lg font-semibold text-emerald-900">{waitingRoomSummary.closed}</p>
+                      <p className="text-[10px] uppercase tracking-wide text-emerald-700">Closed</p>
                     </div>
                   </div>
 
-                  <div className="rounded-[1.45rem] border border-sky-100/80 bg-white/78 p-4 backdrop-blur-sm">
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">Next up</p>
-                        <p className="text-[11px] text-slate-600">
-                          Patients closest to the current queue flow
-                        </p>
-                      </div>
-                      <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-600">
-                        {waitingRoomSpotlight.length} shown
-                      </span>
+                  <div className="mt-3 flex items-center justify-between rounded-lg border border-slate-200/50 bg-slate-50/50 px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <div className="size-2 rounded-full bg-amber-500" />
+                      <span className="text-xs text-slate-700">Needs attention: <span className="font-semibold text-amber-900">{waitingRoomSummary.late}</span></span>
                     </div>
-
-                    <div className="mt-3 space-y-2.5">
-                      {waitingRoomSpotlight.length === 0 ? (
-                        <div className="rounded-2xl border border-dashed border-slate-200 bg-white/80 px-4 py-5 text-sm text-slate-500">
-                          No active patients are in the waiting room flow yet.
-                        </div>
-                      ) : (
-                        waitingRoomSpotlight.map((event) => {
-                          const theme = statusTheme(event.status);
-                          return (
-                            <div
-                              key={`waiting-room-${event.key}`}
-                              className="rounded-2xl border border-slate-200/80 bg-white/92 p-3 shadow-[0_14px_28px_-24px_rgba(15,23,42,0.55)]"
-                            >
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="min-w-0">
-                                  <p className="truncate text-sm font-semibold text-slate-950">
-                                    {event.patientName || event.title}
-                                  </p>
-                                  <p className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-500">
-                                    <Clock3 className="size-3.5" />
-                                    {event.timeLabel || 'Time pending'}
-                                    <span className="text-slate-300">•</span>
-                                    {event.dentistName || 'Dentist pending'}
-                                  </p>
-                                </div>
-                                <span className={cn('rounded-full border px-2.5 py-1 text-[11px] font-semibold', theme.badge)}>
-                                  {formatStatusLabel(event.status)}
-                                </span>
-                              </div>
-                              <div className="mt-3 flex items-center justify-between gap-3">
-                                <p className="min-w-0 truncate text-[11px] text-slate-600">
-                                  {event.note || event.tag || event.title}
-                                </p>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="ghost"
-                                  className="shrink-0 rounded-full px-3 text-sky-800 hover:bg-sky-50 hover:text-sky-900"
-                                  onClick={() => {
-                                    router.push(`/${locale}/dental-management/queue`);
-                                  }}
-                                >
-                                  Manage
-                                  <ChevronRight className="size-4" />
-                                </Button>
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
+                    <div className="flex items-center gap-2">
+                      <div className="size-2 rounded-full bg-sky-500" />
+                      <span className="text-xs text-slate-700">Active flow: <span className="font-semibold text-sky-900">{waitingRoomSummary.activeTotal}</span></span>
                     </div>
                   </div>
                 </div>
               </section>
 
               <section className="grid gap-3 lg:grid-cols-[1fr_1fr]">
-                <div className="rounded-2xl border bg-background p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <h4 className="font-semibold">Patient List</h4>
-                    <span className="text-xs text-muted-foreground">
+                <div className="rounded-2xl border border-border/50 bg-gradient-to-br from-background to-muted/20 p-4 shadow-sm">
+                  <div className="mb-4 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <UsersRound className="size-4 text-primary" />
+                      <h4 className="font-semibold text-foreground">Patient List</h4>
+                    </div>
+                    <span className="rounded-full border border-border/50 bg-muted/50 px-2.5 py-1 text-[10px] font-medium text-muted-foreground">
                       {formatDayHeading(selectedDate)}
                     </span>
                   </div>
                   <div className="space-y-2">
                     {isLoading ? (
-                      <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-                        Loading schedule...
-                      </p>
+                      <div className="flex items-center justify-center rounded-xl border border-dashed border-border/50 p-6 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <div className="size-4 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+                          Loading schedule...
+                        </div>
+                      </div>
                     ) : filteredSelectedDateEvents.length === 0 ? (
-                      <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                      <div className="rounded-xl border border-dashed border-border/50 p-6 text-center text-sm text-muted-foreground">
                         No visits or appointments for this date.
-                      </p>
+                      </div>
                     ) : (
                       filteredSelectedDateEvents.map((event) => {
                         const isActive = selectedEvent?.key === event.key;
@@ -1232,29 +1133,29 @@ export const DentalChartDashboard = ({
                               setManualSelectedEventKey(event.key);
                             }}
                             className={cn(
-                              'flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left transition',
+                              'group relative flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-left transition-all',
                               theme.row,
                               isActive
-                                ? 'ring-2 ring-primary/40'
-                                : 'hover:border-primary/40 hover:bg-accent/20'
+                                ? 'ring-2 ring-primary/50 shadow-sm'
+                                : 'hover:border-primary/30 hover:bg-accent/30 hover:shadow-sm'
                             )}
                           >
-                            <div>
-                              <p className="text-sm font-semibold">{event.patientName}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {event.title} - {event.tag}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-foreground truncate">{event.patientName}</p>
+                              <p className="mt-0.5 text-xs text-muted-foreground truncate">
+                                {event.title} · {event.tag}
                               </p>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 shrink-0">
                               <span
                                 className={cn(
-                                  'rounded-md border px-2 py-0.5 text-[10px] font-semibold capitalize',
+                                  'rounded-lg border px-2 py-1 text-[10px] font-semibold capitalize',
                                   theme.chip
                                 )}
                               >
                                 {event.status}
                               </span>
-                              <span className="rounded-lg border bg-background px-2 py-1 text-[11px] font-medium text-foreground">
+                              <span className="rounded-lg border border-border/50 bg-background/80 px-2 py-1 text-[11px] font-medium text-foreground shadow-xs">
                                 {event.timeLabel}
                               </span>
                             </div>
@@ -1265,57 +1166,63 @@ export const DentalChartDashboard = ({
                   </div>
                 </div>
 
-                <div className="rounded-2xl border bg-background p-4">
-                  <div className="mb-3 flex items-center gap-2">
+                <div className="rounded-2xl border border-border/50 bg-gradient-to-br from-background to-muted/20 p-4 shadow-sm">
+                  <div className="mb-4 flex items-center gap-2">
                     <Stethoscope className="size-4 text-primary" />
-                    <h4 className="font-semibold">Consultation</h4>
+                    <h4 className="font-semibold text-foreground">Consultation</h4>
                   </div>
 
                   {!selectedEvent ? (
-                    <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-                      Select an appointment to see details.
-                    </p>
+                    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/50 p-8 text-center">
+                      <Stethoscope className="size-8 text-muted-foreground/30 mb-3" />
+                      <p className="text-sm text-muted-foreground">Select an appointment to see details.</p>
+                    </div>
                   ) : (
                     <div className="space-y-3 text-sm">
                       <button
                         type="button"
                         onClick={openTreatmentChartFromSelection}
                         className={cn(
-                          'w-full rounded-xl border p-3 text-left transition hover:border-primary/45 hover:bg-accent/15',
+                          'group w-full overflow-hidden rounded-xl border p-4 text-left transition-all hover:shadow-md',
                           selectedEventStatus.row
                         )}
                       >
-                        <p className="text-base font-semibold">{selectedEvent.patientName}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {selectedEvent.title} - {selectedEvent.tag}
-                        </p>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1">
+                            <p className="text-base font-semibold text-foreground">{selectedEvent.patientName}</p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {selectedEvent.title} · {selectedEvent.tag}
+                            </p>
+                          </div>
+                          <ArrowUpRight className="size-4 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                        </div>
                       </button>
                       <div className="grid gap-2">
                         <button
                           type="button"
                           onClick={openTreatmentChartFromSelection}
-                          className="flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition hover:border-primary/45 hover:bg-accent/15"
+                          className="group flex w-full items-center justify-between gap-3 rounded-lg border border-border/50 px-3 py-2.5 text-left transition-all hover:border-primary/30 hover:bg-accent/30"
                         >
                           <span className="text-muted-foreground">Dentist</span>
-                          <span className="font-medium">{selectedEvent.dentistName}</span>
+                          <span className="font-medium text-foreground">{selectedEvent.dentistName}</span>
                         </button>
                         <button
                           type="button"
                           onClick={openTreatmentChartFromSelection}
-                          className="flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition hover:border-primary/45 hover:bg-accent/15"
+                          className="group flex w-full items-center justify-between gap-3 rounded-lg border border-border/50 px-3 py-2.5 text-left transition-all hover:border-primary/30 hover:bg-accent/30"
                         >
                           <span className="text-muted-foreground">Time</span>
-                          <span className="font-medium">{selectedEvent.timeLabel}</span>
+                          <span className="font-medium text-foreground">{selectedEvent.timeLabel}</span>
                         </button>
                         <button
                           type="button"
                           onClick={openTreatmentChartFromSelection}
-                          className="flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition hover:border-primary/45 hover:bg-accent/15"
+                          className="group flex w-full items-center justify-between gap-3 rounded-lg border border-border/50 px-3 py-2.5 text-left transition-all hover:border-primary/30 hover:bg-accent/30"
                         >
                           <span className="text-muted-foreground">Status</span>
                           <span
                             className={cn(
-                              'rounded-md border px-2 py-0.5 text-xs font-medium capitalize',
+                              'rounded-lg border px-2.5 py-1 text-xs font-medium capitalize',
                               selectedEventStatus.badge
                             )}
                           >
@@ -1325,17 +1232,17 @@ export const DentalChartDashboard = ({
                         <button
                           type="button"
                           onClick={openTreatmentChartFromSelection}
-                          className="w-full rounded-lg border px-3 py-2 text-left transition hover:border-primary/45 hover:bg-accent/15"
+                          className="group w-full rounded-lg border border-border/50 px-3 py-2.5 text-left transition-all hover:border-primary/30 hover:bg-accent/30"
                         >
                           <p className="mb-1 text-muted-foreground">Notes</p>
-                          <p className="text-foreground">
+                          <p className="text-foreground line-clamp-2">
                             {selectedEvent.note || 'No notes available for this record.'}
                           </p>
                         </button>
                         <Button
                           type="button"
                           onClick={openTreatmentChartFromSelection}
-                          className="mt-1 bg-primary text-primary-foreground hover:bg-accent hover:text-accent-foreground"
+                          className="mt-2 w-full bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
                         >
                           {isCompletedStatus(selectedEvent.status)
                             ? 'Open Patient Profile'
@@ -1349,64 +1256,74 @@ export const DentalChartDashboard = ({
             </div>
 
             <aside className="space-y-4">
-              <section className="relative overflow-hidden rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-background to-cyan-50 p-4">
-                <div className="pointer-events-none absolute -right-8 -top-8 size-24 rounded-full bg-emerald-200/60 blur-2xl" />
-                <div className="pointer-events-none absolute -bottom-10 -left-8 size-24 rounded-full bg-cyan-200/50 blur-2xl" />
-
-                <Card className="relative z-10 border-border/70 bg-background/85">
-                  <CardHeader className="items-center pb-0">
-                    <CardTitle>Radial Chart - Grid</CardTitle>
-                    <CardDescription>Safe vs debts vs unpaids</CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex-1 pb-0">
-                    {hasSafeRadialChartData ? (
-                      <ChartContainer
-                        config={safeRadialChartConfig}
-                        className="mx-auto aspect-square max-h-[250px]"
+              <section className="rounded-2xl border border-border/50 bg-gradient-to-br from-emerald-50/50 via-background to-cyan-50/30 p-5 shadow-sm">
+                <div className="mb-4 flex items-center gap-2">
+                  <Vault className="size-5 text-emerald-600" />
+                  <h4 className="text-lg font-semibold text-foreground">Financial Overview</h4>
+                </div>
+                <CardContent className="flex-1 pb-0">
+                  {hasSafeRadialChartData ? (
+                    <ChartContainer
+                      config={safeRadialChartConfig}
+                      className="mx-auto aspect-square max-h-[280px]"
+                    >
+                      <RadialBarChart
+                        data={safeRadialChartData}
+                        innerRadius={40}
+                        outerRadius={100}
                       >
-                        <RadialBarChart
-                          data={safeRadialChartData}
-                          innerRadius={30}
-                          outerRadius={100}
-                        >
-                          <ChartTooltip
-                            cursor={false}
-                            content={<ChartTooltipContent hideLabel nameKey="category" />}
-                          />
-                          <PolarGrid gridType="circle" />
-                          <RadialBar dataKey="value" />
-                        </RadialBarChart>
-                      </ChartContainer>
-                    ) : (
-                      <div className="grid h-52 place-items-center rounded-xl border border-dashed text-sm text-muted-foreground">
-                        No safe, debt, or unpaid data yet.
-                      </div>
-                    )}
-                  </CardContent>
-                  <CardFooter className="flex-col gap-2 text-sm">
-                    <div className="flex items-center gap-2 leading-none font-medium">
-                      Safe share {Math.round(ringBreakdown.safePercent)}%{' '}
-                      <TrendingUp className="h-4 w-4" />
+                        <ChartTooltip
+                          cursor={false}
+                          content={<ChartTooltipContent hideLabel nameKey="category" />}
+                        />
+                        <PolarGrid gridType="circle" />
+                        <RadialBar dataKey="value" />
+                      </RadialBarChart>
+                    </ChartContainer>
+                  ) : (
+                    <div className="flex h-[280px] flex-col items-center justify-center rounded-xl border border-dashed border-border/50 text-center">
+                      <Vault className="size-10 text-muted-foreground/30 mb-3" />
+                      <p className="text-sm text-muted-foreground">No financial data yet.</p>
                     </div>
-                    <div className="leading-none text-muted-foreground">
-                      Safe {formatCurrency(safeBalance)} | Debts {formatCurrency(debtOutstanding)} | Unpaids {formatCurrency(supplierUnpaids)}
+                  )}
+                </CardContent>
+                <div className="mt-5 space-y-3 text-sm">
+                  <div className="flex items-center justify-between rounded-lg bg-emerald-50/50 px-4 py-3">
+                    <span className="text-muted-foreground">Safe share</span>
+                    <span className="text-lg font-semibold text-emerald-900">{Math.round(ringBreakdown.safePercent)}%</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div className="rounded-lg bg-emerald-50/30 p-3">
+                      <p className="text-xs text-muted-foreground">Safe</p>
+                      <p className="text-base font-semibold text-emerald-900">{formatCurrency(safeBalance)}</p>
                     </div>
-                  </CardFooter>
-                </Card>
+                    <div className="rounded-lg bg-amber-50/30 p-3">
+                      <p className="text-xs text-muted-foreground">Debts</p>
+                      <p className="text-base font-semibold text-amber-900">{formatCurrency(debtOutstanding)}</p>
+                    </div>
+                    <div className="rounded-lg bg-rose-50/30 p-3">
+                      <p className="text-xs text-muted-foreground">Unpaids</p>
+                      <p className="text-base font-semibold text-rose-900">{formatCurrency(supplierUnpaids)}</p>
+                    </div>
+                  </div>
+                </div>
               </section>
 
-              <section className="rounded-2xl border bg-background p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold">Your Schedule</p>
-                    <p className="text-xs text-muted-foreground">{formatMonth(currentMonth)}</p>
+              <section className="rounded-2xl border border-border/50 bg-gradient-to-br from-background to-muted/20 p-4 shadow-sm">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CalendarDays className="size-4 text-primary" />
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Schedule</p>
+                      <p className="text-xs text-muted-foreground">{formatMonth(currentMonth)}</p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="size-8"
+                      className="size-8 rounded-lg hover:bg-accent"
                       onClick={goToPreviousMonth}
                     >
                       <ChevronLeft className="size-4" />
@@ -1415,7 +1332,7 @@ export const DentalChartDashboard = ({
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="size-8"
+                      className="size-8 rounded-lg hover:bg-accent"
                       onClick={goToNextMonth}
                     >
                       <ChevronRight className="size-4" />
@@ -1423,7 +1340,7 @@ export const DentalChartDashboard = ({
                   </div>
                 </div>
 
-                <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[11px] font-medium text-muted-foreground">
+                <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[10px] font-medium text-muted-foreground">
                   {CALENDAR_WEEKDAYS.map((weekday) => (
                     <div key={weekday}>{weekday}</div>
                   ))}
@@ -1431,7 +1348,7 @@ export const DentalChartDashboard = ({
                 <div className="grid grid-cols-7 gap-1">
                   {monthGrid.map((cell) => {
                     if (!cell.date) {
-                      return <div key={cell.key} className="h-9 rounded-md bg-transparent" />;
+                      return <div key={cell.key} className="h-9 rounded-lg bg-transparent" />;
                     }
 
                     const cellKey = toDateKey(cell.date);
@@ -1449,13 +1366,13 @@ export const DentalChartDashboard = ({
                           setSelectedDate(cell.date as Date);
                         }}
                         className={cn(
-                          'relative h-9 rounded-md border text-sm transition',
+                          'relative h-9 rounded-lg border text-sm font-medium transition-all',
                           isSelected
                             ? 'border-primary bg-primary text-primary-foreground shadow-sm'
                             : eventCount > 0
-                              ? `${cellTheme.cellClass} hover:brightness-95`
-                              : 'border-transparent hover:border-primary/40 hover:bg-accent/25',
-                          isToday && !isSelected ? 'ring-1 ring-primary/45' : ''
+                              ? `${cellTheme.cellClass} hover:brightness-95 hover:shadow-sm`
+                              : 'border-transparent hover:border-primary/30 hover:bg-accent/30',
+                          isToday && !isSelected ? 'ring-2 ring-primary/30' : ''
                         )}
                         style={!isSelected && eventCount > 0 ? cellTheme.cellStyle : undefined}
                       >
@@ -1463,7 +1380,7 @@ export const DentalChartDashboard = ({
                         {eventCount > 0 ? (
                           <span
                             className={cn(
-                              'absolute right-1 top-1 inline-flex min-w-4 justify-center rounded-full px-1 text-[10px] leading-4',
+                              'absolute right-0.5 top-0.5 inline-flex min-w-4 justify-center rounded-full px-1 text-[9px] leading-3 font-bold',
                               isSelected
                                 ? 'bg-primary-foreground/90 text-primary'
                                 : cellTheme.badgeClass
@@ -1479,42 +1396,51 @@ export const DentalChartDashboard = ({
                 </div>
               </section>
 
-              <section className="rounded-2xl border bg-background p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="font-semibold">Upcoming</p>
-                  <span className="text-xs text-muted-foreground">
-                    {upcomingEvents.length} records
+              <section className="rounded-2xl border border-border/50 bg-gradient-to-br from-background to-muted/20 p-4 shadow-sm">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Clock3 className="size-4 text-primary" />
+                    <p className="font-semibold text-foreground">Upcoming</p>
+                  </div>
+                  <span className="rounded-full border border-border/50 bg-muted/50 px-2.5 py-1 text-[10px] font-medium text-muted-foreground">
+                    {upcomingEvents.length}
                   </span>
                 </div>
 
                 <div className="space-y-2">
                   {upcomingEvents.length === 0 ? (
-                    <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-                      No upcoming visits or appointments.
-                    </p>
+                    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/50 p-6 text-center">
+                      <Clock3 className="size-8 text-muted-foreground/30 mb-2" />
+                      <p className="text-sm text-muted-foreground">No upcoming events.</p>
+                    </div>
                   ) : (
                     upcomingEvents.map((event) => {
                       const theme = statusTheme(event.status);
 
                       return (
-                        <div key={event.key} className={cn('rounded-xl border p-3', theme.row)}>
-                          <div className="mb-1 flex items-center justify-between gap-2">
-                            <p className="text-sm font-semibold">{event.patientName}</p>
+                        <div key={event.key} className={cn('group rounded-xl border p-3 transition-all hover:shadow-sm', theme.row)}>
+                          <div className="mb-2 flex items-start justify-between gap-2">
+                            <div className="flex-1">
+                              <p className="text-sm font-semibold text-foreground">{event.patientName}</p>
+                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                {event.title} · {event.tag}
+                              </p>
+                            </div>
                             <span
                               className={cn(
-                                'rounded-md border px-2 py-0.5 text-[10px] font-semibold capitalize',
+                                'shrink-0 rounded-lg border px-2 py-1 text-[10px] font-semibold capitalize',
                                 theme.chip
                               )}
                             >
                               {event.status}
                             </span>
                           </div>
-                          <p className="text-xs text-muted-foreground">
-                            {event.title} - {event.tag}
-                          </p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {formatDayHeading(parseDateOnly(event.dateKey) ?? new Date(event.dateKey))} - {event.timeLabel}
-                          </p>
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <CalendarDays className="size-3" />
+                            {formatDayHeading(parseDateOnly(event.dateKey) ?? new Date(event.dateKey))}
+                            <span className="text-muted-foreground/50">·</span>
+                            {event.timeLabel}
+                          </div>
                         </div>
                       );
                     })
@@ -1528,14 +1454,167 @@ export const DentalChartDashboard = ({
 
       <section className="space-y-2">
         <div className="px-1">
-          <p className="text-sm font-semibold">Performance Snapshot</p>
+          <p className="text-sm font-semibold text-foreground">Finance & Cashflow</p>
+          <p className="text-xs text-muted-foreground">
+            Safe transactions and supplier liabilities
+          </p>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+          <Card className="rounded-2xl border border-emerald-200/60 bg-gradient-to-br from-emerald-50/80 via-background to-cyan-50/40 p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="rounded-xl border border-emerald-200/50 bg-emerald-100/60 p-2">
+                  <Vault className="size-5 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Safe Overview</p>
+                  <p className="text-xs text-muted-foreground">AFN safe balance and movement</p>
+                </div>
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-emerald-200/60 bg-gradient-to-br from-emerald-50/80 to-emerald-100/50 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-base font-semibold text-emerald-700">AFN</span>
+                  <span className="text-xs text-emerald-600/80">Afghan Afghani</span>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Balance</p>
+                    <p className="text-base font-bold text-emerald-900">{formatCurrency(safeBalance)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">In</p>
+                    <p className="text-base font-bold text-emerald-900">{formatCurrency(safeTotalIn)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Out</p>
+                    <p className="text-base font-bold text-emerald-900">{formatCurrency(safeTotalOut)}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-xl border border-blue-200/60 bg-gradient-to-br from-blue-50/80 to-blue-100/50 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-base font-semibold text-blue-700">USD</span>
+                  <span className="text-xs text-blue-600/80">US Dollar</span>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Balance</p>
+                    <p className="text-base font-bold text-blue-900">{formatMoney(overview?.safe.currencySections?.USD?.balance ?? 0, 'USD')}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">In</p>
+                    <p className="text-base font-bold text-blue-900">{formatMoney(overview?.safe.currencySections?.USD?.totalIn ?? 0, 'USD')}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Out</p>
+                    <p className="text-base font-bold text-blue-900">{formatMoney(overview?.safe.currencySections?.USD?.totalOut ?? 0, 'USD')}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-border/50 bg-white/70 p-3">
+                <p className="mb-2 text-xs font-medium text-foreground">Top Pickups</p>
+                {topSafePickups.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No pickups yet</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {topSafePickups.slice(0, 3).map((row) => (
+                      <div
+                        key={`safe-pickup-${row.currency}-${row.name}`}
+                        className="flex items-center justify-between text-xs"
+                      >
+                        <span className="text-muted-foreground">{row.name}</span>
+                        <span className="font-semibold text-foreground">{formatMoney(row.amount, row.currency)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="rounded-xl border border-border/50 bg-white/70 p-3">
+                <p className="mb-2 text-xs font-medium text-foreground">Supplier Status</p>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">Paid</span>
+                    <span className="font-semibold text-emerald-700">{formatCurrency(implantSupplierData.totalPaid)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">Unpaid</span>
+                    <span className="font-semibold text-orange-700">{formatCurrency(implantSupplierData.totalUnpaid)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="rounded-2xl border border-border/50 bg-gradient-to-br from-slate-50/80 via-background to-slate-100/50 p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="rounded-xl border border-slate-200/50 bg-slate-100/60 p-2">
+                  <Activity className="size-5 text-slate-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Recent Activity</p>
+                  <p className="text-xs text-muted-foreground">{recentSafeTransactions.length} transactions</p>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {recentSafeTransactions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/50 p-6 text-center">
+                  <Vault className="size-8 text-muted-foreground/30 mb-2" />
+                  <p className="text-sm text-muted-foreground">No transactions yet</p>
+                </div>
+              ) : (
+                recentSafeTransactions.slice(0, 5).map((entry) => (
+                  <div key={entry.id} className="group flex items-center gap-3 rounded-xl border border-border/50 bg-white/60 p-3 transition-all hover:border-primary/30 hover:bg-accent/30 hover:shadow-sm">
+                    <div
+                      className={cn(
+                        'flex size-8 shrink-0 items-center justify-center rounded-full border',
+                        normalizeStatus(entry.direction) === 'in'
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
+                          : 'border-orange-200 bg-orange-50 text-orange-600'
+                      )}
+                    >
+                      {normalizeStatus(entry.direction) === 'in' ? (
+                        <ArrowDownLeft className="size-4" />
+                      ) : (
+                        <ArrowUpRight className="size-4" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-foreground capitalize">
+                        {entry.entryType.replaceAll('_', ' ')}
+                      </p>
+                      <p className="mt-0.5 text-[10px] text-muted-foreground">
+                        {entry.pickedByStaffName || '-'} · {entry.transactionDate || '-'}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs font-semibold text-foreground">{formatMoney(entry.amount, entry.currency)}</p>
+                      <p className="text-[10px] text-muted-foreground">{entry.currency}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </Card>
+        </div>
+      </section>
+
+      <section className="space-y-2">
+        <div className="px-1">
+          <p className="text-sm font-semibold text-foreground">Performance Snapshot</p>
           <p className="text-xs text-muted-foreground">Quick operational health indicators</p>
         </div>
         <div className="grid gap-4">
-          <Card className="rounded-2xl border border-border/80 bg-gradient-to-br from-blue-50 via-background to-cyan-50 pt-0">
+          <Card className="rounded-2xl border border-border/50 bg-gradient-to-br from-blue-50/50 via-background to-cyan-50/30 pt-0 shadow-sm">
             <CardHeader className="flex items-center gap-2 space-y-0 border-b py-5 sm:flex-row">
               <div className="grid flex-1 gap-1">
-                <CardTitle>Area Chart - Interactive</CardTitle>
+                <CardTitle className="text-foreground">Revenue Overview</CardTitle>
                 <CardDescription>{revenueAreaDescription}</CardDescription>
               </div>
               <Select
@@ -1717,145 +1796,6 @@ export const DentalChartDashboard = ({
                     <Bar dataKey="unpaid" fill="#f97316" radius={[8, 8, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-
-      <section className="space-y-2">
-        <div className="px-1">
-          <p className="text-sm font-semibold">Finance & Cashflow</p>
-          <p className="text-xs text-muted-foreground">
-            Safe transactions and supplier liabilities
-          </p>
-        </div>
-        <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-          <Card className="rounded-2xl border border-border/80 bg-gradient-to-br from-emerald-50 via-background to-cyan-50">
-            <CardContent className="p-4">
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold">Safe Overview</p>
-                  <p className="text-xs text-muted-foreground">AFN safe section on the main dashboard</p>
-                </div>
-                <Vault className="size-5 text-emerald-700" />
-              </div>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-xl border bg-white/90 p-3">
-                  <p className="text-xs text-muted-foreground">Current AFN Balance</p>
-                  <p className="text-lg font-semibold">{formatCurrency(safeBalance)}</p>
-                </div>
-                <div className="rounded-xl border border-emerald-200 bg-emerald-100/70 p-3">
-                  <p className="text-xs text-emerald-900">AFN In</p>
-                  <p className="text-lg font-semibold text-emerald-900">
-                    {formatCurrency(safeTotalIn)}
-                  </p>
-                </div>
-                <div className="rounded-xl border border-orange-200 bg-orange-100/70 p-3">
-                  <p className="text-xs text-orange-900">AFN Out</p>
-                  <p className="text-lg font-semibold text-orange-900">
-                    {formatCurrency(safeTotalOut)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                <div className="rounded-lg border bg-white/90 p-3">
-                  <p className="mb-1 text-xs font-medium text-muted-foreground">Top Safe Pickups</p>
-                  {topSafePickups.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">No outflow by staff yet.</p>
-                  ) : (
-                    topSafePickups.map((row) => (
-                      <div
-                        key={`safe-pickup-${row.currency}-${row.name}`}
-                        className="flex items-center justify-between text-xs"
-                      >
-                        <span className="truncate text-muted-foreground">{row.name} ({row.currency})</span>
-                        <span className="font-semibold">{formatMoney(row.amount, row.currency)}</span>
-                      </div>
-                    ))
-                  )}
-                </div>
-                <div className="rounded-lg border bg-white/90 p-3">
-                  <p className="mb-1 text-xs font-medium text-muted-foreground">Net Position</p>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="inline-flex items-center gap-1 text-emerald-700">
-                      <ArrowDownLeft className="size-3.5" />
-                      Inflow
-                    </span>
-                    <span className="font-semibold">{formatCurrency(safeTotalIn)}</span>
-                  </div>
-                  <div className="mt-1 flex items-center justify-between text-xs">
-                    <span className="inline-flex items-center gap-1 text-orange-700">
-                      <ArrowUpRight className="size-3.5" />
-                      Outflow
-                    </span>
-                    <span className="font-semibold">{formatCurrency(safeTotalOut)}</span>
-                  </div>
-                  <div className="mt-2 border-t border-border/70 pt-2 text-xs">
-                    <div className="flex items-center justify-between text-muted-foreground">
-                      <span>Supplier unpaid</span>
-                      <span className="font-semibold text-orange-700">
-                        {formatCurrency(implantSupplierData.totalUnpaid)}
-                      </span>
-                    </div>
-                    <div className="mt-1 flex items-center justify-between text-muted-foreground">
-                      <span>Supplier paid</span>
-                      <span className="font-semibold text-emerald-700">
-                        {formatCurrency(implantSupplierData.totalPaid)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl border border-border/80 bg-gradient-to-br from-slate-50 via-background to-slate-100">
-            <CardContent className="p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <p className="text-sm font-semibold">Recent Safe Activity</p>
-                <span className="text-xs text-muted-foreground">
-                  {recentSafeTransactions.length} entries
-                </span>
-              </div>
-              <div className="space-y-2">
-                {recentSafeTransactions.length === 0 ? (
-                  <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-                    No safe transactions yet.
-                  </p>
-                ) : (
-                  recentSafeTransactions.map((entry) => (
-                    <div key={entry.id} className="rounded-xl border bg-white/90 p-3 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold capitalize">
-                          {entry.entryType.replaceAll('_', ' ')}
-                        </span>
-                        <span
-                          className={cn(
-                            'rounded-full px-2 py-0.5 font-semibold',
-                            normalizeStatus(entry.direction) === 'in'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-orange-100 text-orange-800'
-                          )}
-                        >
-                          {entry.direction.toUpperCase()}
-                        </span>
-                      </div>
-                      <div className="mt-1 flex items-center justify-between text-muted-foreground">
-                        <span>{entry.transactionDate || '-'}</span>
-                        <span className="font-semibold text-foreground">
-                          {formatMoney(entry.amount, entry.currency)}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-muted-foreground">
-                        {entry.pickedByStaffName
-                          ? `By: ${entry.pickedByStaffName}`
-                          : entry.notes || '-'}
-                      </p>
-                    </div>
-                  ))
-                )}
               </div>
             </CardContent>
           </Card>

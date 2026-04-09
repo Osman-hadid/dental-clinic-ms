@@ -35,7 +35,7 @@ import {
   useVisitList,
   useVisitTreatmentList,
 } from '@/modules/dental-management/presentation/hooks';
-import { Loader2 } from 'lucide-react';
+import { Loader2, DollarSign, Percent, Wallet, Calendar, FileText, CreditCard, Banknote, RefreshCw, CheckCircle, XCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -226,9 +226,9 @@ const formatDate = (value?: string): string => {
 };
 
 const inputClass =
-  'h-9 w-full rounded-md border bg-transparent px-3 py-1 text-sm shadow-xs outline-none transition focus-visible:border-ring focus-visible:ring-ring/50';
+  'h-10 w-full rounded-xl border border-border/60 bg-background/80 px-3 py-2 text-sm shadow-sm outline-none transition focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-primary/20';
 const textAreaClass =
-  'min-h-[80px] w-full resize-none rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition focus-visible:border-ring focus-visible:ring-ring/50';
+  'min-h-[100px] w-full resize-none rounded-xl border border-border/60 bg-background/80 px-3 py-3 text-sm shadow-sm outline-none transition focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-primary/20';
 const paymentClient = new AxiosClient();
 
 export const InvoiceVisitSyncPanel = (): JSX.Element => {
@@ -407,19 +407,44 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
       return roundCurrency(sum + amount);
     }, 0);
   }, [selectedVisits, visitAmountsById]);
-  const resolvedExchangeRate = formState.currency === 'USD'
-    ? Math.max(parseCurrency(formState.exchangeRate) || defaultExchangeRate, DEFAULT_AFN_PER_USD)
-    : 1;
-  const combinedTotalInput = convertUsdToInput(combinedTotal, formState.currency, resolvedExchangeRate);
-  const selectedCount = selectedVisits.length;
-  const appliedDiscount = Math.max(0, roundCurrency(parseCurrency(formState.discount)));
-  const invoiceNetAmount = Math.max(0, roundCurrency(combinedTotalInput - appliedDiscount));
-  const requestedPaidNowAmount = Math.max(0, roundCurrency(parseCurrency(formState.netAmount)));
-  const paidNowAmount = Math.min(
-    invoiceNetAmount,
-    requestedPaidNowAmount
+
+  const resolvedExchangeRate = useMemo(() => 
+    formState.currency === 'USD'
+      ? Math.max(parseCurrency(formState.exchangeRate) || defaultExchangeRate, DEFAULT_AFN_PER_USD)
+      : 1,
+    [formState.currency, formState.exchangeRate, defaultExchangeRate]
   );
-  const debtAmount = Math.max(0, roundCurrency(invoiceNetAmount - paidNowAmount));
+
+  const combinedTotalInput = useMemo(() => 
+    convertUsdToInput(combinedTotal, formState.currency, resolvedExchangeRate),
+    [combinedTotal, formState.currency, resolvedExchangeRate]
+  );
+
+  const selectedCount = selectedVisits.length;
+  const appliedDiscount = useMemo(() => 
+    Math.max(0, roundCurrency(parseCurrency(formState.discount))),
+    [formState.discount]
+  );
+
+  const invoiceNetAmount = useMemo(() => 
+    Math.max(0, roundCurrency(combinedTotalInput - appliedDiscount)),
+    [combinedTotalInput, appliedDiscount]
+  );
+
+  const requestedPaidNowAmount = useMemo(() => 
+    Math.max(0, roundCurrency(parseCurrency(formState.netAmount))),
+    [formState.netAmount]
+  );
+
+  const paidNowAmount = useMemo(() => 
+    Math.min(invoiceNetAmount, requestedPaidNowAmount),
+    [invoiceNetAmount, requestedPaidNowAmount]
+  );
+
+  const debtAmount = useMemo(() => 
+    Math.max(0, roundCurrency(invoiceNetAmount - paidNowAmount)),
+    [invoiceNetAmount, paidNowAmount]
+  );
 
   const resetForm = (): void => {
     setIsNetAmountEdited(false);
@@ -739,49 +764,74 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
           </div>
         )}
 
-        <div className="space-y-4 rounded-xl border border-border/70 bg-muted/10 p-4">
-          <div className="grid gap-2 md:grid-cols-4">
-            <p className="text-sm font-semibold">
-              {t('config.sync.selectedCount')}: <span>{selectedCount}</span>
-            </p>
-            <p className="text-sm font-semibold">
-              {t('config.sync.combinedAmount')}: <span>{formatDisplayAmount(combinedTotal, formState.currency, resolvedExchangeRate)}</span>
-            </p>
-            <p className="text-sm font-semibold">
-              {t('config.sync.form.netAmount')}: <span>{formState.currency === 'USD' ? formatCurrency(paidNowAmount, 'USD') : formatCurrency(paidNowAmount, 'AFN')}</span>
-            </p>
-            <p className="text-sm font-semibold">
-              Debt: <span>{formState.currency === 'USD' ? formatCurrency(debtAmount, 'USD') : formatCurrency(debtAmount, 'AFN')}</span>
-            </p>
+        <div className="space-y-4 rounded-2xl border border-border/50 bg-gradient-to-br from-white/80 to-muted/50 p-5 shadow-sm">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl border border-border/40 bg-background/60 p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <CheckCircle className="size-4 text-emerald-600" />
+                <p className="text-xs font-medium text-muted-foreground">{t('config.sync.selectedCount')}</p>
+              </div>
+              <p className="text-lg font-bold text-foreground">{selectedCount}</p>
+            </div>
+            <div className="rounded-xl border border-border/40 bg-background/60 p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <DollarSign className="size-4 text-violet-600" />
+                <p className="text-xs font-medium text-muted-foreground">{t('config.sync.combinedAmount')}</p>
+              </div>
+              <p className="text-lg font-bold text-foreground">{formatDisplayAmount(combinedTotal, formState.currency, resolvedExchangeRate)}</p>
+            </div>
+            <div className="rounded-xl border border-border/40 bg-background/60 p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <Wallet className="size-4 text-blue-600" />
+                <p className="text-xs font-medium text-muted-foreground">{t('config.sync.form.netAmount')}</p>
+              </div>
+              <p className="text-lg font-bold text-foreground">{formState.currency === 'USD' ? formatCurrency(paidNowAmount, 'USD') : formatCurrency(paidNowAmount, 'AFN')}</p>
+            </div>
+            <div className="rounded-xl border border-border/40 bg-background/60 p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <XCircle className="size-4 text-rose-600" />
+                <p className="text-xs font-medium text-muted-foreground">Debt</p>
+              </div>
+              <p className="text-lg font-bold text-foreground">{formState.currency === 'USD' ? formatCurrency(debtAmount, 'USD') : formatCurrency(debtAmount, 'AFN')}</p>
+            </div>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Reports stay in AFN. Current AFN equivalent: {formatCurrency(convertInputToUsd(invoiceNetAmount, formState.currency, resolvedExchangeRate), 'AFN')}.
-          </p>
 
           {selectedVisits.length > 0 ? (
-            <div className="space-y-2 text-xs text-muted-foreground">
-              {selectedVisits.map((visit) => (
-                <p key={`selected-visit-${visit.id}`}>
-                  {formatVisitLabel(visit)} ({formatDate(visit.visitDate)}) - {formatDisplayAmount(
-                    visitAmountsById.get(String(visit.id))?.baseTotal ?? 0,
-                    formState.currency,
-                    resolvedExchangeRate
-                  )}
-                </p>
-              ))}
+            <div className="space-y-2 rounded-xl border border-border/30 bg-background/50 p-3">
+              <p className="text-xs font-semibold text-foreground">Selected Visits</p>
+              <div className="space-y-1.5 text-xs text-muted-foreground">
+                {selectedVisits.map((visit) => (
+                  <div key={`selected-visit-${visit.id}`} className="flex items-center justify-between">
+                    <span>{formatVisitLabel(visit)} ({formatDate(visit.visitDate)})</span>
+                    <span className="font-medium text-foreground">{formatDisplayAmount(
+                      visitAmountsById.get(String(visit.id))?.baseTotal ?? 0,
+                      formState.currency,
+                      resolvedExchangeRate
+                    )}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
-            <p className="text-xs text-muted-foreground">{t('config.sync.noVisitSelected')}</p>
+            <div className="rounded-xl border border-dashed border-border/40 bg-background/50 p-3 text-xs text-muted-foreground">
+              {t('config.sync.noVisitSelected')}
+            </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="space-y-1 text-xs">
-                <label className="font-semibold">{t('config.sync.form.totalAmount')}</label>
-                <Input type="number" value={formatMoney(combinedTotalInput)} readOnly />
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+                  <DollarSign className="size-3.5 text-violet-600" />
+                  {t('config.sync.form.totalAmount')}
+                </label>
+                <Input type="number" value={formatMoney(combinedTotalInput)} readOnly className="bg-muted/50" />
               </div>
-              <div className="space-y-1 text-xs">
-                <label className="font-semibold">{t('config.sync.form.discount')}</label>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+                  <Percent className="size-3.5 text-amber-600" />
+                  {t('config.sync.form.discount')}
+                </label>
                 <Input
                   type="number"
                   min="0"
@@ -789,10 +839,14 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
                   value={formState.discount}
                   onChange={updateField('discount')}
                   disabled={selectedVisits.length === 0}
+                  placeholder="0.00"
                 />
               </div>
-              <div className="space-y-1 text-xs">
-                <label className="font-semibold">{t('config.sync.form.netAmount')}</label>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+                  <Wallet className="size-3.5 text-blue-600" />
+                  {t('config.sync.form.netAmount')}
+                </label>
                 <Input
                   type="number"
                   min="0"
@@ -800,16 +854,20 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
                   value={formState.netAmount}
                   onChange={updateField('netAmount')}
                   disabled={selectedVisits.length === 0}
+                  placeholder="0.00"
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  This is treated as paid now. Remaining debt: {formState.currency === 'USD' ? formatCurrency(debtAmount, 'USD') : formatCurrency(debtAmount, 'AFN')}.
+                  Remaining debt: {formState.currency === 'USD' ? formatCurrency(debtAmount, 'USD') : formatCurrency(debtAmount, 'AFN')}
                 </p>
               </div>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-              <div className="space-y-1 text-xs">
-                <label className="font-semibold">Currency</label>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+                  <DollarSign className="size-3.5 text-emerald-600" />
+                  Currency
+                </label>
                 <select
                   className={inputClass}
                   value={formState.currency}
@@ -845,8 +903,11 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
                   <option value="USD">USD</option>
                 </select>
               </div>
-              <div className="space-y-1 text-xs">
-                <label className="font-semibold">Exchange Rate</label>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+                  <RefreshCw className="size-3.5 text-sky-600" />
+                  Exchange Rate
+                </label>
                 <Input
                   type="number"
                   min="0"
@@ -854,10 +915,14 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
                   value={formState.exchangeRate}
                   onChange={updateField('exchangeRate')}
                   disabled={selectedVisits.length === 0 || formState.currency === 'AFN'}
+                  placeholder="1.00"
                 />
               </div>
-              <div className="space-y-1 text-xs">
-                <label className="font-semibold">{t('config.form.status.label')}</label>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+                  <CheckCircle className="size-3.5 text-emerald-600" />
+                  {t('config.form.status.label')}
+                </label>
                 <select
                   className={inputClass}
                   value={formState.status}
@@ -872,8 +937,14 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
                   <option value="cancelled">{t('config.form.status.options.cancelled')}</option>
                 </select>
               </div>
-              <div className="space-y-1 text-xs">
-                <label className="font-semibold">{t('config.sync.form.paymentType')}</label>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+                  <CreditCard className="size-3.5 text-violet-600" />
+                  {t('config.sync.form.paymentType')}
+                </label>
                 <select
                   className={inputClass}
                   value={formState.paymentType}
@@ -889,8 +960,11 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
                   <option value="other">{t('config.form.paymentType.options.other')}</option>
                 </select>
               </div>
-              <div className="space-y-1 text-xs">
-                <label className="font-semibold">{t('config.sync.form.invoiceDate')}</label>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+                  <Calendar className="size-3.5 text-amber-600" />
+                  {t('config.sync.form.invoiceDate')}
+                </label>
                 <Input
                   type="date"
                   value={formState.invoiceDate}
@@ -898,36 +972,41 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
                   disabled={selectedVisits.length === 0}
                 />
               </div>
-              <div className="space-y-1 text-xs">
-                <label className="font-semibold">{t('config.sync.form.notes')}</label>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+                  <FileText className="size-3.5 text-blue-600" />
+                  {t('config.sync.form.notes')}
+                </label>
                 <textarea
                   className={textAreaClass}
                   value={formState.notes}
                   onChange={updateField('notes')}
-                  placeholder="Add a quick note"
+                  placeholder="Add a quick note..."
                   disabled={selectedVisits.length === 0}
+                  maxLength={255}
                 />
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
+                size="default"
                 onClick={handleClearSelection}
                 disabled={selectedVisits.length === 0 || isSubmitting}
+                className="h-10"
               >
                 {t('config.sync.clearSelection')}
               </Button>
-              <Button type="submit" size="sm" disabled={!canSubmit}>
-                {isSubmitting ? <Loader2 className="mr-2 inline size-4 animate-spin" /> : null}
+              <Button type="submit" size="default" disabled={!canSubmit} className="h-10 bg-gradient-to-r from-primary to-primary/90 text-white hover:from-primary/90 hover:to-primary shadow-lg shadow-primary/20">
+                {isSubmitting ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                 {t('config.sync.createButton')}
               </Button>
             </div>
           </form>
 
-          <p className="text-xs text-muted-foreground">{t('config.sync.manualDescription')}</p>
+          <p className="text-xs text-muted-foreground text-center">{t('config.sync.manualDescription')}</p>
         </div>
       </CardContent>
     </Card>
