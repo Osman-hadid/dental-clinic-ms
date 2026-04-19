@@ -560,10 +560,7 @@ const ToothSurfaceInspector = (): JSX.Element => {
   const activeSection = hoveredSection ? TOOTH_SECTION_META[hoveredSection] : TOOTH_SECTION_META.occlusal;
 
   return (
-    <div className="relative isolate overflow-hidden rounded-2xl border border-violet-200/80 bg-gradient-to-br from-violet-50 via-background to-purple-50 p-3 shadow-sm">
-      <div className="pointer-events-none absolute -right-10 -top-10 size-28 rounded-full bg-violet-200/45 blur-2xl" />
-      <div className="pointer-events-none absolute -bottom-10 -left-10 size-24 rounded-full bg-purple-200/45 blur-2xl" />
-
+    <div className="rounded-2xl border border-border/50 bg-card p-3 shadow-sm">
       <div className="relative z-10">
         <div className="mb-2.5 flex items-center justify-between gap-2">
           <div>
@@ -575,13 +572,13 @@ const ToothSurfaceInspector = (): JSX.Element => {
               Hover each section to inspect
             </p>
           </div>
-          <span className="rounded-full border border-violet-300 bg-violet-100 px-2 py-1 text-[11px] font-semibold text-violet-800">
+          <span className="rounded-full border border-violet-300 bg-violet-100 px-2 py-1 text-[11px] font-semibold text-violet-800 dark:border-violet-400/20 dark:bg-violet-500/16 dark:text-violet-200">
             LR6
           </span>
         </div>
 
         <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
-          <div className="rounded-xl border border-violet-200 bg-white/90 p-2.5">
+          <div className="rounded-xl border border-violet-200 bg-background/70 p-2.5 dark:border-violet-400/20">
             <svg
               viewBox="0 0 220 320"
               className="mx-auto h-56 w-full max-w-[220px]"
@@ -647,7 +644,7 @@ const ToothSurfaceInspector = (): JSX.Element => {
                     'flex w-full items-center justify-between rounded-lg border px-2.5 py-1.5 text-left text-xs transition',
                     isActive
                       ? 'border-violet-400 bg-violet-100 text-violet-900'
-                      : 'border-border bg-background text-muted-foreground hover:border-violet-300 hover:bg-violet-50'
+                      : 'border-border bg-background text-muted-foreground hover:border-violet-300 hover:bg-violet-50 dark:hover:border-violet-400/30 dark:hover:bg-violet-500/10'
                   )}
                 >
                   <span>{section.label}</span>
@@ -658,7 +655,7 @@ const ToothSurfaceInspector = (): JSX.Element => {
           </div>
         </div>
 
-        <div className="mt-2.5 rounded-lg border border-violet-200 bg-white/85 p-2.5">
+        <div className="mt-2.5 rounded-lg border border-violet-200 bg-background/70 p-2.5 dark:border-violet-400/20">
           <p className="text-xs font-semibold text-foreground">{activeSection.label}</p>
           <p className="mt-1 text-[11px] text-muted-foreground">{activeSection.description}</p>
         </div>
@@ -750,6 +747,16 @@ export const DentalChartDashboard = ({
       overview?.charts.appointmentMix.completed,
       overview?.charts.appointmentMix.cancelled,
     ]
+  );
+  const appointmentMixChartConfig = useMemo(
+    () =>
+      ({
+        value: {
+          color: 'var(--chart-1)',
+          label: 'Appointments',
+        },
+      }) satisfies ChartConfig,
+    []
   );
   const safeBalance = overview?.safe.balance ?? 0;
   const safeTotalIn = overview?.safe.totalIn ?? 0;
@@ -956,7 +963,7 @@ export const DentalChartDashboard = ({
 
           <div className="grid gap-4 xl:grid-cols-[1.8fr_1fr]">
             <div className="space-y-4">
-              <section className="grid gap-4 rounded-3xl border border-primary/15 bg-gradient-to-br from-primary/10 via-background to-background p-5 lg:grid-cols-[1.25fr_0.95fr]">
+              <section className="grid gap-4 rounded-3xl border border-border/50 bg-card p-5 lg:grid-cols-[1.25fr_0.95fr]">
                 <div className="space-y-5">
                   <div>
                     <p className="text-xs font-medium text-primary/70 uppercase tracking-wider">Dashboard Overview</p>
@@ -970,37 +977,34 @@ export const DentalChartDashboard = ({
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-3">
-                    <div className="group relative overflow-hidden rounded-xl border border-blue-200/60 bg-gradient-to-br from-blue-50/80 to-blue-100/40 p-4 transition-all hover:shadow-md">
-                      <div className="absolute right-0 top-0 size-16 translate-x-8 -translate-y-8 rounded-full bg-blue-200/50 blur-2xl transition-all group-hover:translate-x-4 group-hover:translate-y-4" />
+                    <div className="group rounded-xl border border-blue-200/60 bg-blue-50/70 p-4 transition-all hover:shadow-md dark:border-blue-400/20 dark:bg-blue-500/12">
                       <div className="relative">
                         <div className="flex items-center gap-2">
-                          <UsersRound className="size-4 text-blue-600" />
-                          <p className="text-xs font-semibold text-blue-700">New Patients</p>
+                          <UsersRound className="size-4 text-blue-600 dark:text-blue-300" />
+                          <p className="text-xs font-semibold text-blue-700 dark:text-blue-200">New Patients</p>
                         </div>
-                        <p className="mt-2 text-3xl font-bold text-blue-900">{newPatients}</p>
-                        <p className="mt-1 text-[10px] text-blue-600/80">Last 30 days</p>
+                        <p className="mt-2 text-3xl font-bold text-blue-900 dark:text-blue-50">{newPatients}</p>
+                        <p className="mt-1 text-[10px] text-blue-600/80 dark:text-blue-200/80">Last 30 days</p>
                       </div>
                     </div>
-                    <div className="group relative overflow-hidden rounded-xl border border-violet-200/60 bg-gradient-to-br from-violet-50/80 to-violet-100/40 p-4 transition-all hover:shadow-md">
-                      <div className="absolute right-0 top-0 size-16 translate-x-8 -translate-y-8 rounded-full bg-violet-200/50 blur-2xl transition-all group-hover:translate-x-4 group-hover:translate-y-4" />
+                    <div className="group rounded-xl border border-violet-200/60 bg-violet-50/70 p-4 transition-all hover:shadow-md dark:border-violet-400/20 dark:bg-violet-500/12">
                       <div className="relative">
                         <div className="flex items-center gap-2">
-                          <Activity className="size-4 text-violet-600" />
-                          <p className="text-xs font-semibold text-violet-700">Returning</p>
+                          <Activity className="size-4 text-violet-600 dark:text-violet-300" />
+                          <p className="text-xs font-semibold text-violet-700 dark:text-violet-200">Returning</p>
                         </div>
-                        <p className="mt-2 text-3xl font-bold text-violet-900">{returningPatients}</p>
-                        <p className="mt-1 text-[10px] text-violet-600/80">Last 30 days</p>
+                        <p className="mt-2 text-3xl font-bold text-violet-900 dark:text-violet-50">{returningPatients}</p>
+                        <p className="mt-1 text-[10px] text-violet-600/80 dark:text-violet-200/80">Last 30 days</p>
                       </div>
                     </div>
-                    <div className="group relative overflow-hidden rounded-xl border border-emerald-200/60 bg-gradient-to-br from-emerald-50/80 to-emerald-100/40 p-4 transition-all hover:shadow-md">
-                      <div className="absolute right-0 top-0 size-16 translate-x-8 -translate-y-8 rounded-full bg-emerald-200/50 blur-2xl transition-all group-hover:translate-x-4 group-hover:translate-y-4" />
+                    <div className="group rounded-xl border border-emerald-200/60 bg-emerald-50/70 p-4 transition-all hover:shadow-md dark:border-emerald-400/20 dark:bg-emerald-500/12">
                       <div className="relative">
                         <div className="flex items-center gap-2">
-                          <CalendarDays className="size-4 text-emerald-600" />
-                          <p className="text-xs font-semibold text-emerald-700">Appointments</p>
+                          <CalendarDays className="size-4 text-emerald-600 dark:text-emerald-300" />
+                          <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-200">Appointments</p>
                         </div>
-                        <p className="mt-2 text-3xl font-bold text-emerald-900">{todayAppointments}</p>
-                        <p className="mt-1 text-[10px] text-emerald-600/80">Today</p>
+                        <p className="mt-2 text-3xl font-bold text-emerald-900 dark:text-emerald-50">{todayAppointments}</p>
+                        <p className="mt-1 text-[10px] text-emerald-600/80 dark:text-emerald-200/80">Today</p>
                       </div>
                     </div>
                   </div>
@@ -1044,11 +1048,11 @@ export const DentalChartDashboard = ({
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-sky-200/60 bg-gradient-to-br from-sky-50/50 to-white p-4 shadow-sm">
+                <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs font-semibold text-sky-700">Waiting Room</p>
-                      <p className="mt-1 text-sm text-slate-600">
+                      <p className="text-xs font-semibold text-primary">Waiting Room</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {waitingRoomSummary.activeTotal} active · {waitingRoomSummary.late} need attention
                       </p>
                     </div>
@@ -1056,7 +1060,7 @@ export const DentalChartDashboard = ({
                       type="button"
                       size="sm"
                       variant="outline"
-                      className="h-8 rounded-lg border-sky-200 bg-white text-sky-700 hover:bg-sky-50"
+                      className="h-8 rounded-lg border-border/50 bg-background text-foreground hover:bg-accent/40"
                       onClick={() => {
                         router.push(`/${locale}/dental-management/queue`);
                       }}
@@ -1067,39 +1071,39 @@ export const DentalChartDashboard = ({
                   </div>
 
                   <div className="mt-4 grid grid-cols-4 gap-2">
-                    <div className="rounded-lg border border-amber-200/50 bg-amber-50/50 p-2.5 text-center">
-                      <p className="text-lg font-semibold text-amber-900">{waitingRoomSummary.arrivals}</p>
-                      <p className="text-[10px] uppercase tracking-wide text-amber-700">Arrivals</p>
+                    <div className="rounded-lg border border-amber-200/50 bg-amber-50/60 p-2.5 text-center dark:border-amber-400/20 dark:bg-amber-500/10">
+                      <p className="text-lg font-semibold text-amber-900 dark:text-amber-50">{waitingRoomSummary.arrivals}</p>
+                      <p className="text-[10px] uppercase tracking-wide text-amber-700 dark:text-amber-200">Arrivals</p>
                     </div>
-                    <div className="rounded-lg border border-sky-200/50 bg-sky-50/50 p-2.5 text-center">
-                      <p className="text-lg font-semibold text-sky-900">{waitingRoomSummary.waiting}</p>
-                      <p className="text-[10px] uppercase tracking-wide text-sky-700">Waiting</p>
+                    <div className="rounded-lg border border-sky-200/50 bg-sky-50/60 p-2.5 text-center dark:border-sky-400/20 dark:bg-sky-500/10">
+                      <p className="text-lg font-semibold text-sky-900 dark:text-sky-50">{waitingRoomSummary.waiting}</p>
+                      <p className="text-[10px] uppercase tracking-wide text-sky-700 dark:text-sky-200">Waiting</p>
                     </div>
-                    <div className="rounded-lg border border-violet-200/50 bg-violet-50/50 p-2.5 text-center">
-                      <p className="text-lg font-semibold text-violet-900">{waitingRoomSummary.inChair}</p>
-                      <p className="text-[10px] uppercase tracking-wide text-violet-700">In Chair</p>
+                    <div className="rounded-lg border border-violet-200/50 bg-violet-50/60 p-2.5 text-center dark:border-violet-400/20 dark:bg-violet-500/10">
+                      <p className="text-lg font-semibold text-violet-900 dark:text-violet-50">{waitingRoomSummary.inChair}</p>
+                      <p className="text-[10px] uppercase tracking-wide text-violet-700 dark:text-violet-200">In Chair</p>
                     </div>
-                    <div className="rounded-lg border border-emerald-200/50 bg-emerald-50/50 p-2.5 text-center">
-                      <p className="text-lg font-semibold text-emerald-900">{waitingRoomSummary.closed}</p>
-                      <p className="text-[10px] uppercase tracking-wide text-emerald-700">Closed</p>
+                    <div className="rounded-lg border border-emerald-200/50 bg-emerald-50/60 p-2.5 text-center dark:border-emerald-400/20 dark:bg-emerald-500/10">
+                      <p className="text-lg font-semibold text-emerald-900 dark:text-emerald-50">{waitingRoomSummary.closed}</p>
+                      <p className="text-[10px] uppercase tracking-wide text-emerald-700 dark:text-emerald-200">Closed</p>
                     </div>
                   </div>
 
-                  <div className="mt-3 flex items-center justify-between rounded-lg border border-slate-200/50 bg-slate-50/50 px-3 py-2">
+                  <div className="mt-3 flex items-center justify-between rounded-lg border border-border/50 bg-background/70 px-3 py-2">
                     <div className="flex items-center gap-2">
                       <div className="size-2 rounded-full bg-amber-500" />
-                      <span className="text-xs text-slate-700">Needs attention: <span className="font-semibold text-amber-900">{waitingRoomSummary.late}</span></span>
+                      <span className="text-xs text-muted-foreground">Needs attention: <span className="font-semibold text-amber-700 dark:text-amber-200">{waitingRoomSummary.late}</span></span>
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="size-2 rounded-full bg-sky-500" />
-                      <span className="text-xs text-slate-700">Active flow: <span className="font-semibold text-sky-900">{waitingRoomSummary.activeTotal}</span></span>
+                      <span className="text-xs text-muted-foreground">Active flow: <span className="font-semibold text-sky-700 dark:text-sky-200">{waitingRoomSummary.activeTotal}</span></span>
                     </div>
                   </div>
                 </div>
               </section>
 
               <section className="grid gap-3 lg:grid-cols-[1fr_1fr]">
-                <div className="rounded-2xl border border-border/50 bg-gradient-to-br from-background to-muted/20 p-4 shadow-sm">
+                <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
                   <div className="mb-4 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <UsersRound className="size-4 text-primary" />
@@ -1166,7 +1170,7 @@ export const DentalChartDashboard = ({
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-border/50 bg-gradient-to-br from-background to-muted/20 p-4 shadow-sm">
+                <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
                   <div className="mb-4 flex items-center gap-2">
                     <Stethoscope className="size-4 text-primary" />
                     <h4 className="font-semibold text-foreground">Consultation</h4>
@@ -1256,7 +1260,7 @@ export const DentalChartDashboard = ({
             </div>
 
             <aside className="space-y-4">
-              <section className="rounded-2xl border border-border/50 bg-gradient-to-br from-emerald-50/50 via-background to-cyan-50/30 p-5 shadow-sm">
+              <section className="rounded-2xl border border-border/50 bg-card p-5 shadow-sm">
                 <div className="mb-4 flex items-center gap-2">
                   <Vault className="size-5 text-emerald-600" />
                   <h4 className="text-lg font-semibold text-foreground">Financial Overview</h4>
@@ -1288,28 +1292,28 @@ export const DentalChartDashboard = ({
                   )}
                 </CardContent>
                 <div className="mt-5 space-y-3 text-sm">
-                  <div className="flex items-center justify-between rounded-lg bg-emerald-50/50 px-4 py-3">
+                  <div className="flex items-center justify-between rounded-lg border border-emerald-200/50 bg-emerald-50/40 px-4 py-3 dark:border-emerald-400/20 dark:bg-emerald-500/10">
                     <span className="text-muted-foreground">Safe share</span>
-                    <span className="text-lg font-semibold text-emerald-900">{Math.round(ringBreakdown.safePercent)}%</span>
+                    <span className="text-lg font-semibold text-emerald-900 dark:text-emerald-50">{Math.round(ringBreakdown.safePercent)}%</span>
                   </div>
                   <div className="grid grid-cols-3 gap-3 text-center">
-                    <div className="rounded-lg bg-emerald-50/30 p-3">
+                    <div className="rounded-lg border border-emerald-200/50 bg-emerald-50/30 p-3 dark:border-emerald-400/20 dark:bg-emerald-500/10">
                       <p className="text-xs text-muted-foreground">Safe</p>
-                      <p className="text-base font-semibold text-emerald-900">{formatCurrency(safeBalance)}</p>
+                      <p className="text-base font-semibold text-emerald-900 dark:text-emerald-50">{formatCurrency(safeBalance)}</p>
                     </div>
-                    <div className="rounded-lg bg-amber-50/30 p-3">
+                    <div className="rounded-lg border border-amber-200/50 bg-amber-50/30 p-3 dark:border-amber-400/20 dark:bg-amber-500/10">
                       <p className="text-xs text-muted-foreground">Debts</p>
-                      <p className="text-base font-semibold text-amber-900">{formatCurrency(debtOutstanding)}</p>
+                      <p className="text-base font-semibold text-amber-900 dark:text-amber-50">{formatCurrency(debtOutstanding)}</p>
                     </div>
-                    <div className="rounded-lg bg-rose-50/30 p-3">
+                    <div className="rounded-lg border border-rose-200/50 bg-rose-50/30 p-3 dark:border-rose-400/20 dark:bg-rose-500/10">
                       <p className="text-xs text-muted-foreground">Unpaids</p>
-                      <p className="text-base font-semibold text-rose-900">{formatCurrency(supplierUnpaids)}</p>
+                      <p className="text-base font-semibold text-rose-900 dark:text-rose-50">{formatCurrency(supplierUnpaids)}</p>
                     </div>
                   </div>
                 </div>
               </section>
 
-              <section className="rounded-2xl border border-border/50 bg-gradient-to-br from-background to-muted/20 p-4 shadow-sm">
+              <section className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <CalendarDays className="size-4 text-primary" />
@@ -1396,7 +1400,7 @@ export const DentalChartDashboard = ({
                 </div>
               </section>
 
-              <section className="rounded-2xl border border-border/50 bg-gradient-to-br from-background to-muted/20 p-4 shadow-sm">
+              <section className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Clock3 className="size-4 text-primary" />
@@ -1460,7 +1464,7 @@ export const DentalChartDashboard = ({
           </p>
         </div>
         <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-          <Card className="rounded-2xl border border-emerald-200/60 bg-gradient-to-br from-emerald-50/80 via-background to-cyan-50/40 p-5 shadow-sm">
+          <Card className="rounded-2xl border border-border/50 bg-card p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="rounded-xl border border-emerald-200/50 bg-emerald-100/60 p-2">
@@ -1473,50 +1477,50 @@ export const DentalChartDashboard = ({
               </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-emerald-200/60 bg-gradient-to-br from-emerald-50/80 to-emerald-100/50 p-4">
+              <div className="rounded-xl border border-emerald-200/60 bg-emerald-50/70 p-4 dark:border-emerald-400/20 dark:bg-emerald-500/12">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-base font-semibold text-emerald-700">AFN</span>
-                  <span className="text-xs text-emerald-600/80">Afghan Afghani</span>
+                  <span className="text-base font-semibold text-emerald-700 dark:text-emerald-200">AFN</span>
+                  <span className="text-xs text-emerald-600/80 dark:text-emerald-200/70">Afghan Afghani</span>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div>
                     <p className="text-xs text-muted-foreground">Balance</p>
-                    <p className="text-base font-bold text-emerald-900">{formatCurrency(safeBalance)}</p>
+                    <p className="text-base font-bold text-emerald-900 dark:text-emerald-50">{formatCurrency(safeBalance)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">In</p>
-                    <p className="text-base font-bold text-emerald-900">{formatCurrency(safeTotalIn)}</p>
+                    <p className="text-base font-bold text-emerald-900 dark:text-emerald-50">{formatCurrency(safeTotalIn)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Out</p>
-                    <p className="text-base font-bold text-emerald-900">{formatCurrency(safeTotalOut)}</p>
+                    <p className="text-base font-bold text-emerald-900 dark:text-emerald-50">{formatCurrency(safeTotalOut)}</p>
                   </div>
                 </div>
               </div>
-              <div className="rounded-xl border border-blue-200/60 bg-gradient-to-br from-blue-50/80 to-blue-100/50 p-4">
+              <div className="rounded-xl border border-blue-200/60 bg-blue-50/70 p-4 dark:border-blue-400/20 dark:bg-blue-500/12">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-base font-semibold text-blue-700">USD</span>
-                  <span className="text-xs text-blue-600/80">US Dollar</span>
+                  <span className="text-base font-semibold text-blue-700 dark:text-blue-200">USD</span>
+                  <span className="text-xs text-blue-600/80 dark:text-blue-200/70">US Dollar</span>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div>
                     <p className="text-xs text-muted-foreground">Balance</p>
-                    <p className="text-base font-bold text-blue-900">{formatMoney(overview?.safe.currencySections?.USD?.balance ?? 0, 'USD')}</p>
+                    <p className="text-base font-bold text-blue-900 dark:text-blue-50">{formatMoney(overview?.safe.currencySections?.USD?.balance ?? 0, 'USD')}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">In</p>
-                    <p className="text-base font-bold text-blue-900">{formatMoney(overview?.safe.currencySections?.USD?.totalIn ?? 0, 'USD')}</p>
+                    <p className="text-base font-bold text-blue-900 dark:text-blue-50">{formatMoney(overview?.safe.currencySections?.USD?.totalIn ?? 0, 'USD')}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Out</p>
-                    <p className="text-base font-bold text-blue-900">{formatMoney(overview?.safe.currencySections?.USD?.totalOut ?? 0, 'USD')}</p>
+                    <p className="text-base font-bold text-blue-900 dark:text-blue-50">{formatMoney(overview?.safe.currencySections?.USD?.totalOut ?? 0, 'USD')}</p>
                   </div>
                 </div>
               </div>
             </div>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-border/50 bg-white/70 p-3">
+              <div className="rounded-xl border border-border/50 bg-background/70 p-3">
                 <p className="mb-2 text-xs font-medium text-foreground">Top Pickups</p>
                 {topSafePickups.length === 0 ? (
                   <p className="text-xs text-muted-foreground">No pickups yet</p>
@@ -1534,23 +1538,23 @@ export const DentalChartDashboard = ({
                   </div>
                 )}
               </div>
-              <div className="rounded-xl border border-border/50 bg-white/70 p-3">
+              <div className="rounded-xl border border-border/50 bg-background/70 p-3">
                 <p className="mb-2 text-xs font-medium text-foreground">Supplier Status</p>
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-muted-foreground">Paid</span>
-                    <span className="font-semibold text-emerald-700">{formatCurrency(implantSupplierData.totalPaid)}</span>
+                    <span className="font-semibold text-emerald-700 dark:text-emerald-200">{formatCurrency(implantSupplierData.totalPaid)}</span>
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-muted-foreground">Unpaid</span>
-                    <span className="font-semibold text-orange-700">{formatCurrency(implantSupplierData.totalUnpaid)}</span>
+                    <span className="font-semibold text-orange-700 dark:text-orange-200">{formatCurrency(implantSupplierData.totalUnpaid)}</span>
                   </div>
                 </div>
               </div>
             </div>
           </Card>
 
-          <Card className="rounded-2xl border border-border/50 bg-gradient-to-br from-slate-50/80 via-background to-slate-100/50 p-5 shadow-sm">
+          <Card className="rounded-2xl border border-border/50 bg-card p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="rounded-xl border border-slate-200/50 bg-slate-100/60 p-2">
@@ -1570,7 +1574,7 @@ export const DentalChartDashboard = ({
                 </div>
               ) : (
                 recentSafeTransactions.slice(0, 5).map((entry) => (
-                  <div key={entry.id} className="group flex items-center gap-3 rounded-xl border border-border/50 bg-white/60 p-3 transition-all hover:border-primary/30 hover:bg-accent/30 hover:shadow-sm">
+                  <div key={entry.id} className="group flex items-center gap-3 rounded-xl border border-border/50 bg-background/70 p-3 transition-all hover:border-primary/30 hover:bg-accent/30 hover:shadow-sm">
                     <div
                       className={cn(
                         'flex size-8 shrink-0 items-center justify-center rounded-full border',
@@ -1611,7 +1615,7 @@ export const DentalChartDashboard = ({
           <p className="text-xs text-muted-foreground">Quick operational health indicators</p>
         </div>
         <div className="grid gap-4">
-          <Card className="rounded-2xl border border-border/50 bg-gradient-to-br from-blue-50/50 via-background to-cyan-50/30 pt-0 shadow-sm">
+          <Card className="rounded-2xl border border-border/50 bg-card pt-0 shadow-sm">
             <CardHeader className="flex items-center gap-2 space-y-0 border-b py-5 sm:flex-row">
               <div className="grid flex-1 gap-1">
                 <CardTitle className="text-foreground">Revenue Overview</CardTitle>
@@ -1726,31 +1730,32 @@ export const DentalChartDashboard = ({
           </p>
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
-          <Card className="rounded-2xl border border-border/80 bg-gradient-to-br from-orange-50 via-background to-emerald-50">
+          <Card className="rounded-2xl border border-border/80 bg-card">
             <CardContent className="p-4">
               <div className="mb-3">
                 <p className="text-sm font-semibold">Appointment Mix</p>
                 <p className="text-xs text-muted-foreground">Current appointment distribution</p>
               </div>
-              <div className="h-52">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={appointmentMixData}>
-                    <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
-                    <XAxis
-                      dataKey="name"
-                      tick={{ fill: '#64748b', fontSize: 11 }}
-                      tickLine={false}
-                    />
-                    <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} width={60} />
-                    <Tooltip />
-                    <Bar dataKey="value" fill="#0ea5e9" radius={[10, 10, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              <ChartContainer config={appointmentMixChartConfig} className="h-52 w-full">
+                <BarChart data={appointmentMixData}>
+                  <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                    tickLine={false}
+                  />
+                  <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} width={60} />
+                  <ChartTooltip
+                    cursor={{ fill: 'rgba(148, 163, 184, 0.10)' }}
+                    content={<ChartTooltipContent />}
+                  />
+                  <Bar dataKey="value" fill="var(--color-value)" radius={[10, 10, 0, 0]} />
+                </BarChart>
+              </ChartContainer>
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl border border-border/80 bg-gradient-to-br from-sky-50 via-background to-blue-50">
+          <Card className="rounded-2xl border border-border/80 bg-card">
             <CardContent className="p-4">
               <div className="mb-3 flex items-center justify-between">
                 <div>
@@ -1760,19 +1765,19 @@ export const DentalChartDashboard = ({
                 <Building2 className="size-5 text-blue-700" />
               </div>
               <div className="grid gap-2 sm:grid-cols-2">
-                <div className="rounded-xl border border-blue-200 bg-blue-100/70 p-3">
-                  <p className="text-xs text-blue-900">Total Supplier Cost</p>
-                  <p className="text-sm font-semibold text-blue-900">{formatCurrency(implantSupplierData.totalSupplierCost)}</p>
+                <div className="rounded-xl border border-blue-200/60 bg-blue-50/50 p-3 dark:border-blue-400/20 dark:bg-blue-500/10">
+                  <p className="text-xs text-blue-900 dark:text-blue-100">Total Supplier Cost</p>
+                  <p className="text-sm font-semibold text-blue-900 dark:text-blue-50">{formatCurrency(implantSupplierData.totalSupplierCost)}</p>
                 </div>
-                <div className="rounded-xl border border-emerald-200 bg-emerald-100/70 p-3">
-                  <p className="text-xs text-emerald-900">Paid to Supplier</p>
-                  <p className="text-sm font-semibold text-emerald-900">{formatCurrency(implantSupplierData.totalPaid)}</p>
+                <div className="rounded-xl border border-emerald-200/60 bg-emerald-50/50 p-3 dark:border-emerald-400/20 dark:bg-emerald-500/10">
+                  <p className="text-xs text-emerald-900 dark:text-emerald-100">Paid to Supplier</p>
+                  <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-50">{formatCurrency(implantSupplierData.totalPaid)}</p>
                 </div>
-                <div className="rounded-xl border border-orange-200 bg-orange-100/70 p-3">
-                  <p className="text-xs text-orange-900">Unpaid to Supplier</p>
-                  <p className="text-sm font-semibold text-orange-900">{formatCurrency(implantSupplierData.totalUnpaid)}</p>
+                <div className="rounded-xl border border-orange-200/60 bg-orange-50/50 p-3 dark:border-orange-400/20 dark:bg-orange-500/10">
+                  <p className="text-xs text-orange-900 dark:text-orange-100">Unpaid to Supplier</p>
+                  <p className="text-sm font-semibold text-orange-900 dark:text-orange-50">{formatCurrency(implantSupplierData.totalUnpaid)}</p>
                 </div>
-                <div className="rounded-xl border bg-white/90 p-3">
+                <div className="rounded-xl border border-border/50 bg-background/70 p-3">
                   <p className="text-xs text-muted-foreground">Unpaid Teeth</p>
                   <p className="text-sm font-semibold text-foreground">
                     {implantSupplierData.unpaidCount} / {implantSupplierData.implantCount}

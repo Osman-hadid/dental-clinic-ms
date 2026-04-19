@@ -85,7 +85,7 @@ export const NavMain = ({
                         }}
                         className={cn(
                           'mx-auto h-11 w-11 justify-center rounded-full border border-transparent p-0 shadow-xs [&>svg]:size-5 [&>svg]:stroke-[1.8]',
-                          'hover:border-white/55 hover:bg-white/45 hover:text-sidebar-foreground hover:backdrop-blur-md',
+                          'hover:border-sidebar-border/80 hover:bg-sidebar-accent/80 hover:text-sidebar-foreground',
                           'data-[active=true]:border-sidebar-primary/50 data-[active=true]:bg-sidebar-primary/25 data-[active=true]:text-sidebar-foreground data-[active=true]:shadow-sm'
                         )}
                       >
@@ -102,7 +102,7 @@ export const NavMain = ({
                       side="right"
                       align="start"
                       sideOffset={12}
-                      className="bg-sidebar/95 min-w-48 rounded-xl border-sidebar-border/80 p-1.5 backdrop-blur-md"
+                      className="min-w-48 rounded-xl border border-sidebar-border/80 bg-sidebar/95 p-1.5 shadow-xl backdrop-blur-xl"
                       onMouseEnter={() => setOpenExpandedItem(item.url)}
                       onMouseLeave={() => {
                         setOpenExpandedItem((current) => (current === item.url ? null : current));
@@ -128,7 +128,7 @@ export const NavMain = ({
                               asChild
                               className={cn(
                                 'cursor-pointer rounded-lg px-2.5 py-2 text-sm',
-                                isActive && 'bg-sidebar-primary/25 text-foreground'
+                                isActive && 'bg-sidebar-primary/25 text-sidebar-foreground'
                               )}
                             >
                               <Link
@@ -160,7 +160,7 @@ export const NavMain = ({
                   isActive={!!isParentActive}
                   className={cn(
                     'mx-auto h-11 w-11 justify-center rounded-full border border-transparent p-0 shadow-xs [&>svg]:size-5 [&>svg]:stroke-[1.8]',
-                    'hover:border-white/55 hover:bg-white/45 hover:text-sidebar-foreground hover:backdrop-blur-md',
+                    'hover:border-sidebar-border/80 hover:bg-sidebar-accent/80 hover:text-sidebar-foreground',
                     'data-[active=true]:border-sidebar-primary/50 data-[active=true]:bg-sidebar-primary/25 data-[active=true]:text-sidebar-foreground data-[active=true]:shadow-sm'
                   )}
                 >
@@ -241,11 +241,14 @@ export const NavMain = ({
                                 rel={subItem.newTab ? 'noopener noreferrer' : undefined}
                                 target={subItem.newTab ? '_blank' : undefined}
                                 className={cn(
-                                  'flex items-center gap-2 rounded-lg border border-transparent px-3 py-2 text-sm transition-colors hover:border-white/50 hover:bg-white/40 hover:text-foreground hover:backdrop-blur-md',
-                                  isActive && 'bg-sidebar-primary/25 font-medium text-foreground'
+                                  'flex items-center gap-2 rounded-lg border border-transparent px-3 py-2 text-sm transition-colors hover:border-sidebar-border/70 hover:bg-sidebar-accent/80 hover:text-sidebar-foreground',
+                                  isActive &&
+                                    'bg-sidebar-primary/25 font-medium text-sidebar-foreground'
                                 )}
                               >
-                                {subItem.icon ? <subItem.icon className="size-4 shrink-0 opacity-80" /> : null}
+                                {subItem.icon ? (
+                                  <subItem.icon className="size-4 shrink-0 opacity-80" />
+                                ) : null}
                                 {subItem.title}
                               </Link>
                             </SidebarMenuSubButton>

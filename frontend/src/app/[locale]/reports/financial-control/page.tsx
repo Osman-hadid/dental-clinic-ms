@@ -253,7 +253,7 @@ export default function FinancialControlPage(): JSX.Element {
       <div className="flex flex-1 flex-col">
         <div className="@container/main flex flex-1 flex-col gap-2">
           <div className="flex flex-col gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6">
-            <Card className="rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-background to-cyan-50">
+            <Card className="rounded-3xl border border-border/50 bg-card">
               <CardHeader>
                 <CardTitle className="inline-flex items-center gap-2">
                   <ShieldCheck className="size-5 text-emerald-700" />

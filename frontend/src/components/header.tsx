@@ -2,6 +2,7 @@
 
 import React, { JSX } from 'react';
 import { LocaleSwitcher } from '@/components/locale-switcher';
+import { ThemeToggle } from '@/components/theme-toggle';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -10,6 +11,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
+import { SidebarTrigger } from '@/components/ui/sidebar';
 
 const LOCALE_SWITCHER_ENABLED = false;
 
@@ -31,8 +33,9 @@ export const Header = ({
   showLocaleSwitcher = true,
 }: Readonly<HeaderProps>): JSX.Element => {
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-      <div className="flex items-center gap-2 px-4">
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-2 border-b border-border/50 bg-background/72 backdrop-blur-xl transition-[width,height] ease-linear supports-[backdrop-filter]:bg-background/56 group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+      <div className="flex min-w-0 items-center gap-2 px-4">
+        <SidebarTrigger className="rounded-full border border-border/60 bg-card/70 shadow-xs hover:bg-accent/80 md:hidden" />
         <Breadcrumb>
           <BreadcrumbList>
             {breadcrumbs.map((item, index) => {
@@ -64,11 +67,10 @@ export const Header = ({
           </BreadcrumbList>
         </Breadcrumb>
       </div>
-      {LOCALE_SWITCHER_ENABLED && showLocaleSwitcher && (
-        <div className="px-4">
-          <LocaleSwitcher />
-        </div>
-      )}
+      <div className="flex items-center gap-2 px-4">
+        <ThemeToggle />
+        {LOCALE_SWITCHER_ENABLED && showLocaleSwitcher && <LocaleSwitcher />}
+      </div>
     </header>
   );
 };

@@ -2818,8 +2818,7 @@ export const TreatmentChartWorkspace = ({
             </Button>
           </div>
 
-          <Card className="rounded-2xl border border-emerald-200/60 bg-gradient-to-br from-emerald-50/80 via-background to-cyan-50/40 shadow-sm overflow-hidden">
-            <div className="absolute right-0 top-0 h-32 w-32 translate-x-16 -translate-y-16 rounded-full bg-emerald-500/10 blur-3xl" />
+          <Card className="overflow-hidden rounded-2xl border border-border/50 bg-card shadow-sm">
             <CardHeader className="relative pb-4">
               <div className="flex items-center gap-2">
                 <div className="rounded-xl border border-emerald-200/50 bg-emerald-100/60 p-2">
@@ -2840,46 +2839,35 @@ export const TreatmentChartWorkspace = ({
                   const toothCode = resolveToothQuadrantCode(toothNumber);
                   const conditionColor = condition ? CONDITIONS[condition].color : '#d1d5db';
                   const selectionColor = condition ? conditionColor : (activeCondition ? CONDITIONS[activeCondition].color : '#94a3b8');
-                  const selectionTextColor = isLightColor(selectionColor) ? '#0f172a' : '#ffffff';
 
                   return (
                     <button
                       key={toothNumber}
                       type="button"
-                      onClick={(e) => {
+                      onClick={() => {
                         paintTooth(toothNumber);
-                        // Add ripple effect
-                        const ripple = document.createElement('span');
-                        ripple.className = 'absolute rounded-full bg-white/30 animate-ping';
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        const size = Math.max(rect.width, rect.height);
-                        ripple.style.width = ripple.style.height = `${size}px`;
-                        ripple.style.left = `${rect.width / 2 - size / 2}px`;
-                        ripple.style.top = `${rect.height / 2 - size / 2}px`;
-                        e.currentTarget.appendChild(ripple);
-                        setTimeout(() => ripple.remove(), 500);
                       }}
                       className={cn(
-                        'relative flex h-28 min-w-0 flex-col items-center justify-between overflow-visible rounded-[20px] rounded-br-none border px-1.5 py-2 text-[10px] font-semibold transition-all duration-300 ease-out hover:scale-[1.05] hover:shadow-lg active:scale-[0.95] active:shadow-inner',
-                        'before:absolute before:inset-0 before:rounded-[20px] before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100',
+                        'relative flex h-28 min-w-0 flex-col items-center justify-between overflow-visible rounded-2xl border px-1.5 py-2 text-[10px] font-semibold transition-[border-color,background-color,box-shadow,transform] duration-200',
+                        'hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-sm active:translate-y-0',
                         isSelected ? 'ring-2 ring-offset-1' : ''
                       )}
                       style={{
-                        background: isSelected
-                          ? `linear-gradient(180deg, ${hexToRgba(selectionColor, 0.32)} 0%, ${hexToRgba(selectionColor, 0.78)} 100%)`
+                        backgroundColor: isSelected
+                          ? hexToRgba(selectionColor, 0.18)
                           : condition
-                            ? `linear-gradient(180deg, ${hexToRgba(conditionColor, 0.16)} 0%, #f8fafc 100%)`
-                            : '#f8fafc',
-                        borderColor: isSelected ? selectionColor : condition ? hexToRgba(conditionColor, 0.65) : '#e5e7eb',
+                            ? hexToRgba(conditionColor, 0.1)
+                            : 'var(--background)',
+                        borderColor: isSelected ? selectionColor : condition ? hexToRgba(conditionColor, 0.4) : 'var(--border)',
                         boxShadow: isSelected
-                          ? `0 14px 26px ${hexToRgba(selectionColor, 0.28)}`
-                          : '0 8px 16px rgba(15,23,42,0.06)',
-                        color: isSelected ? selectionTextColor : '#1f2937',
+                          ? `0 10px 24px ${hexToRgba(selectionColor, 0.18)}`
+                          : '0 1px 2px rgba(15,23,42,0.04)',
+                        color: 'var(--foreground)',
                       }}
                       aria-label={`Tooth ${toothNumber} ${toothMeta.fullLabel}`}
                       title={`${toothCode} - ${toothMeta.fullLabel}`}
                     >
-                      <span className={cn('text-sm leading-none', isSelected ? 'text-white' : 'text-slate-500')}>
+                      <span className="text-sm leading-none text-muted-foreground">
                         {toothCode}
                       </span>
                       <ToothGlyph
@@ -2888,7 +2876,7 @@ export const TreatmentChartWorkspace = ({
                         visualType={toothMeta.visualType}
                       />
                       <span
-                        className="absolute -bottom-2 left-1/2 block size-5 -translate-x-1/2 rounded-full border-2 border-white transition-transform duration-300"
+                        className="absolute -bottom-2 left-1/2 block size-5 -translate-x-1/2 rounded-full border-2 border-background transition-transform duration-300"
                         style={{ backgroundColor: conditionColor }}
                       />
                     </button>
@@ -2898,8 +2886,7 @@ export const TreatmentChartWorkspace = ({
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl border border-blue-200/60 bg-gradient-to-br from-blue-50/80 via-background to-indigo-50/40 shadow-sm overflow-hidden">
-            <div className="absolute right-0 top-0 h-32 w-32 translate-x-16 -translate-y-16 rounded-full bg-blue-500/10 blur-3xl" />
+          <Card className="overflow-hidden rounded-2xl border border-border/50 bg-card shadow-sm">
             <CardHeader className="relative pb-4">
               <div className="flex items-center gap-2">
                 <div className="rounded-xl border border-blue-200/50 bg-blue-100/60 p-2">
@@ -2920,46 +2907,35 @@ export const TreatmentChartWorkspace = ({
                   const toothCode = resolveToothQuadrantCode(toothNumber);
                   const conditionColor = condition ? CONDITIONS[condition].color : '#d1d5db';
                   const selectionColor = condition ? conditionColor : (activeCondition ? CONDITIONS[activeCondition].color : '#94a3b8');
-                  const selectionTextColor = isLightColor(selectionColor) ? '#0f172a' : '#ffffff';
 
                   return (
                     <button
                       key={toothNumber}
                       type="button"
-                      onClick={(e) => {
+                      onClick={() => {
                         paintTooth(toothNumber);
-                        // Add ripple effect
-                        const ripple = document.createElement('span');
-                        ripple.className = 'absolute rounded-full bg-white/30 animate-ping';
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        const size = Math.max(rect.width, rect.height);
-                        ripple.style.width = ripple.style.height = `${size}px`;
-                        ripple.style.left = `${rect.width / 2 - size / 2}px`;
-                        ripple.style.top = `${rect.height / 2 - size / 2}px`;
-                        e.currentTarget.appendChild(ripple);
-                        setTimeout(() => ripple.remove(), 500);
                       }}
                       className={cn(
-                        'relative flex h-28 min-w-0 flex-col items-center justify-between overflow-visible rounded-[20px] rounded-br-none border px-1.5 py-2 text-[10px] font-semibold transition-all duration-300 ease-out hover:scale-[1.05] hover:shadow-lg active:scale-[0.95] active:shadow-inner',
-                        'before:absolute before:inset-0 before:rounded-[20px] before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100',
+                        'relative flex h-28 min-w-0 flex-col items-center justify-between overflow-visible rounded-2xl border px-1.5 py-2 text-[10px] font-semibold transition-[border-color,background-color,box-shadow,transform] duration-200',
+                        'hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-sm active:translate-y-0',
                         isSelected ? 'ring-2 ring-offset-1' : ''
                       )}
                       style={{
-                        background: isSelected
-                          ? `linear-gradient(180deg, ${hexToRgba(selectionColor, 0.32)} 0%, ${hexToRgba(selectionColor, 0.78)} 100%)`
+                        backgroundColor: isSelected
+                          ? hexToRgba(selectionColor, 0.18)
                           : condition
-                            ? `linear-gradient(180deg, ${hexToRgba(conditionColor, 0.16)} 0%, #f8fafc 100%)`
-                            : '#f8fafc',
-                        borderColor: isSelected ? selectionColor : condition ? hexToRgba(conditionColor, 0.65) : '#e5e7eb',
+                            ? hexToRgba(conditionColor, 0.1)
+                            : 'var(--background)',
+                        borderColor: isSelected ? selectionColor : condition ? hexToRgba(conditionColor, 0.4) : 'var(--border)',
                         boxShadow: isSelected
-                          ? `0 14px 26px ${hexToRgba(selectionColor, 0.28)}`
-                          : '0 8px 16px rgba(15,23,42,0.06)',
-                        color: isSelected ? selectionTextColor : '#1f2937',
+                          ? `0 10px 24px ${hexToRgba(selectionColor, 0.18)}`
+                          : '0 1px 2px rgba(15,23,42,0.04)',
+                        color: 'var(--foreground)',
                       }}
                       aria-label={`Tooth ${toothNumber} ${toothMeta.fullLabel}`}
                       title={`${toothCode} - ${toothMeta.fullLabel}`}
                     >
-                      <span className={cn('text-sm leading-none', isSelected ? 'text-white' : 'text-slate-500')}>
+                      <span className="text-sm leading-none text-muted-foreground">
                         {toothCode}
                       </span>
                       <ToothGlyph
@@ -2968,7 +2944,7 @@ export const TreatmentChartWorkspace = ({
                         visualType={toothMeta.visualType}
                       />
                       <span
-                        className="absolute -bottom-2 left-1/2 block size-5 -translate-x-1/2 rounded-full border-2 border-white transition-transform duration-300"
+                        className="absolute -bottom-2 left-1/2 block size-5 -translate-x-1/2 rounded-full border-2 border-background transition-transform duration-300"
                         style={{ backgroundColor: conditionColor }}
                       />
                     </button>
@@ -2978,7 +2954,7 @@ export const TreatmentChartWorkspace = ({
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl border border-border/50 bg-gradient-to-br from-background via-background to-muted/20 shadow-sm">
+          <Card className="rounded-2xl border border-border/50 bg-card shadow-sm">
             <CardHeader className="pb-4">
               <div className="flex items-center gap-2">
                 <div className="rounded-xl border border-violet-200/50 bg-violet-100/60 p-2">

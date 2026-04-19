@@ -45,7 +45,7 @@ return [
     ],
 
     'ai_imaging' => [
-        'provider' => env('AI_IMAGING_PROVIDER', 'gemini'),
+        'provider' => env('AI_IMAGING_PROVIDER', 'dentalgemma'),
         'timeout' => (int) env('AI_IMAGING_TIMEOUT', 120),
         'gemini' => [
             'api_key' => env('GEMINI_API_KEY', ''),
@@ -54,17 +54,12 @@ return [
             'verify_ssl' => filter_var(env('GEMINI_VERIFY_SSL', true), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? true,
             'ca_bundle' => env('GEMINI_CA_BUNDLE', ''),
         ],
-        'dental_disease_detection' => [
-            'python_bin' => env('DENTAL_DISEASE_DETECTION_PYTHON', 'python'),
-            'repo_path' => env('DENTAL_DISEASE_DETECTION_REPO_PATH', base_path('../third_party/Dental_Disease_Detection/project-main')),
-            'script_path' => env('DENTAL_DISEASE_DETECTION_SCRIPT_PATH', base_path('scripts/dental_disease_detection_detect.py')),
-            'model_path' => env('DENTAL_DISEASE_DETECTION_MODEL_PATH', base_path('../third_party/Dental_Disease_Detection/project-main/model/runs/detect/Yolo_10s_train/weights/best.pt')),
-            'conf' => (float) env('DENTAL_DISEASE_DETECTION_CONF', 0.25),
-            'fallback_conf' => (float) env('DENTAL_DISEASE_DETECTION_FALLBACK_CONF', 0.1),
-            'iou' => (float) env('DENTAL_DISEASE_DETECTION_IOU', 0.45),
-            'imgsz' => (int) env('DENTAL_DISEASE_DETECTION_IMGSZ', 1280),
-            'augment' => filter_var(env('DENTAL_DISEASE_DETECTION_AUGMENT', false), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? false,
-            'multi_pass' => filter_var(env('DENTAL_DISEASE_DETECTION_MULTI_PASS', true), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? true,
+        'dentalgemma' => [
+            'python_bin' => env('DENTALGEMMA_PYTHON', 'python'),
+            'repo_path' => env('DENTALGEMMA_REPO_PATH', base_path()),
+            'script_path' => env('DENTALGEMMA_SCRIPT_PATH', base_path('scripts/dentalgemma_analyze.py')),
+            'model_path' => env('DENTALGEMMA_MODEL_PATH', base_path('../third_party/dentalgemma-1.5-4b-it')),
+            'model_name' => env('DENTALGEMMA_MODEL_NAME', 'DentalGemma 1.5 4B IT'),
         ],
     ],
 

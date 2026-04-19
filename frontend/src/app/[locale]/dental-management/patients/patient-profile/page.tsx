@@ -7,7 +7,14 @@ import { Header } from '@/components/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import { type ClinicProfile } from '@/modules/dental-management/domain/entities/ClinicProfile';
 import { type Tooth } from '@/modules/dental-management/domain/entities/Tooth';
@@ -35,16 +42,16 @@ import {
   UserRound,
   Wallet,
 } from 'lucide-react';
-import { toast } from 'sonner';
 import {
   Area,
   AreaChart,
   CartesianGrid,
-  ResponsiveContainer,
   Tooltip as RechartsTooltip,
+  ResponsiveContainer,
   XAxis,
   YAxis,
 } from 'recharts';
+import { toast } from 'sonner';
 
 type ConditionKey =
   | 'caries'
@@ -145,11 +152,79 @@ const CONDITION_CODES: Record<string, ConditionKey> = {
   s: 'surgery',
 };
 
-const UPPER_ARCH = ['18', '17', '16', '15', '14', '13', '12', '11', '21', '22', '23', '24', '25', '26', '27', '28'];
-const LOWER_ARCH = ['48', '47', '46', '45', '44', '43', '42', '41', '31', '32', '33', '34', '35', '36', '37', '38'];
+const UPPER_ARCH = [
+  '18',
+  '17',
+  '16',
+  '15',
+  '14',
+  '13',
+  '12',
+  '11',
+  '21',
+  '22',
+  '23',
+  '24',
+  '25',
+  '26',
+  '27',
+  '28',
+];
+const LOWER_ARCH = [
+  '48',
+  '47',
+  '46',
+  '45',
+  '44',
+  '43',
+  '42',
+  '41',
+  '31',
+  '32',
+  '33',
+  '34',
+  '35',
+  '36',
+  '37',
+  '38',
+];
 const RING_TEETH = [...UPPER_ARCH, ...LOWER_ARCH];
-const PRINT_UPPER_ARCH = ['18', '17', '16', '15', '14', '13', '12', '11', '21', '22', '23', '24', '25', '26', '27', '28'];
-const PRINT_LOWER_ARCH = ['48', '47', '46', '45', '44', '43', '42', '41', '31', '32', '33', '34', '35', '36', '37', '38'];
+const PRINT_UPPER_ARCH = [
+  '18',
+  '17',
+  '16',
+  '15',
+  '14',
+  '13',
+  '12',
+  '11',
+  '21',
+  '22',
+  '23',
+  '24',
+  '25',
+  '26',
+  '27',
+  '28',
+];
+const PRINT_LOWER_ARCH = [
+  '48',
+  '47',
+  '46',
+  '45',
+  '44',
+  '43',
+  '42',
+  '41',
+  '31',
+  '32',
+  '33',
+  '34',
+  '35',
+  '36',
+  '37',
+  '38',
+];
 const PRINT_ALL_TEETH = [...PRINT_UPPER_ARCH, ...PRINT_LOWER_ARCH];
 const MAX_PER_PAGE = 100;
 const TASK_MARKS = [
@@ -377,38 +452,37 @@ const formatPrescriptionSummary = (
 ): string => {
   if (!prescription) return '-';
 
-  const formatSingle = (source: Partial<{
-    amount: string;
-    foodTiming: string;
-    frequency: string;
-    name: string;
-  }>): string => {
+  const formatSingle = (
+    source: Partial<{
+      amount: string;
+      foodTiming: string;
+      frequency: string;
+      name: string;
+    }>
+  ): string => {
     const name = source.name?.trim() || '';
     const amount = source.amount?.trim() || '';
     const frequency = source.frequency?.trim() || '';
     const foodTimingRaw = source.foodTiming?.trim() || '';
-    const foodTiming = (foodTimingRaw in PRESCRIPTION_FOOD_TIMING_LABELS
-      ? PRESCRIPTION_FOOD_TIMING_LABELS[foodTimingRaw as PrescriptionFoodTiming]
-      : foodTimingRaw);
+    const foodTiming =
+      foodTimingRaw in PRESCRIPTION_FOOD_TIMING_LABELS
+        ? PRESCRIPTION_FOOD_TIMING_LABELS[foodTimingRaw as PrescriptionFoodTiming]
+        : foodTimingRaw;
 
     if (!name && !amount && !frequency && !foodTiming) {
       return '';
     }
 
     const dose = amount;
-    const parts = [
-      name ? (dose ? `${name} (${dose})` : name) : dose,
-      frequency,
-      foodTiming,
-    ].filter(Boolean);
+    const parts = [name ? (dose ? `${name} (${dose})` : name) : dose, frequency, foodTiming].filter(
+      Boolean
+    );
 
     return parts.join(', ');
   };
 
   if (Array.isArray(prescription.items) && prescription.items.length > 0) {
-    const rows = prescription.items
-      .map((item) => formatSingle(item))
-      .filter(Boolean);
+    const rows = prescription.items.map((item) => formatSingle(item)).filter(Boolean);
     if (rows.length > 0) {
       return rows.join('; ');
     }
@@ -508,7 +582,10 @@ export default function PatientProfilePage(): JSX.Element {
     [teeth]
   );
 
-  const visitFilters = useMemo(() => ({ patientId: patientId ? [patientId] : ['-1'] }), [patientId]);
+  const visitFilters = useMemo(
+    () => ({ patientId: patientId ? [patientId] : ['-1'] }),
+    [patientId]
+  );
   const { entities: visits, isFetching: isLoadingVisits } = useVisitList(
     1,
     MAX_PER_PAGE,
@@ -517,7 +594,10 @@ export default function PatientProfilePage(): JSX.Element {
     ['appointment', 'dentist'],
     visitFilters
   );
-  const invoiceFilters = useMemo(() => ({ patientId: patientId ? [patientId] : ['-1'] }), [patientId]);
+  const invoiceFilters = useMemo(
+    () => ({ patientId: patientId ? [patientId] : ['-1'] }),
+    [patientId]
+  );
   const { entities: invoices, isFetching: isLoadingInvoices } = useInvoiceList(
     1,
     MAX_PER_PAGE,
@@ -541,7 +621,10 @@ export default function PatientProfilePage(): JSX.Element {
     visitTreatmentFilters
   );
   const typedVisitTreatments = visitTreatments as VisitTreatmentWithRelations[];
-  const visitById = useMemo(() => new Map(visits.map((visit) => [String(visit.id), visit])), [visits]);
+  const visitById = useMemo(
+    () => new Map(visits.map((visit) => [String(visit.id), visit])),
+    [visits]
+  );
   const visitOrderIndexById = useMemo(() => {
     const sortedVisits = visits.slice().sort((left, right) => {
       const leftDate = new Date(left.visitDate || '').getTime();
@@ -553,11 +636,18 @@ export default function PatientProfilePage(): JSX.Element {
 
       const leftCreatedAt = new Date(left.createdAt || '').getTime();
       const rightCreatedAt = new Date(right.createdAt || '').getTime();
-      if (!Number.isNaN(leftCreatedAt) && !Number.isNaN(rightCreatedAt) && leftCreatedAt !== rightCreatedAt) {
+      if (
+        !Number.isNaN(leftCreatedAt) &&
+        !Number.isNaN(rightCreatedAt) &&
+        leftCreatedAt !== rightCreatedAt
+      ) {
         return leftCreatedAt - rightCreatedAt;
       }
 
-      return String(left.id).localeCompare(String(right.id), undefined, { numeric: true, sensitivity: 'base' });
+      return String(left.id).localeCompare(String(right.id), undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      });
     });
 
     const map = new Map<string, number>();
@@ -592,7 +682,9 @@ export default function PatientProfilePage(): JSX.Element {
 
   const fullName = useMemo(() => {
     if (!patient) return 'Unknown patient';
-    return [patient.firstName, patient.lastName].filter(Boolean).join(' ').trim() || patient.patientCode;
+    return (
+      [patient.firstName, patient.lastName].filter(Boolean).join(' ').trim() || patient.patientCode
+    );
   }, [patient]);
 
   const patientAge = useMemo(() => ageFromDate(patient?.dateOfBirth), [patient?.dateOfBirth]);
@@ -614,8 +706,7 @@ export default function PatientProfilePage(): JSX.Element {
         })
         .map((response, index) => {
           const rawAnswer = asText(response.answer);
-          const questionLabel =
-            asText(response.question?.questionText) || `Question ${index + 1}`;
+          const questionLabel = asText(response.question?.questionText) || `Question ${index + 1}`;
 
           return {
             answerLabel: formatQuestionnaireAnswer(response.answer),
@@ -636,23 +727,24 @@ export default function PatientProfilePage(): JSX.Element {
     const result: Record<string, ConditionKey | null> = {};
     for (const toothNumber of RING_TEETH) result[toothNumber] = null;
 
-    const orderedTreatments = typedVisitTreatments
-      .slice()
-      .sort((a, b) => {
-        const visitIndexA = visitOrderIndexById.get(String(a.visitId)) ?? Number.MAX_SAFE_INTEGER;
-        const visitIndexB = visitOrderIndexById.get(String(b.visitId)) ?? Number.MAX_SAFE_INTEGER;
-        if (visitIndexA !== visitIndexB) {
-          return visitIndexA - visitIndexB;
-        }
+    const orderedTreatments = typedVisitTreatments.slice().sort((a, b) => {
+      const visitIndexA = visitOrderIndexById.get(String(a.visitId)) ?? Number.MAX_SAFE_INTEGER;
+      const visitIndexB = visitOrderIndexById.get(String(b.visitId)) ?? Number.MAX_SAFE_INTEGER;
+      if (visitIndexA !== visitIndexB) {
+        return visitIndexA - visitIndexB;
+      }
 
-        const createdAtA = new Date(a.createdAt || '').getTime();
-        const createdAtB = new Date(b.createdAt || '').getTime();
-        if (!Number.isNaN(createdAtA) && !Number.isNaN(createdAtB) && createdAtA !== createdAtB) {
-          return createdAtA - createdAtB;
-        }
+      const createdAtA = new Date(a.createdAt || '').getTime();
+      const createdAtB = new Date(b.createdAt || '').getTime();
+      if (!Number.isNaN(createdAtA) && !Number.isNaN(createdAtB) && createdAtA !== createdAtB) {
+        return createdAtA - createdAtB;
+      }
 
-        return String(a.id).localeCompare(String(b.id), undefined, { numeric: true, sensitivity: 'base' });
+      return String(a.id).localeCompare(String(b.id), undefined, {
+        numeric: true,
+        sensitivity: 'base',
       });
+    });
 
     for (const row of orderedTreatments) {
       const fromChart = parseChartConditionMap(row.notes);
@@ -667,7 +759,11 @@ export default function PatientProfilePage(): JSX.Element {
       }
 
       const legacyCondition = parseLegacyCondition(row.notes);
-      const legacyTooth = row.toothNumber || row.tooth?.toothNumber || toothById.get(String(row.toothId)) || parseLegacyTooth(row.notes);
+      const legacyTooth =
+        row.toothNumber ||
+        row.tooth?.toothNumber ||
+        toothById.get(String(row.toothId)) ||
+        parseLegacyTooth(row.notes);
       if (legacyCondition && legacyTooth && legacyTooth in result) {
         result[legacyTooth] = legacyCondition;
       }
@@ -685,7 +781,8 @@ export default function PatientProfilePage(): JSX.Element {
     });
 
     const affected = RING_TEETH.filter((tooth) => Boolean(toothConditionMap[tooth])).length;
-    const overall = totalTeeth === 0 ? 0 : Math.max(0, Math.round(((totalTeeth - affected) / totalTeeth) * 100));
+    const overall =
+      totalTeeth === 0 ? 0 : Math.max(0, Math.round(((totalTeeth - affected) / totalTeeth) * 100));
     return { entries, overall };
   }, [toothConditionMap]);
 
@@ -693,14 +790,18 @@ export default function PatientProfilePage(): JSX.Element {
     if (visits.length === 0) return null;
     return visits
       .slice()
-      .sort((a, b) => new Date(b.visitDate || '').getTime() - new Date(a.visitDate || '').getTime())[0];
+      .sort(
+        (a, b) => new Date(b.visitDate || '').getTime() - new Date(a.visitDate || '').getTime()
+      )[0];
   }, [visits]);
 
   const orderedVisits = useMemo(
     () =>
       visits
         .slice()
-        .sort((a, b) => new Date(b.visitDate || '').getTime() - new Date(a.visitDate || '').getTime()),
+        .sort(
+          (a, b) => new Date(b.visitDate || '').getTime() - new Date(a.visitDate || '').getTime()
+        ),
     [visits]
   );
   const prescriptionRecords = useMemo<PatientPrescriptionRecord[]>(() => {
@@ -713,9 +814,9 @@ export default function PatientProfilePage(): JSX.Element {
 
         const visit = visitById.get(String(row.visitId));
         const visitLabel = visit
-          ? (visit.tag
-              ? `${visit.tag} (${visit.visitDate || '-'})`
-              : `Visit ${visit.id} (${visit.visitDate || '-'})`)
+          ? visit.tag
+            ? `${visit.tag} (${visit.visitDate || '-'})`
+            : `Visit ${visit.id} (${visit.visitDate || '-'})`
           : `Visit ${row.visitId}`;
         const treatmentName = row.treatment?.name || `Treatment ${row.treatmentId}`;
 
@@ -736,13 +837,21 @@ export default function PatientProfilePage(): JSX.Element {
     records.sort((left, right) => {
       const leftVisitDate = new Date(left.visitDate || '').getTime();
       const rightVisitDate = new Date(right.visitDate || '').getTime();
-      if (!Number.isNaN(leftVisitDate) && !Number.isNaN(rightVisitDate) && leftVisitDate !== rightVisitDate) {
+      if (
+        !Number.isNaN(leftVisitDate) &&
+        !Number.isNaN(rightVisitDate) &&
+        leftVisitDate !== rightVisitDate
+      ) {
         return rightVisitDate - leftVisitDate;
       }
 
       const leftCreatedAt = new Date(left.createdAt || '').getTime();
       const rightCreatedAt = new Date(right.createdAt || '').getTime();
-      if (!Number.isNaN(leftCreatedAt) && !Number.isNaN(rightCreatedAt) && leftCreatedAt !== rightCreatedAt) {
+      if (
+        !Number.isNaN(leftCreatedAt) &&
+        !Number.isNaN(rightCreatedAt) &&
+        leftCreatedAt !== rightCreatedAt
+      ) {
         return rightCreatedAt - leftCreatedAt;
       }
 
@@ -783,9 +892,10 @@ export default function PatientProfilePage(): JSX.Element {
       const invoiceKind = resolveInvoiceKind(notes);
       const linkedInvoiceId = extractLinkedInvoiceId(notes);
 
-      const visit = invoice.visit && typeof invoice.visit === 'object'
-        ? (invoice.visit as Record<string, unknown>)
-        : null;
+      const visit =
+        invoice.visit && typeof invoice.visit === 'object'
+          ? (invoice.visit as Record<string, unknown>)
+          : null;
       const visitId = asText(invoice.visitId ?? invoice.visit_id);
       const visitLabel = asText(visit?.tag ?? visit?.name) || (visitId ? `Visit #${visitId}` : '-');
 
@@ -863,7 +973,9 @@ export default function PatientProfilePage(): JSX.Element {
             continue;
           }
           const currentBucket = buckets.get(monthKey) ?? { debt: 0, income: 0 };
-          currentBucket.income = Number((currentBucket.income + parseAmount(payment.amount)).toFixed(2));
+          currentBucket.income = Number(
+            (currentBucket.income + parseAmount(payment.amount)).toFixed(2)
+          );
           buckets.set(monthKey, currentBucket);
         }
         continue;
@@ -900,7 +1012,8 @@ export default function PatientProfilePage(): JSX.Element {
   );
   const latestIncome = incomeTrend.length > 0 ? incomeTrend[incomeTrend.length - 1].income : 0;
   const latestDebt = incomeTrend.length > 0 ? incomeTrend[incomeTrend.length - 1].debt : 0;
-  const averageIncome = incomeTrend.length > 0 ? Number((totalIncome / incomeTrend.length).toFixed(2)) : 0;
+  const averageIncome =
+    incomeTrend.length > 0 ? Number((totalIncome / incomeTrend.length).toFixed(2)) : 0;
 
   const fetchCsrfClient = async (): Promise<AxiosClient> => {
     const client = new AxiosClient();
@@ -929,7 +1042,13 @@ export default function PatientProfilePage(): JSX.Element {
   });
 
   const updateTaskMutation = useMutation({
-    mutationFn: async ({ id, payload }: { id: number; payload: Partial<Pick<SessionTask, 'mark' | 'notes' | 'status' | 'title'>> }) => {
+    mutationFn: async ({
+      id,
+      payload,
+    }: {
+      id: number;
+      payload: Partial<Pick<SessionTask, 'mark' | 'notes' | 'status' | 'title'>>;
+    }) => {
       const client = await fetchCsrfClient();
       return client.put<SessionTask>(
         `/api/v1/dental-management/patients/${patientId}/session-tasks/${id}`,
@@ -982,7 +1101,10 @@ export default function PatientProfilePage(): JSX.Element {
     }
   };
 
-  const handleStatusChange = async (taskId: number, nextStatus: SessionTaskStatus): Promise<void> => {
+  const handleStatusChange = async (
+    taskId: number,
+    nextStatus: SessionTaskStatus
+  ): Promise<void> => {
     setTaskError('');
     const response = await updateTaskMutation.mutateAsync({
       id: taskId,
@@ -1042,7 +1164,11 @@ export default function PatientProfilePage(): JSX.Element {
       resolvedClinicProfile.logoPath.trim() !== ''
         ? resolveFileUrl(resolvedClinicProfile.logoPath)
         : `${window.location.origin}/logo2.png`;
-    const isDefaultLogo = !(resolvedClinicProfile?.logoPath && typeof resolvedClinicProfile.logoPath === 'string' && resolvedClinicProfile.logoPath.trim() !== '');
+    const isDefaultLogo = !(
+      resolvedClinicProfile?.logoPath &&
+      typeof resolvedClinicProfile.logoPath === 'string' &&
+      resolvedClinicProfile.logoPath.trim() !== ''
+    );
     const clinicLogoUrlBusted = clinicLogoUrl.includes('?')
       ? `${clinicLogoUrl}&v=${Date.now()}`
       : `${clinicLogoUrl}?v=${Date.now()}`;
@@ -1460,19 +1586,22 @@ export default function PatientProfilePage(): JSX.Element {
 
       await Promise.race([
         Promise.all(
-          images.map((img) => new Promise<void>((resolve) => {
-            if (img.complete) {
-              resolve();
-              return;
-            }
-            const handleDone = (): void => {
-              img.removeEventListener('load', handleDone);
-              img.removeEventListener('error', handleDone);
-              resolve();
-            };
-            img.addEventListener('load', handleDone);
-            img.addEventListener('error', handleDone);
-          }))
+          images.map(
+            (img) =>
+              new Promise<void>((resolve) => {
+                if (img.complete) {
+                  resolve();
+                  return;
+                }
+                const handleDone = (): void => {
+                  img.removeEventListener('load', handleDone);
+                  img.removeEventListener('error', handleDone);
+                  resolve();
+                };
+                img.addEventListener('load', handleDone);
+                img.addEventListener('error', handleDone);
+              })
+          )
         ),
         new Promise<void>((resolve) => {
           setTimeout(() => resolve(), 1200);
@@ -1527,21 +1656,21 @@ export default function PatientProfilePage(): JSX.Element {
       if (fromToothNumber.length > 0) return fromToothNumber;
 
       const toothNumber =
-        row.tooth?.toothNumber
-        ?? toothById.get(String(row.toothId))
-        ?? parseLegacyTooth(row.notes);
+        row.tooth?.toothNumber ?? toothById.get(String(row.toothId)) ?? parseLegacyTooth(row.notes);
 
       return toothNumber ? [toothNumber] : [];
     };
 
-    const resolveRowConditionMap = (row: VisitTreatmentWithRelations): Record<string, ConditionKey> => {
+    const resolveRowConditionMap = (
+      row: VisitTreatmentWithRelations
+    ): Record<string, ConditionKey> => {
       const fromChartMetadata = parseChartConditionMap(row.notes);
       if (Object.keys(fromChartMetadata).length > 0) return fromChartMetadata;
 
       const condition =
-        parseLegacyCondition(row.notes)
-        ?? inferConditionFromText(row.treatment?.category)
-        ?? inferConditionFromText(row.treatment?.name);
+        parseLegacyCondition(row.notes) ??
+        inferConditionFromText(row.treatment?.category) ??
+        inferConditionFromText(row.treatment?.name);
 
       if (!condition) return {};
 
@@ -1552,9 +1681,8 @@ export default function PatientProfilePage(): JSX.Element {
       return mapped;
     };
 
-    const latestVisitForPrint = visits
-      .slice()
-      .sort((a, b) => {
+    const latestVisitForPrint =
+      visits.slice().sort((a, b) => {
         const dateA = new Date(a.visitDate || '').getTime();
         const dateB = new Date(b.visitDate || '').getTime();
         if (!Number.isNaN(dateA) && !Number.isNaN(dateB) && dateA !== dateB) {
@@ -1567,35 +1695,42 @@ export default function PatientProfilePage(): JSX.Element {
           return createdB - createdA;
         }
 
-        return String(b.id).localeCompare(String(a.id), undefined, { numeric: true, sensitivity: 'base' });
+        return String(b.id).localeCompare(String(a.id), undefined, {
+          numeric: true,
+          sensitivity: 'base',
+        });
       })[0] ?? null;
 
     const latestVisitTreatments = latestVisitForPrint
       ? typedVisitTreatments.filter((row) => String(row.visitId) === String(latestVisitForPrint.id))
       : [];
-    const printSourceTreatments = latestVisitTreatments.length > 0 ? latestVisitTreatments : typedVisitTreatments;
+    const printSourceTreatments =
+      latestVisitTreatments.length > 0 ? latestVisitTreatments : typedVisitTreatments;
 
-    const orderedTreatmentsForScheme = typedVisitTreatments
-      .slice()
-      .sort((a, b) => {
-        const visitIndexA = visitOrderIndexById.get(String(a.visitId)) ?? Number.MAX_SAFE_INTEGER;
-        const visitIndexB = visitOrderIndexById.get(String(b.visitId)) ?? Number.MAX_SAFE_INTEGER;
-        if (visitIndexA !== visitIndexB) {
-          return visitIndexA - visitIndexB;
-        }
+    const orderedTreatmentsForScheme = typedVisitTreatments.slice().sort((a, b) => {
+      const visitIndexA = visitOrderIndexById.get(String(a.visitId)) ?? Number.MAX_SAFE_INTEGER;
+      const visitIndexB = visitOrderIndexById.get(String(b.visitId)) ?? Number.MAX_SAFE_INTEGER;
+      if (visitIndexA !== visitIndexB) {
+        return visitIndexA - visitIndexB;
+      }
 
-        const createdAtA = new Date(a.createdAt || '').getTime();
-        const createdAtB = new Date(b.createdAt || '').getTime();
-        if (!Number.isNaN(createdAtA) && !Number.isNaN(createdAtB) && createdAtA !== createdAtB) {
-          return createdAtA - createdAtB;
-        }
+      const createdAtA = new Date(a.createdAt || '').getTime();
+      const createdAtB = new Date(b.createdAt || '').getTime();
+      if (!Number.isNaN(createdAtA) && !Number.isNaN(createdAtB) && createdAtA !== createdAtB) {
+        return createdAtA - createdAtB;
+      }
 
-        return String(a.id).localeCompare(String(b.id), undefined, { numeric: true, sensitivity: 'base' });
+      return String(a.id).localeCompare(String(b.id), undefined, {
+        numeric: true,
+        sensitivity: 'base',
       });
+    });
 
     const orderedPrintSourceTreatments = printSourceTreatments
       .slice()
-      .sort((a, b) => new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime());
+      .sort(
+        (a, b) => new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime()
+      );
 
     const printToothConditions: Record<string, ConditionKey | null> = {};
     for (const toothNumber of PRINT_ALL_TEETH) {
@@ -1612,7 +1747,9 @@ export default function PatientProfilePage(): JSX.Element {
 
     const conditionStatsRows = (Object.keys(CONDITIONS) as ConditionKey[])
       .map((key) => {
-        const count = PRINT_ALL_TEETH.filter((toothNumber) => printToothConditions[toothNumber] === key).length;
+        const count = PRINT_ALL_TEETH.filter(
+          (toothNumber) => printToothConditions[toothNumber] === key
+        ).length;
         const percent = Math.round((count / PRINT_ALL_TEETH.length) * 100);
         const color = printConditionColors[key];
         return `
@@ -1627,17 +1764,20 @@ export default function PatientProfilePage(): JSX.Element {
         `;
       })
       .join('');
-    const questionnaireRows = questionnaireResponses.length > 0
-      ? questionnaireResponses
-        .map((response, index) => `
+    const questionnaireRows =
+      questionnaireResponses.length > 0
+        ? questionnaireResponses
+            .map(
+              (response, index) => `
           <tr>
             <td>${index + 1}</td>
             <td>${escapeHtml(response.questionLabel)}</td>
             <td class="answer-cell">${escapeHtml(response.answerLabel)}</td>
           </tr>
-        `)
-        .join('')
-      : '<tr><td colspan="3">No questionnaire responses were recorded for this patient.</td></tr>';
+        `
+            )
+            .join('')
+        : '<tr><td colspan="3">No questionnaire responses were recorded for this patient.</td></tr>';
 
     const renderArchCells = (arch: string[]): string => {
       return arch
@@ -1661,25 +1801,28 @@ export default function PatientProfilePage(): JSX.Element {
         .join('');
     };
 
-    const latestVisitTreatmentRows = latestVisitTreatments.length > 0
-      ? latestVisitTreatments
-        .map((row) => {
-          const teeth = resolveRowTeeth(row);
-          const teethLabel = teeth.length > 0 ? teeth.join(', ') : '-';
-          const treatmentName =
-            row.treatment?.name || treatmentById.get(String(row.treatmentId))?.name || `Treatment ${row.treatmentId}`;
-          const rowConditionMap = resolveRowConditionMap(row);
-          const uniqueConditions = Array.from(new Set(Object.values(rowConditionMap)));
-          const conditionLabel =
-            uniqueConditions.length === 0
-              ? 'Unspecified'
-              : uniqueConditions.length === 1
-                ? CONDITIONS[uniqueConditions[0]].label
-                : `Multiple (${uniqueConditions.map((key) => CONDITIONS[key].label).join(', ')})`;
-          const cleanedNotes = stripMetadataPrefixes(row.notes);
-          const prescriptionContent = formatPrescriptionSummary(row.prescription);
+    const latestVisitTreatmentRows =
+      latestVisitTreatments.length > 0
+        ? latestVisitTreatments
+            .map((row) => {
+              const teeth = resolveRowTeeth(row);
+              const teethLabel = teeth.length > 0 ? teeth.join(', ') : '-';
+              const treatmentName =
+                row.treatment?.name ||
+                treatmentById.get(String(row.treatmentId))?.name ||
+                `Treatment ${row.treatmentId}`;
+              const rowConditionMap = resolveRowConditionMap(row);
+              const uniqueConditions = Array.from(new Set(Object.values(rowConditionMap)));
+              const conditionLabel =
+                uniqueConditions.length === 0
+                  ? 'Unspecified'
+                  : uniqueConditions.length === 1
+                    ? CONDITIONS[uniqueConditions[0]].label
+                    : `Multiple (${uniqueConditions.map((key) => CONDITIONS[key].label).join(', ')})`;
+              const cleanedNotes = stripMetadataPrefixes(row.notes);
+              const prescriptionContent = formatPrescriptionSummary(row.prescription);
 
-          return `
+              return `
             <tr>
               <td>${escapeHtml(teethLabel)}</td>
               <td>${escapeHtml(treatmentName)}</td>
@@ -1690,14 +1833,16 @@ export default function PatientProfilePage(): JSX.Element {
               <td>${escapeHtml(prescriptionContent)}</td>
             </tr>
           `;
-        })
-        .join('')
-      : '<tr><td colspan="7">No treatments recorded for the latest visit.</td></tr>';
+            })
+            .join('')
+        : '<tr><td colspan="7">No treatments recorded for the latest visit.</td></tr>';
 
-    const latestTreatment = orderedPrintSourceTreatments[orderedPrintSourceTreatments.length - 1] ?? null;
+    const latestTreatment =
+      orderedPrintSourceTreatments[orderedPrintSourceTreatments.length - 1] ?? null;
     const latestTeeth = latestTreatment ? resolveRowTeeth(latestTreatment) : [];
     const selectedToothNumber = latestTeeth[0] ?? '-';
-    const selectedToothRegion = selectedToothNumber === '-' ? 'N/A' : getToothRegion(selectedToothNumber);
+    const selectedToothRegion =
+      selectedToothNumber === '-' ? 'N/A' : getToothRegion(selectedToothNumber);
     const noteRows = printSourceTreatments
       .map((row) => {
         const cleanedNotes = stripMetadataPrefixes(row.notes);
@@ -1706,7 +1851,9 @@ export default function PatientProfilePage(): JSX.Element {
         const teeth = resolveRowTeeth(row);
         const teethLabel = teeth.length > 0 ? teeth.join(', ') : '-';
         const treatmentName =
-          row.treatment?.name || treatmentById.get(String(row.treatmentId))?.name || `Treatment ${row.treatmentId}`;
+          row.treatment?.name ||
+          treatmentById.get(String(row.treatmentId))?.name ||
+          `Treatment ${row.treatmentId}`;
 
         return `
           <tr>
@@ -1831,8 +1978,9 @@ export default function PatientProfilePage(): JSX.Element {
 
   <div class="section">
     <h2>Latest Visit Data</h2>
-    ${latestVisitForPrint
-    ? `<div class="box">
+    ${
+      latestVisitForPrint
+        ? `<div class="box">
       <p><strong>Visit:</strong> ${escapeHtml(latestVisitForPrint.tag || latestVisitForPrint.appointmentTag || `Visit #${latestVisitForPrint.id}`)}</p>
       <p><strong>Date:</strong> ${escapeHtml(latestVisitForPrint.visitDate || '-')}</p>
       <p><strong>Dentist:</strong> ${escapeHtml(latestVisitForPrint.dentistName || latestVisitForPrint.dentistId || '-')}</p>
@@ -1853,13 +2001,15 @@ export default function PatientProfilePage(): JSX.Element {
       </thead>
       <tbody>${latestVisitTreatmentRows}</tbody>
     </table>`
-    : '<p class="muted">No visits are recorded for this patient.</p>'}
+        : '<p class="muted">No visits are recorded for this patient.</p>'
+    }
   </div>
 
   <div class="section">
     <h2>Notes</h2>
-    ${noteRows
-    ? `<table>
+    ${
+      noteRows
+        ? `<table>
       <thead>
         <tr>
           <th>Teeth</th>
@@ -1869,7 +2019,8 @@ export default function PatientProfilePage(): JSX.Element {
       </thead>
       <tbody>${noteRows}</tbody>
     </table>`
-    : '<p class="muted">No notes were recorded for this patient.</p>'}
+        : '<p class="muted">No notes were recorded for this patient.</p>'
+    }
   </div>
 
   <div class="section page-break">
@@ -1970,7 +2121,8 @@ export default function PatientProfilePage(): JSX.Element {
     }, 150);
   };
 
-  const isTaskMutationLoading = createTaskMutation.isPending || updateTaskMutation.isPending || deleteTaskMutation.isPending;
+  const isTaskMutationLoading =
+    createTaskMutation.isPending || updateTaskMutation.isPending || deleteTaskMutation.isPending;
 
   const breadcrumbs = useMemo(
     () => [
@@ -1992,11 +2144,9 @@ export default function PatientProfilePage(): JSX.Element {
   return (
     <>
       <Header breadcrumbs={breadcrumbs} />
-      <div className="flex flex-1 flex-col px-4 pb-6 lg:px-6 overflow-x-hidden">
-        <div className="rounded-3xl border border-primary/10 bg-gradient-to-br from-primary/5 via-background to-muted/20 p-6 text-foreground shadow-lg overflow-hidden">
-          <div className="absolute right-0 top-0 h-48 w-48 translate-x-24 -translate-y-24 rounded-full bg-primary/10 blur-3xl" />
-          <div className="absolute left-0 bottom-0 h-48 w-48 -translate-x-24 translate-y-24 rounded-full bg-emerald-500/10 blur-3xl" />
-          
+      <div className="flex flex-1 flex-col overflow-x-hidden px-4 pb-6 lg:px-6">
+        <div className="rounded-3xl border border-border/60 bg-card/95 p-6 text-foreground shadow-lg">
+
           <div className="relative mb-6 flex flex-wrap items-center justify-between gap-3">
             <Button
               type="button"
@@ -2033,14 +2183,16 @@ export default function PatientProfilePage(): JSX.Element {
 
           <div className="grid min-w-0 gap-6 xl:grid-cols-[1.4fr_1fr]">
             <div className="min-w-0 space-y-6">
-              <Card className="rounded-3xl border border-border/50 bg-gradient-to-br from-white/80 to-muted/50 shadow-sm">
+              <Card className="rounded-3xl border border-border/50 bg-card shadow-sm">
                 <CardContent className="p-6">
                   <div className="grid gap-4 md:grid-cols-[auto_1fr_1fr] md:items-center">
-                    <div className="flex size-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary/80 text-2xl font-semibold text-primary-foreground shadow-lg">
+                    <div className="flex size-20 items-center justify-center rounded-2xl bg-linear-to-br from-primary to-primary/80 text-2xl font-semibold text-primary-foreground shadow-lg">
                       {fullName.slice(0, 1).toUpperCase()}
                     </div>
                     <div>
-                      <p className="text-2xl font-semibold text-foreground">{isLoadingPatient ? 'Loading...' : fullName}</p>
+                      <p className="text-2xl font-semibold text-foreground">
+                        {isLoadingPatient ? 'Loading...' : fullName}
+                      </p>
                       <p className="text-sm text-muted-foreground">{patient?.patientCode || '-'}</p>
                     </div>
                     <div className="grid grid-cols-2 gap-3 text-sm">
@@ -2054,23 +2206,27 @@ export default function PatientProfilePage(): JSX.Element {
                       </div>
                       <div className="rounded-xl border border-border/50 bg-background/60 px-3 py-2">
                         <p className="text-xs text-muted-foreground">Blood</p>
-                        <p className="font-semibold text-foreground">{patient?.bloodGroup || '-'}</p>
+                        <p className="font-semibold text-foreground">
+                          {patient?.bloodGroup || '-'}
+                        </p>
                       </div>
                       <div className="rounded-xl border border-border/50 bg-background/60 px-3 py-2">
                         <p className="text-xs text-muted-foreground">Tel</p>
-                        <p className="font-semibold text-foreground">{patient?.contactNumber || '-'}</p>
+                        <p className="font-semibold text-foreground">
+                          {patient?.contactNumber || '-'}
+                        </p>
                       </div>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card className="rounded-3xl border border-border/50 bg-gradient-to-br from-background via-background to-muted/20 shadow-sm">
+              <Card className="rounded-3xl border border-border/50 bg-card shadow-sm">
                 <CardHeader className="pb-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="rounded-xl border border-emerald-200/50 bg-emerald-100/60 p-2">
-                        <Wallet className="size-5 text-emerald-600" />
+                      <div className="rounded-xl border border-emerald-200/50 bg-emerald-100/60 p-2 dark:border-emerald-400/20 dark:bg-emerald-500/16">
+                        <Wallet className="size-5 text-emerald-600 dark:text-emerald-300" />
                       </div>
                       <div>
                         <CardTitle className="text-base text-foreground">Income Diagram</CardTitle>
@@ -2085,38 +2241,67 @@ export default function PatientProfilePage(): JSX.Element {
                       <div className="rounded-xl border border-border/50 bg-muted/30 p-4 mb-3">
                         <Wallet className="size-8 text-muted-foreground" />
                       </div>
-                      <p className="text-sm text-muted-foreground">No income or debt data available yet.</p>
+                      <p className="text-sm text-muted-foreground">
+                        No income or debt data available yet.
+                      </p>
                     </div>
                   ) : (
                     <>
-                      <div className="grid gap-3 rounded-2xl border border-border/50 bg-gradient-to-br from-background via-background to-muted/20 p-4 text-xs sm:grid-cols-5">
-                        <div className="rounded-xl border border-emerald-200/60 bg-gradient-to-br from-emerald-50/80 to-emerald-100/50 px-3 py-2">
-                          <p className="text-xs text-emerald-700">Total Income</p>
-                          <p className="mt-1 text-sm font-bold text-emerald-900">{formatCurrency(totalIncome)}</p>
+                      <div className="grid gap-3 rounded-2xl border border-border/50 bg-muted/15 p-4 text-xs sm:grid-cols-5">
+                        <div className="rounded-xl border border-emerald-200/60 bg-linear-to-br from-emerald-50/80 to-emerald-100/50 px-3 py-2 dark:border-emerald-400/20 dark:from-emerald-500/16 dark:to-emerald-500/6">
+                          <p className="text-xs text-emerald-700 dark:text-emerald-200/80">
+                            Total Income
+                          </p>
+                          <p className="mt-1 text-sm font-bold text-emerald-900 dark:text-emerald-50">
+                            {formatCurrency(totalIncome)}
+                          </p>
                         </div>
-                        <div className="rounded-xl border border-orange-200/60 bg-gradient-to-br from-orange-50/80 to-orange-100/50 px-3 py-2">
-                          <p className="text-xs text-orange-700">Total Debt</p>
-                          <p className="mt-1 text-sm font-bold text-orange-900">{formatCurrency(totalDebt)}</p>
+                        <div className="rounded-xl border border-orange-200/60 bg-linear-to-br from-orange-50/80 to-orange-100/50 px-3 py-2 dark:border-orange-400/20 dark:from-orange-500/16 dark:to-orange-500/6">
+                          <p className="text-xs text-orange-700 dark:text-orange-200/80">
+                            Total Debt
+                          </p>
+                          <p className="mt-1 text-sm font-bold text-orange-900 dark:text-orange-50">
+                            {formatCurrency(totalDebt)}
+                          </p>
                         </div>
-                        <div className="rounded-xl border border-blue-200/60 bg-gradient-to-br from-blue-50/80 to-blue-100/50 px-3 py-2">
-                          <p className="text-xs text-blue-700">Latest Month</p>
-                          <p className="mt-1 text-sm font-bold text-blue-900">{formatCurrency(latestIncome)}</p>
+                        <div className="rounded-xl border border-blue-200/60 bg-linear-to-br from-blue-50/80 to-blue-100/50 px-3 py-2 dark:border-blue-400/20 dark:from-blue-500/16 dark:to-blue-500/6">
+                          <p className="text-xs text-blue-700 dark:text-blue-200/80">
+                            Latest Month
+                          </p>
+                          <p className="mt-1 text-sm font-bold text-blue-900 dark:text-blue-50">
+                            {formatCurrency(latestIncome)}
+                          </p>
                         </div>
-                        <div className="rounded-xl border border-red-200/60 bg-gradient-to-br from-red-50/80 to-red-100/50 px-3 py-2">
-                          <p className="text-xs text-red-700">Latest Debt</p>
-                          <p className="mt-1 text-sm font-bold text-red-900">{formatCurrency(latestDebt)}</p>
+                        <div className="rounded-xl border border-red-200/60 bg-linear-to-br from-red-50/80 to-red-100/50 px-3 py-2 dark:border-red-400/20 dark:from-red-500/16 dark:to-red-500/6">
+                          <p className="text-xs text-red-700 dark:text-red-200/80">Latest Debt</p>
+                          <p className="mt-1 text-sm font-bold text-red-900 dark:text-red-50">
+                            {formatCurrency(latestDebt)}
+                          </p>
                         </div>
-                        <div className="rounded-xl border border-violet-200/60 bg-gradient-to-br from-violet-50/80 to-violet-100/50 px-3 py-2">
-                          <p className="text-xs text-violet-700">Avg / Month</p>
-                          <p className="mt-1 text-sm font-bold text-violet-900">{formatCurrency(averageIncome)}</p>
+                        <div className="rounded-xl border border-violet-200/60 bg-linear-to-br from-violet-50/80 to-violet-100/50 px-3 py-2 dark:border-violet-400/20 dark:from-violet-500/16 dark:to-violet-500/6">
+                          <p className="text-xs text-violet-700 dark:text-violet-200/80">
+                            Avg / Month
+                          </p>
+                          <p className="mt-1 text-sm font-bold text-violet-900 dark:text-violet-50">
+                            {formatCurrency(averageIncome)}
+                          </p>
                         </div>
                       </div>
 
-                      <div className="h-72 rounded-2xl border border-border/50 bg-gradient-to-br from-background via-background to-muted/20 p-4">
+                      <div className="h-72 rounded-2xl border border-border/50 bg-background/70 p-4">
                         <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={incomeTrend} margin={{ bottom: 8, left: 0, right: 10, top: 8 }}>
+                          <AreaChart
+                            data={incomeTrend}
+                            margin={{ bottom: 8, left: 0, right: 10, top: 8 }}
+                          >
                             <defs>
-                              <linearGradient id="patientIncomeGradient" x1="0" x2="0" y1="0" y2="1">
+                              <linearGradient
+                                id="patientIncomeGradient"
+                                x1="0"
+                                x2="0"
+                                y1="0"
+                                y2="1"
+                              >
                                 <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.45} />
                                 <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0.04} />
                               </linearGradient>
@@ -2125,28 +2310,28 @@ export default function PatientProfilePage(): JSX.Element {
                                 <stop offset="95%" stopColor="#f97316" stopOpacity={0.04} />
                               </linearGradient>
                             </defs>
-                            <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
+                            <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3" />
                             <XAxis
                               axisLine={false}
                               dataKey="label"
-                              tick={{ fill: '#64748b', fontSize: 11 }}
+                              tick={{ fill: 'var(--chart-axis)', fontSize: 11 }}
                               tickLine={false}
                               tickMargin={8}
                             />
                             <YAxis
                               axisLine={false}
-                              tick={{ fill: '#64748b', fontSize: 11 }}
+                              tick={{ fill: 'var(--chart-axis)', fontSize: 11 }}
                               tickFormatter={(value) => `AFN ${Number(value).toFixed(0)}`}
                               tickLine={false}
                               width={64}
                             />
                             <RechartsTooltip
                               contentStyle={{
-                                backgroundColor: '#ffffff',
-                                border: '1px solid #e2e8f0',
+                                backgroundColor: 'var(--chart-tooltip-background)',
+                                border: '1px solid var(--chart-tooltip-border)',
                                 borderRadius: '8px',
                                 boxShadow: '0 8px 22px rgba(15, 23, 42, 0.12)',
-                                color: '#0f172a',
+                                color: 'var(--chart-tooltip-foreground)',
                               }}
                               formatter={(value, key) => [
                                 formatCurrency(Number(value ?? 0)),
@@ -2191,47 +2376,59 @@ export default function PatientProfilePage(): JSX.Element {
                   ) : (
                     paymentSummaries.map((invoice) => {
                       const normalizedStatus = invoice.status.toLowerCase();
-                      const statusTone = normalizedStatus === 'paid'
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : normalizedStatus === 'partially_paid'
-                          ? 'bg-amber-100 text-amber-700'
-                          : normalizedStatus === 'cancelled'
-                            ? 'bg-slate-200 text-slate-700'
-                            : 'bg-rose-100 text-rose-700';
+                      const statusTone =
+                        normalizedStatus === 'paid'
+                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/16 dark:text-emerald-200'
+                          : normalizedStatus === 'partially_paid'
+                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/16 dark:text-amber-200'
+                            : normalizedStatus === 'cancelled'
+                              ? 'bg-slate-200 text-slate-700 dark:bg-slate-500/16 dark:text-slate-200'
+                              : 'bg-rose-100 text-rose-700 dark:bg-rose-500/16 dark:text-rose-200';
                       const debtFlow = debtFlowByInvoiceId.get(invoice.id);
-                      const sourceInvoice = debtFlow ? paymentSummaryById.get(debtFlow.sourceId) : null;
-                      const settlementInvoice = debtFlow ? paymentSummaryById.get(debtFlow.settlementId) : null;
-                      const showPartialFlow = normalizedStatus === 'partially_paid' && Boolean(debtFlow);
-                      const movedRemainingAmount = invoice.invoiceKind === 'debt_source'
-                        ? settlementInvoice?.totalNet ?? 0
-                        : 0;
-                      const displayedRemainingAmount = Math.max(invoice.remainingAmount, movedRemainingAmount);
+                      const sourceInvoice = debtFlow
+                        ? paymentSummaryById.get(debtFlow.sourceId)
+                        : null;
+                      const settlementInvoice = debtFlow
+                        ? paymentSummaryById.get(debtFlow.settlementId)
+                        : null;
+                      const showPartialFlow =
+                        normalizedStatus === 'partially_paid' && Boolean(debtFlow);
+                      const movedRemainingAmount =
+                        invoice.invoiceKind === 'debt_source'
+                          ? (settlementInvoice?.totalNet ?? 0)
+                          : 0;
+                      const displayedRemainingAmount = Math.max(
+                        invoice.remainingAmount,
+                        movedRemainingAmount
+                      );
                       const hasRemainingAmount = displayedRemainingAmount > 0;
                       const isConnectedInvoice = Boolean(debtFlow);
-                      const isBaseConnected = isConnectedInvoice && invoice.invoiceKind === 'debt_source';
-                      const isSettlementConnected = isConnectedInvoice && invoice.invoiceKind === 'debt_settlement';
+                      const isBaseConnected =
+                        isConnectedInvoice && invoice.invoiceKind === 'debt_source';
+                      const isSettlementConnected =
+                        isConnectedInvoice && invoice.invoiceKind === 'debt_settlement';
                       const connectionCardTone = isBaseConnected
-                        ? 'border-sky-300 bg-sky-50/30'
+                        ? 'border-sky-300 bg-sky-50/30 dark:border-sky-400/30 dark:bg-sky-500/10'
                         : isSettlementConnected
-                          ? 'border-emerald-300 bg-emerald-50/30'
+                          ? 'border-emerald-300 bg-emerald-50/30 dark:border-emerald-400/30 dark:bg-emerald-500/10'
                           : isConnectedInvoice
-                            ? 'border-amber-300 bg-amber-50/30'
+                            ? 'border-amber-300 bg-amber-50/30 dark:border-amber-400/30 dark:bg-amber-500/10'
                             : 'border-border bg-background';
                       const connectionChipTone = isBaseConnected
-                        ? 'bg-sky-100 text-sky-700'
+                        ? 'bg-sky-100 text-sky-700 dark:bg-sky-500/16 dark:text-sky-200'
                         : isSettlementConnected
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : 'bg-amber-100 text-amber-700';
+                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/16 dark:text-emerald-200'
+                          : 'bg-amber-100 text-amber-700 dark:bg-amber-500/16 dark:text-amber-200';
                       const connectionDotTone = isBaseConnected
                         ? 'bg-sky-500'
                         : isSettlementConnected
                           ? 'bg-emerald-500'
                           : 'bg-amber-500';
                       const connectionTextTone = isBaseConnected
-                        ? 'text-sky-700'
+                        ? 'text-sky-700 dark:text-sky-200'
                         : isSettlementConnected
-                          ? 'text-emerald-700'
-                          : 'text-amber-700';
+                          ? 'text-emerald-700 dark:text-emerald-200'
+                          : 'text-amber-700 dark:text-amber-200';
                       const connectionLabel = isBaseConnected
                         ? 'Connected Flow - Base'
                         : isSettlementConnected
@@ -2239,27 +2436,34 @@ export default function PatientProfilePage(): JSX.Element {
                           : 'Connected Flow';
 
                       return (
-                        <div key={`patient-payment-${invoice.id}`} className={`rounded-lg border p-3 ${connectionCardTone}`}>
+                        <div
+                          key={`patient-payment-${invoice.id}`}
+                          className={`rounded-lg border p-3 ${connectionCardTone}`}
+                        >
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <p className="text-sm font-semibold text-foreground">
                               Invoice #{invoice.id}
                             </p>
                             <div className="flex flex-wrap items-center gap-1.5">
                               {invoice.invoiceKind === 'debt_source' ? (
-                                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold uppercase text-sky-700">
+                                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold uppercase text-sky-700 dark:bg-sky-500/16 dark:text-sky-200">
                                   Base Invoice
                                 </span>
                               ) : null}
                               {invoice.invoiceKind === 'debt_settlement' ? (
-                                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold uppercase text-emerald-700">
+                                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold uppercase text-emerald-700 dark:bg-emerald-500/16 dark:text-emerald-200">
                                   Settlement Invoice
                                 </span>
                               ) : null}
-                              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase ${statusTone}`}>
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase ${statusTone}`}
+                              >
                                 {invoice.status.replaceAll('_', ' ')}
                               </span>
                               {isConnectedInvoice ? (
-                                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${connectionChipTone}`}>
+                                <span
+                                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${connectionChipTone}`}
+                                >
                                   <span className={`size-2 rounded-full ${connectionDotTone}`} />
                                   {connectionLabel}
                                 </span>
@@ -2267,7 +2471,8 @@ export default function PatientProfilePage(): JSX.Element {
                             </div>
                           </div>
                           <p className="mt-1 text-xs text-muted-foreground">
-                            Date: {formatDisplayDate(invoice.invoiceDate)} | Visit: {invoice.visitLabel}
+                            Date: {formatDisplayDate(invoice.invoiceDate)} | Visit:{' '}
+                            {invoice.visitLabel}
                           </p>
                           {invoice.linkedInvoiceId ? (
                             <p className={`text-xs ${connectionTextTone}`}>
@@ -2279,28 +2484,38 @@ export default function PatientProfilePage(): JSX.Element {
                           </p>
 
                           {showPartialFlow ? (
-                            <div className="mt-2 rounded-md border border-amber-300/70 bg-amber-50/70 p-2.5">
-                              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
+                            <div className="mt-2 rounded-md border border-amber-300/70 bg-amber-50/70 p-2.5 dark:border-amber-400/30 dark:bg-amber-500/10">
+                              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-200">
                                 Partial Payment Flow
                               </p>
                               <div className="grid gap-2 md:grid-cols-[1fr_auto_1fr] md:items-center">
-                                <div className="rounded-md border border-sky-200 bg-sky-50 p-2">
-                                  <p className="text-[11px] font-semibold text-sky-800">Step 1: Base Invoice</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    #{sourceInvoice?.id || debtFlow?.sourceId || '-'} | {formatDisplayDate(sourceInvoice?.invoiceDate)}
+                                <div className="rounded-md border border-sky-200 bg-sky-50 p-2 dark:border-sky-400/30 dark:bg-sky-500/10">
+                                  <p className="text-[11px] font-semibold text-sky-800 dark:text-sky-100">
+                                    Step 1: Base Invoice
                                   </p>
                                   <p className="text-xs text-muted-foreground">
-                                    Net: {formatCurrency(sourceInvoice?.totalNet ?? 0)} | Paid: {formatCurrency(sourceInvoice?.totalPaid ?? 0)}
+                                    #{sourceInvoice?.id || debtFlow?.sourceId || '-'} |{' '}
+                                    {formatDisplayDate(sourceInvoice?.invoiceDate)}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Net: {formatCurrency(sourceInvoice?.totalNet ?? 0)} | Paid:{' '}
+                                    {formatCurrency(sourceInvoice?.totalPaid ?? 0)}
                                   </p>
                                 </div>
-                                <div className="text-center text-lg font-semibold text-amber-700">{'->'}</div>
-                                <div className="rounded-md border border-emerald-200 bg-emerald-50 p-2">
-                                  <p className="text-[11px] font-semibold text-emerald-800">Step 2: Settlement Invoice</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    #{settlementInvoice?.id || debtFlow?.settlementId || '-'} | {formatDisplayDate(settlementInvoice?.invoiceDate)}
+                                <div className="text-center text-lg font-semibold text-amber-700 dark:text-amber-200">
+                                  {'->'}
+                                </div>
+                                <div className="rounded-md border border-emerald-200 bg-emerald-50 p-2 dark:border-emerald-400/30 dark:bg-emerald-500/10">
+                                  <p className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-100">
+                                    Step 2: Settlement Invoice
                                   </p>
                                   <p className="text-xs text-muted-foreground">
-                                    Net: {formatCurrency(settlementInvoice?.totalNet ?? 0)} | Paid: {formatCurrency(settlementInvoice?.totalPaid ?? 0)}
+                                    #{settlementInvoice?.id || debtFlow?.settlementId || '-'} |{' '}
+                                    {formatDisplayDate(settlementInvoice?.invoiceDate)}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Net: {formatCurrency(settlementInvoice?.totalNet ?? 0)} | Paid:{' '}
+                                    {formatCurrency(settlementInvoice?.totalPaid ?? 0)}
                                   </p>
                                 </div>
                               </div>
@@ -2308,33 +2523,72 @@ export default function PatientProfilePage(): JSX.Element {
                           ) : null}
 
                           <div className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
-                            <p>Total: <span className="font-semibold text-foreground">{formatCurrency(invoice.totalAmount)}</span></p>
-                            <p>Discount: <span className="font-semibold text-foreground">{formatCurrency(invoice.totalDiscount)}</span></p>
-                            <p>Net: <span className="font-semibold text-foreground">{formatCurrency(invoice.totalNet)}</span></p>
-                            <p>Paid: <span className="font-semibold text-foreground">{formatCurrency(invoice.totalPaid)}</span></p>
-                            <p className={`sm:col-span-2 rounded p-2 ${hasRemainingAmount ? 'bg-yellow-300' : ''}`}>
-                              Remaining: <span className="font-semibold text-foreground">{formatCurrency(displayedRemainingAmount)}</span>
+                            <p>
+                              Total:{' '}
+                              <span className="font-semibold text-foreground">
+                                {formatCurrency(invoice.totalAmount)}
+                              </span>
+                            </p>
+                            <p>
+                              Discount:{' '}
+                              <span className="font-semibold text-foreground">
+                                {formatCurrency(invoice.totalDiscount)}
+                              </span>
+                            </p>
+                            <p>
+                              Net:{' '}
+                              <span className="font-semibold text-foreground">
+                                {formatCurrency(invoice.totalNet)}
+                              </span>
+                            </p>
+                            <p>
+                              Paid:{' '}
+                              <span className="font-semibold text-foreground">
+                                {formatCurrency(invoice.totalPaid)}
+                              </span>
+                            </p>
+                            <p
+                              className={`sm:col-span-2 rounded p-2 ${hasRemainingAmount ? 'bg-yellow-300/70 dark:bg-yellow-400/18' : ''}`}
+                            >
+                              Remaining:{' '}
+                              <span className="font-semibold text-foreground">
+                                {formatCurrency(displayedRemainingAmount)}
+                              </span>
                             </p>
                           </div>
                           {invoice.isEstimatedPaid ? (
                             <p className="mt-1 text-[11px] text-muted-foreground">
-                              Paid amount is estimated from invoice status because no payment entries are recorded yet.
+                              Paid amount is estimated from invoice status because no payment
+                              entries are recorded yet.
                             </p>
                           ) : null}
 
                           {invoice.payments.length === 0 ? (
-                            <p className="mt-2 text-xs text-muted-foreground">No payment entries yet for this invoice.</p>
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              No payment entries yet for this invoice.
+                            </p>
                           ) : (
                             <div className="mt-2 space-y-1">
                               {invoice.payments.map((payment) => (
-                                <div key={`patient-payment-entry-${invoice.id}-${payment.id}`} className="rounded-md border border-border/70 bg-muted/20 px-2 py-1.5">
+                                <div
+                                  key={`patient-payment-entry-${invoice.id}-${payment.id}`}
+                                  className="rounded-md border border-border/70 bg-muted/20 px-2 py-1.5"
+                                >
                                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                                    <p className="text-muted-foreground">{formatDisplayDate(payment.paymentDate)}</p>
-                                    <p className="font-semibold text-foreground">{formatCurrency(parseAmount(payment.amount))}</p>
+                                    <p className="text-muted-foreground">
+                                      {formatDisplayDate(payment.paymentDate)}
+                                    </p>
+                                    <p className="font-semibold text-foreground">
+                                      {formatCurrency(parseAmount(payment.amount))}
+                                    </p>
                                   </div>
-                                  <p className="text-xs text-muted-foreground">Method: {payment.method || '-'}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Method: {payment.method || '-'}
+                                  </p>
                                   {payment.notes ? (
-                                    <p className="text-xs text-muted-foreground">Notes: {payment.notes}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      Notes: {payment.notes}
+                                    </p>
                                   ) : null}
                                 </div>
                               ))}
@@ -2342,7 +2596,9 @@ export default function PatientProfilePage(): JSX.Element {
                           )}
 
                           {invoice.notes ? (
-                            <p className="mt-2 text-xs text-muted-foreground">Invoice Notes: {invoice.notes}</p>
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              Invoice Notes: {invoice.notes}
+                            </p>
                           ) : null}
                         </div>
                       );
@@ -2351,11 +2607,11 @@ export default function PatientProfilePage(): JSX.Element {
                 </CardContent>
               </Card>
 
-              <Card className="rounded-3xl border border-border/50 bg-gradient-to-br from-background via-background to-muted/20 shadow-sm">
+              <Card className="rounded-3xl border border-border/50 bg-card shadow-sm">
                 <CardHeader className="pb-4">
                   <div className="flex items-center gap-3">
-                    <div className="rounded-xl border border-rose-200/50 bg-rose-100/60 p-2">
-                      <HeartPulse className="size-5 text-rose-600" />
+                    <div className="rounded-xl border border-rose-200/50 bg-rose-100/60 p-2 dark:border-rose-400/20 dark:bg-rose-500/16">
+                      <HeartPulse className="size-5 text-rose-600 dark:text-rose-300" />
                     </div>
                     <div>
                       <CardTitle className="text-base text-foreground">Dental Condition</CardTitle>
@@ -2365,18 +2621,32 @@ export default function PatientProfilePage(): JSX.Element {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="mx-auto flex size-24 items-center justify-center rounded-full border-4 border-rose-200/60 bg-gradient-to-br from-rose-50/80 to-rose-100/50 shadow-lg sm:mx-0">
+                    <div className="mx-auto flex size-24 items-center justify-center rounded-full border-4 border-rose-200/60 bg-linear-to-br from-rose-50/80 to-rose-100/50 shadow-lg dark:border-rose-400/20 dark:from-rose-500/14 dark:to-rose-500/6 sm:mx-0">
                       <div className="text-center">
-                        <p className="text-3xl font-bold text-rose-900">{conditionStats.overall}%</p>
-                        <p className="text-xs text-rose-700 font-medium">overall</p>
+                        <p className="text-3xl font-bold text-rose-900 dark:text-rose-50">
+                          {conditionStats.overall}%
+                        </p>
+                        <p className="text-xs font-medium text-rose-700 dark:text-rose-200/80">
+                          overall
+                        </p>
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {conditionStats.entries.map((entry) => (
-                        <div key={entry.key} className="flex items-center gap-2 rounded-lg border border-border/50 bg-background px-3 py-2 shadow-sm">
-                          <div className="size-2 rounded-full" style={{ backgroundColor: CONDITIONS[entry.key].color }} />
-                          <span className="text-xs font-medium text-foreground">{CONDITIONS[entry.key].label}</span>
-                          <span className="text-xs font-semibold text-muted-foreground">{entry.percent}%</span>
+                        <div
+                          key={entry.key}
+                          className="flex items-center gap-2 rounded-lg border border-border/50 bg-background px-3 py-2 shadow-sm"
+                        >
+                          <div
+                            className="size-2 rounded-full"
+                            style={{ backgroundColor: CONDITIONS[entry.key].color }}
+                          />
+                          <span className="text-xs font-medium text-foreground">
+                            {CONDITIONS[entry.key].label}
+                          </span>
+                          <span className="text-xs font-semibold text-muted-foreground">
+                            {entry.percent}%
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -2384,7 +2654,10 @@ export default function PatientProfilePage(): JSX.Element {
                 </CardContent>
               </Card>
 
-              <Card id="session-tasks-section" className="border-border bg-card text-card-foreground">
+              <Card
+                id="session-tasks-section"
+                className="border-border bg-card text-card-foreground"
+              >
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center justify-between text-base">
                     <span>Session Tasks</span>
@@ -2413,7 +2686,10 @@ export default function PatientProfilePage(): JSX.Element {
                             }}
                             className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs ${taskMark === mark.value ? 'border-primary' : 'border-border'}`}
                           >
-                            <span className="size-2.5 rounded-full" style={{ backgroundColor: mark.color }} />
+                            <span
+                              className="size-2.5 rounded-full"
+                              style={{ backgroundColor: mark.color }}
+                            />
                             <span>{mark.label}</span>
                           </button>
                         ))}
@@ -2451,9 +2727,7 @@ export default function PatientProfilePage(): JSX.Element {
                       Add Task
                     </Button>
                   </div>
-                  {taskError ? (
-                    <p className="text-xs text-destructive">{taskError}</p>
-                  ) : null}
+                  {taskError ? <p className="text-xs text-destructive">{taskError}</p> : null}
 
                   <div className="space-y-2">
                     {isLoadingManualTasks ? (
@@ -2462,7 +2736,10 @@ export default function PatientProfilePage(): JSX.Element {
                       <p className="text-sm text-muted-foreground">No manual tasks added yet.</p>
                     ) : (
                       manualTasks.map((task) => (
-                        <div key={task.id} className="rounded-lg border border-border bg-background p-3">
+                        <div
+                          key={task.id}
+                          className="rounded-lg border border-border bg-background p-3"
+                        >
                           <div className="flex flex-wrap items-start justify-between gap-2">
                             <div>
                               <p className="text-sm font-semibold text-foreground">{task.title}</p>
@@ -2471,14 +2748,14 @@ export default function PatientProfilePage(): JSX.Element {
                                   className="size-2.5 rounded-full"
                                   style={{
                                     backgroundColor:
-                                      TASK_MARKS.find((item) => item.value === task.mark)?.color
-                                      || '#94a3b8',
+                                      TASK_MARKS.find((item) => item.value === task.mark)?.color ||
+                                      '#94a3b8',
                                   }}
                                 />
                                 <span>
                                   Mark:{' '}
-                                  {TASK_MARKS.find((item) => item.value === task.mark)?.label
-                                    || task.mark}
+                                  {TASK_MARKS.find((item) => item.value === task.mark)?.label ||
+                                    task.mark}
                                 </span>
                               </p>
                               {task.notes ? (
@@ -2489,7 +2766,10 @@ export default function PatientProfilePage(): JSX.Element {
                               <select
                                 value={task.status}
                                 onChange={(event) => {
-                                  void handleStatusChange(task.id, event.target.value as SessionTaskStatus);
+                                  void handleStatusChange(
+                                    task.id,
+                                    event.target.value as SessionTaskStatus
+                                  );
                                 }}
                                 disabled={isTaskMutationLoading}
                                 className="h-8 rounded-md border border-input bg-background px-2 text-xs"
@@ -2519,7 +2799,10 @@ export default function PatientProfilePage(): JSX.Element {
                 </CardContent>
               </Card>
 
-              <Card id="patient-visits-section" className="border-border bg-card text-card-foreground">
+              <Card
+                id="patient-visits-section"
+                className="border-border bg-card text-card-foreground"
+              >
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center justify-between text-base">
                     <span>Patient Visits</span>
@@ -2536,7 +2819,9 @@ export default function PatientProfilePage(): JSX.Element {
                         type="button"
                         onClick={() => {
                           const encodedVisitId = encodeURIComponent(String(visit.id));
-                          router.push(`/${locale}/dental-management/visits/chart?visitId=${encodedVisitId}`);
+                          router.push(
+                            `/${locale}/dental-management/visits/chart?visitId=${encodedVisitId}`
+                          );
                         }}
                         className="w-full rounded-lg border border-border bg-background p-3 text-left transition hover:border-primary/40 hover:bg-accent/20"
                       >
@@ -2550,10 +2835,14 @@ export default function PatientProfilePage(): JSX.Element {
                           Dentist: {visit.dentistName || visit.dentistId || '-'}
                         </p>
                         {visit.nextVisitDate ? (
-                          <p className="text-xs text-muted-foreground">Next Visit: {visit.nextVisitDate}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Next Visit: {visit.nextVisitDate}
+                          </p>
                         ) : null}
                         {visit.diagnosisNotes ? (
-                          <p className="mt-1 text-xs text-muted-foreground">{visit.diagnosisNotes}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {visit.diagnosisNotes}
+                          </p>
                         ) : null}
                       </button>
                     ))
@@ -2561,7 +2850,10 @@ export default function PatientProfilePage(): JSX.Element {
                 </CardContent>
               </Card>
 
-              <Card id="prescriptions-section" className="border-border bg-card text-card-foreground">
+              <Card
+                id="prescriptions-section"
+                className="border-border bg-card text-card-foreground"
+              >
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center justify-between text-base">
                     <span>Prescriptions</span>
@@ -2573,13 +2865,22 @@ export default function PatientProfilePage(): JSX.Element {
                     <p className="text-sm text-muted-foreground">No prescriptions recorded yet.</p>
                   ) : (
                     prescriptionRecords.map((record) => (
-                      <div key={`prescription-${record.id}`} className="rounded-lg border border-border bg-background p-3">
+                      <div
+                        key={`prescription-${record.id}`}
+                        className="rounded-lg border border-border bg-background p-3"
+                      >
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-sm font-semibold text-foreground">{record.treatmentName}</p>
-                          <p className="text-xs text-muted-foreground">{formatDisplayDate(record.visitDate)}</p>
+                          <p className="text-sm font-semibold text-foreground">
+                            {record.treatmentName}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatDisplayDate(record.visitDate)}
+                          </p>
                         </div>
                         <p className="text-xs text-muted-foreground">{record.visitLabel}</p>
-                        <p className="mt-1 whitespace-pre-wrap text-xs text-foreground">{record.content}</p>
+                        <p className="mt-1 whitespace-pre-wrap text-xs text-foreground">
+                          {record.content}
+                        </p>
                       </div>
                     ))
                   )}
@@ -2594,15 +2895,37 @@ export default function PatientProfilePage(): JSX.Element {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="grid gap-2 text-sm text-muted-foreground md:grid-cols-2">
-                  <p>Email: <span className="text-foreground">{patient?.email || '-'}</span></p>
-                  <p>Address: <span className="text-foreground">{patient?.address || '-'}</span></p>
-                  <p>Emergency: <span className="text-foreground">{patient?.emergencyContact || '-'}</span></p>
-                  <p>Latest Visit: <span className="text-foreground">{latestVisit?.visitDate || '-'}</span></p>
-                  <p>Status: <span className="text-foreground">{patient?.status || '-'}</span></p>
-                  <p>Visit Count: <span className="text-foreground">{visits.length}</span></p>
-                  <p>Treatments: <span className="text-foreground">{typedVisitTreatments.length}</span></p>
-                  <p>Prescriptions: <span className="text-foreground">{prescriptionRecords.length}</span></p>
-                  <p className="md:col-span-2">Remarks: <span className="text-foreground">{patient?.remarks || '-'}</span></p>
+                  <p>
+                    Email: <span className="text-foreground">{patient?.email || '-'}</span>
+                  </p>
+                  <p>
+                    Address: <span className="text-foreground">{patient?.address || '-'}</span>
+                  </p>
+                  <p>
+                    Emergency:{' '}
+                    <span className="text-foreground">{patient?.emergencyContact || '-'}</span>
+                  </p>
+                  <p>
+                    Latest Visit:{' '}
+                    <span className="text-foreground">{latestVisit?.visitDate || '-'}</span>
+                  </p>
+                  <p>
+                    Status: <span className="text-foreground">{patient?.status || '-'}</span>
+                  </p>
+                  <p>
+                    Visit Count: <span className="text-foreground">{visits.length}</span>
+                  </p>
+                  <p>
+                    Treatments:{' '}
+                    <span className="text-foreground">{typedVisitTreatments.length}</span>
+                  </p>
+                  <p>
+                    Prescriptions:{' '}
+                    <span className="text-foreground">{prescriptionRecords.length}</span>
+                  </p>
+                  <p className="md:col-span-2">
+                    Remarks: <span className="text-foreground">{patient?.remarks || '-'}</span>
+                  </p>
                 </CardContent>
               </Card>
 
@@ -2641,7 +2964,10 @@ export default function PatientProfilePage(): JSX.Element {
                         <p className="text-muted-foreground">
                           Completion
                           <span className="mt-1 block text-sm font-semibold text-foreground">
-                            {Math.round((answeredQuestionnaireCount / questionnaireResponses.length) * 100)}%
+                            {Math.round(
+                              (answeredQuestionnaireCount / questionnaireResponses.length) * 100
+                            )}
+                            %
                           </span>
                         </p>
                       </div>
@@ -2651,8 +2977,8 @@ export default function PatientProfilePage(): JSX.Element {
                           <TableHeader className="bg-muted/40">
                             <TableRow className="hover:bg-transparent">
                               <TableHead className="w-12">#</TableHead>
-                              <TableHead className="min-w-[260px]">Question</TableHead>
-                              <TableHead className="min-w-[220px]">Answer</TableHead>
+                              <TableHead className="min-w-65">Question</TableHead>
+                              <TableHead className="min-w-55">Answer</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -2662,7 +2988,9 @@ export default function PatientProfilePage(): JSX.Element {
                                   {String(index + 1).padStart(2, '0')}
                                 </TableCell>
                                 <TableCell className="whitespace-normal">
-                                  <p className="font-medium text-foreground">{response.questionLabel}</p>
+                                  <p className="font-medium text-foreground">
+                                    {response.questionLabel}
+                                  </p>
                                   {response.helpText ? (
                                     <p className="mt-1 text-xs text-muted-foreground">
                                       {response.helpText}
@@ -2671,8 +2999,8 @@ export default function PatientProfilePage(): JSX.Element {
                                   <span
                                     className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                                       response.isRequired
-                                        ? 'bg-rose-100 text-rose-700'
-                                        : 'bg-slate-100 text-slate-700'
+                                        ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/16 dark:text-rose-200'
+                                        : 'bg-slate-100 text-slate-700 dark:bg-slate-500/16 dark:text-slate-200'
                                     }`}
                                   >
                                     {response.isRequired ? 'Required' : 'Optional'}
@@ -2684,7 +3012,7 @@ export default function PatientProfilePage(): JSX.Element {
                                       {response.answerLabel}
                                     </p>
                                   ) : (
-                                    <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                                    <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-500/16 dark:text-amber-200">
                                       Not answered
                                     </span>
                                   )}
@@ -2696,7 +3024,8 @@ export default function PatientProfilePage(): JSX.Element {
                       </div>
 
                       <p className="text-xs text-muted-foreground">
-                        These answers are included in the printable patient record with a signature section.
+                        These answers are included in the printable patient record with a signature
+                        section.
                       </p>
                     </>
                   )}
@@ -2704,7 +3033,7 @@ export default function PatientProfilePage(): JSX.Element {
               </Card>
             </div>
 
-            <Card className="min-w-0 rounded-2xl border border-border/60 bg-gradient-to-b from-card to-card/80 shadow-lg">
+            <Card className="min-w-0 rounded-2xl border border-border/60 bg-card shadow-lg">
               <CardHeader className="pb-4 border-b border-border/40">
                 <CardTitle className="flex items-center justify-between text-sm font-semibold tracking-tight">
                   <span className="text-foreground">Dental Scheme</span>
@@ -2714,7 +3043,7 @@ export default function PatientProfilePage(): JSX.Element {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-6">
-                <div className="relative mx-auto h-[360px] w-full max-w-[360px] overflow-hidden">
+                <div className="relative mx-auto h-90 w-full max-w-90 overflow-hidden">
                   {RING_TEETH.map((toothNumber, index) => {
                     const angle = (index / RING_TEETH.length) * Math.PI * 2 - Math.PI / 2;
                     const markerRadius = 38;
@@ -2731,11 +3060,13 @@ export default function PatientProfilePage(): JSX.Element {
                         <div
                           className={`absolute size-7 -translate-x-1/2 -translate-y-1/2 rounded-full transition-all duration-300 hover:scale-125 hover:z-10 ${condition ? 'border-2' : 'border-0'}`}
                           style={{
-                            backgroundColor: condition ? hexToRgba(conditionColor, 0.95) : '#e8e4e0',
+                            backgroundColor: condition
+                              ? hexToRgba(conditionColor, 0.95)
+                              : '#e8e4e0',
                             borderColor: condition ? conditionColor : '#c6ac8f',
                             left: `${markerX}%`,
                             top: `${markerY}%`,
-                            boxShadow: condition 
+                            boxShadow: condition
                               ? `0 4px 12px ${hexToRgba(conditionColor, 0.35)}, 0 2px 4px ${hexToRgba(conditionColor, 0.2)}`
                               : '0 2px 4px rgba(0,0,0,0.08)',
                           }}
@@ -2753,7 +3084,7 @@ export default function PatientProfilePage(): JSX.Element {
                     );
                   })}
 
-                  <div className="absolute left-1/2 top-1/2 flex size-32 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full border-2 border-border/40 bg-gradient-to-br from-background via-background to-muted/50 shadow-xl">
+                  <div className="absolute left-1/2 top-1/2 flex size-32 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full border-2 border-border/40 bg-card shadow-xl">
                     <div className="rounded-xl bg-primary/5 p-2.5 mb-2">
                       <Sparkles className="size-6 text-primary" />
                     </div>
@@ -2764,12 +3095,15 @@ export default function PatientProfilePage(): JSX.Element {
 
                 <div className="mt-6 grid grid-cols-2 gap-3 text-xs">
                   {Object.entries(CONDITIONS).map(([key, condition]) => (
-                    <div key={key} className="flex items-center gap-2.5 rounded-lg border border-border/40 bg-background/60 px-3 py-2.5 transition-all hover:border-border/60 hover:bg-background/80">
+                    <div
+                      key={key}
+                      className="flex items-center gap-2.5 rounded-lg border border-border/40 bg-background/60 px-3 py-2.5 transition-all hover:border-border/60 hover:bg-background/80"
+                    >
                       <span
                         className="size-3 rounded-full shadow-sm"
-                        style={{ 
+                        style={{
                           backgroundColor: condition.color,
-                          boxShadow: `0 2px 4px ${hexToRgba(condition.color, 0.3)}`
+                          boxShadow: `0 2px 4px ${hexToRgba(condition.color, 0.3)}`,
                         }}
                       />
                       <span className="font-medium text-foreground/90">{condition.label}</span>

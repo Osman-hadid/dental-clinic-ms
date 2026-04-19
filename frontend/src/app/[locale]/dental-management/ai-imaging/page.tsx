@@ -1,6 +1,6 @@
 'use client';
 
-import { JSX, useEffect, useMemo, useRef, useState } from 'react';
+import { JSX, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Header } from '@/components/header';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import { useMutation } from '@tanstack/react-query';
-import { Loader2, Sparkles } from 'lucide-react';
+import { BrainCircuit, FileText, Loader2 } from 'lucide-react';
 
 type AiImagingReport = {
   confidence: number;
@@ -20,31 +20,12 @@ type AiImagingReport = {
   urgency: string;
 };
 
-type DetectionBox = {
-  confidence: number;
-  label: string;
-  x1: number;
-  x2: number;
-  y1: number;
-  y2: number;
-};
-
 type AiImagingResponse = {
-  detectorModel?: string;
-  detectorMeta?: {
-    augment?: boolean;
-    confUsed?: number;
-    imgsz?: number;
-    iou?: number;
-    multiPass?: boolean;
-    variantUsed?: string;
-  };
-  detectorWarning?: string;
-  detections?: DetectionBox[];
+  analysisWarning?: string | null;
   disclaimer: string;
   modality: string;
-  provider?: string;
   model: string;
+  provider?: string;
   rawText: string;
   report: AiImagingReport;
 };
@@ -75,7 +56,6 @@ const extractErrorMessage = (error: unknown): string => {
   return 'Failed to analyze image.';
 };
 
-// eslint-disable-next-line react/function-component-definition
 export default function AiImagingPage(): JSX.Element {
   const locale = useLocale();
   const tSidebar = useTranslations('sidebar.dentalManagement');
@@ -85,93 +65,11 @@ export default function AiImagingPage(): JSX.Element {
   const [patientContext, setPatientContext] = useState('');
   const [reportData, setReportData] = useState<AiImagingResponse | null>(null);
   const [errorText, setErrorText] = useState('');
-  const previewImageRef = useRef<HTMLImageElement | null>(null);
-  const [imageMetrics, setImageMetrics] = useState({
-    displayHeight: 0,
-    displayWidth: 0,
-    naturalHeight: 0,
-    naturalWidth: 0,
-    offsetX: 0,
-    offsetY: 0,
-    renderedHeight: 0,
-    renderedWidth: 0,
-  });
-
-  const groupedDetections = useMemo(() => {
-    if (!reportData?.detections || reportData.detections.length === 0) {
-      return [];
-    }
-
-    const grouped = new Map<string, { count: number; confidenceSum: number }>();
-    reportData.detections.forEach((detection) => {
-      const current = grouped.get(detection.label) || { confidenceSum: 0, count: 0 };
-      current.count += 1;
-      current.confidenceSum += detection.confidence;
-      grouped.set(detection.label, current);
-    });
-
-    return Array.from(grouped.entries())
-      .map(([label, value]) => ({
-        avgConfidence: Math.round((value.confidenceSum / value.count) * 100),
-        count: value.count,
-        label,
-      }))
-      .sort((a, b) => b.count - a.count || b.avgConfidence - a.avgConfidence);
-  }, [reportData]);
 
   const previewUrl = useMemo(() => {
     if (!file) return '';
     return URL.createObjectURL(file);
   }, [file]);
-
-  const updateImageMetrics = (): void => {
-    const image = previewImageRef.current;
-    if (!image) return;
-
-    const naturalWidth = image.naturalWidth || 0;
-    const naturalHeight = image.naturalHeight || 0;
-    const renderedWidth = image.clientWidth || 0;
-    const renderedHeight = image.clientHeight || 0;
-
-    const scale =
-      naturalWidth > 0 && naturalHeight > 0
-        ? Math.min(renderedWidth / naturalWidth, renderedHeight / naturalHeight)
-        : 0;
-    const displayWidth = naturalWidth * scale;
-    const displayHeight = naturalHeight * scale;
-    const offsetX = (renderedWidth - displayWidth) / 2;
-    const offsetY = (renderedHeight - displayHeight) / 2;
-
-    setImageMetrics({
-      displayHeight,
-      displayWidth,
-      naturalHeight,
-      naturalWidth,
-      offsetX,
-      offsetY,
-      renderedHeight,
-      renderedWidth,
-    });
-  };
-
-  useEffect(() => {
-    return () => {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
-    };
-  }, [previewUrl]);
-
-  useEffect(() => {
-    const onResize = (): void => {
-      updateImageMetrics();
-    };
-
-    window.addEventListener('resize', onResize);
-    return () => {
-      window.removeEventListener('resize', onResize);
-    };
-  }, []);
 
   const analyzeMutation = useMutation({
     mutationFn: async (): Promise<AiImagingResponse> => {
@@ -212,8 +110,6 @@ export default function AiImagingPage(): JSX.Element {
     },
   });
 
-  const showLegacySections = true;
-
   return (
     <>
       <Header
@@ -222,390 +118,271 @@ export default function AiImagingPage(): JSX.Element {
           { id: 'aiImaging', isCurrent: true, label: tSidebar('aiImaging') },
         ]}
       />
-      <div className="flex flex-1 flex-col px-4 pb-6 lg:px-6">
-        <Card className="mb-4 border-border bg-gradient-to-r from-amber-50 via-background to-sky-50">
-          <CardContent className="flex flex-col items-center gap-4 py-6 text-center md:flex-row md:items-center md:justify-center md:text-left">
-            <div className="h-28 w-28 shrink-0">
-              <svg
-                viewBox="0 0 220 220"
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-full w-full"
-              >
-                <defs>
-                  <linearGradient id="underWorkGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#f59e0b" />
-                    <stop offset="100%" stopColor="#0ea5e9" />
-                  </linearGradient>
-                </defs>
-                <rect
-                  x="25"
-                  y="30"
-                  width="170"
-                  height="160"
-                  rx="18"
-                  fill="#ffffff"
-                  stroke="#d4d4d8"
-                  strokeWidth="6"
-                />
-                <rect
-                  x="45"
-                  y="52"
-                  width="130"
-                  height="90"
-                  rx="10"
-                  fill="#f8fafc"
-                  stroke="#cbd5e1"
-                  strokeWidth="4"
-                />
-                <path
-                  d="M70 115 L95 88 L113 106 L135 82 L160 110"
-                  fill="none"
-                  stroke="url(#underWorkGradient)"
-                  strokeWidth="8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <circle cx="72" cy="72" r="9" fill="#38bdf8" />
-                <circle cx="170" cy="164" r="20" fill="#f59e0b" />
-                <path
-                  d="M170 150v28M156 164h28"
-                  stroke="#fff"
-                  strokeWidth="6"
-                  strokeLinecap="round"
-                />
-              </svg>
+      <div className="flex flex-1 flex-col gap-4 px-4 pb-6 lg:px-6">
+        <Card className="overflow-hidden border-border bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.18),_transparent_34%),linear-gradient(140deg,_rgba(15,23,42,0.98),_rgba(8,47,73,0.96))] text-white">
+          <CardContent className="grid gap-5 py-6 lg:grid-cols-[1.2fr_0.8fr]">
+            <div className="space-y-3">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100">
+                <BrainCircuit className="size-3.5" />
+                DentalGemma Workflow
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-2xl font-semibold tracking-tight">AI imaging now focuses on report generation</h2>
+                <p className="max-w-2xl text-sm text-cyan-50/85">
+                  The old overlay and detection workflow has been removed from this page. Upload a
+                  dental image to generate a narrative AI report designed for clinical review.
+                </p>
+              </div>
             </div>
-            <div className="max-w-xl">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">
-                Under Work
-              </p>
-              <h3 className="mt-1 text-lg font-semibold text-foreground">
-                AI Imaging Is Still Improving
-              </h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                This section is under work. Results may change while we stabilize model behavior and
-                reporting.
-              </p>
+            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+              <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-cyan-100/80">Preferred model</p>
+                <p className="mt-2 text-sm font-semibold">DentalGemma 1.5 4B IT</p>
+              </div>
+              <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-cyan-100/80">Fallback</p>
+                <p className="mt-2 text-sm font-semibold">Gemini report mode</p>
+              </div>
+              <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-cyan-100/80">Output</p>
+                <p className="mt-2 text-sm font-semibold">Human-readable report</p>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        {showLegacySections ? (
-          <>
-            <div className="grid gap-4 xl:grid-cols-[1.1fr_1fr]">
-              <Card className="border-border bg-card">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Sparkles className="size-4 text-primary" />
-                    AI Imaging Assistant
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    Upload dental images (X-ray, OPG, CBCT, intraoral photo) for a preliminary AI
-                    report. This does not replace clinical diagnosis.
-                  </p>
+        <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+          <Card className="border-border bg-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BrainCircuit className="size-4 text-primary" />
+                Report Intake
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Upload a dental image and optional context. The AI will return a narrative report,
+                concerns, and next-step recommendations rather than boxes or segmentation masks.
+              </p>
 
-                  <div className="space-y-2">
-                    <label htmlFor="modality" className="text-sm font-medium">
-                      Modality
-                    </label>
-                    <select
-                      id="modality"
-                      value={modality}
-                      onChange={(event) => {
-                        setModality(event.target.value);
-                      }}
-                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                    >
-                      {MODALITY_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+              <div className="space-y-2">
+                <label htmlFor="modality" className="text-sm font-medium">
+                  Modality
+                </label>
+                <select
+                  id="modality"
+                  value={modality}
+                  onChange={(event) => {
+                    setModality(event.target.value);
+                  }}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  {MODALITY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-                  <div className="space-y-2">
-                    <label htmlFor="image" className="text-sm font-medium">
-                      Image File
-                    </label>
-                    <Input
-                      id="image"
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp,image/bmp,image/tiff"
-                      onChange={(event) => {
-                        setReportData(null);
-                        setImageMetrics({
-                          displayHeight: 0,
-                          displayWidth: 0,
-                          naturalHeight: 0,
-                          naturalWidth: 0,
-                          offsetX: 0,
-                          offsetY: 0,
-                          renderedHeight: 0,
-                          renderedWidth: 0,
-                        });
-                        const selectedFile = event.target.files?.[0] ?? null;
-                        setFile(selectedFile);
-                      }}
-                    />
-                  </div>
+              <div className="space-y-2">
+                <label htmlFor="image" className="text-sm font-medium">
+                  Image File
+                </label>
+                <Input
+                  id="image"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/bmp,image/tiff"
+                  onChange={(event) => {
+                    setReportData(null);
+                    setErrorText('');
+                    setFile(event.target.files?.[0] ?? null);
+                  }}
+                />
+              </div>
 
-                  <div className="space-y-2">
-                    <label htmlFor="context" className="text-sm font-medium">
-                      Optional Clinical Context
-                    </label>
-                    <textarea
-                      id="context"
-                      value={patientContext}
-                      onChange={(event) => {
-                        setPatientContext(event.target.value);
-                      }}
-                      placeholder="Symptoms, tooth area, pain history, prior treatment..."
-                      className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
-                    />
-                  </div>
+              <div className="space-y-2">
+                <label htmlFor="context" className="text-sm font-medium">
+                  Optional Clinical Context
+                </label>
+                <textarea
+                  id="context"
+                  value={patientContext}
+                  onChange={(event) => {
+                    setPatientContext(event.target.value);
+                  }}
+                  placeholder="Symptoms, suspected tooth, pain history, referral question..."
+                  className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+                />
+              </div>
 
-                  {errorText ? <p className="text-sm text-destructive">{errorText}</p> : null}
+              {errorText ? <p className="text-sm text-destructive">{errorText}</p> : null}
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      type="button"
-                      onClick={() => {
-                        analyzeMutation.mutate();
-                      }}
-                      disabled={!file || analyzeMutation.isPending}
-                      className="bg-primary text-primary-foreground hover:bg-accent hover:text-accent-foreground"
-                    >
-                      {analyzeMutation.isPending ? (
-                        <>
-                          <Loader2 className="me-2 size-4 animate-spin" />
-                          Analyzing
-                        </>
-                      ) : (
-                        'Analyze Image'
-                      )}
-                    </Button>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        window.open(
-                          `/${locale}/dental-management/ai-imaging`,
-                          '_blank',
-                          'noopener,noreferrer'
-                        );
-                      }}
-                    >
-                      Open In New Tab
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-border bg-card">
-                <CardHeader>
-                  <CardTitle>Image Preview</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {previewUrl ? (
-                    <div className="relative inline-block w-full">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        ref={previewImageRef}
-                        src={previewUrl}
-                        alt="Uploaded dental image preview"
-                        onLoad={() => {
-                          updateImageMetrics();
-                        }}
-                        className="max-h-[380px] w-full rounded-md border border-border object-contain bg-background"
-                      />
-                      {reportData?.detections &&
-                      reportData.detections.length > 0 &&
-                      imageMetrics.naturalWidth > 0 &&
-                      imageMetrics.displayWidth > 0 ? (
-                        <div
-                          className="pointer-events-none absolute inset-0 overflow-hidden rounded-md"
-                          style={{
-                            height: `${imageMetrics.renderedHeight}px`,
-                            width: `${imageMetrics.renderedWidth}px`,
-                          }}
-                        >
-                          {reportData.detections.map((detection, index) => {
-                            const left =
-                              imageMetrics.offsetX +
-                              (detection.x1 / imageMetrics.naturalWidth) *
-                                imageMetrics.displayWidth;
-                            const top =
-                              imageMetrics.offsetY +
-                              (detection.y1 / imageMetrics.naturalHeight) *
-                                imageMetrics.displayHeight;
-                            const width =
-                              ((detection.x2 - detection.x1) / imageMetrics.naturalWidth) *
-                              imageMetrics.displayWidth;
-                            const height =
-                              ((detection.y2 - detection.y1) / imageMetrics.naturalHeight) *
-                              imageMetrics.displayHeight;
-
-                            const color =
-                              detection.label.toLowerCase() === 'healthy' ? '#16a34a' : '#ef4444';
-
-                            return (
-                              <div
-                                key={`${detection.label}-${detection.x1}-${detection.y1}-${index}`}
-                                className="absolute"
-                                style={{
-                                  border: `2px solid ${color}`,
-                                  height: `${Math.max(height, 2)}px`,
-                                  left: `${left}px`,
-                                  top: `${top}px`,
-                                  width: `${Math.max(width, 2)}px`,
-                                }}
-                              >
-                                <span
-                                  className="absolute left-0 top-0 -translate-y-full rounded px-1 py-0.5 text-[10px] font-semibold text-white"
-                                  style={{ backgroundColor: color }}
-                                >
-                                  {detection.label} {Math.round(detection.confidence * 100)}%
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : null}
-                    </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  onClick={() => {
+                    analyzeMutation.mutate();
+                  }}
+                  disabled={!file || analyzeMutation.isPending}
+                  className="bg-primary text-primary-foreground hover:bg-accent hover:text-accent-foreground"
+                >
+                  {analyzeMutation.isPending ? (
+                    <>
+                      <Loader2 className="me-2 size-4 animate-spin" />
+                      Generating Report
+                    </>
                   ) : (
-                    <div className="flex min-h-[220px] items-center justify-center rounded-md border border-dashed border-border text-sm text-muted-foreground">
-                      No image selected.
-                    </div>
+                    'Generate Report'
                   )}
-                </CardContent>
-              </Card>
-            </div>
+                </Button>
 
-            <Card className="mt-4 border-border bg-card">
-              <CardHeader>
-                <CardTitle>AI Report</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {!reportData ? (
-                  <p className="text-sm text-muted-foreground">
-                    Run analysis to generate a report.
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    window.open(
+                      `/${locale}/dental-management/ai-imaging`,
+                      '_blank',
+                      'noopener,noreferrer'
+                    );
+                  }}
+                >
+                  Open In New Tab
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border bg-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="size-4 text-primary" />
+                Image Preview
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {previewUrl ? (
+                <div className="space-y-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={previewUrl}
+                    alt="Uploaded dental image preview"
+                    className="max-h-[420px] w-full rounded-xl border border-border object-contain bg-background"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    The uploaded image is used to generate a report. This page no longer draws
+                    detection boxes or segmentation overlays.
                   </p>
-                ) : (
-                  <>
-                    <p className="text-sm text-muted-foreground">
-                      Model: <span className="text-foreground">{reportData.model}</span> | Modality:{' '}
-                      <span className="text-foreground">{reportData.modality}</span> | Provider:{' '}
-                      <span className="text-foreground">{reportData.provider || 'unknown'}</span>
+                </div>
+              ) : (
+                <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted-foreground">
+                  Upload an image to preview it here.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card className="border-border bg-card">
+          <CardHeader>
+            <CardTitle>AI Report</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {!reportData ? (
+              <p className="text-sm text-muted-foreground">Generate a report to view the AI interpretation.</p>
+            ) : (
+              <>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-2xl border border-border bg-background p-4">
+                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Provider</p>
+                    <p className="mt-2 text-sm font-semibold text-foreground">
+                      {reportData.provider || 'unknown'}
                     </p>
-                    {reportData.detectorModel ? (
-                      <p className="text-sm text-muted-foreground">
-                        Detector:{' '}
-                        <span className="text-foreground">{reportData.detectorModel}</span>
-                      </p>
-                    ) : null}
-                    {reportData.detectorMeta ? (
-                      <p className="text-sm text-muted-foreground">
-                        Variant:{' '}
-                        <span className="text-foreground">
-                          {reportData.detectorMeta.variantUsed || 'original'}
-                        </span>{' '}
-                        | Conf Used:{' '}
-                        <span className="text-foreground">
-                          {reportData.detectorMeta.confUsed
-                            ? `${Math.round(reportData.detectorMeta.confUsed * 100)}%`
-                            : 'n/a'}
-                        </span>
-                      </p>
-                    ) : null}
-                    {reportData.detectorWarning ? (
-                      <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-                        {reportData.detectorWarning}
-                      </p>
-                    ) : null}
-                    <p className="rounded-md border border-border bg-background p-3 text-sm">
-                      <span className="font-semibold">Summary: </span>
-                      {reportData.report.summary || 'No summary provided.'}
+                  </div>
+                  <div className="rounded-2xl border border-border bg-background p-4">
+                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Model</p>
+                    <p className="mt-2 text-sm font-semibold text-foreground">{reportData.model}</p>
+                  </div>
+                  <div className="rounded-2xl border border-border bg-background p-4">
+                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Modality</p>
+                    <p className="mt-2 text-sm font-semibold text-foreground">{reportData.modality}</p>
+                  </div>
+                  <div className="rounded-2xl border border-border bg-background p-4">
+                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Confidence</p>
+                    <p className="mt-2 text-sm font-semibold text-foreground">
+                      {reportData.report.confidence}%
                     </p>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div className="rounded-md border border-border bg-background p-3">
-                        <p className="mb-1 text-sm font-semibold">Findings</p>
-                        <ul className="list-disc ps-5 text-sm text-muted-foreground">
-                          {reportData.report.findings.length > 0 ? (
-                            reportData.report.findings.map((item) => <li key={item}>{item}</li>)
-                          ) : (
-                            <li>No findings listed.</li>
-                          )}
-                        </ul>
-                      </div>
-                      <div className="rounded-md border border-border bg-background p-3">
-                        <p className="mb-1 text-sm font-semibold">Concerns</p>
-                        <ul className="list-disc ps-5 text-sm text-muted-foreground">
-                          {reportData.report.concerns.length > 0 ? (
-                            reportData.report.concerns.map((item) => <li key={item}>{item}</li>)
-                          ) : (
-                            <li>No concerns listed.</li>
-                          )}
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="rounded-md border border-border bg-background p-3">
-                      <p className="mb-1 text-sm font-semibold">Recommendations</p>
-                      <ul className="list-disc ps-5 text-sm text-muted-foreground">
-                        {reportData.report.recommendations.length > 0 ? (
-                          reportData.report.recommendations.map((item) => (
-                            <li key={item}>{item}</li>
-                          ))
-                        ) : (
-                          <li>No recommendations listed.</li>
-                        )}
-                      </ul>
-                    </div>
-                    {groupedDetections.length > 0 ? (
-                      <div className="rounded-md border border-border bg-background p-3">
-                        <p className="mb-1 text-sm font-semibold">Condition Overview</p>
-                        <ul className="list-disc ps-5 text-sm text-muted-foreground">
-                          {groupedDetections.map((group) => (
-                            <li key={group.label}>
-                              {group.label}: detected in {group.count} region(s), average confidence{' '}
-                              {group.avgConfidence}%
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-                    {reportData.detections && reportData.detections.length > 0 ? (
-                      <details className="rounded-md border border-border bg-background p-3 text-sm text-muted-foreground">
-                        <summary className="cursor-pointer font-semibold text-foreground">
-                          Technical Detection Boxes
-                        </summary>
-                        <ul className="mt-2 list-disc ps-5">
-                          {reportData.detections.map((detection, index) => (
-                            <li key={`${detection.label}-${detection.x1}-${detection.y1}-${index}`}>
-                              {detection.label} ({Math.round(detection.confidence * 100)}%) [
-                              {detection.x1},{detection.y1}] to [{detection.x2},{detection.y2}]
-                            </li>
-                          ))}
-                        </ul>
-                      </details>
-                    ) : null}
-                    <p className="text-sm text-muted-foreground">
-                      Confidence:{' '}
-                      <span className="text-foreground">{reportData.report.confidence}%</span> |
-                      Urgency: <span className="text-foreground">{reportData.report.urgency}</span>
-                    </p>
-                    <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-                      {reportData.disclaimer || reportData.report.disclaimer}
-                    </p>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          </>
-        ) : null}
+                  </div>
+                </div>
+
+                {reportData.analysisWarning ? (
+                  <p className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                    {reportData.analysisWarning}
+                  </p>
+                ) : null}
+
+                <p className="rounded-2xl border border-border bg-background p-4 text-sm">
+                  <span className="font-semibold">Summary: </span>
+                  {reportData.report.summary || 'No summary provided.'}
+                </p>
+
+                <div className="grid gap-3 lg:grid-cols-2">
+                  <div className="rounded-2xl border border-border bg-background p-4">
+                    <p className="mb-2 text-sm font-semibold text-foreground">Findings</p>
+                    <ul className="list-disc ps-5 text-sm text-muted-foreground">
+                      {reportData.report.findings.length > 0 ? (
+                        reportData.report.findings.map((item) => <li key={item}>{item}</li>)
+                      ) : (
+                        <li>No findings listed.</li>
+                      )}
+                    </ul>
+                  </div>
+                  <div className="rounded-2xl border border-border bg-background p-4">
+                    <p className="mb-2 text-sm font-semibold text-foreground">Concerns</p>
+                    <ul className="list-disc ps-5 text-sm text-muted-foreground">
+                      {reportData.report.concerns.length > 0 ? (
+                        reportData.report.concerns.map((item) => <li key={item}>{item}</li>)
+                      ) : (
+                        <li>No concerns listed.</li>
+                      )}
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-border bg-background p-4">
+                  <p className="mb-2 text-sm font-semibold text-foreground">Recommendations</p>
+                  <ul className="list-disc ps-5 text-sm text-muted-foreground">
+                    {reportData.report.recommendations.length > 0 ? (
+                      reportData.report.recommendations.map((item) => <li key={item}>{item}</li>)
+                    ) : (
+                      <li>No recommendations listed.</li>
+                    )}
+                  </ul>
+                </div>
+
+                <p className="text-sm text-muted-foreground">
+                  Urgency: <span className="capitalize text-foreground">{reportData.report.urgency}</span>
+                </p>
+
+                {reportData.rawText ? (
+                  <details className="rounded-2xl border border-border bg-background p-4 text-sm text-muted-foreground">
+                    <summary className="cursor-pointer font-semibold text-foreground">
+                      Raw Model Output
+                    </summary>
+                    <pre className="mt-3 whitespace-pre-wrap break-words text-xs">
+                      {reportData.rawText}
+                    </pre>
+                  </details>
+                ) : null}
+
+                <p className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                  {reportData.disclaimer || reportData.report.disclaimer}
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </>
   );

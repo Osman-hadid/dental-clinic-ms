@@ -764,7 +764,7 @@ export const InvoiceVisitSyncPanel = (): JSX.Element => {
           </div>
         )}
 
-        <div className="space-y-4 rounded-2xl border border-border/50 bg-gradient-to-br from-white/80 to-muted/50 p-5 shadow-sm">
+        <div className="space-y-4 rounded-2xl border border-border/50 bg-card p-5 shadow-sm">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-xl border border-border/40 bg-background/60 p-3">
               <div className="flex items-center gap-2 mb-1">

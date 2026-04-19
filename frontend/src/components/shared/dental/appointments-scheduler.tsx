@@ -223,15 +223,15 @@ ReservationType,
 > = {
   consultation: {
     label: 'Consultation',
-    pillClass: 'border-blue-300 bg-blue-50 text-blue-700',
+    pillClass: 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-400/20 dark:bg-blue-500/12 dark:text-blue-100',
   },
   emergency: {
     label: 'Emergency care',
-    pillClass: 'border-rose-300 bg-rose-50 text-rose-700',
+    pillClass: 'border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-500/12 dark:text-rose-100',
   },
   treatment: {
     label: 'Treatment',
-    pillClass: 'border-emerald-300 bg-emerald-50 text-emerald-700',
+    pillClass: 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-500/12 dark:text-emerald-100',
   },
 };
 
@@ -523,7 +523,7 @@ export const AppointmentsScheduler = ({
   };
 
   return (
-    <Card className="overflow-hidden rounded-[28px] border border-slate-200/80 bg-[#f8fafc] pt-0 shadow-sm">
+    <Card className="overflow-hidden rounded-[28px] border border-border/50 bg-card pt-0 shadow-sm">
       <CardContent className="overflow-hidden p-4 md:p-5">
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
           <div className="min-w-0 space-y-4">
@@ -536,11 +536,11 @@ export const AppointmentsScheduler = ({
               </p>
             </section>
 
-            <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+            <section className="rounded-3xl border border-border/50 bg-card p-4 shadow-sm">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h3 className="text-xl font-semibold text-slate-900">Schedule</h3>
-                  <p className="text-sm text-slate-500">Book and manage dental appointments with ease.</p>
+                  <h3 className="text-xl font-semibold text-foreground">Schedule</h3>
+                  <p className="text-sm text-muted-foreground">Book and manage dental appointments with ease.</p>
                 </div>
                 <div className="flex items-center gap-2">
                   {canCreate ? (
@@ -580,9 +580,9 @@ export const AppointmentsScheduler = ({
                 </div>
               </div>
 
-              <p className="mt-4 text-sm font-medium text-slate-600">{monthLabel(selectedMonth)}</p>
+              <p className="mt-4 text-sm font-medium text-muted-foreground">{monthLabel(selectedMonth)}</p>
 
-              <div className="mt-3 grid grid-cols-7 gap-2 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+              <div className="mt-3 grid grid-cols-7 gap-2 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/80">
                 {WEEKDAY_LABELS.map((label) => (
                   <div key={label} className="py-1">
                     {label}
@@ -618,18 +618,18 @@ export const AppointmentsScheduler = ({
                       className={cn(
                         'min-h-20 rounded-2xl border px-2 py-2 text-center transition-all duration-200',
                         isSelected
-                          ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-md ring-2 ring-blue-200/60'
+                          ? 'border-blue-500 bg-blue-500/12 text-blue-700 shadow-md ring-2 ring-blue-300/40 dark:text-blue-100 dark:ring-blue-500/30'
                           : isOccupiedDay
-                            ? 'border-rose-300 bg-rose-50 text-rose-700 hover:border-rose-400 hover:bg-rose-100/70'
+                            ? 'border-rose-300 bg-rose-50 text-rose-700 hover:border-rose-400 hover:bg-rose-100/70 dark:border-rose-400/25 dark:bg-rose-500/12 dark:text-rose-100 dark:hover:bg-rose-500/16'
                           : isHovered
-                            ? 'border-blue-300 bg-blue-50/80 text-blue-700 -translate-y-0.5 shadow-sm'
-                            : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:bg-blue-50/40 hover:-translate-y-0.5'
+                            ? 'border-blue-300 bg-blue-50/80 text-blue-700 -translate-y-0.5 shadow-sm dark:border-blue-400/30 dark:bg-blue-500/10 dark:text-blue-100'
+                            : 'border-border/60 bg-background text-foreground hover:border-blue-300 hover:bg-blue-50/40 hover:-translate-y-0.5 dark:hover:border-blue-400/30 dark:hover:bg-blue-500/10'
                       )}
                     >
                       <p className="text-[11px] leading-tight">{weekdayLabel(day)}</p>
                       <p className="text-lg font-semibold leading-tight">{day.getDate()}</p>
-                      <p className="text-[11px] font-medium text-slate-500">{isToday ? 'Today' : monthLabel(day).split(' ')[0]}</p>
-                      <p className="text-[11px] text-slate-500">{dayCount}</p>
+                      <p className="text-[11px] font-medium text-muted-foreground">{isToday ? 'Today' : monthLabel(day).split(' ')[0]}</p>
+                      <p className="text-[11px] text-muted-foreground">{dayCount}</p>
                     </button>
                   );
                 })}
@@ -646,7 +646,7 @@ export const AppointmentsScheduler = ({
                     'rounded-full border px-4 py-1.5 text-sm transition',
                     selectedTime === 'all'
                       ? 'border-blue-600 bg-blue-600 text-white'
-                      : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300'
+                      : 'border-border/60 bg-background text-muted-foreground hover:border-blue-300 dark:hover:border-blue-400/30'
                   )}
                 >
                   All times
@@ -668,12 +668,12 @@ export const AppointmentsScheduler = ({
                         isStart
                           ? 'border-blue-600 bg-blue-600 text-white'
                           : isEnd
-                            ? 'border-blue-300 bg-blue-100 text-blue-800'
+                            ? 'border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-400/30 dark:bg-blue-500/16 dark:text-blue-100'
                             : isOccupiedSlot
-                              ? 'border-rose-300 bg-rose-100 text-rose-800'
+                              ? 'border-rose-300 bg-rose-100 text-rose-800 dark:border-rose-400/30 dark:bg-rose-500/16 dark:text-rose-100'
                             : isSelectedFilter
                               ? 'border-blue-500 bg-blue-500 text-white'
-                              : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300'
+                              : 'border-border/60 bg-background text-muted-foreground hover:border-blue-300 dark:hover:border-blue-400/30'
                       )}
                     >
                       {slot}
@@ -681,15 +681,15 @@ export const AppointmentsScheduler = ({
                   );
                 })}
               </div>
-              <p className="mt-2 text-xs font-medium text-blue-700">
+              <p className="mt-2 text-xs font-medium text-blue-700 dark:text-blue-200">
                 Time picker: next click sets {timePickTarget === 'start' ? 'Start time' : 'End time'}
               </p>
 
               <Separator className="my-4" />
 
               {quickAddOpen ? (
-                <div className="mt-3 rounded-2xl border border-blue-200 bg-blue-50/40 p-3">
-                  <p className="mb-2 text-sm font-semibold text-blue-900">Quick Add Appointment</p>
+                <div className="mt-3 rounded-2xl border border-blue-200 bg-blue-50/40 p-3 dark:border-blue-400/20 dark:bg-blue-500/10">
+                  <p className="mb-2 text-sm font-semibold text-blue-900 dark:text-blue-50">Quick Add Appointment</p>
                   <div className="grid gap-2 md:grid-cols-2">
                     <Select
                       value={quickCreateData.patientId}
@@ -699,10 +699,10 @@ export const AppointmentsScheduler = ({
                     >
                       <SelectTrigger
                         className={cn(
-                          'w-full rounded-xl bg-white',
+                          'w-full rounded-xl',
                           quickCreateData.patientId
-                            ? 'border-blue-400 bg-blue-50 text-blue-900'
-                            : 'border-slate-200'
+                            ? 'border-blue-400 bg-blue-50 text-blue-900 dark:border-blue-400/30 dark:bg-blue-500/16 dark:text-blue-50'
+                            : 'border-border/60 bg-background'
                         )}
                       >
                         <SelectValue placeholder="Select patient" />
@@ -724,10 +724,10 @@ export const AppointmentsScheduler = ({
                     >
                       <SelectTrigger
                         className={cn(
-                          'w-full rounded-xl bg-white',
+                          'w-full rounded-xl',
                           quickCreateData.dentistId
-                            ? 'border-blue-400 bg-blue-50 text-blue-900'
-                            : 'border-slate-200'
+                            ? 'border-blue-400 bg-blue-50 text-blue-900 dark:border-blue-400/30 dark:bg-blue-500/16 dark:text-blue-50'
+                            : 'border-border/60 bg-background'
                         )}
                       >
                         <SelectValue placeholder="Select dentist" />
@@ -742,7 +742,7 @@ export const AppointmentsScheduler = ({
                     </Select>
 
                     <div className="space-y-1">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Appointment Date</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-200">Appointment Date</p>
                       <Input
                         type="date"
                         value={quickCreateData.appointmentDate}
@@ -752,11 +752,11 @@ export const AppointmentsScheduler = ({
                             appointmentDate: event.target.value,
                           }));
                         }}
-                        className="h-10 rounded-xl border-amber-300 bg-amber-50 text-amber-900"
+                        className="h-10 rounded-xl border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-400/30 dark:bg-amber-500/16 dark:text-amber-50"
                       />
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-cyan-700">Start Time</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-cyan-700 dark:text-cyan-200">Start Time</p>
                       <Input
                         type="time"
                         value={quickCreateData.startTime}
@@ -771,11 +771,11 @@ export const AppointmentsScheduler = ({
                             startTime,
                           }));
                         }}
-                        className="h-10 rounded-xl border-cyan-300 bg-cyan-50 text-cyan-900"
+                        className="h-10 rounded-xl border-cyan-300 bg-cyan-50 text-cyan-900 dark:border-cyan-400/30 dark:bg-cyan-500/16 dark:text-cyan-50"
                       />
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-700">End Time</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-200">End Time</p>
                       <Input
                         type="time"
                         value={quickCreateData.endTime}
@@ -787,7 +787,7 @@ export const AppointmentsScheduler = ({
                           }));
                           setTimePickTarget('start');
                         }}
-                        className="h-10 rounded-xl border-indigo-300 bg-indigo-50 text-indigo-900"
+                        className="h-10 rounded-xl border-indigo-300 bg-indigo-50 text-indigo-900 dark:border-indigo-400/30 dark:bg-indigo-500/16 dark:text-indigo-50"
                       />
                     </div>
 
@@ -797,12 +797,12 @@ export const AppointmentsScheduler = ({
                         setQuickCreateData((current) => ({ ...current, notes: event.target.value }));
                       }}
                       placeholder="Notes (optional)"
-                      className="h-10 rounded-xl border-slate-200 bg-white"
+                      className="h-10 rounded-xl border-border/60 bg-background"
                     />
                   </div>
 
                   {quickCreateError ? (
-                    <p className="mt-2 text-xs font-medium text-rose-700">{quickCreateError}</p>
+                    <p className="mt-2 text-xs font-medium text-rose-700 dark:text-rose-200">{quickCreateError}</p>
                   ) : null}
 
                   <div className="mt-3 flex justify-end">
@@ -823,14 +823,14 @@ export const AppointmentsScheduler = ({
 
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                 <div className="relative flex-1">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     value={searchTerm}
                     onChange={(event) => {
                       setSearchTerm(event.target.value);
                     }}
                     placeholder="Search patient, dentist, tag, notes..."
-                    className="h-10 rounded-xl border-slate-200 pl-9"
+                    className="h-10 rounded-xl border-border/60 bg-background pl-9"
                   />
                 </div>
                 <Button
@@ -847,11 +847,11 @@ export const AppointmentsScheduler = ({
 
               <div className="mt-4 space-y-2">
                 {isLoading ? (
-                  <p className="rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">
+                  <p className="rounded-xl border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
                     Loading scheduler...
                   </p>
                 ) : filteredAppointments.length === 0 ? (
-                  <p className="rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">
+                  <p className="rounded-xl border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
                     No appointments match the selected filters.
                   </p>
                 ) : (
@@ -867,20 +867,20 @@ export const AppointmentsScheduler = ({
                         className={cn(
                           'w-full rounded-2xl border px-3 py-2 text-left transition',
                           isActive
-                            ? 'border-blue-400 bg-blue-50'
-                            : 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/30'
+                            ? 'border-blue-400 bg-blue-50 dark:border-blue-400/30 dark:bg-blue-500/12'
+                            : 'border-border/60 bg-background hover:border-blue-300 hover:bg-blue-50/30 dark:hover:border-blue-400/30 dark:hover:bg-blue-500/10'
                         )}
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-slate-900">{item.patientName}</p>
-                            <p className="truncate text-xs text-slate-500">{item.tag}</p>
+                            <p className="truncate text-sm font-semibold text-foreground">{item.patientName}</p>
+                            <p className="truncate text-xs text-muted-foreground">{item.tag}</p>
                           </div>
                           <Badge variant="outline" className={cn('capitalize', typeMeta[item.type].pillClass)}>
                             {item.type}
                           </Badge>
                         </div>
-                        <div className="mt-2 flex items-center gap-3 text-xs text-slate-600">
+                        <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
                           <span className="inline-flex items-center gap-1">
                             <Clock3 className="size-3.5" />
                             {item.startTimeLabel}
@@ -899,73 +899,73 @@ export const AppointmentsScheduler = ({
           </div>
 
           <aside className="min-w-0 space-y-4">
-            <Card className="rounded-3xl border-slate-200 bg-white shadow-sm">
+            <Card className="rounded-3xl border border-border/50 bg-card shadow-sm">
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg">Scheduler Insights</CardTitle>
                 <CardDescription>Selected day and reservation details</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
-                    <p className="text-xs text-blue-700">Selected Day</p>
-                    <p className="text-xl font-semibold text-blue-900">{selectedDayAppointments.length}</p>
+                    <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 dark:border-blue-400/20 dark:bg-blue-500/10">
+                      <p className="text-xs text-blue-700 dark:text-blue-200">Selected Day</p>
+                      <p className="text-xl font-semibold text-blue-900 dark:text-blue-50">{selectedDayAppointments.length}</p>
+                    </div>
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-400/20 dark:bg-emerald-500/10">
+                      <p className="text-xs text-emerald-700 dark:text-emerald-200">After Filters</p>
+                      <p className="text-xl font-semibold text-emerald-900 dark:text-emerald-50">{filteredAppointments.length}</p>
+                    </div>
                   </div>
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-                    <p className="text-xs text-emerald-700">After Filters</p>
-                    <p className="text-xl font-semibold text-emerald-900">{filteredAppointments.length}</p>
-                  </div>
-                </div>
 
                 {selectedAppointment ? (
-                  <div className="rounded-2xl border border-slate-200 p-3">
+                  <div className="rounded-2xl border border-border/60 bg-background/60 p-3">
                     <div className="mb-2 flex items-center gap-3">
                       <Avatar className="size-10">
-                        <AvatarFallback className="bg-blue-100 text-blue-700">
+                        <AvatarFallback className="bg-blue-100 text-blue-700 dark:bg-blue-500/16 dark:text-blue-100">
                           {selectedAppointment.patientName.slice(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       <div className="min-w-0">
-                        <p className="truncate font-semibold text-slate-900">{selectedAppointment.patientName}</p>
-                        <p className="truncate text-xs text-slate-500">{selectedAppointment.tag}</p>
+                        <p className="truncate font-semibold text-foreground">{selectedAppointment.patientName}</p>
+                        <p className="truncate text-xs text-muted-foreground">{selectedAppointment.tag}</p>
                       </div>
                     </div>
                     <div className="space-y-1 text-sm">
                       <p className="flex items-center justify-between gap-2">
-                        <span className="text-slate-500">Dentist</span>
-                        <span className="truncate font-medium text-slate-800">{selectedAppointment.dentistName}</span>
+                        <span className="text-muted-foreground">Dentist</span>
+                        <span className="truncate font-medium text-foreground">{selectedAppointment.dentistName}</span>
                       </p>
                       <p className="flex items-center justify-between gap-2">
-                        <span className="text-slate-500">Time</span>
-                        <span className="font-medium text-slate-800">
+                        <span className="text-muted-foreground">Time</span>
+                        <span className="font-medium text-foreground">
                           {selectedAppointment.startTimeLabel}
                           {selectedAppointment.endTimeLabel !== '--:--' ? ` - ${selectedAppointment.endTimeLabel}` : ''}
                         </span>
                       </p>
                       <p className="flex items-center justify-between gap-2">
-                        <span className="text-slate-500">Status</span>
+                        <span className="text-muted-foreground">Status</span>
                         <Badge variant="outline" className="capitalize">{selectedAppointment.status}</Badge>
                       </p>
                     </div>
-                    <p className="mt-2 rounded-lg bg-slate-50 p-2 text-xs text-slate-600">
+                    <p className="mt-2 rounded-lg border border-border/50 bg-background/80 p-2 text-xs text-muted-foreground">
                       {selectedAppointment.notes || 'No notes provided for this appointment.'}
                     </p>
                   </div>
                 ) : (
-                  <p className="rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">
+                  <p className="rounded-xl border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
                     Pick an appointment to view details.
                   </p>
                 )}
 
-                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
-                  <p className="mb-2 text-sm font-semibold text-slate-800">Quick Snapshot</p>
-                  <div className="space-y-1 text-xs text-slate-600">
+                <div className="rounded-2xl border border-border/60 bg-background/70 p-3">
+                  <p className="mb-2 text-sm font-semibold text-foreground">Quick Snapshot</p>
+                  <div className="space-y-1 text-xs text-muted-foreground">
                     <p className="flex items-center justify-between">
                       <span>Current Month</span>
-                      <span className="font-medium text-slate-800">{monthLabel(selectedMonth)}</span>
+                      <span className="font-medium text-foreground">{monthLabel(selectedMonth)}</span>
                     </p>
                     <p className="flex items-center justify-between">
                       <span>Selected Time</span>
-                      <span className="font-medium text-slate-800">{selectedTime === 'all' ? 'All times' : selectedTime}</span>
+                      <span className="font-medium text-foreground">{selectedTime === 'all' ? 'All times' : selectedTime}</span>
                     </p>
                   </div>
                 </div>

@@ -50,6 +50,20 @@
   --shadow-2xl: 0px 4px 8px -1px hsl(0 0% 0% / 0.25);
   --tracking-normal: 0em;
   --spacing: 0.25rem;
+  --page-background:
+    radial-gradient(circle at top left, rgb(110 163 255 / 0.2), transparent 28%),
+    radial-gradient(circle at top right, rgb(16 185 129 / 0.14), transparent 24%),
+    linear-gradient(180deg, #f4f8ff 0%, #eef4fb 42%, #e7eef8 100%);
+  --chart-grid: #cad9ef;
+  --chart-axis: #5f7696;
+  --chart-tooltip-background: rgb(248 251 255 / 0.96);
+  --chart-tooltip-border: #d7e4f4;
+  --chart-tooltip-foreground: #102441;
+  --selection-background: rgb(47 111 221 / 0.18);
+  --selection-foreground: #0b1b33;
+  --scrollbar-thumb: rgb(120 145 182 / 0.65);
+  --scrollbar-thumb-hover: rgb(73 106 160 / 0.85);
+  --scrollbar-track: rgb(255 255 255 / 0.2);
 }
 
 .dark {
@@ -97,6 +111,20 @@
   --shadow-lg: 0px 4px 8px -1px hsl(0 0% 0% / 0.1), 0px 4px 6px -2px hsl(0 0% 0% / 0.1);
   --shadow-xl: 0px 4px 8px -1px hsl(0 0% 0% / 0.1), 0px 8px 10px -2px hsl(0 0% 0% / 0.1);
   --shadow-2xl: 0px 4px 8px -1px hsl(0 0% 0% / 0.25);
+  --page-background:
+    radial-gradient(circle at top left, rgb(110 163 255 / 0.22), transparent 28%),
+    radial-gradient(circle at top right, rgb(16 185 129 / 0.16), transparent 24%),
+    linear-gradient(180deg, #07111f 0%, #0b1424 44%, #0f1a2d 100%);
+  --chart-grid: #2b3e5e;
+  --chart-axis: #90aad0;
+  --chart-tooltip-background: rgb(14 26 47 / 0.97);
+  --chart-tooltip-border: #2d4169;
+  --chart-tooltip-foreground: #e7f0ff;
+  --selection-background: rgb(110 163 255 / 0.26);
+  --selection-foreground: #e7f0ff;
+  --scrollbar-thumb: rgb(80 112 166 / 0.72);
+  --scrollbar-thumb-hover: rgb(110 163 255 / 0.88);
+  --scrollbar-track: rgb(8 16 31 / 0.4);
 }
 
 @theme inline {
@@ -153,16 +181,56 @@
 }
 
 @layer base {
+  html {
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
   * {
     @apply border-border outline-ring/50;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
   }
   body {
     @apply bg-background text-foreground;
+    min-height: 100vh;
+    background-attachment: fixed;
+    background-image: var(--page-background);
+  }
+
+  ::selection {
+    background: var(--selection-background);
+    color: var(--selection-foreground);
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+  }
+
+  *::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: var(--scrollbar-thumb);
+    background-clip: padding-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+    background-clip: padding-box;
   }
 }
 
 .custom-cursor {
-  cursor: url('/cursor-default.png') 0 0, auto;
+  cursor:
+    url('/cursor-default.png') 0 0,
+    auto;
 }
 
 .custom-cursor * {
@@ -176,7 +244,9 @@
 .custom-cursor .cursor-pointer,
 .custom-cursor summary,
 .custom-cursor label {
-  cursor: url('/cursor-pointer.png') 0 0, pointer;
+  cursor:
+    url('/cursor-pointer.png') 0 0,
+    pointer;
 }
 
 /* .custom-cursor input,

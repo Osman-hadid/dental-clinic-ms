@@ -7,6 +7,18 @@ import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, Res
 
 export const FinancialReportPanel = ({ data }: { data: FinancialData }): JSX.Element => {
   const currencySections = data.summary.currencySections;
+  const collectorSections = (row: Record<string, unknown>): Record<CurrencyCode, { totalAmount: number }> => {
+    const sections = row.currencySections as Record<string, Record<string, unknown>> | undefined;
+
+    return {
+      AFN: {
+        totalAmount: Number(sections?.AFN?.totalAmount ?? row.totalAmount ?? 0),
+      },
+      USD: {
+        totalAmount: Number(sections?.USD?.totalAmount ?? 0),
+      },
+    };
+  };
 
   return (
     <div className="space-y-4">
@@ -322,17 +334,23 @@ export const FinancialReportPanel = ({ data }: { data: FinancialData }): JSX.Ele
                 <tr>
                   <th className="px-3 py-2">Collector</th>
                   <th className="px-3 py-2">Payments</th>
-                  <th className="px-3 py-2">Total</th>
+                  <th className="px-3 py-2">Total (AFN / USD)</th>
                 </tr>
               </thead>
               <tbody>
-                {data.tables.collectorPerformance.length > 0 ? data.tables.collectorPerformance.map((row, index) => (
-                  <tr key={`${String(row.collector ?? 'collector')}-${index}`} className="border-t">
-                    <td className="px-3 py-2">{String(row.collector ?? '-')}</td>
-                    <td className="px-3 py-2">{Number(row.paymentsCount ?? 0)}</td>
-                    <td className="px-3 py-2">{formatCurrency(Number(row.totalAmount ?? 0), 'AFN')}</td>
-                  </tr>
-                )) : (
+                {data.tables.collectorPerformance.length > 0 ? data.tables.collectorPerformance.map((row, index) => {
+                  const totals = collectorSections(row);
+
+                  return (
+                    <tr key={`${String(row.collector ?? 'collector')}-${index}`} className="border-t">
+                      <td className="px-3 py-2">{String(row.collector ?? '-')}</td>
+                      <td className="px-3 py-2">{Number(row.paymentsCount ?? 0)}</td>
+                      <td className="px-3 py-2">
+                        {formatCurrency(totals.AFN.totalAmount, 'AFN')} / {formatCurrency(totals.USD.totalAmount, 'USD')}
+                      </td>
+                    </tr>
+                  );
+                }) : (
                   <tr className="border-t">
                     <td colSpan={3} className="px-3 py-6 text-center text-muted-foreground">No collector activity matched the selected filters.</td>
                   </tr>
@@ -363,7 +381,12 @@ export const FinancialReportPanel = ({ data }: { data: FinancialData }): JSX.Ele
                   <tr key={`${String(row.invoiceId ?? 'debt')}-${index}`} className="border-t">
                     <td className="px-3 py-2">{String(row.patientName ?? '-')}</td>
                     <td className="px-3 py-2">{String(row.agingBucket ?? '-')}</td>
-                    <td className="px-3 py-2">{formatCurrency(Number(row.debtAmount ?? 0), 'AFN')}</td>
+                    <td className="px-3 py-2">
+                      {formatCurrency(
+                        Number(row.debtAmountInput ?? row.debtAmount ?? 0),
+                        (String(row.currency ?? 'AFN') === 'USD' ? 'USD' : 'AFN') as CurrencyCode
+                      )}
+                    </td>
                   </tr>
                 )) : (
                   <tr className="border-t">

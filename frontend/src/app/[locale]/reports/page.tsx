@@ -649,21 +649,18 @@ const ReportsPage = (): JSX.Element => {
     <>
       <Header breadcrumbs={[{ id: 'reports', isCurrent: true, label: tSidebar('reports.title') }]} />
       <div className="flex flex-1 flex-col px-4 pb-6 lg:px-6 overflow-x-hidden">
-        <div className="rounded-3xl border border-primary/10 bg-gradient-to-br from-primary/5 via-background to-muted/20 p-6 text-foreground shadow-lg overflow-hidden relative">
-          <div className="absolute right-0 top-0 h-48 w-48 translate-x-24 -translate-y-24 rounded-full bg-primary/10 blur-3xl" />
-          <div className="absolute left-0 bottom-0 h-48 w-48 -translate-x-24 translate-y-24 rounded-full bg-emerald-500/10 blur-3xl" />
-          
+        <div className="rounded-3xl border border-border/50 bg-card p-6 text-foreground shadow-lg">
           <div className="relative mb-6">
             <h1 className="text-2xl font-semibold text-foreground">Reports Dashboard</h1>
             <p className="text-sm text-muted-foreground">Analyze clinic performance, financials, and operations</p>
           </div>
 
           <div className="relative space-y-6">
-            <Card className="min-w-0 rounded-2xl border border-border/50 bg-gradient-to-br from-white/80 to-muted/50 shadow-sm">
+            <Card className="min-w-0 rounded-2xl border border-border/50 bg-card shadow-sm">
               <CardHeader className="pb-4">
                 <div className="flex items-center gap-3">
-                  <div className="rounded-xl border border-emerald-200/50 bg-emerald-100/60 p-2.5">
-                    <Wallet className="size-5 text-emerald-600" />
+                  <div className="rounded-xl border border-emerald-200/50 bg-emerald-100/60 p-2.5 dark:border-emerald-400/20 dark:bg-emerald-500/12">
+                    <Wallet className="size-5 text-emerald-600 dark:text-emerald-200" />
                   </div>
                   <div>
                     <CardTitle className="text-base">Quick Financial Snapshot</CardTitle>
@@ -730,7 +727,7 @@ const ReportsPage = (): JSX.Element => {
                 </div>
 
                 {!workflowAccess?.capabilities.canAccessFinancialReports && workflowAccess ? (
-                  <div className="rounded-2xl border border-amber-200/60 bg-gradient-to-br from-amber-50/80 to-amber-100/50 p-4 text-sm text-amber-900">
+                  <div className="rounded-2xl border border-amber-200/60 bg-amber-50/70 p-4 text-sm text-amber-900 dark:border-amber-400/20 dark:bg-amber-500/10 dark:text-amber-100">
                     Financial summary widgets require review access.
                   </div>
                 ) : isLoadingRangeSummary && !rangeSummary ? (
@@ -808,11 +805,11 @@ const ReportsPage = (): JSX.Element => {
               </CardContent>
             </Card>
 
-            <Card className="min-w-0 rounded-2xl border border-border/50 bg-gradient-to-br from-white/80 to-muted/50 shadow-sm">
+            <Card className="min-w-0 rounded-2xl border border-border/50 bg-card shadow-sm">
               <CardHeader className="pb-4">
                 <div className="flex items-center gap-3">
-                  <div className="rounded-xl border border-violet-200/50 bg-violet-100/60 p-2.5">
-                    <BarChart3 className="size-5 text-violet-600" />
+                  <div className="rounded-xl border border-violet-200/50 bg-violet-100/60 p-2.5 dark:border-violet-400/20 dark:bg-violet-500/12">
+                    <BarChart3 className="size-5 text-violet-600 dark:text-violet-200" />
                   </div>
                   <div>
                     <CardTitle className="text-base">Reports Center</CardTitle>
@@ -821,7 +818,7 @@ const ReportsPage = (): JSX.Element => {
                 </div>
               </CardHeader>
               <CardContent className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.75fr)_360px]">
-                <div className="space-y-4 rounded-2xl border border-border/40 bg-background/60 p-4">
+                <div className="space-y-4 rounded-2xl border border-border/40 bg-background/70 p-4">
                   <div className="flex flex-col gap-3 border-b border-border/30 pb-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
@@ -837,7 +834,7 @@ const ReportsPage = (): JSX.Element => {
                         <p className="text-xs text-muted-foreground">Filters adapt to the active report tab</p>
                       </div>
                     </div>
-                    <div className="grid min-w-[220px] gap-2 rounded-xl border border-border/40 bg-muted/50 p-3 text-xs">
+                    <div className="grid min-w-[220px] gap-2 rounded-xl border border-border/40 bg-background/70 p-3 text-xs">
                       <div>
                         <p className="font-medium text-foreground">Current report</p>
                         <p className="text-muted-foreground">{activeReport.label}</p>
@@ -850,7 +847,7 @@ const ReportsPage = (): JSX.Element => {
                   </div>
 
                   <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-                    <div className="space-y-3 rounded-2xl border border-border/40 bg-gradient-to-br from-white via-muted/50 to-violet-50/30 p-4">
+                    <div className="space-y-3 rounded-2xl border border-border/40 bg-card p-4">
                       <div className="space-y-1">
                         <p className="text-sm font-semibold text-foreground">Time and structure</p>
                         <p className="text-xs text-muted-foreground">Choose reporting window and data grouping</p>
@@ -881,7 +878,7 @@ const ReportsPage = (): JSX.Element => {
                       </div>
                     </div>
 
-                    <div className="space-y-3 rounded-2xl border border-border/40 bg-white/90 p-4">
+                    <div className="space-y-3 rounded-2xl border border-border/40 bg-card p-4">
                       <div className="space-y-1">
                         <p className="text-sm font-semibold text-foreground">Search and clinic filters</p>
                         <p className="text-xs text-muted-foreground">Narrow by people, status, treatment, payment method</p>
@@ -953,7 +950,7 @@ const ReportsPage = (): JSX.Element => {
                   </div>
                 </div>
 
-                <div className="grid gap-3 self-start rounded-2xl border border-border/50 bg-gradient-to-br from-violet-50/80 via-white to-emerald-50/80 p-4 text-foreground shadow-lg">
+                <div className="grid gap-3 self-start rounded-2xl border border-border/50 bg-card p-4 text-foreground shadow-lg">
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="outline" className="border-violet-200/50 bg-violet-100/60 text-violet-700">Action panel</Badge>
@@ -967,10 +964,10 @@ const ReportsPage = (): JSX.Element => {
                     ) : null}
                   </div>
 
-                  <div className="rounded-xl border border-border/40 bg-white/85 p-3 backdrop-blur-sm">
+                    <div className="rounded-xl border border-border/40 bg-background/70 p-3">
                     <div className="flex flex-col gap-1">
                       <p className="text-sm font-medium text-foreground">Download this report</p>
-                      <select className={`${reportSelectClassName} border-border/40 bg-white text-foreground`} value={csvExportType} onChange={(event) => setCsvExportType(event.target.value as CsvExportType)}>
+                      <select className={`${reportSelectClassName} border-border/40 bg-background text-foreground`} value={csvExportType} onChange={(event) => setCsvExportType(event.target.value as CsvExportType)}>
                         {activeReport.exportOptions.map((option) => (
                           <option key={option.value} value={option.value}>{option.label}</option>
                         ))}
@@ -985,12 +982,12 @@ const ReportsPage = (): JSX.Element => {
                     <Button type="button" className="bg-violet-500 text-white hover:bg-violet-600" onClick={handleExport}>
                       Download CSV
                     </Button>
-                    <Button type="button" variant="outline" className="border-border/40 bg-white/80 text-foreground hover:bg-violet-50/50 hover:text-foreground" onClick={handlePrintReport} disabled={!hasPrintableContent || isLoadingTab}>
+                    <Button type="button" variant="outline" className="border-border/40 bg-background/80 text-foreground hover:bg-accent/40 hover:text-foreground" onClick={handlePrintReport} disabled={!hasPrintableContent || isLoadingTab}>
                       Print / Save PDF
                     </Button>
                   </div>
 
-                  <div className="rounded-xl border border-border/40 bg-gradient-to-br from-violet-100/60 to-emerald-100/60 p-3 text-xs text-muted-foreground">
+                  <div className="rounded-xl border border-border/40 bg-background/70 p-3 text-xs text-muted-foreground">
                     Filters apply across report tabs you can access.
                   </div>
                 </div>
@@ -998,11 +995,11 @@ const ReportsPage = (): JSX.Element => {
             </Card>
 
             {workflowAccess ? (
-              <Card className="min-w-0 rounded-2xl border border-border/50 bg-muted/50">
+              <Card className="min-w-0 rounded-2xl border border-border/50 bg-card">
                 <CardContent className="flex flex-wrap items-start justify-between gap-3 p-4 text-sm">
                   <div className="flex items-center gap-3">
-                    <div className="rounded-xl border border-amber-200/50 bg-amber-100/60 p-2.5">
-                      <ShieldCheck className="size-4 text-amber-600" />
+                    <div className="rounded-xl border border-amber-200/50 bg-amber-100/60 p-2.5 dark:border-amber-400/20 dark:bg-amber-500/12">
+                      <ShieldCheck className="size-4 text-amber-600 dark:text-amber-200" />
                     </div>
                     <div className="space-y-1">
                       <p className="font-semibold text-foreground">Workflow restrictions</p>

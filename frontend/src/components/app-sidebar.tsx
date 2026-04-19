@@ -15,59 +15,59 @@ import {
 import { useCan } from '@/hooks/useCan';
 import { useAuthStore } from '@/modules/auth/application/stores/auth-store';
 import {
+  Activity,
   Archive,
+  BadgeCheck,
   BadgeDollarSign,
-  Building2,
   BarChart3,
   Boxes,
   Brain,
+  Briefcase,
+  Building,
+  Building2,
   Calendar,
+  CalendarClock,
   CalendarDays,
   ClipboardList,
+  CreditCard,
+  Database,
+  FileBarChart,
+  FileCheck,
+  FilePieChart,
+  FileSearch,
+  FileSpreadsheet,
+  FileText,
+  FolderKanban,
+  FolderOpen,
   GalleryVerticalEnd,
+  GraduationCap,
   HandCoins,
   HeartPulse,
+  Home,
   House,
   KeyRound,
   Landmark,
+  Layers,
+  LayoutDashboard,
+  Lock,
   LucideIcon,
+  Package,
+  PieChart,
+  PiggyBank,
   Receipt,
+  ScrollText,
+  Settings,
   Shield,
   ShieldUser,
   ShoppingCart,
   Smile,
   Stethoscope,
+  TrendingUp,
   User,
+  UserCircle,
+  UserCog,
   Users,
   Wallet,
-  Home,
-  Activity,
-  FileText,
-  Database,
-  Settings,
-  FileCheck,
-  CreditCard,
-  PiggyBank,
-  LayoutDashboard,
-  FolderOpen,
-  FileSearch,
-  CalendarClock,
-  UserCircle,
-  Building,
-  Briefcase,
-  GraduationCap,
-  FileSpreadsheet,
-  TrendingUp,
-  PieChart,
-  Package,
-  Layers,
-  FolderKanban,
-  FilePieChart,
-  BadgeCheck,
-  Lock,
-  UserCog,
-  ScrollText,
-  FileBarChart,
 } from 'lucide-react';
 
 export type SidebarSubItem = {
@@ -101,14 +101,24 @@ const staticNavItems: SidebarItem[] = [
   {
     icon: Activity,
     items: [
-      { key: 'patients', permission: 'page.dental-management.patients', section: 'Patients', url: '/dental-management/patients' },
+      {
+        key: 'patients',
+        permission: 'page.dental-management.patients',
+        section: 'Patients',
+        url: '/dental-management/patients',
+      },
       {
         key: 'patientQuestions',
         permission: 'page.dental-management.patient-questions',
         section: 'Patients',
         url: '/dental-management/patient-questions',
       },
-      { key: 'appointments', permission: 'page.dental-management.appointments', section: 'Scheduling', url: '/dental-management/appointments' },
+      {
+        key: 'appointments',
+        permission: 'page.dental-management.appointments',
+        section: 'Scheduling',
+        url: '/dental-management/appointments',
+      },
       {
         key: 'queue',
         permission: 'page.dental-management.appointments',
@@ -116,15 +126,55 @@ const staticNavItems: SidebarItem[] = [
         title: 'Waiting Room',
         url: '/dental-management/queue',
       },
-      { key: 'visits', permission: 'page.dental-management.visits', section: 'Scheduling', url: '/dental-management/visits' },
+      {
+        key: 'visits',
+        permission: 'page.dental-management.visits',
+        section: 'Scheduling',
+        url: '/dental-management/visits',
+      },
       // { key: 'teeth', url: '/dental-management/teeth' },
-      { key: 'visitTreatments', permission: 'page.dental-management.visit-treatments', section: 'Clinical', url: '/dental-management/visit-treatments' },
-      { key: 'treatments', permission: 'page.dental-management.treatments', section: 'Clinical', url: '/dental-management/treatments' },
-      { key: 'implants', permission: 'page.dental-management.implants', section: 'Implants', url: '/dental-management/implants' },
-      { key: 'implantsInProcess', permission: 'page.dental-management.implants-in-process', section: 'Implants', url: '/dental-management/implants/in-process' },
-      { key: 'invoices', permission: 'page.dental-management.invoices', section: 'Billing', url: '/dental-management/invoices' },
-      { key: 'payments', permission: 'page.dental-management.payments', section: 'Billing', url: '/dental-management/payments' },
-      { key: 'staff', permission: 'page.dental-management.staff', section: 'People', url: '/dental-management/staff' },
+      {
+        key: 'visitTreatments',
+        permission: 'page.dental-management.visit-treatments',
+        section: 'Clinical',
+        url: '/dental-management/visit-treatments',
+      },
+      {
+        key: 'treatments',
+        permission: 'page.dental-management.treatments',
+        section: 'Clinical',
+        url: '/dental-management/treatments',
+      },
+      {
+        key: 'implants',
+        permission: 'page.dental-management.implants',
+        section: 'Implants',
+        url: '/dental-management/implants',
+      },
+      {
+        key: 'implantsInProcess',
+        permission: 'page.dental-management.implants-in-process',
+        section: 'Implants',
+        url: '/dental-management/implants/in-process',
+      },
+      {
+        key: 'invoices',
+        permission: 'page.dental-management.invoices',
+        section: 'Billing',
+        url: '/dental-management/invoices',
+      },
+      {
+        key: 'payments',
+        permission: 'page.dental-management.payments',
+        section: 'Billing',
+        url: '/dental-management/payments',
+      },
+      {
+        key: 'staff',
+        permission: 'page.dental-management.staff',
+        section: 'People',
+        url: '/dental-management/staff',
+      },
       {
         key: 'shareholders',
         permission: 'page.dental-management.shareholders',
@@ -147,8 +197,16 @@ const staticNavItems: SidebarItem[] = [
         title: 'Financial Control',
         url: '/reports/financial-control',
       },
-      { key: 'dailyExpenses', permission: 'page.reports.daily-expenses', url: '/reports/daily-expenses' },
-      { key: 'clinicalExpenses', permission: 'page.reports.clinical-expenses', url: '/reports/clinical-expenses' },
+      {
+        key: 'dailyExpenses',
+        permission: 'page.reports.daily-expenses',
+        url: '/reports/daily-expenses',
+      },
+      {
+        key: 'clinicalExpenses',
+        permission: 'page.reports.clinical-expenses',
+        url: '/reports/clinical-expenses',
+      },
       { key: 'safe', permission: 'page.reports.safe', url: '/reports/safe' },
       { key: 'salaries', permission: 'page.reports.salaries', url: '/reports/salaries' },
       {
@@ -162,7 +220,9 @@ const staticNavItems: SidebarItem[] = [
   },
   {
     icon: Package,
-    items: [{ key: 'inventory', permission: 'page.inventory-management', url: '/inventory-management' }],
+    items: [
+      { key: 'inventory', permission: 'page.inventory-management', url: '/inventory-management' },
+    ],
     key: 'inventoryManagement',
     url: '/inventory-management',
   },
@@ -195,7 +255,11 @@ const staticNavItems: SidebarItem[] = [
     items: [
       { key: 'users', permission: 'page.user-management.users', url: '/user-management/users' },
       { key: 'roles', permission: 'page.user-management.roles', url: '/user-management/roles' },
-      { key: 'permissions', permission: 'page.user-management.permissions', url: '/user-management/permissions' },
+      {
+        key: 'permissions',
+        permission: 'page.user-management.permissions',
+        url: '/user-management/permissions',
+      },
     ],
     key: 'userManagement',
     url: '/user-management',
@@ -288,12 +352,14 @@ export const AppSidebar = (props: React.ComponentProps<typeof Sidebar>): React.J
     .filter(Boolean) as SidebarItem[];
 
   const localizedNavItems = visibleNavItems.map((item) => ({
-      ...item,
-      items: item.items?.map((subItem) => ({
-        ...subItem,
-        icon: subItem.icon ?? sidebarSubItemIcons[subItem.key],
-        title: t.has(`${item.key}.${subItem.key}`) ? t(`${item.key}.${subItem.key}`) : (subItem.title ?? subItem.key),
-      })),
+    ...item,
+    items: item.items?.map((subItem) => ({
+      ...subItem,
+      icon: subItem.icon ?? sidebarSubItemIcons[subItem.key],
+      title: t.has(`${item.key}.${subItem.key}`)
+        ? t(`${item.key}.${subItem.key}`)
+        : (subItem.title ?? subItem.key),
+    })),
     title: t.has(`${item.key}.title`) ? t(`${item.key}.title`) : item.key,
   }));
 
@@ -301,7 +367,7 @@ export const AppSidebar = (props: React.ComponentProps<typeof Sidebar>): React.J
     <Sidebar
       collapsible="icon"
       variant="floating"
-      className="border-none [&_[data-slot=sidebar-inner]]:rounded-[1.9rem] [&_[data-slot=sidebar-inner]]:border [&_[data-slot=sidebar-inner]]:border-sidebar-border/80 [&_[data-slot=sidebar-inner]]:bg-sidebar/98 [&_[data-slot=sidebar-inner]]:ring-1 [&_[data-slot=sidebar-inner]]:ring-sidebar-border/35 [&_[data-slot=sidebar-inner]]:shadow-[0_14px_30px_-18px_rgba(21,75,169,0.34)]"
+      className="border-none [&_[data-slot=sidebar-inner]]:rounded-[1.9rem] [&_[data-slot=sidebar-inner]]:border [&_[data-slot=sidebar-inner]]:border-sidebar-border/80 [&_[data-slot=sidebar-inner]]:bg-sidebar/96 [&_[data-slot=sidebar-inner]]:backdrop-blur-xl [&_[data-slot=sidebar-inner]]:ring-1 [&_[data-slot=sidebar-inner]]:ring-sidebar-border/35 [&_[data-slot=sidebar-inner]]:shadow-[0_22px_46px_-28px_rgba(15,23,42,0.48)] dark:[&_[data-slot=sidebar-inner]]:shadow-[0_28px_70px_-30px_rgba(2,8,23,0.92)]"
       {...props}
     >
       <SidebarHeader className="px-2.5 pt-4">

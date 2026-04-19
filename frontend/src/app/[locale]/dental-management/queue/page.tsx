@@ -72,34 +72,34 @@ const QUEUE_COLUMNS: QueueColumn[] = [
 
 const STATUS_META: Record<string, { badgeClass: string; label: string; panelClass: string }> = {
   cancelled: {
-    badgeClass: 'border-rose-300 bg-rose-100 text-rose-800',
+    badgeClass: 'border-rose-300 bg-rose-100 text-rose-800 dark:border-rose-400/20 dark:bg-rose-500/12 dark:text-rose-100',
     label: 'Cancelled',
-    panelClass: 'border-rose-200/80 bg-rose-50/80',
+    panelClass: 'border-rose-200/80 bg-rose-50/80 dark:border-rose-400/20 dark:bg-rose-500/10',
   },
   checked_in: {
-    badgeClass: 'border-sky-300 bg-sky-100 text-sky-800',
+    badgeClass: 'border-sky-300 bg-sky-100 text-sky-800 dark:border-sky-400/20 dark:bg-sky-500/12 dark:text-sky-100',
     label: 'Checked In',
-    panelClass: 'border-sky-200/80 bg-sky-50/80',
+    panelClass: 'border-sky-200/80 bg-sky-50/80 dark:border-sky-400/20 dark:bg-sky-500/10',
   },
   completed: {
-    badgeClass: 'border-emerald-300 bg-emerald-100 text-emerald-800',
+    badgeClass: 'border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-400/20 dark:bg-emerald-500/12 dark:text-emerald-100',
     label: 'Completed',
-    panelClass: 'border-emerald-200/80 bg-emerald-50/80',
+    panelClass: 'border-emerald-200/80 bg-emerald-50/80 dark:border-emerald-400/20 dark:bg-emerald-500/10',
   },
   in_chair: {
-    badgeClass: 'border-violet-300 bg-violet-100 text-violet-800',
+    badgeClass: 'border-violet-300 bg-violet-100 text-violet-800 dark:border-violet-400/20 dark:bg-violet-500/12 dark:text-violet-100',
     label: 'In Chair',
-    panelClass: 'border-violet-200/80 bg-violet-50/80',
+    panelClass: 'border-violet-200/80 bg-violet-50/80 dark:border-violet-400/20 dark:bg-violet-500/10',
   },
   scheduled: {
-    badgeClass: 'border-amber-300 bg-amber-100 text-amber-800',
+    badgeClass: 'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-400/20 dark:bg-amber-500/12 dark:text-amber-100',
     label: 'Scheduled',
-    panelClass: 'border-amber-200/80 bg-amber-50/80',
+    panelClass: 'border-amber-200/80 bg-amber-50/80 dark:border-amber-400/20 dark:bg-amber-500/10',
   },
   waiting: {
-    badgeClass: 'border-blue-300 bg-blue-100 text-blue-800',
+    badgeClass: 'border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-400/20 dark:bg-blue-500/12 dark:text-blue-100',
     label: 'Waiting',
-    panelClass: 'border-blue-200/80 bg-blue-50/80',
+    panelClass: 'border-blue-200/80 bg-blue-50/80 dark:border-blue-400/20 dark:bg-blue-500/10',
   },
 };
 
@@ -455,62 +455,59 @@ export default function QueuePage(): JSX.Element {
         ]}
       />
       <div className="flex flex-1 flex-col px-4 pb-6 lg:px-6 overflow-x-hidden">
-        <div className="rounded-3xl border border-primary/10 bg-gradient-to-br from-primary/5 via-background to-muted/20 p-6 text-foreground shadow-lg overflow-hidden relative">
-          <div className="absolute right-0 top-0 h-48 w-48 translate-x-24 -translate-y-24 rounded-full bg-primary/10 blur-3xl" />
-          <div className="absolute left-0 bottom-0 h-48 w-48 -translate-x-24 translate-y-24 rounded-full bg-emerald-500/10 blur-3xl" />
-          
+        <div className="rounded-3xl border border-border/50 bg-card p-6 text-foreground shadow-lg">
           <div className="relative mb-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="rounded-xl border border-blue-200/50 bg-blue-100/60 p-2.5">
-                  <Users className="size-5 text-blue-600" />
+                <div className="rounded-xl border border-blue-200/50 bg-blue-100/60 p-2.5 dark:border-blue-400/20 dark:bg-blue-500/12">
+                  <Users className="size-5 text-blue-600 dark:text-blue-200" />
                 </div>
                 <div>
                   <h1 className="text-2xl font-semibold text-foreground">Waiting Room</h1>
                   <p className="text-sm text-muted-foreground">Manage patient flow and queue status</p>
                 </div>
               </div>
-              <Badge variant="outline" className="rounded-full border-dashed px-4 py-1.5 text-xs uppercase tracking-[0.22em] bg-white/80">
+              <Badge variant="outline" className="rounded-full border-dashed bg-background/80 px-4 py-1.5 text-xs uppercase tracking-[0.22em]">
                 {toDateLabel(today)}
               </Badge>
             </div>
           </div>
 
           <div className="relative grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
-            <div className="rounded-2xl border border-border/50 bg-gradient-to-br from-white/80 to-muted/50 p-4 shadow-sm">
+            <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
               <div className="flex items-center gap-2 mb-2">
-                <div className="rounded-lg border border-violet-200/50 bg-violet-100/60 p-1.5">
-                  <Users className="size-4 text-violet-600" />
+                <div className="rounded-lg border border-violet-200/50 bg-violet-100/60 p-1.5 dark:border-violet-400/20 dark:bg-violet-500/12">
+                  <Users className="size-4 text-violet-600 dark:text-violet-200" />
                 </div>
                 <p className="text-xs font-medium text-muted-foreground">Today Total</p>
               </div>
               <p className="text-2xl font-bold text-foreground">{summary.total}</p>
             </div>
 
-            <div className="rounded-2xl border border-border/50 bg-gradient-to-br from-white/80 to-muted/50 p-4 shadow-sm">
+            <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
               <div className="flex items-center gap-2 mb-2">
-                <div className="rounded-lg border border-emerald-200/50 bg-emerald-100/60 p-1.5">
-                  <Timer className="size-4 text-emerald-600" />
+                <div className="rounded-lg border border-emerald-200/50 bg-emerald-100/60 p-1.5 dark:border-emerald-400/20 dark:bg-emerald-500/12">
+                  <Timer className="size-4 text-emerald-600 dark:text-emerald-200" />
                 </div>
                 <p className="text-xs font-medium text-muted-foreground">Active Queue</p>
               </div>
               <p className="text-2xl font-bold text-foreground">{summary.active}</p>
             </div>
 
-            <div className="rounded-2xl border border-border/50 bg-gradient-to-br from-white/80 to-muted/50 p-4 shadow-sm">
+            <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
               <div className="flex items-center gap-2 mb-2">
-                <div className="rounded-lg border border-amber-200/50 bg-amber-100/60 p-1.5">
-                  <Clock3 className="size-4 text-amber-600" />
+                <div className="rounded-lg border border-amber-200/50 bg-amber-100/60 p-1.5 dark:border-amber-400/20 dark:bg-amber-500/12">
+                  <Clock3 className="size-4 text-amber-600 dark:text-amber-200" />
                 </div>
                 <p className="text-xs font-medium text-muted-foreground">Waiting Now</p>
               </div>
               <p className="text-2xl font-bold text-foreground">{summary.waiting}</p>
             </div>
 
-            <div className="rounded-2xl border border-border/50 bg-gradient-to-br from-white/80 to-muted/50 p-4 shadow-sm">
+            <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
               <div className="flex items-center gap-2 mb-2">
-                <div className="rounded-lg border border-blue-200/50 bg-blue-100/60 p-1.5">
-                  <Armchair className="size-4 text-blue-600" />
+                <div className="rounded-lg border border-blue-200/50 bg-blue-100/60 p-1.5 dark:border-blue-400/20 dark:bg-blue-500/12">
+                  <Armchair className="size-4 text-blue-600 dark:text-blue-200" />
                 </div>
                 <p className="text-xs font-medium text-muted-foreground">In Chair</p>
               </div>
@@ -538,7 +535,7 @@ export default function QueuePage(): JSX.Element {
                   const ColumnIcon = columnIcons[column.id];
 
                   return (
-                    <div key={column.id} className="min-w-0 rounded-2xl border border-border/50 bg-gradient-to-br from-white/80 to-muted/50 p-4 shadow-sm">
+                    <div key={column.id} className="min-w-0 rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
                       <div className="mb-4">
                         <div className="flex items-center justify-between gap-2 mb-2">
                           <div className="flex items-center gap-2">
@@ -597,9 +594,9 @@ export default function QueuePage(): JSX.Element {
                                       {statusMeta.label}
                                     </Badge>
                                     {isLate ? (
-                                      <Badge variant="outline" className="rounded-full border-amber-300 bg-amber-100 px-2 py-0.5 text-[10px] text-amber-900">
-                                        Late
-                                      </Badge>
+                              <Badge variant="outline" className="rounded-full border-amber-300 bg-amber-100 px-2 py-0.5 text-[10px] text-amber-900 dark:border-amber-400/20 dark:bg-amber-500/12 dark:text-amber-100">
+                                Late
+                              </Badge>
                                     ) : null}
                                   </div>
                                 </div>
@@ -677,10 +674,10 @@ export default function QueuePage(): JSX.Element {
             </div>
 
             <div className="space-y-4">
-              <div className="rounded-2xl border border-border/50 bg-gradient-to-br from-white/80 to-muted/50 p-4 shadow-sm">
+              <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="rounded-lg border border-amber-200/50 bg-amber-100/60 p-2">
-                    <AlertTriangle className="size-4 text-amber-600" />
+                  <div className="rounded-lg border border-amber-200/50 bg-amber-100/60 p-2 dark:border-amber-400/20 dark:bg-amber-500/12">
+                    <AlertTriangle className="size-4 text-amber-600 dark:text-amber-200" />
                   </div>
                   <div>
                     <h3 className="text-sm font-semibold text-foreground">Queue Pressure</h3>
@@ -689,36 +686,36 @@ export default function QueuePage(): JSX.Element {
                 </div>
                 
                 <div className="space-y-3">
-                  <div className="rounded-xl border border-amber-200/60 bg-amber-50/80 p-3">
+                  <div className="rounded-xl border border-amber-200/60 bg-amber-50/80 p-3 dark:border-amber-400/20 dark:bg-amber-500/10">
                     <div className="flex items-center gap-3">
-                      <AlertTriangle className="size-4 text-amber-700" />
+                      <AlertTriangle className="size-4 text-amber-700 dark:text-amber-200" />
                       <div className="flex-1">
-                        <p className="text-sm font-semibold text-amber-900">{summary.late} late arrivals</p>
-                        <p className="text-[11px] text-amber-800">
+                        <p className="text-sm font-semibold text-amber-900 dark:text-amber-50">{summary.late} late arrivals</p>
+                        <p className="text-[11px] text-amber-800 dark:text-amber-200">
                           Patients past appointment time
                         </p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-violet-200/60 bg-violet-50/80 p-3">
+                  <div className="rounded-xl border border-violet-200/60 bg-violet-50/80 p-3 dark:border-violet-400/20 dark:bg-violet-500/10">
                     <div className="flex items-center gap-3">
-                      <CheckCircle2 className="size-4 text-violet-700" />
+                      <CheckCircle2 className="size-4 text-violet-700 dark:text-violet-200" />
                       <div className="flex-1">
-                        <p className="text-sm font-semibold text-violet-900">{summary.inChair} in chair</p>
-                        <p className="text-[11px] text-violet-800">
+                        <p className="text-sm font-semibold text-violet-900 dark:text-violet-50">{summary.inChair} in chair</p>
+                        <p className="text-[11px] text-violet-800 dark:text-violet-200">
                           Currently seated with dentist
                         </p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-sky-200/60 bg-sky-50/80 p-3">
+                  <div className="rounded-xl border border-sky-200/60 bg-sky-50/80 p-3 dark:border-sky-400/20 dark:bg-sky-500/10">
                     <div className="flex items-center gap-3">
-                      <CalendarDays className="size-4 text-sky-700" />
+                      <CalendarDays className="size-4 text-sky-700 dark:text-sky-200" />
                       <div className="flex-1">
-                        <p className="text-sm font-semibold text-sky-900">{summary.waiting} ready</p>
-                        <p className="text-[11px] text-sky-800">
+                        <p className="text-sm font-semibold text-sky-900 dark:text-sky-50">{summary.waiting} ready</p>
+                        <p className="text-[11px] text-sky-800 dark:text-sky-200">
                           Checked-in and waiting
                         </p>
                       </div>
@@ -727,10 +724,10 @@ export default function QueuePage(): JSX.Element {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-border/50 bg-gradient-to-br from-white/80 to-muted/50 p-4 shadow-sm">
+              <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="rounded-lg border border-emerald-200/50 bg-emerald-100/60 p-2">
-                    <Stethoscope className="size-4 text-emerald-600" />
+                  <div className="rounded-lg border border-emerald-200/50 bg-emerald-100/60 p-2 dark:border-emerald-400/20 dark:bg-emerald-500/12">
+                    <Stethoscope className="size-4 text-emerald-600 dark:text-emerald-200" />
                   </div>
                   <div>
                     <h3 className="text-sm font-semibold text-foreground">Dentist Load</h3>

@@ -8,6 +8,7 @@ import { notFound } from 'next/navigation';
 import { ClientLayoutWrapper } from '@/components/client-layout-wrapper';
 import { ReactQueryProvider } from '@/components/react-query-provider';
 import { LoadingOverlay } from '@/components/shared/loading-overlay';
+import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/sonner';
 import { routing } from '@/i18n/routing';
 import { AuthInitializer } from '@/modules/auth/presentation/components/auth-initializer';
@@ -52,16 +53,21 @@ export default async function RootLayout({
   const direction = getDirection(locale);
 
   return (
-    <html lang={locale} dir={direction} className="light">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased custom-cursor`} dir={direction}>
-        <NextIntlClientProvider locale={locale}>
-          <ReactQueryProvider>
-            <AuthInitializer />
-            <LoadingOverlay />
-            <Toaster position="top-center" richColors duration={4000} />
-            <ClientLayoutWrapper>{children}</ClientLayoutWrapper>
-          </ReactQueryProvider>
-        </NextIntlClientProvider>
+    <html lang={locale} dir={direction} suppressHydrationWarning>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased custom-cursor`}
+        dir={direction}
+      >
+        <ThemeProvider>
+          <NextIntlClientProvider locale={locale}>
+            <ReactQueryProvider>
+              <AuthInitializer />
+              <LoadingOverlay />
+              <Toaster position="top-center" richColors duration={4000} />
+              <ClientLayoutWrapper>{children}</ClientLayoutWrapper>
+            </ReactQueryProvider>
+          </NextIntlClientProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

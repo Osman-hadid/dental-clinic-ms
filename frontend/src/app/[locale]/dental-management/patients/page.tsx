@@ -22,9 +22,11 @@ const TABLE_PER_PAGE = 100;
 const SEARCH_PAGE_SIZE = 100;
 const SEARCH_RESULTS_VISIBLE_LIMIT = 12;
 
-const normalizeSearchValue = (value: string): string => value.replace(/\s+/g, ' ').trim().toLowerCase();
+const normalizeSearchValue = (value: string): string =>
+  value.replace(/\s+/g, ' ').trim().toLowerCase();
 
-const tokenizeSearchValue = (value: string): string[] => normalizeSearchValue(value).split(' ').filter(Boolean);
+const tokenizeSearchValue = (value: string): string[] =>
+  normalizeSearchValue(value).split(' ').filter(Boolean);
 
 const computeSearchPriority = (value: string, query: string): number => {
   const normalizedValue = normalizeSearchValue(value);
@@ -55,13 +57,16 @@ const computeSearchPriority = (value: string, query: string): number => {
   return Number.MAX_SAFE_INTEGER;
 };
 
-const computeHumanSearchScore = (patient: {
-  contactNumber?: string | null;
-  firstName?: string | null;
-  id?: string | number | null;
-  lastName?: string | null;
-  patientCode?: string | null;
-}, query: string): number => {
+const computeHumanSearchScore = (
+  patient: {
+    contactNumber?: string | null;
+    firstName?: string | null;
+    id?: string | number | null;
+    lastName?: string | null;
+    patientCode?: string | null;
+  },
+  query: string
+): number => {
   const normalizedQuery = normalizeSearchValue(query);
   const queryTokens = tokenizeSearchValue(query);
   const patientId = String(patient.id ?? '');
@@ -93,7 +98,9 @@ const computeHumanSearchScore = (patient: {
           return;
         }
 
-        const tokenPrefixIndex = fieldTokens.findIndex((fieldToken) => fieldToken.startsWith(token));
+        const tokenPrefixIndex = fieldTokens.findIndex((fieldToken) =>
+          fieldToken.startsWith(token)
+        );
         if (tokenPrefixIndex >= 0) {
           score = Math.min(score, 300 + tokenIndex * 10 + tokenPrefixIndex + fieldIndex * 1000);
           return;
@@ -175,10 +182,7 @@ export default function PatientsPage(): JSX.Element {
   );
 
   const searchPageSize = trimmedSearch ? SEARCH_PAGE_SIZE : TABLE_PER_PAGE;
-  const {
-    entities: searchResults,
-    isFetching: isSearching,
-  } = usePatientList(
+  const { entities: searchResults, isFetching: isSearching } = usePatientList(
     1,
     searchPageSize,
     trimmedSearch,
@@ -202,9 +206,9 @@ export default function PatientsPage(): JSX.Element {
     return searchResults
       .filter((patient) => {
         const searchBlob = buildPatientSearchBlob(patient);
-        
+
         // Check if all search tokens are found in the search blob
-        return searchTokens.every(token => {
+        return searchTokens.every((token) => {
           const normalizedToken = normalizeSearchValue(token);
           return searchBlob.includes(normalizedToken);
         });
@@ -231,7 +235,14 @@ export default function PatientsPage(): JSX.Element {
     [filteredSearchResults]
   );
 
-  const { entities: dashboardPatients } = usePatientList(1, TABLE_PER_PAGE, '', searchFields, [], {});
+  const { entities: dashboardPatients } = usePatientList(
+    1,
+    TABLE_PER_PAGE,
+    '',
+    searchFields,
+    [],
+    {}
+  );
 
   const activePatients = useMemo(
     () => dashboardPatients.filter((patient) => String(patient.enabled) === '1').length,
@@ -245,7 +256,9 @@ export default function PatientsPage(): JSX.Element {
 
   const handleOpenPatient = (patientId: string | number): void => {
     const encodedPatientId = encodeURIComponent(String(patientId));
-    router.push(`/${locale}/dental-management/patients/patient-profile?patientId=${encodedPatientId}`);
+    router.push(
+      `/${locale}/dental-management/patients/patient-profile?patientId=${encodedPatientId}`
+    );
   };
 
   const isTableQueryReset = useMemo(() => {
@@ -255,9 +268,9 @@ export default function PatientsPage(): JSX.Element {
 
     for (const key of searchParameters.keys()) {
       if (
-        key.startsWith('searchFields[')
-        || key.startsWith('filter[')
-        || key.startsWith('include[')
+        key.startsWith('searchFields[') ||
+        key.startsWith('filter[') ||
+        key.startsWith('include[')
       ) {
         return false;
       }
@@ -298,10 +311,10 @@ export default function PatientsPage(): JSX.Element {
       <div className="flex flex-1 flex-col">
         <div className="@container/main flex flex-1 flex-col gap-2">
           <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
-            <Card className="rounded-3xl border border-primary/10 bg-gradient-to-br from-primary/5 via-background to-muted/20 shadow-lg overflow-hidden">
-              <div className="absolute right-0 top-0 h-48 w-48 translate-x-24 -translate-y-24 rounded-full bg-primary/10 blur-3xl" />
+            <Card className="relative isolate overflow-hidden rounded-3xl border border-border/60 bg-card/95 shadow-lg">
+              {/* <div className="absolute right-0 top-0 h-48 w-48 translate-x-24 -translate-y-24 rounded-full bg-primary/10 blur-3xl" /> */}
               <div className="absolute left-0 bottom-0 h-48 w-48 -translate-x-24 translate-y-24 rounded-full bg-emerald-500/10 blur-3xl" />
-              
+
               <CardContent className="relative p-6">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
                   <div className="flex items-center gap-3">
@@ -309,40 +322,56 @@ export default function PatientsPage(): JSX.Element {
                       <UsersRound className="size-6 text-primary" />
                     </div>
                     <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Dental Dashboard</p>
-                      <h2 className="mt-1 text-2xl font-semibold text-foreground">Patient Finder</h2>
-                      <p className="text-sm text-muted-foreground">Search quickly, open profile, and move directly to clinical workflow.</p>
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                        Dental Dashboard
+                      </p>
+                      <h2 className="mt-1 text-2xl font-semibold text-foreground">
+                        Patient Finder
+                      </h2>
+                      <p className="text-sm text-muted-foreground">
+                        Search quickly, open profile, and move directly to clinical workflow.
+                      </p>
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <div className="rounded-xl border border-emerald-200/60 bg-gradient-to-br from-emerald-50/80 to-emerald-100/50 px-4 py-2">
+                    <div className="rounded-xl border border-emerald-200/60 bg-linear-to-br from-emerald-50/80 to-emerald-100/50 px-4 py-2 dark:border-emerald-400/20 dark:from-emerald-500/16 dark:to-emerald-500/6">
                       <div className="flex items-center gap-2">
-                        <UsersRound className="size-4 text-emerald-600" />
+                        <UsersRound className="size-4 text-emerald-600 dark:text-emerald-300" />
                         <div>
-                          <p className="text-[10px] text-emerald-700">Total</p>
-                          <p className="text-sm font-bold text-emerald-900">{dashboardPatients.length}</p>
+                          <p className="text-[10px] text-emerald-700 dark:text-emerald-200/80">
+                            Total
+                          </p>
+                          <p className="text-sm font-bold text-emerald-900 dark:text-emerald-50">
+                            {dashboardPatients.length}
+                          </p>
                         </div>
                       </div>
                     </div>
-                    <div className="rounded-xl border border-blue-200/60 bg-gradient-to-br from-blue-50/80 to-blue-100/50 px-4 py-2">
+                    <div className="rounded-xl border border-blue-200/60 bg-linear-to-br from-blue-50/80 to-blue-100/50 px-4 py-2 dark:border-blue-400/20 dark:from-blue-500/16 dark:to-blue-500/6">
                       <div className="flex items-center gap-2">
-                        <div className="rounded-lg border border-blue-200/50 bg-blue-100/60 p-1.5">
-                          <UsersRound className="size-3 text-blue-600" />
+                        <div className="rounded-lg border border-blue-200/50 bg-blue-100/60 p-1.5 dark:border-blue-400/20 dark:bg-blue-500/16">
+                          <UsersRound className="size-3 text-blue-600 dark:text-blue-300" />
                         </div>
                         <div>
-                          <p className="text-[10px] text-blue-700">Active</p>
-                          <p className="text-sm font-bold text-blue-900">{activePatients}</p>
+                          <p className="text-[10px] text-blue-700 dark:text-blue-200/80">Active</p>
+                          <p className="text-sm font-bold text-blue-900 dark:text-blue-50">
+                            {activePatients}
+                          </p>
                         </div>
                       </div>
                     </div>
-                    <div className="rounded-xl border border-violet-200/60 bg-gradient-to-br from-violet-50/80 to-violet-100/50 px-4 py-2">
+                    <div className="rounded-xl border border-violet-200/60 bg-linear-to-br from-violet-50/80 to-violet-100/50 px-4 py-2 dark:border-violet-400/20 dark:from-violet-500/16 dark:to-violet-500/6">
                       <div className="flex items-center gap-2">
-                        <div className="rounded-lg border border-violet-200/50 bg-violet-100/60 p-1.5">
-                          <UsersRound className="size-3 text-violet-600" />
+                        <div className="rounded-lg border border-violet-200/50 bg-violet-100/60 p-1.5 dark:border-violet-400/20 dark:bg-violet-500/16">
+                          <UsersRound className="size-3 text-violet-600 dark:text-violet-300" />
                         </div>
                         <div>
-                          <p className="text-[10px] text-violet-700">Approved</p>
-                          <p className="text-sm font-bold text-violet-900">{approvedPatients}</p>
+                          <p className="text-[10px] text-violet-700 dark:text-violet-200/80">
+                            Approved
+                          </p>
+                          <p className="text-sm font-bold text-violet-900 dark:text-violet-50">
+                            {approvedPatients}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -372,7 +401,7 @@ export default function PatientsPage(): JSX.Element {
                 </div>
 
                 {trimmedSearch ? (
-                  <div className="mt-6 rounded-2xl border border-border/50 bg-gradient-to-br from-background via-background to-muted/20 p-4">
+                  <div className="mt-6 rounded-2xl border border-border/50 bg-card/70 p-4">
                     {isSearching ? (
                       <div className="flex items-center justify-center py-8 text-center">
                         <div className="rounded-xl border border-primary/20 bg-primary/10 p-4 mb-3">
@@ -385,14 +414,23 @@ export default function PatientsPage(): JSX.Element {
                         <div className="rounded-xl border border-border/50 bg-muted/30 p-4 mb-3">
                           <Search className="size-6 text-muted-foreground" />
                         </div>
-                        <p className="text-sm text-muted-foreground">No patients found matching your search.</p>
+                        <p className="text-sm text-muted-foreground">
+                          No patients found matching your search.
+                        </p>
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        <p className="text-sm font-medium text-foreground">{visibleSearchResults.length} patient{visibleSearchResults.length !== 1 ? 's' : ''} found</p>
+                        <p className="text-sm font-medium text-foreground">
+                          {visibleSearchResults.length} patient
+                          {visibleSearchResults.length !== 1 ? 's' : ''} found
+                        </p>
                         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                           {visibleSearchResults.map((patient) => {
-                            const fullName = [patient.firstName, patient.lastName].filter(Boolean).join(' ').trim() || patient.patientCode;
+                            const fullName =
+                              [patient.firstName, patient.lastName]
+                                .filter(Boolean)
+                                .join(' ')
+                                .trim() || patient.patientCode;
                             return (
                               <button
                                 key={patient.id}
@@ -400,12 +438,16 @@ export default function PatientsPage(): JSX.Element {
                                 onClick={() => {
                                   handleOpenPatient(patient.id);
                                 }}
-                                className="group rounded-2xl border border-border/50 bg-gradient-to-br from-white/80 to-muted/50 p-4 text-left transition-all hover:border-primary/50 hover:shadow-lg hover:scale-[1.02] hover:from-primary/5 hover:to-muted/30"
+                                className="group rounded-2xl border border-border/50 bg-card p-4 text-left transition-all hover:scale-[1.02] hover:border-primary/50 hover:bg-accent/30 hover:shadow-lg"
                               >
                                 <div className="flex items-start justify-between mb-2">
                                   <div className="flex-1">
-                                    <p className="text-base font-semibold text-foreground">{fullName}</p>
-                                    <p className="text-xs text-muted-foreground">{patient.patientCode}</p>
+                                    <p className="text-base font-semibold text-foreground">
+                                      {fullName}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {patient.patientCode}
+                                    </p>
                                   </div>
                                   <ChevronRight className="size-5 text-muted-foreground opacity-50 transition group-hover:translate-x-1 group-hover:opacity-100" />
                                 </div>
@@ -422,22 +464,24 @@ export default function PatientsPage(): JSX.Element {
                     )}
                   </div>
                 ) : (
-                  <div className="mt-6 rounded-2xl border border-dashed border-border/50 bg-gradient-to-br from-background via-background to-muted/20 p-6 text-center">
+                  <div className="mt-6 rounded-2xl border border-dashed border-border/50 bg-card/60 p-6 text-center">
                     <div className="rounded-xl border border-border/50 bg-muted/30 p-4 mx-auto mb-3 max-w-fit">
                       <Search className="size-8 text-muted-foreground" />
                     </div>
-                    <p className="text-sm text-muted-foreground">Start typing in the search bar to find and open a patient profile.</p>
+                    <p className="text-sm text-muted-foreground">
+                      Start typing in the search bar to find and open a patient profile.
+                    </p>
                   </div>
                 )}
               </CardContent>
             </Card>
 
             {showList ? (
-              <Card className="rounded-3xl border border-border/50 bg-gradient-to-br from-background via-background to-muted/20 shadow-sm">
+              <Card className="rounded-3xl border border-border/50 bg-card shadow-sm">
                 <CardHeader className="pb-4">
                   <div className="flex items-center gap-3">
-                    <div className="rounded-xl border border-violet-200/50 bg-violet-100/60 p-2">
-                      <CalendarDays className="size-5 text-violet-600" />
+                    <div className="rounded-xl border border-violet-200/50 bg-violet-100/60 p-2 dark:border-violet-400/20 dark:bg-violet-500/16">
+                      <CalendarDays className="size-5 text-violet-600 dark:text-violet-300" />
                     </div>
                     <div>
                       <CardTitle className="text-base text-foreground">All Patients</CardTitle>
@@ -456,13 +500,15 @@ export default function PatientsPage(): JSX.Element {
                 </CardContent>
               </Card>
             ) : isPreparingList ? (
-              <Card className="rounded-3xl border border-border/50 bg-gradient-to-br from-background via-background to-muted/20 shadow-sm">
+              <Card className="rounded-3xl border border-border/50 bg-card shadow-sm">
                 <CardContent className="flex flex-col items-center justify-center p-8 text-center">
                   <div className="rounded-xl border border-primary/20 bg-primary/10 p-4 mb-4">
                     <CalendarDays className="size-8 text-primary animate-pulse" />
                   </div>
                   <p className="text-sm font-medium text-foreground">Preparing patients table...</p>
-                  <p className="text-xs text-muted-foreground mt-1">Please wait while we load the complete database</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Please wait while we load the complete database
+                  </p>
                 </CardContent>
               </Card>
             ) : null}

@@ -281,7 +281,7 @@ export default function DebtsPage(): JSX.Element {
       <div className="flex flex-1 flex-col">
         <div className="@container/main flex flex-1 flex-col gap-2">
           <div className="flex flex-col gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6">
-            <Card className="rounded-3xl border border-rose-200 bg-linear-to-br from-rose-50 via-background to-amber-50">
+            <Card className="rounded-3xl border border-border/50 bg-card">
               <CardHeader>
                 <CardTitle className="inline-flex items-center gap-2">
                   <Wallet className="size-5 text-rose-500" />
@@ -291,7 +291,7 @@ export default function DebtsPage(): JSX.Element {
               <CardContent className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
                 <form onSubmit={handleSettleSelected} className="grid gap-3 rounded-2xl border bg-background/90 p-4">
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-xl border bg-white/90 p-3">
+                    <div className="rounded-xl border bg-background/80 p-3 dark:border-border/60">
                       <p className="text-xs text-muted-foreground">Selected Debt</p>
                       <div className="text-lg font-semibold text-rose-600">
                         {selectedDebt ? renderMoney(selectedDebt.debtAmountInput, selectedDebt.currency, selectedDebt.debtAmount) : formatCurrency(0, 'AFN')}
@@ -304,7 +304,7 @@ export default function DebtsPage(): JSX.Element {
                           : 'Select one invoice to see the debt amount.'}
                       </p>
                     </div>
-                    <div className="rounded-xl border bg-white/90 p-3">
+                    <div className="rounded-xl border bg-background/80 p-3 dark:border-border/60">
                       <p className="text-xs text-muted-foreground">Remaining After Payment</p>
                       <div className="text-lg font-semibold text-amber-600">
                         {selectedDebt ? formatCurrency(remainingAfterPayment, selectedDebtCurrency) : formatCurrency(0, 'AFN')}
@@ -345,7 +345,7 @@ export default function DebtsPage(): JSX.Element {
                 <div className="grid gap-3">
                   <div className="grid gap-3 xl:grid-cols-[1fr_1fr_1.15fr]">
                     {(['AFN', 'USD'] as CurrencyCode[]).map((currency) => (
-                      <div key={currency} className="rounded-xl border bg-white/85 p-3">
+                      <div key={currency} className="rounded-xl border bg-background/80 p-3 dark:border-border/60">
                         <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">{currency} Summary</p>
                         <div className="mt-3 grid gap-3">
                           <div>
@@ -364,20 +364,20 @@ export default function DebtsPage(): JSX.Element {
                       </div>
                     ))}
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-xl border bg-white/85 p-3">
+                      <div className="rounded-xl border bg-background/80 p-3 dark:border-border/60">
                         <p className="text-xs text-muted-foreground">AFN Base Open Debt</p>
                         <p className="text-lg font-semibold">{formatCurrency(report?.summary.totalDebt ?? 0, 'AFN')}</p>
                         <p className="text-xs text-muted-foreground">Includes unpaid and partially paid invoice balances.</p>
                       </div>
-                      <div className="rounded-xl border bg-white/85 p-3">
+                      <div className="rounded-xl border bg-background/80 p-3 dark:border-border/60">
                         <p className="text-xs text-muted-foreground">AFN Base Net Invoices</p>
                         <p className="text-lg font-semibold">{formatCurrency(report?.summary.totalNet ?? 0, 'AFN')}</p>
                       </div>
-                      <div className="rounded-xl border bg-white/85 p-3">
+                      <div className="rounded-xl border bg-background/80 p-3 dark:border-border/60">
                         <p className="text-xs text-muted-foreground">AFN Base Paid</p>
                         <p className="text-lg font-semibold">{formatCurrency(report?.summary.totalPaid ?? 0, 'AFN')}</p>
                       </div>
-                      <div className="rounded-xl border bg-white/85 p-3">
+                      <div className="rounded-xl border bg-background/80 p-3 dark:border-border/60">
                         <p className="text-xs text-muted-foreground">Total Debts</p>
                         <p className="text-lg font-semibold">{totalDebts.toLocaleString(locale)}</p>
                         <p className="text-xs text-muted-foreground">Number of outstanding invoices in this range.</p>
@@ -385,7 +385,7 @@ export default function DebtsPage(): JSX.Element {
                     </div>
                   </div>
 
-                  <div className="grid gap-3 rounded-2xl border bg-white/85 p-4 md:grid-cols-4">
+                  <div className="grid gap-3 rounded-2xl border bg-background/80 p-4 dark:border-border/60 md:grid-cols-4">
                     <div className="grid gap-1.5">
                       <Label>Start Date</Label>
                       <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
@@ -417,11 +417,11 @@ export default function DebtsPage(): JSX.Element {
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border bg-white/85 p-4">
+                  <div className="rounded-2xl border bg-background/80 p-4 dark:border-border/60">
                     <p className="mb-2 text-sm font-medium">Aging Snapshot</p>
                     <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                       {(report?.aging ?? []).map((row) => (
-                        <div key={row.bucket} className="rounded-xl border bg-background/80 p-3">
+                        <div key={row.bucket} className="rounded-xl border bg-background/80 p-3 dark:border-border/60">
                           <p className="text-xs text-muted-foreground">{row.bucket}</p>
                           <p className="text-base font-semibold">{formatCurrency(row.amount, 'AFN')}</p>
                           <p className="text-xs text-muted-foreground">{row.count} invoices · AFN accounting base</p>
@@ -486,7 +486,7 @@ export default function DebtsPage(): JSX.Element {
                               
                               return (
                                 <React.Fragment key={patient.patientId}>
-                                  <tr className="border-b-2 border-gray-200 bg-linear-to-r from-slate-50 to-gray-50">
+                                  <tr className="border-b-2 border-border/50 bg-background/70">
                                     <td colSpan={7} className="px-4 py-3">
                                       <div className="flex items-center gap-3">
                                         <input
@@ -496,15 +496,15 @@ export default function DebtsPage(): JSX.Element {
                                             if (el) el.indeterminate = somePatientInvoicesSelected && !allPatientInvoicesSelected;
                                           }}
                                           onChange={(event) => togglePatientRows(patient.patientId, event.target.checked)}
-                                          className="h-4 w-4 rounded border-gray-300"
+                                          className="h-4 w-4 rounded border-border/60"
                                         />
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-blue-700 text-xs font-semibold">
+                                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-blue-700 text-xs font-semibold dark:bg-blue-500/15 dark:text-blue-100">
                                           {patient.patientId.slice(-4)}
                                         </div>
                                         <div>
-                                          <span className="font-semibold text-gray-900">{patient.patientName}</span>
-                                          <span className="ml-2 text-sm text-gray-500">ID: {patient.patientId}</span>
-                                          <span className="ml-2 rounded-full bg-rose-100 px-2 py-1 text-xs font-medium text-rose-700">
+                                            <span className="font-semibold text-foreground">{patient.patientName}</span>
+                                            <span className="ml-2 text-sm text-muted-foreground">ID: {patient.patientId}</span>
+                                            <span className="ml-2 rounded-full bg-rose-100 px-2 py-1 text-xs font-medium text-rose-700 dark:bg-rose-500/15 dark:text-rose-100">
                                             {patient.invoices.length} invoice{patient.invoices.length > 1 ? 's' : ''}
                                           </span>
                                         </div>
@@ -512,27 +512,27 @@ export default function DebtsPage(): JSX.Element {
                                     </td>
                                   </tr>
                                   {patient.invoices.map((row, invoiceIndex) => (
-                                    <tr key={row.id} className={`border-b border-gray-200 hover:bg-blue-50 transition-colors ${
+                                    <tr key={row.id} className={`border-b border-border/50 transition-colors hover:bg-accent/30 ${
                                       patient.invoices.length === 1 
-                                        ? 'bg-white' 
-                                        : 'bg-blue-50/30'
+                                        ? 'bg-background'
+                                        : 'bg-background/70'
                                     }`}>
                                       <td className="px-4 py-3">
-                                        <input type="checkbox" checked={selectedIds.includes(row.id)} onChange={(event) => toggleRow(row.id, event.target.checked)} className="h-4 w-4 rounded border-gray-300" />
+                                        <input type="checkbox" checked={selectedIds.includes(row.id)} onChange={(event) => toggleRow(row.id, event.target.checked)} className="h-4 w-4 rounded border-border/60" />
                                       </td>
-                                      <td className="px-4 py-3 font-medium text-gray-900">#{row.invoiceId}</td>
-                                      <td className="px-4 py-3 text-gray-700">{new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(row.invoiceDate))}</td>
-                                      <td className="px-4 py-3 text-gray-700">{row.patientName}</td>
-                                      <td className="px-4 py-3 text-gray-700">{renderMoney(row.paidAmountInput, row.currency, row.paidAmount)}</td>
-                                      <td className="px-4 py-3 font-semibold text-rose-600">
+                                      <td className="px-4 py-3 font-medium text-foreground">#{row.invoiceId}</td>
+                                      <td className="px-4 py-3 text-muted-foreground">{new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(row.invoiceDate))}</td>
+                                      <td className="px-4 py-3 text-muted-foreground">{row.patientName}</td>
+                                      <td className="px-4 py-3 text-muted-foreground">{renderMoney(row.paidAmountInput, row.currency, row.paidAmount)}</td>
+                                      <td className="px-4 py-3 font-semibold text-rose-600 dark:text-rose-100">
                                         {renderMoney(row.debtAmountInput, row.currency, row.debtAmount)}
                                       </td>
                                       <td className="px-4 py-3">
                                         <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
-                                          row.agingBucket === '0-30 days' ? 'bg-green-100 text-green-800' :
-                                          row.agingBucket === '31-60 days' ? 'bg-yellow-100 text-yellow-800' :
-                                          row.agingBucket === '61-90 days' ? 'bg-orange-100 text-orange-800' :
-                                          'bg-red-100 text-red-800'
+                                          row.agingBucket === '0-30 days' ? 'bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-100' :
+                                          row.agingBucket === '31-60 days' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/15 dark:text-yellow-100' :
+                                          row.agingBucket === '61-90 days' ? 'bg-orange-100 text-orange-800 dark:bg-orange-500/15 dark:text-orange-100' :
+                                          'bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-100'
                                         }`}>
                                           {row.agingBucket}
                                         </span>

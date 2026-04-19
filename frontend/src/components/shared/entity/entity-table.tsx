@@ -1217,6 +1217,36 @@ export const EntityTable = <TData extends User>({
 
                     ) : null}
 
+                    {config.queryKey === 'staff' ? (
+
+                      <Button
+
+                        variant="ghost"
+
+                        size="icon"
+
+                        onClick={() => {
+
+                          const staffId = row.original.id;
+
+                          const encodedStaffId = encodeURIComponent(String(staffId));
+
+                          router.push(`/${locale}/dental-management/staff/staff-dashboard?staffId=${encodedStaffId}`);
+
+                        }}
+
+                        aria-label="Open staff dashboard"
+
+                        className="text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50"
+
+                      >
+
+                        <LayoutDashboard className="h-4 w-4" />
+
+                      </Button>
+
+                    ) : null}
+
                     {config.queryKey === 'invoices' ? (
 
                       <Button

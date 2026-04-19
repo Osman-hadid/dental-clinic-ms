@@ -237,7 +237,7 @@ const ClinicalExpensesPage = (): JSX.Element => {
       <div className="flex flex-1 flex-col">
         <div className="@container/main flex flex-1 flex-col gap-2">
           <div className="flex flex-col gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6">
-            <Card className="overflow-hidden rounded-3xl border border-cyan-200 bg-gradient-to-br from-cyan-50 via-background to-blue-50">
+            <Card className="overflow-hidden rounded-3xl border border-border/50 bg-card">
               <CardHeader>
                 <CardTitle className="inline-flex items-center gap-2">
                   <ShoppingBag className="size-5 text-cyan-700" />
@@ -310,7 +310,7 @@ const ClinicalExpensesPage = (): JSX.Element => {
                       />
                     </div>
                   </div>
-                  <div className="rounded-xl border border-dashed bg-slate-50/80 p-3 text-xs text-muted-foreground">
+                  <div className="rounded-xl border border-dashed bg-background/70 p-3 text-xs text-muted-foreground dark:border-border/60">
                     This buy is tracked only inside the selected currency section.
                   </div>
                   <div className="grid gap-1.5">

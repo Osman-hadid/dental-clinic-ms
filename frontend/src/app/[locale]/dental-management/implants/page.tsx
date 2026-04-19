@@ -142,7 +142,7 @@ const buildDefaultForm = (): ImplantPlanningForm => ({
   boneWidthMm: '',
   currency: 'AFN',
   dentistId: '',
-  exchangeRate: '1',
+  exchangeRate: '',
   imagingType: 'cbct',
   implantCompanyDate: new Date().toISOString().slice(0, 10),
   implantCompanyId: '',
@@ -159,13 +159,13 @@ const buildDefaultForm = (): ImplantPlanningForm => ({
   linkedVisitId: '',
   loadingProtocol: 'delayed',
   notes: '',
-  paidNowAmount: '0',
+  paidNowAmount: '',
   patientId: '',
   paymentMethod: 'cash',
   primaryStabilityIsq: '',
   prosthesisType: 'Single crown',
   riskFactors: [],
-  supplierCostPerTooth: '0',
+  supplierCostPerTooth: '',
   surgeryGuideType: 'pilot',
   treatmentId: '',
   visitDate: '',
@@ -346,7 +346,7 @@ export default function ImplantsPage(): JSX.Element {
       .then((rate) => {
         setDefaultExchangeRate(rate);
         setForm((prev) => (
-          prev.currency === 'USD' && (parseMoney(prev.exchangeRate) <= 0 || prev.exchangeRate === '1')
+          prev.currency === 'USD' && parseMoney(prev.exchangeRate) <= 0
             ? { ...prev, exchangeRate: String(rate) }
             : prev
         ));
@@ -1233,7 +1233,7 @@ export default function ImplantsPage(): JSX.Element {
                       setForm((prev) => ({
                         ...prev,
                         currency: nextCurrency,
-                        exchangeRate: String(nextExchangeRate),
+                        exchangeRate: nextCurrency === 'USD' ? String(nextExchangeRate) : '',
                         implantPricePerTooth: convertValue(prev.implantPricePerTooth),
                         paidNowAmount: convertValue(prev.paidNowAmount),
                         supplierCostPerTooth: convertValue(prev.supplierCostPerTooth),

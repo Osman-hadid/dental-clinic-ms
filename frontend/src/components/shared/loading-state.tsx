@@ -19,20 +19,19 @@ export const LoadingState = ({
   const content = (
     <div
       className={cn(
-        'relative overflow-hidden rounded-[1.75rem] border border-border/70 bg-gradient-to-br from-slate-50 via-background to-cyan-50/70 shadow-sm',
+        'relative overflow-hidden rounded-[1.75rem] border border-border/70 bg-card shadow-sm',
         compact ? 'p-4' : 'p-5 md:p-6',
         className
       )}
     >
-      <div className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-cyan-500/80 to-transparent" />
-      <div className="absolute -end-4 -top-4 size-24 rounded-full bg-emerald-200/30 blur-2xl" />
+      <div className="absolute inset-x-6 top-0 h-px bg-border/60" />
       <div className="relative flex flex-col items-center gap-4 text-center">
         <div className={cn('sourire-cube-loader', compact ? 'sourire-cube-loader--compact' : 'sourire-cube-loader--regular')}>
           <div className="sourire-cube-loader__shadow" aria-hidden="true" />
           <div className="sourire-cube-loader__box" aria-hidden="true" />
         </div>
         <div className="space-y-1">
-          <p className={cn('font-semibold tracking-[0.34em] uppercase text-slate-800', compact ? 'text-[0.58rem]' : 'text-[0.72rem]')}>
+          <p className={cn('font-semibold tracking-[0.34em] uppercase text-foreground/80', compact ? 'text-[0.58rem]' : 'text-[0.72rem]')}>
             Sourire
           </p>
         </div>
@@ -48,10 +47,10 @@ export const LoadingState = ({
           </div>
 
           <div className="mx-auto w-full max-w-sm space-y-2">
-            <div className="h-2 rounded-full bg-slate-200/85 animate-pulse" style={{ width: compact ? '78%' : '86%' }} />
-            <div className="h-2 rounded-full bg-slate-200/70 animate-pulse [animation-delay:120ms]" style={{ width: compact ? '58%' : '68%' }} />
+            <div className="h-2 rounded-full bg-muted animate-pulse" style={{ width: compact ? '78%' : '86%' }} />
+            <div className="h-2 rounded-full bg-muted/80 animate-pulse [animation-delay:120ms]" style={{ width: compact ? '58%' : '68%' }} />
             {!compact ? (
-              <div className="h-2 rounded-full bg-slate-200/60 animate-pulse [animation-delay:220ms]" style={{ width: '42%' }} />
+              <div className="h-2 rounded-full bg-muted/70 animate-pulse [animation-delay:220ms]" style={{ width: '42%' }} />
             ) : null}
           </div>
         </div>
