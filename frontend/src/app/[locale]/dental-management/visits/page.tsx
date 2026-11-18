@@ -19,7 +19,7 @@ import {
   useUpdateVisit,
   useVisitList,
 } from '@/modules/dental-management/presentation/hooks';
-import { CalendarDays, Clock3, Loader2, Search, Stethoscope, UserRound } from 'lucide-react';
+import { Activity, ArrowRight, CalendarDays, Clock3, Loader2, Search, Stethoscope, UserRound } from 'lucide-react';
 import { toast } from 'sonner';
 
 const asText = (value: unknown): string => {
@@ -152,6 +152,15 @@ export default function VisitsPage(): JSX.Element {
     });
   }, [normalizedSearch, sortedAppointments]);
 
+  const visitStats = useMemo(() => {
+    const today = toDateInputValue(new Date());
+    return {
+      today: appointments.filter((appointment) => asText(appointment.appointmentDate) === today).length,
+      ready: appointments.filter((appointment) => !visitsByAppointmentId.has(String(appointment.id)) && !['cancelled', 'canceled'].includes(normalizeStatus(asText(appointment.status)))).length,
+      recorded: visits.length,
+    };
+  }, [appointments, visits, visitsByAppointmentId]);
+
   const resolvePatientName = (appointment: Appointment): string => {
     return asText(appointment.patientName)
       || buildPersonName(appointment.patient)
@@ -229,11 +238,31 @@ export default function VisitsPage(): JSX.Element {
       <div className="flex flex-1 flex-col">
         <div className="@container/main flex flex-1 flex-col gap-2">
           <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
-            <div className="rounded-2xl border bg-gradient-to-r from-background to-muted/30 p-4">
-              <h2 className="text-base font-semibold">Start Visits From Appointments</h2>
-              <p className="text-xs text-muted-foreground">
-                Open an existing visit chart or start a new visit directly from an appointment card.
-              </p>
+            <div className="relative overflow-hidden rounded-[1.75rem] border border-cyan-200/60 bg-gradient-to-br from-cyan-50 via-background to-blue-50 p-5 shadow-sm dark:border-cyan-900/60 dark:from-cyan-950/40 dark:via-background dark:to-blue-950/30 md:p-7">
+              <div className="pointer-events-none absolute -right-10 -top-16 size-48 rounded-full bg-cyan-300/20 blur-3xl dark:bg-cyan-400/10" />
+              <div className="relative flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-white/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-800 dark:border-cyan-800 dark:bg-cyan-950/50 dark:text-cyan-200">
+                    <Activity className="size-3.5" /> Clinical workspace
+                  </div>
+                  <h2 className="text-2xl font-semibold tracking-tight md:text-3xl">Turn appointments into care</h2>
+                  <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
+                    Open a chart already in progress or begin a new clinical visit in seconds.
+                  </p>
+                </div>
+                <div className="grid grid-cols-3 gap-2 md:min-w-80">
+                  {[
+                    ['Today', visitStats.today],
+                    ['Ready', visitStats.ready],
+                    ['Recorded', visitStats.recorded],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded-2xl border border-white/70 bg-white/60 px-3 py-3 dark:border-white/10 dark:bg-white/5">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+                      <p className="mt-1 text-xl font-semibold text-foreground">{value}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
 
             <Card className="rounded-2xl border">
@@ -250,7 +279,15 @@ export default function VisitsPage(): JSX.Element {
                   />
                 </div>
 
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <div className="mb-1 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold">Appointment queue</p>
+                    <p className="text-xs text-muted-foreground">Prioritized by status and appointment time</p>
+                  </div>
+                  <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">{filteredAppointments.length} shown</span>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {isLoadingAppointments || isLoadingVisits ? (
                     <div className="col-span-full rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
                       <Loader2 className="mr-2 inline size-4 animate-spin" />
@@ -269,7 +306,8 @@ export default function VisitsPage(): JSX.Element {
                       const isPending = pendingAppointmentId === appointmentId;
 
                       return (
-                        <div key={`appointment-card-${appointment.id}`} className="rounded-xl border bg-background p-4">
+                        <div key={`appointment-card-${appointment.id}`} className="group relative overflow-hidden rounded-2xl border bg-background p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-cyan-300 hover:shadow-md dark:hover:border-cyan-800">
+                          <div className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-cyan-400 to-blue-500 opacity-70" />
                           <div className="mb-2 flex items-start justify-between gap-2">
                             <p className="text-sm font-semibold">
                               {asText(appointment.tag) || `Appointment #${appointment.id}`}
@@ -319,6 +357,7 @@ export default function VisitsPage(): JSX.Element {
                           >
                             {isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                             {existingVisit ? 'Open Visit Chart' : 'Start Visit Chart'}
+                            <ArrowRight className="ml-auto size-4 transition-transform group-hover:translate-x-0.5" />
                           </Button>
                         </div>
                       );

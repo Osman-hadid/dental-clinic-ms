@@ -1,4 +1,7 @@
 {
+  "sidebar": "Sidebar",
+  "mobileSidebarDescription": "Displays the mobile sidebar.",
+  "toggleSidebar": "Toggle Sidebar",
   "selectLocale": "Select Locale",
   "searchForACommand": "Search for a command to run...",
   "commandPalette": "Command Palette",

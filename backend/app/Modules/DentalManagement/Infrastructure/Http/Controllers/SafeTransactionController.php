@@ -212,7 +212,7 @@ final class SafeTransactionController extends BaseApiController
             exchangeRate: isset($data['exchangeRate']) ? (float) $data['exchangeRate'] : null,
         );
         $amountInput = round((float) ($data['amount'] ?? 0), 2);
-        $amount = $this->currencyService->toUsd(
+        $amount = $this->currencyService->toAfn(
             amountInput: $amountInput,
             currency: $resolvedCurrency['currency'],
             exchangeRate: (float) $resolvedCurrency['exchangeRate'],

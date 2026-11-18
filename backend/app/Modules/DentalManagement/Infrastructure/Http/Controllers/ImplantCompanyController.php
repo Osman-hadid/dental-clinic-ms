@@ -16,7 +16,7 @@ final class ImplantCompanyController extends BaseApiController
 {
     public function index(Request $request): JsonResponse
     {
-        abort_unless(auth()->user()?->can('dental-management.view'), 403);
+        abort_unless(auth()->user()?->can('dental-management.implant-companies.view'), 403);
 
         $validated = $request->validate([
             'search' => 'nullable|string|max:160',
@@ -49,7 +49,7 @@ final class ImplantCompanyController extends BaseApiController
 
     public function store(StoreImplantCompanyRequest $request): JsonResponse
     {
-        abort_unless(auth()->user()?->can('dental-management.view'), 403);
+        abort_unless(auth()->user()?->can('dental-management.implant-companies.create'), 403);
 
         $validated = $request->validated();
         $userId = $this->authenticatedUserId();

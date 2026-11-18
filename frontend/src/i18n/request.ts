@@ -2,9 +2,11 @@ import { getRequestConfig } from 'next-intl/server';
 import { routing } from './routing';
 
 type Messages = {
+  account: Record<string, unknown>;
   app: Record<string, unknown>;
   auth: Record<string, unknown>;
   component: Record<string, unknown>;
+  dashboard: Record<string, unknown>;
   global: Record<string, unknown>;
   sidebar: Record<string, unknown>;
   user: Record<string, unknown>;
@@ -32,9 +34,11 @@ export default getRequestConfig(async ({ requestLocale }) => {
   }
 
   const messages: Messages = {
+    account: (await import(`@/messages/${locale}/account.json`)).default,
     app: (await import(`@/messages/${locale}/app.json`)).default,
     auth: (await import(`@/messages/${locale}/auth.json`)).default,
     component: (await import(`@/messages/${locale}/component.json`)).default,
+    dashboard: (await import(`@/messages/${locale}/dashboard.json`)).default,
     global: (await import(`@/messages/${locale}/global.json`)).default,
     module: (await import(`@/messages/${locale}/settings/module.json`)).default,
     permission: (await import(`@/messages/${locale}/user-management/permission.json`)).default,

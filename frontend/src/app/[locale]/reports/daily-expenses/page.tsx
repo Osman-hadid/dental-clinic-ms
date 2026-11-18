@@ -2,15 +2,17 @@
 
 import { FormEvent, JSX, useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useDebounce } from 'use-debounce';
 import { Header } from '@/components/header';
 import { LoadingState } from '@/components/shared/loading-state';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { DEFAULT_AFN_PER_USD, type CurrencyCode, formatCurrency, getExchangeRate, parseMoney } from '@/lib/currency-utils';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import { createDefaultReportRange, fetchReport, toInputDate } from '@/modules/dental-management/presentation/reports/report-client';
+import { ReportPageIntro } from '@/modules/dental-management/presentation/reports/report-page-intro';
 import { Trash2, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -121,11 +123,12 @@ const DailyExpensesPage = (): JSX.Element => {
   const [endDate, setEndDate] = useState(range.endDate);
   const [category, setCategory] = useState('all');
   const [search, setSearch] = useState('');
+  const [debouncedSearch] = useDebounce(search, 350);
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchExpenses = useCallback(async (pageNumber = page): Promise<void> => {
+  const fetchExpenses = useCallback(async (pageNumber = 1): Promise<void> => {
     setIsLoading(true);
     try {
       const data = await fetchReport<DailyExpenseReportResponse>('/api/v1/dental-management/reports/daily-expenses', {
@@ -133,7 +136,7 @@ const DailyExpensesPage = (): JSX.Element => {
         endDate,
         page: pageNumber,
         perPage: 10,
-        search,
+        search: debouncedSearch,
         sortBy: 'expenseDate',
         sortDirection: 'desc',
         startDate,
@@ -143,7 +146,7 @@ const DailyExpensesPage = (): JSX.Element => {
     } finally {
       setIsLoading(false);
     }
-  }, [category, endDate, page, search, startDate]);
+  }, [category, debouncedSearch, endDate, startDate]);
 
   useEffect(() => {
     void fetchExpenses(1);
@@ -222,13 +225,15 @@ const DailyExpensesPage = (): JSX.Element => {
       />
       <div className="flex flex-1 flex-col">
         <div className="@container/main flex flex-1 flex-col gap-2">
-          <div className="flex flex-col gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6">
+          <div className="flex min-w-0 flex-col gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6">
+            <ReportPageIntro title="Daily expenses" description="Record routine clinic costs, then review spending by date, category, and payment method." />
             <Card className="overflow-hidden rounded-3xl border border-border/50 bg-card">
               <CardHeader>
                 <CardTitle className="inline-flex items-center gap-2">
                   <Wallet className="size-5 text-emerald-600" />
-                  Daily Expenses Register
+                  Add an expense
                 </CardTitle>
+                <CardDescription>Enter the amount and payment details. Optional notes help explain unusual costs.</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
                 <form onSubmit={handleCreate} className="grid gap-3 rounded-2xl border bg-background/80 p-4">
@@ -352,7 +357,7 @@ const DailyExpensesPage = (): JSX.Element => {
                   <div className="grid gap-3 xl:grid-cols-2">
                     {(['AFN', 'USD'] as CurrencyCode[]).map((currency) => (
                       <div key={currency} className="rounded-2xl border bg-background/80 p-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">{currency} Summary</p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{currency} spending</p>
                         <div className="mt-3 grid gap-3 sm:grid-cols-3">
                           <div>
                             <p className="text-xs text-muted-foreground">Today</p>
@@ -392,25 +397,28 @@ const DailyExpensesPage = (): JSX.Element => {
                       <Label>Search</Label>
                       <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Title, note, staff..." />
                     </div>
-                    <div className="md:col-span-4">
-                      <Button type="button" onClick={() => void fetchExpenses(1)}>Apply Filters</Button>
+                    <div className="flex flex-wrap items-end justify-between gap-2 md:col-span-4">
+                      <p className="text-xs text-muted-foreground">Filters update automatically. The chart shows AFN equivalent for easy comparison.</p>
                     </div>
                   </div>
 
-                  <div className="h-72 rounded-2xl border bg-background/80 p-3">
-                    {isLoading ? (
-                      <LoadingState compact title="Refreshing report" description="Fetching daily expense totals and history." />
-                    ) : (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={report?.chart ?? []}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="date" />
-                          <YAxis />
-                          <Tooltip formatter={(value) => formatCurrency(Number(value), 'AFN')} />
-                          <Bar dataKey="amount" fill="#10b981" radius={[8, 8, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    )}
+                  <div className="rounded-2xl border bg-background/80 p-3">
+                    <p className="px-2 pb-2 text-sm font-medium">Daily spending (AFN equivalent)</p>
+                    <div className="h-60">
+                      {isLoading ? (
+                        <LoadingState compact title="Refreshing report" description="Fetching daily expense totals and history." />
+                      ) : (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={report?.chart ?? []}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="date" />
+                            <YAxis />
+                            <Tooltip formatter={(value) => formatCurrency(Number(value), 'AFN')} />
+                            <Bar dataKey="amount" fill="#10b981" radius={[8, 8, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      )}
+                    </div>
                   </div>
                 </div>
               </CardContent>

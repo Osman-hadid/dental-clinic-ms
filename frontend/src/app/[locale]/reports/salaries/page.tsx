@@ -5,15 +5,27 @@ import { useTranslations } from 'next-intl';
 import { Header } from '@/components/header';
 import { LoadingState } from '@/components/shared/loading-state';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { DEFAULT_AFN_PER_USD, type CurrencyCode, formatCurrency, getExchangeRate, parseMoney } from '@/lib/currency-utils';
+import {
+  DEFAULT_AFN_PER_USD,
+  formatCurrency,
+  getExchangeRate,
+  parseMoney,
+  type CurrencyCode,
+} from '@/lib/currency-utils';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import { useStaffList } from '@/modules/dental-management/presentation/hooks';
-import { createDefaultReportRange, fetchReport, toInputDate } from '@/modules/dental-management/presentation/reports/report-client';
-import { ReceiptText, Trash2 } from 'lucide-react';
+import {
+  createDefaultReportRange,
+  fetchReport,
+  toInputDate,
+} from '@/modules/dental-management/presentation/reports/report-client';
+import { ReportPageIntro } from '@/modules/dental-management/presentation/reports/report-page-intro';
+import { BadgeCheck, Clock3, Coins, ReceiptText, Search, Trash2, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
+import { useDebounce } from 'use-debounce';
 
 type SalaryRow = {
   createdAt: string;
@@ -29,9 +41,12 @@ type SalaryRow = {
   status: string;
 };
 
-type SalaryCurrencySections = Record<CurrencyCode, {
-  paidTotal: number;
-}>;
+type SalaryCurrencySections = Record<
+  CurrencyCode,
+  {
+    paidTotal: number;
+  }
+>;
 
 type SalaryReportResponse = {
   rows: {
@@ -90,7 +105,13 @@ const buildSalaryMonthOptions = (monthsBack: number): Array<{ label: string; val
 };
 
 const extractApiErrorMessage = (error: unknown, fallback: string): string => {
-  const response = (error as { response?: { data?: { error?: { code?: string; details?: Record<string, unknown>; message?: string } } } })?.response;
+  const response = (
+    error as {
+      response?: {
+        data?: { error?: { code?: string; details?: Record<string, unknown>; message?: string } };
+      };
+    }
+  )?.response;
   const payload = response?.data?.error;
   const code = payload?.code;
 
@@ -127,7 +148,7 @@ const emptyCurrencySections = (): SalaryCurrencySections => ({
   },
 });
 
-export default function SalariesPage(): JSX.Element {
+const SalariesPage = (): JSX.Element => {
   const tSidebar = useTranslations('sidebar');
   const tReports = useTranslations('sidebar.reports');
   const { entities: staff } = useStaffList(1, 100);
@@ -139,30 +160,37 @@ export default function SalariesPage(): JSX.Element {
   const [endDate, setEndDate] = useState(range.endDate);
   const [staffFilter, setStaffFilter] = useState('');
   const [search, setSearch] = useState('');
+  const [debouncedSearch] = useDebounce(search, 350);
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const salaryMonthOptions = useMemo(() => buildSalaryMonthOptions(24), []);
 
-  const fetchData = useCallback(async (pageNumber = page): Promise<void> => {
-    setIsLoading(true);
-    try {
-      const data = await fetchReport<SalaryReportResponse>('/api/v1/dental-management/reports/salaries', {
-        endDate,
-        page: pageNumber,
-        perPage: 12,
-        search,
-        sortBy: 'paymentDate',
-        sortDirection: 'desc',
-        staffId: staffFilter,
-        startDate,
-      });
-      setReport(data);
-      setPage(pageNumber);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [endDate, page, search, staffFilter, startDate]);
+  const fetchData = useCallback(
+    async (pageNumber = 1): Promise<void> => {
+      setIsLoading(true);
+      try {
+        const data = await fetchReport<SalaryReportResponse>(
+          '/api/v1/dental-management/reports/salaries',
+          {
+            endDate,
+            page: pageNumber,
+            perPage: 12,
+            search: debouncedSearch,
+            sortBy: 'paymentDate',
+            sortDirection: 'desc',
+            staffId: staffFilter,
+            startDate,
+          }
+        );
+        setReport(data);
+        setPage(pageNumber);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [debouncedSearch, endDate, staffFilter, startDate]
+  );
 
   useEffect(() => {
     void fetchData(1);
@@ -182,10 +210,17 @@ export default function SalariesPage(): JSX.Element {
     const grossAmount = parseMoney(form.grossAmount);
     const bonusAmount = parseMoney(form.bonusAmount);
     const deductionAmount = parseMoney(form.deductionAmount);
-    const resolvedExchangeRate = form.currency === 'USD'
-      ? Math.max(parseMoney(form.exchangeRate) || defaultExchangeRate, DEFAULT_AFN_PER_USD)
-      : 1;
-    if (!form.staffId || grossAmount <= 0 || !form.salaryMonth || !form.paymentDate || resolvedExchangeRate <= 0) {
+    const resolvedExchangeRate =
+      form.currency === 'USD'
+        ? Math.max(parseMoney(form.exchangeRate) || defaultExchangeRate, DEFAULT_AFN_PER_USD)
+        : 1;
+    if (
+      !form.staffId ||
+      grossAmount <= 0 ||
+      !form.salaryMonth ||
+      !form.paymentDate ||
+      resolvedExchangeRate <= 0
+    ) {
       return;
     }
 
@@ -236,13 +271,25 @@ export default function SalariesPage(): JSX.Element {
   const bonusAmount = parseMoney(form.bonusAmount);
   const deductionAmount = parseMoney(form.deductionAmount);
   const netAmount = Math.max(0, grossAmount + bonusAmount - deductionAmount);
-  const resolvedExchangeRate = form.currency === 'USD'
-    ? Math.max(parseMoney(form.exchangeRate) || defaultExchangeRate, DEFAULT_AFN_PER_USD)
-    : 1;
+  const resolvedExchangeRate =
+    form.currency === 'USD'
+      ? Math.max(parseMoney(form.exchangeRate) || defaultExchangeRate, DEFAULT_AFN_PER_USD)
+      : 1;
   const currencySections = report?.summary.currencySections ?? emptyCurrencySections();
 
-  const renderMoney = (amountInput: number, currency: CurrencyCode, amountAfn: number): JSX.Element => (
-    <div>{formatCurrency(amountInput, currency)}</div>
+  const renderMoney = (
+    amountInput: number,
+    currency: CurrencyCode,
+    amountAfn: number
+  ): JSX.Element => (
+    <div>
+      <p className="font-semibold">{formatCurrency(amountInput, currency)}</p>
+      {currency === 'USD' && (
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          AFN equivalent: {formatCurrency(amountAfn, 'AFN')}
+        </p>
+      )}
+    </div>
   );
 
   return (
@@ -255,19 +302,39 @@ export default function SalariesPage(): JSX.Element {
       />
       <div className="flex flex-1 flex-col">
         <div className="@container/main flex flex-1 flex-col gap-2">
-          <div className="flex flex-col gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6">
-            <Card className="rounded-3xl border border-border/50 bg-card">
-              <CardHeader>
-                <CardTitle className="inline-flex items-center gap-2">
-                  <ReceiptText className="size-5 text-violet-700" />
-                  Salaries Register
+          <div className="flex min-w-0 flex-col gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6">
+            <ReportPageIntro
+              title="Staff salaries"
+              description="Manage staff payments, see what is outstanding, and keep a clear record by month."
+            />
+            <Card className="overflow-hidden rounded-3xl border-border/60 bg-card shadow-sm">
+              <CardHeader className="border-b border-border/50 bg-gradient-to-r from-violet-500/[0.08] via-background to-background px-5 py-5 md:px-7">
+                <CardTitle className="inline-flex items-center gap-2 text-lg">
+                  <span className="flex size-9 items-center justify-center rounded-xl bg-violet-600 text-white shadow-sm">
+                    <ReceiptText className="size-4" />
+                  </span>
+                  Record a salary payment
                 </CardTitle>
+                <CardDescription className="max-w-2xl">
+                  Choose the staff member and salary month, then enter the payment details. The
+                  take-home amount updates as you type.
+                </CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-4 lg:grid-cols-[1.15fr_1fr]">
-                <form onSubmit={handleSubmit} className="grid gap-3 rounded-2xl border bg-background/85 p-4">
+              <CardContent className="grid gap-5 p-4 md:p-6 lg:grid-cols-[1.15fr_0.85fr]">
+                <form
+                  onSubmit={handleSubmit}
+                  className="grid content-start gap-4 rounded-2xl border border-border/60 bg-background p-4 md:p-5"
+                >
                   <div className="grid gap-1.5">
                     <Label>Staff</Label>
-                    <select className="h-9 rounded-md border bg-background px-3 text-sm" value={form.staffId} onChange={(event) => setForm((prev) => ({ ...prev, staffId: event.target.value }))} required>
+                    <select
+                      className="h-9 rounded-md border bg-background px-3 text-sm"
+                      value={form.staffId}
+                      onChange={(event) =>
+                        setForm((prev) => ({ ...prev, staffId: event.target.value }))
+                      }
+                      required
+                    >
                       <option value="">Select staff</option>
                       {staff.map((member) => (
                         <option key={member.id} value={String(member.id)}>
@@ -279,29 +346,70 @@ export default function SalariesPage(): JSX.Element {
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-1.5">
                       <Label>Salary Month</Label>
-                      <select className="h-9 rounded-md border bg-background px-3 text-sm" value={form.salaryMonth} onChange={(event) => setForm((prev) => ({ ...prev, salaryMonth: event.target.value }))} required>
+                      <select
+                        className="h-9 rounded-md border bg-background px-3 text-sm"
+                        value={form.salaryMonth}
+                        onChange={(event) =>
+                          setForm((prev) => ({ ...prev, salaryMonth: event.target.value }))
+                        }
+                        required
+                      >
                         {salaryMonthOptions.map((option) => (
-                          <option key={option.value} value={option.value}>{option.label}</option>
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
                         ))}
                       </select>
                     </div>
                     <div className="grid gap-1.5">
                       <Label>Payment Date</Label>
-                      <Input type="date" value={form.paymentDate} onChange={(event) => setForm((prev) => ({ ...prev, paymentDate: event.target.value }))} required />
+                      <Input
+                        type="date"
+                        value={form.paymentDate}
+                        onChange={(event) =>
+                          setForm((prev) => ({ ...prev, paymentDate: event.target.value }))
+                        }
+                        required
+                      />
                     </div>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-3">
                     <div className="grid gap-1.5">
-                      <Label>Gross</Label>
-                      <Input type="number" min="0" step="0.01" value={form.grossAmount} onChange={(event) => setForm((prev) => ({ ...prev, grossAmount: event.target.value }))} required />
+                      <Label>Base salary</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={form.grossAmount}
+                        onChange={(event) =>
+                          setForm((prev) => ({ ...prev, grossAmount: event.target.value }))
+                        }
+                        required
+                      />
                     </div>
                     <div className="grid gap-1.5">
-                      <Label>Bonus</Label>
-                      <Input type="number" min="0" step="0.01" value={form.bonusAmount} onChange={(event) => setForm((prev) => ({ ...prev, bonusAmount: event.target.value }))} />
+                      <Label>Extra pay</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={form.bonusAmount}
+                        onChange={(event) =>
+                          setForm((prev) => ({ ...prev, bonusAmount: event.target.value }))
+                        }
+                      />
                     </div>
                     <div className="grid gap-1.5">
-                      <Label>Deduction</Label>
-                      <Input type="number" min="0" step="0.01" value={form.deductionAmount} onChange={(event) => setForm((prev) => ({ ...prev, deductionAmount: event.target.value }))} />
+                      <Label>Amount deducted</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={form.deductionAmount}
+                        onChange={(event) =>
+                          setForm((prev) => ({ ...prev, deductionAmount: event.target.value }))
+                        }
+                      />
                     </div>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -338,21 +446,74 @@ export default function SalariesPage(): JSX.Element {
                       />
                     </div>
                   </div>
-                  <div className="rounded-xl border border-dashed bg-background/70 p-3 text-xs text-muted-foreground dark:border-border/60">
-                    This salary record affects only the selected currency section.
+                  <div className="grid gap-3 rounded-2xl border border-violet-200/70 bg-violet-50/70 p-4 dark:border-violet-400/15 dark:bg-violet-400/[0.06] sm:grid-cols-[1fr_auto] sm:items-center">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-700 dark:text-violet-300">
+                        Take-home amount
+                      </p>
+                      <p className="mt-1 text-2xl font-bold tracking-tight">
+                        {formatCurrency(netAmount, form.currency)}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Base salary + extra pay minus deductions
+                      </p>
+                      {form.currency === 'USD' && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Rate: 1 USD = {formatCurrency(resolvedExchangeRate, 'AFN')}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-1 text-xs text-muted-foreground sm:text-right">
+                      <p>
+                        Base{' '}
+                        <span className="font-medium text-foreground">
+                          {formatCurrency(grossAmount, form.currency)}
+                        </span>
+                      </p>
+                      <p>
+                        Extra{' '}
+                        <span className="font-medium text-foreground">
+                          {formatCurrency(bonusAmount, form.currency)}
+                        </span>
+                      </p>
+                      <p>
+                        Deducted{' '}
+                        <span className="font-medium text-foreground">
+                          -{formatCurrency(deductionAmount, form.currency)}
+                        </span>
+                      </p>
+                    </div>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-1.5">
                       <Label>Status</Label>
-                      <select className="h-9 rounded-md border bg-background px-3 text-sm" value={form.status} onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value as SalaryForm['status'] }))}>
+                      <select
+                        className="h-9 rounded-md border bg-background px-3 text-sm"
+                        value={form.status}
+                        onChange={(event) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            status: event.target.value as SalaryForm['status'],
+                          }))
+                        }
+                      >
                         <option value="paid">Paid</option>
                         <option value="partial">Partial</option>
                         <option value="pending">Pending</option>
                       </select>
                     </div>
                     <div className="grid gap-1.5">
-                      <Label>Paid From Safe</Label>
-                      <select className="h-9 rounded-md border bg-background px-3 text-sm" value={form.paidFromSafe ? 'yes' : 'no'} onChange={(event) => setForm((prev) => ({ ...prev, paidFromSafe: event.target.value === 'yes' }))}>
+                      <Label>Paid from clinic safe</Label>
+                      <select
+                        className="h-9 rounded-md border bg-background px-3 text-sm"
+                        value={form.paidFromSafe ? 'yes' : 'no'}
+                        onChange={(event) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            paidFromSafe: event.target.value === 'yes',
+                          }))
+                        }
+                      >
                         <option value="yes">Yes</option>
                         <option value="no">No</option>
                       </select>
@@ -360,48 +521,100 @@ export default function SalariesPage(): JSX.Element {
                   </div>
                   <div className="grid gap-1.5">
                     <Label>Notes</Label>
-                    <Input value={form.notes} onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))} placeholder="Optional note" />
+                    <Input
+                      value={form.notes}
+                      onChange={(event) =>
+                        setForm((prev) => ({ ...prev, notes: event.target.value }))
+                      }
+                      placeholder="Optional note"
+                    />
                   </div>
-                  <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? 'Saving...' : 'Save Salary Payment'}
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="h-11 rounded-xl bg-violet-700 text-white shadow-sm hover:bg-violet-800"
+                  >
+                    {isSubmitting ? 'Saving payment...' : 'Save salary payment'}
                   </Button>
                 </form>
 
-                <div className="grid gap-3">
+                <div className="grid content-start gap-4">
+                  <div className="flex items-center gap-2 px-1 text-sm font-semibold">
+                    <Wallet className="size-4 text-muted-foreground" />
+                    Payment overview
+                  </div>
                   <div className="grid gap-3 xl:grid-cols-2">
                     {(['AFN', 'USD'] as CurrencyCode[]).map((currency) => (
-                      <div key={currency} className="rounded-2xl border bg-background/80 p-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">{currency} Paid</p>
-                        <p className="mt-3 text-2xl font-semibold">{formatCurrency(currencySections[currency].paidTotal, currency)}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">Paid and partial salary rows in the selected range.</p>
+                      <div
+                        key={currency}
+                        className="rounded-2xl border border-border/60 bg-gradient-to-br from-background to-muted/30 p-4"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                            Paid in {currency}
+                          </p>
+                          <Coins className="size-4 text-violet-600" />
+                        </div>
+                        <p className="mt-3 text-xl font-bold tracking-tight">
+                          {formatCurrency(currencySections[currency].paidTotal, currency)}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Paid or partially paid in this date range
+                        </p>
                       </div>
                     ))}
                   </div>
-                  <div className="rounded-2xl border bg-background/80 p-4">
-                    <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="flex items-center gap-3 rounded-2xl border border-amber-200/70 bg-amber-50/60 p-4 dark:border-amber-400/15 dark:bg-amber-400/[0.05]">
+                      <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300">
+                        <Clock3 className="size-5" />
+                      </span>
                       <div>
-                        <p className="text-xs text-muted-foreground">Pending</p>
-                        <p className="text-xl font-semibold">{report?.summary.pendingCount ?? 0}</p>
+                        <p className="text-xs font-medium text-muted-foreground">
+                          Pending payments
+                        </p>
+                        <p className="text-xl font-bold">{report?.summary.pendingCount ?? 0}</p>
                       </div>
+                    </div>
+                    <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-muted/20 p-4">
+                      <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-background text-muted-foreground">
+                        <BadgeCheck className="size-5" />
+                      </span>
                       <div>
-                        <p className="text-xs text-muted-foreground">Total Rows</p>
-                        <p className="text-xl font-semibold">{report?.summary.totalCount ?? 0}</p>
+                        <p className="text-xs font-medium text-muted-foreground">Payment records</p>
+                        <p className="text-xl font-bold">{report?.summary.totalCount ?? 0}</p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="grid gap-3 rounded-2xl border bg-background/80 p-4 md:grid-cols-4">
-                    <div className="grid gap-1.5">
-                      <Label>Start Date</Label>
-                      <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+                  <div className="grid gap-3 rounded-2xl border border-border/60 bg-muted/15 p-4 md:grid-cols-2">
+                    <div className="md:col-span-2 flex items-center gap-2 text-sm font-semibold">
+                      <Search className="size-4 text-muted-foreground" />
+                      Find salary records
                     </div>
                     <div className="grid gap-1.5">
-                      <Label>End Date</Label>
-                      <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+                      <Label>From date</Label>
+                      <Input
+                        type="date"
+                        value={startDate}
+                        onChange={(event) => setStartDate(event.target.value)}
+                      />
                     </div>
                     <div className="grid gap-1.5">
-                      <Label>Staff</Label>
-                      <select className="h-9 rounded-md border bg-background px-3 text-sm" value={staffFilter} onChange={(event) => setStaffFilter(event.target.value)}>
+                      <Label>To date</Label>
+                      <Input
+                        type="date"
+                        value={endDate}
+                        onChange={(event) => setEndDate(event.target.value)}
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label>Staff member</Label>
+                      <select
+                        className="h-9 rounded-md border bg-background px-3 text-sm"
+                        value={staffFilter}
+                        onChange={(event) => setStaffFilter(event.target.value)}
+                      >
                         <option value="">All staff</option>
                         {staff.map((member) => (
                           <option key={member.id} value={String(member.id)}>
@@ -411,67 +624,133 @@ export default function SalariesPage(): JSX.Element {
                       </select>
                     </div>
                     <div className="grid gap-1.5">
-                      <Label>Search</Label>
-                      <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Month or staff..." />
+                      <Label>Search records</Label>
+                      <Input
+                        value={search}
+                        onChange={(event) => setSearch(event.target.value)}
+                        placeholder="Month or staff name"
+                      />
                     </div>
-                    <div className="md:col-span-4">
-                      <Button type="button" onClick={() => void fetchData(1)}>Apply Filters</Button>
+                    <div className="md:col-span-2 flex justify-end">
+                      <p className="text-xs text-muted-foreground">Results update automatically.</p>
                     </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="rounded-3xl border">
+            <Card className="overflow-hidden rounded-3xl border-border/60 shadow-sm">
               <CardHeader>
-                <CardTitle>Salary History</CardTitle>
+                <CardTitle className="inline-flex items-center gap-2">
+                  <span className="flex size-9 items-center justify-center rounded-xl bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                    <ReceiptText className="size-4" />
+                  </span>
+                  Salary history
+                </CardTitle>
+                <CardDescription>Review and manage recorded salary payments.</CardDescription>
               </CardHeader>
               <CardContent>
                 {isLoading && report === null ? (
-                  <LoadingState compact title="Loading salary report" description="Fetching salary payments." />
+                  <LoadingState
+                    compact
+                    title="Loading salary report"
+                    description="Fetching salary payments."
+                  />
                 ) : (
                   <div className="space-y-4">
-                    <div className="overflow-x-auto rounded-2xl border">
-                      <table className="min-w-full text-sm">
-                        <thead className="bg-muted/30 text-left text-muted-foreground">
+                    <div className="overflow-x-auto rounded-2xl border border-border/60">
+                      <table className="min-w-[760px] w-full text-sm">
+                        <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                           <tr>
-                            <th className="px-3 py-2">Payment Date</th>
-                            <th className="px-3 py-2">Salary Month</th>
-                            <th className="px-3 py-2">Staff</th>
-                            <th className="px-3 py-2">Status</th>
-                            <th className="px-3 py-2">Net Amount</th>
-                            <th className="px-3 py-2">Action</th>
+                            <th className="px-4 py-3">Payment date</th>
+                            <th className="px-4 py-3">Salary month</th>
+                            <th className="px-4 py-3">Staff member</th>
+                            <th className="px-4 py-3">Status</th>
+                            <th className="px-4 py-3">Take-home amount</th>
+                            <th className="px-4 py-3 text-right">Action</th>
                           </tr>
                         </thead>
                         <tbody>
                           {(report?.rows.data ?? []).map((row) => (
-                            <tr key={row.id} className="border-t">
-                              <td className="px-3 py-2">{row.paymentDate}</td>
-                              <td className="px-3 py-2">{row.salaryMonth}</td>
-                              <td className="px-3 py-2">{row.staffName}</td>
-                              <td className="px-3 py-2">{row.status}</td>
-                              <td className="px-3 py-2 font-medium">{renderMoney(row.netAmountInput, row.currency, row.netAmount)}</td>
-                              <td className="px-3 py-2">
-                                <Button type="button" variant="ghost" size="icon" onClick={() => removeRow(row.id)}>
+                            <tr
+                              key={row.id}
+                              className="border-t border-border/50 transition-colors hover:bg-muted/20"
+                            >
+                              <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
+                                {row.paymentDate}
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3 font-medium">
+                                {row.salaryMonth}
+                              </td>
+                              <td className="px-4 py-3 font-medium">{row.staffName}</td>
+                              <td className="px-4 py-3">
+                                <span
+                                  className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${row.status === 'paid' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300' : row.status === 'partial' ? 'bg-amber-100 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-200'}`}
+                                >
+                                  {row.status}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                {renderMoney(row.netAmountInput, row.currency, row.netAmount)}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label={`Delete salary payment for ${row.staffName}`}
+                                  className="rounded-xl text-muted-foreground hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-400/10"
+                                  onClick={() => removeRow(row.id)}
+                                >
                                   <Trash2 className="size-4" />
                                 </Button>
                               </td>
                             </tr>
                           ))}
+                          {(report?.rows.data ?? []).length === 0 && (
+                            <tr>
+                              <td colSpan={6} className="px-4 py-12 text-center">
+                                <div className="mx-auto flex max-w-sm flex-col items-center gap-2">
+                                  <span className="flex size-11 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+                                    <ReceiptText className="size-5" />
+                                  </span>
+                                  <p className="font-semibold">No salary payments found</p>
+                                  <p className="text-sm text-muted-foreground">
+                                    Try changing the date range or search, or record a new payment
+                                    above.
+                                  </p>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
                         </tbody>
                       </table>
                     </div>
 
-                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                    <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
                       <span>{report?.rows.meta.total ?? 0} rows</span>
-                      <div className="flex items-center gap-2">
-                        <Button type="button" variant="outline" disabled={(report?.rows.meta.currentPage ?? 1) <= 1} onClick={() => void fetchData((report?.rows.meta.currentPage ?? 1) - 1)}>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={(report?.rows.meta.currentPage ?? 1) <= 1}
+                          onClick={() => void fetchData((report?.rows.meta.currentPage ?? 1) - 1)}
+                        >
                           Previous
                         </Button>
                         <span>
-                          Page {report?.rows.meta.currentPage ?? 1} of {report?.rows.meta.lastPage ?? 1}
+                          Page {report?.rows.meta.currentPage ?? 1} of{' '}
+                          {report?.rows.meta.lastPage ?? 1}
                         </span>
-                        <Button type="button" variant="outline" disabled={(report?.rows.meta.currentPage ?? 1) >= (report?.rows.meta.lastPage ?? 1)} onClick={() => void fetchData((report?.rows.meta.currentPage ?? 1) + 1)}>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={
+                            (report?.rows.meta.currentPage ?? 1) >=
+                            (report?.rows.meta.lastPage ?? 1)
+                          }
+                          onClick={() => void fetchData((report?.rows.meta.currentPage ?? 1) + 1)}
+                        >
                           Next
                         </Button>
                       </div>
@@ -485,4 +764,6 @@ export default function SalariesPage(): JSX.Element {
       </div>
     </>
   );
-}
+};
+
+export default SalariesPage;

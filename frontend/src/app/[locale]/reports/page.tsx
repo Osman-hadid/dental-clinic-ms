@@ -10,13 +10,19 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { formatCurrency, type CurrencyCode } from '@/lib/currency-utils';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
-import { createDefaultReportRange, fetchReport, triggerReportExport } from '@/modules/dental-management/presentation/reports/report-client';
+import { getIntlLocale } from '@/modules/common/utils/locale';
 import { AuditReportPanel } from '@/modules/dental-management/presentation/reports/audit-report-panel';
 import { ClinicalReportPanel } from '@/modules/dental-management/presentation/reports/clinical-report-panel';
 import { ExecutiveReportPanel } from '@/modules/dental-management/presentation/reports/executive-report-panel';
 import { FinancialReportPanel } from '@/modules/dental-management/presentation/reports/financial-report-panel';
 import { InventoryReportPanel } from '@/modules/dental-management/presentation/reports/inventory-report-panel';
+import {
+  createDefaultReportRange,
+  fetchReport,
+  triggerReportExport,
+} from '@/modules/dental-management/presentation/reports/report-client';
 import {
   AuditData,
   ClinicalData,
@@ -30,13 +36,34 @@ import {
   SnapshotRecord,
   SnapshotScheduleResponse,
 } from '@/modules/dental-management/presentation/reports/report-dashboard-types';
-import { FilterLabel, MetricCard } from '@/modules/dental-management/presentation/reports/report-dashboard-utils';
-import { type CurrencyCode, formatCurrency } from '@/lib/currency-utils';
+import {
+  FilterLabel,
+  MetricCard,
+} from '@/modules/dental-management/presentation/reports/report-dashboard-utils';
+import {
+  Activity,
+  BarChart3,
+  Download,
+  FileText,
+  Filter,
+  Package,
+  Printer,
+  ShieldCheck,
+  TrendingUp,
+  Wallet,
+} from 'lucide-react';
 import { toast } from 'sonner';
-import { BarChart3, FileText, Filter, Download, Printer, TrendingUp, Wallet, Activity, Package, ShieldCheck } from 'lucide-react';
 
 const client = new AxiosClient();
-type ReportFilterKey = 'dateRange' | 'dentist' | 'granularity' | 'patient' | 'paymentMethod' | 'search' | 'status' | 'treatment';
+type ReportFilterKey =
+  | 'dateRange'
+  | 'dentist'
+  | 'granularity'
+  | 'patient'
+  | 'paymentMethod'
+  | 'search'
+  | 'status'
+  | 'treatment';
 type RangePreset = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom';
 type WorkflowAccessSummary = {
   capabilities: {
@@ -70,34 +97,57 @@ const reportExperience: Record<
 > = {
   audit: {
     defaultExport: 'audit_log',
-    description: 'See who changed financial records, who opened reports, and when important snapshots were saved.',
+    description:
+      'See who changed financial records, who opened reports, and when important snapshots were saved.',
     exportOptions: [{ label: 'Activity history', value: 'audit_log' }],
-    helperText: 'Use this when you need to review staff activity, exports, and important report events.',
+    helperText:
+      'Use this when you need to review staff activity, exports, and important report events.',
     label: 'Activity History',
     searchPlaceholder: 'Search by action, report name, staff name, or note',
     visibleFilters: ['dateRange', 'search'],
   },
   clinical: {
     defaultExport: 'clinical_treatment',
-    description: 'Understand appointment outcomes, treatment volume, prescriptions, and implant follow-up.',
+    description:
+      'Understand appointment outcomes, treatment volume, prescriptions, and implant follow-up.',
     exportOptions: [{ label: 'Treatment activity', value: 'clinical_treatment' }],
-    helperText: 'Useful for dentists and supervisors who want to track workload and treatment progress.',
+    helperText:
+      'Useful for dentists and supervisors who want to track workload and treatment progress.',
     label: 'Clinical Care',
     searchPlaceholder: 'Search by patient, treatment, medicine, or implant details',
-    visibleFilters: ['dateRange', 'granularity', 'status', 'dentist', 'treatment', 'patient', 'search'],
+    visibleFilters: [
+      'dateRange',
+      'granularity',
+      'status',
+      'dentist',
+      'treatment',
+      'patient',
+      'search',
+    ],
   },
   executive: {
     defaultExport: 'executive_summary',
-    description: 'Get a quick clinic summary for money received, unpaid balances, profit, and patient growth.',
+    description:
+      'Get a quick clinic summary for money received, unpaid balances, profit, and patient growth.',
     exportOptions: [{ label: 'Clinic summary', value: 'executive_summary' }],
     helperText: 'Best for owners and managers who want a fast picture of how the clinic is doing.',
     label: 'Clinic Overview',
     searchPlaceholder: 'Search by patient, invoice, treatment, or note',
-    visibleFilters: ['dateRange', 'granularity', 'status', 'dentist', 'treatment', 'paymentMethod', 'patient', 'search'],
+    visibleFilters: [
+      'dateRange',
+      'granularity',
+      'status',
+      'dentist',
+      'treatment',
+      'paymentMethod',
+      'patient',
+      'search',
+    ],
   },
   financial: {
     defaultExport: 'financial_revenue',
-    description: 'Review income, unpaid balances, cash movement, and what treatments bring in the most money.',
+    description:
+      'Review income, unpaid balances, cash movement, and what treatments bring in the most money.',
     exportOptions: [
       { label: 'Income by treatment', value: 'financial_revenue' },
       { label: 'Unpaid invoices', value: 'financial_outstanding' },
@@ -106,28 +156,41 @@ const reportExperience: Record<
       { label: 'Shareholder ledger', value: 'financial_shareholder' },
       { label: 'Implant supplier payments', value: 'financial_implant_installment' },
     ],
-    helperText: 'This report helps accounting and management follow collections, debts, and clinic spending.',
+    helperText:
+      'This report helps accounting and management follow collections, debts, and clinic spending.',
     label: 'Money and Collections',
     searchPlaceholder: 'Search by patient, invoice, payment note, or ledger entry',
-    visibleFilters: ['dateRange', 'granularity', 'status', 'dentist', 'treatment', 'paymentMethod', 'patient', 'search'],
+    visibleFilters: [
+      'dateRange',
+      'granularity',
+      'status',
+      'dentist',
+      'treatment',
+      'paymentMethod',
+      'patient',
+      'search',
+    ],
   },
   inventory: {
     defaultExport: 'inventory_stock',
-    description: 'Check what is in stock, what is running low, and which treatments are using the most items.',
+    description:
+      'Check what is in stock, what is running low, and which treatments are using the most items.',
     exportOptions: [{ label: 'Stock list', value: 'inventory_stock' }],
-    helperText: 'Use this to spot low stock early and understand which supplies are being consumed fastest.',
+    helperText:
+      'Use this to spot low stock early and understand which supplies are being consumed fastest.',
     label: 'Stock and Supplies',
     searchPlaceholder: 'Search by item, treatment, supplier, or patient name',
     visibleFilters: ['dateRange', 'granularity', 'treatment', 'search'],
   },
 };
 
-const escapeHtml = (value: string): string => value
-  .replaceAll('&', '&amp;')
-  .replaceAll('<', '&lt;')
-  .replaceAll('>', '&gt;')
-  .replaceAll('"', '&quot;')
-  .replaceAll("'", '&#39;');
+const escapeHtml = (value: string): string =>
+  value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 
 const defaultFilters = (): FiltersState => {
   const range = createDefaultReportRange(90);
@@ -161,8 +224,8 @@ const buildReportParams = (filters: FiltersState) => ({
 
 const areReportParamsEqual = (
   left: ReturnType<typeof buildReportParams>,
-  right: ReturnType<typeof buildReportParams>,
-): boolean => (
+  right: ReturnType<typeof buildReportParams>
+): boolean =>
   left.dentistFilter === right.dentistFilter &&
   left.endDate === right.endDate &&
   left.granularity === right.granularity &&
@@ -171,10 +234,12 @@ const areReportParamsEqual = (
   left.search === right.search &&
   left.startDate === right.startDate &&
   left.statusFilter === right.statusFilter &&
-  left.treatmentFilter === right.treatmentFilter
-);
+  left.treatmentFilter === right.treatmentFilter;
 
-const rangePresets: Record<RangePreset, { days: number | null; granularity: FiltersState['granularity']; label: string }> = {
+const rangePresets: Record<
+  RangePreset,
+  { days: number | null; granularity: FiltersState['granularity']; label: string }
+> = {
   daily: { days: 0, granularity: 'day', label: 'Daily' },
   weekly: { days: 7, granularity: 'day', label: 'Weekly' },
   monthly: { days: 30, granularity: 'month', label: 'Monthly' },
@@ -191,8 +256,12 @@ const ReportsPage = (): JSX.Element => {
   const [draftFilters, setDraftFilters] = useState<FiltersState>(() => defaultFilters());
   const [appliedFilters, setAppliedFilters] = useState<FiltersState>(() => defaultFilters());
   const [summaryRange, setSummaryRange] = useState<RangePreset>('monthly');
-  const [summaryRangeStart, setSummaryRangeStart] = useState(() => createDefaultReportRange(30).startDate);
-  const [summaryRangeEnd, setSummaryRangeEnd] = useState(() => createDefaultReportRange(30).endDate);
+  const [summaryRangeStart, setSummaryRangeStart] = useState(
+    () => createDefaultReportRange(30).startDate
+  );
+  const [summaryRangeEnd, setSummaryRangeEnd] = useState(
+    () => createDefaultReportRange(30).endDate
+  );
   const [rangeSummary, setRangeSummary] = useState<FinancialData['summary'] | null>(null);
   const [filterOptions, setFilterOptions] = useState<FilterOptionsResponse | null>(null);
   const [executive, setExecutive] = useState<ExecutiveData | null>(null);
@@ -212,58 +281,90 @@ const ReportsPage = (): JSX.Element => {
   const activeReport = reportExperience[activeTab];
   const availableTabs = useMemo(() => {
     const capabilities = workflowAccess?.capabilities;
-    return ([
+    return [
       capabilities?.canAccessExecutiveReports !== false ? 'executive' : null,
       capabilities?.canAccessFinancialReports ? 'financial' : null,
       capabilities?.canAccessClinicalReports !== false ? 'clinical' : null,
       capabilities?.canAccessInventoryReports !== false ? 'inventory' : null,
       capabilities?.canAccessAuditReports ? 'audit' : null,
-    ].filter(Boolean) as ReportTab[]);
+    ].filter(Boolean) as ReportTab[];
   }, [workflowAccess]);
 
   const reportParams = useMemo(() => buildReportParams(appliedFilters), [appliedFilters]);
   const draftReportParams = useMemo(() => buildReportParams(draftFilters), [draftFilters]);
   const hasPendingFilterChanges = useMemo(
     () => !areReportParamsEqual(reportParams, draftReportParams),
-    [draftReportParams, reportParams],
+    [draftReportParams, reportParams]
   );
 
   const fetchFilterOptions = useCallback(async (): Promise<void> => {
     setIsLoadingFilters(true);
     try {
-      setFilterOptions(await fetchReport<FilterOptionsResponse>('/api/v1/dental-management/reports/filter-options', reportParams));
+      setFilterOptions(
+        await fetchReport<FilterOptionsResponse>(
+          '/api/v1/dental-management/reports/filter-options',
+          reportParams
+        )
+      );
     } finally {
       setIsLoadingFilters(false);
     }
   }, [reportParams]);
 
   const fetchSnapshots = useCallback(async (): Promise<void> => {
-    setSnapshots(await fetchReport<SnapshotRecord[]>('/api/v1/dental-management/reports/snapshots', { limit: 20, reportKey: 'executive' }));
+    setSnapshots(
+      await fetchReport<SnapshotRecord[]>('/api/v1/dental-management/reports/snapshots', {
+        limit: 20,
+        reportKey: 'executive',
+      })
+    );
   }, []);
 
   const fetchSnapshotSchedule = useCallback(async (): Promise<void> => {
-    setSnapshotSchedule(await fetchReport<SnapshotScheduleResponse>('/api/v1/dental-management/reports/snapshot-schedule', { reportKey: 'executive' }));
+    setSnapshotSchedule(
+      await fetchReport<SnapshotScheduleResponse>(
+        '/api/v1/dental-management/reports/snapshot-schedule',
+        { reportKey: 'executive' }
+      )
+    );
   }, []);
 
-  const fetchTab = useCallback(async (tab: ReportTab, params = reportParams): Promise<void> => {
-    setIsLoadingTab(true);
-    try {
-      if (tab === 'executive') setExecutive(await fetchReport<ExecutiveData>('/api/v1/dental-management/reports/executive', params));
-      if (tab === 'financial') setFinancial(await fetchReport<FinancialData>('/api/v1/dental-management/reports/financial', params));
-      if (tab === 'clinical') setClinical(await fetchReport<ClinicalData>('/api/v1/dental-management/reports/clinical', params));
-      if (tab === 'inventory') setInventory(await fetchReport<InventoryData>('/api/v1/dental-management/reports/inventory', params));
-      if (tab === 'audit') setAudit(await fetchReport<AuditData>('/api/v1/dental-management/reports/audit', params));
-    } finally {
-      setIsLoadingTab(false);
-    }
-  }, [reportParams]);
+  const fetchTab = useCallback(
+    async (tab: ReportTab, params = reportParams): Promise<void> => {
+      setIsLoadingTab(true);
+      try {
+        if (tab === 'executive')
+          setExecutive(
+            await fetchReport<ExecutiveData>('/api/v1/dental-management/reports/executive', params)
+          );
+        if (tab === 'financial')
+          setFinancial(
+            await fetchReport<FinancialData>('/api/v1/dental-management/reports/financial', params)
+          );
+        if (tab === 'clinical')
+          setClinical(
+            await fetchReport<ClinicalData>('/api/v1/dental-management/reports/clinical', params)
+          );
+        if (tab === 'inventory')
+          setInventory(
+            await fetchReport<InventoryData>('/api/v1/dental-management/reports/inventory', params)
+          );
+        if (tab === 'audit')
+          setAudit(await fetchReport<AuditData>('/api/v1/dental-management/reports/audit', params));
+      } finally {
+        setIsLoadingTab(false);
+      }
+    },
+    [reportParams]
+  );
 
   useEffect(() => {
     void fetchFilterOptions();
   }, [fetchFilterOptions]);
 
   useEffect(() => {
-    void client.get<WorkflowAccessSummary>('/api/v1/dental-management/workflow/access-summary')
+    void client
+      .get<WorkflowAccessSummary>('/api/v1/dental-management/workflow/access-summary')
       .then((response) => {
         if (response.success && response.data) {
           setWorkflowAccess(response.data);
@@ -312,11 +413,12 @@ const ReportsPage = (): JSX.Element => {
     const fallbackRange = createDefaultReportRange(preset.days ?? 30);
     const safeStart = summaryRangeStart || fallbackRange.startDate;
     const safeEnd = summaryRangeEnd || fallbackRange.endDate;
-    const range = summaryRange === 'daily'
-      ? { startDate: safeStart, endDate: safeStart }
-      : preset.days === null
-        ? { startDate: safeStart, endDate: safeEnd }
-        : createDefaultReportRange(preset.days);
+    const range =
+      summaryRange === 'daily'
+        ? { startDate: safeStart, endDate: safeStart }
+        : preset.days === null
+          ? { startDate: safeStart, endDate: safeEnd }
+          : createDefaultReportRange(preset.days);
     const baseFilters = defaultFilters();
     const params = buildReportParams({
       ...baseFilters,
@@ -326,11 +428,17 @@ const ReportsPage = (): JSX.Element => {
     });
 
     setIsLoadingRangeSummary(true);
-    void fetchReport<FinancialData>('/api/v1/dental-management/reports/financial', { ...params, summaryOnly: 1 })
+    void fetchReport<FinancialData>('/api/v1/dental-management/reports/financial', {
+      ...params,
+      summaryOnly: 1,
+    })
       .then(async (data) => {
         if (!isActive) return;
         if (!data?.summary) {
-          const fallback = await fetchReport<FinancialData>('/api/v1/dental-management/reports/financial', params);
+          const fallback = await fetchReport<FinancialData>(
+            '/api/v1/dental-management/reports/financial',
+            params
+          );
           if (isActive) setRangeSummary(fallback?.summary ?? null);
           return;
         }
@@ -365,14 +473,14 @@ const ReportsPage = (): JSX.Element => {
     router.push(`/${locale}/reports/safe?${params.toString()}`);
   };
 
-  const showsFilter = (filterKey: ReportFilterKey): boolean => activeReport.visibleFilters.includes(filterKey);
-  const hasPrintableContent = (
+  const showsFilter = (filterKey: ReportFilterKey): boolean =>
+    activeReport.visibleFilters.includes(filterKey);
+  const hasPrintableContent =
     (activeTab === 'executive' && executive !== null) ||
     (activeTab === 'financial' && financial !== null) ||
     (activeTab === 'clinical' && clinical !== null) ||
     (activeTab === 'inventory' && inventory !== null) ||
-    (activeTab === 'audit' && audit !== null)
-  );
+    (activeTab === 'audit' && audit !== null);
 
   const handleExport = (): void => {
     const exportParams = draftReportParams;
@@ -416,20 +524,34 @@ const ReportsPage = (): JSX.Element => {
         .map((node) => node.outerHTML)
         .join('\n');
 
-      const selectedPatient = filterOptions?.patients.find((patient) => String(patient.id) === printParams.patientFilter)?.name;
+      const selectedPatient = filterOptions?.patients.find(
+        (patient) => String(patient.id) === printParams.patientFilter
+      )?.name;
       const selectedFilters = [
         `Report: ${activeReport.label}`,
         `Date range: ${printParams.startDate} to ${printParams.endDate}`,
         showsFilter('granularity') ? `View by: ${printParams.granularity}` : '',
-        showsFilter('status') ? `Status: ${printParams.statusFilter === 'all' ? 'All statuses' : printParams.statusFilter}` : '',
-        showsFilter('dentist') ? `Dentist: ${printParams.dentistFilter === 'all' ? 'All dentists' : printParams.dentistFilter}` : '',
-        showsFilter('treatment') ? `Treatment: ${printParams.treatmentFilter === 'all' ? 'All treatments' : printParams.treatmentFilter}` : '',
-        showsFilter('paymentMethod') ? `Payment method: ${printParams.paymentMethodFilter === 'all' ? 'All methods' : printParams.paymentMethodFilter}` : '',
-        showsFilter('patient') ? `Patient: ${printParams.patientFilter === 'all' ? 'All patients' : (selectedPatient ?? printParams.patientFilter)}` : '',
-        showsFilter('search') && printParams.search.trim() !== '' ? `Search: ${printParams.search.trim()}` : '',
+        showsFilter('status')
+          ? `Status: ${printParams.statusFilter === 'all' ? 'All statuses' : printParams.statusFilter}`
+          : '',
+        showsFilter('dentist')
+          ? `Dentist: ${printParams.dentistFilter === 'all' ? 'All dentists' : printParams.dentistFilter}`
+          : '',
+        showsFilter('treatment')
+          ? `Treatment: ${printParams.treatmentFilter === 'all' ? 'All treatments' : printParams.treatmentFilter}`
+          : '',
+        showsFilter('paymentMethod')
+          ? `Payment method: ${printParams.paymentMethodFilter === 'all' ? 'All methods' : printParams.paymentMethodFilter}`
+          : '',
+        showsFilter('patient')
+          ? `Patient: ${printParams.patientFilter === 'all' ? 'All patients' : (selectedPatient ?? printParams.patientFilter)}`
+          : '',
+        showsFilter('search') && printParams.search.trim() !== ''
+          ? `Search: ${printParams.search.trim()}`
+          : '',
       ].filter(Boolean);
 
-      const printedAt = new Intl.DateTimeFormat(locale, {
+      const printedAt = new Intl.DateTimeFormat(getIntlLocale(locale), {
         dateStyle: 'medium',
         timeStyle: 'short',
       }).format(new Date());
@@ -625,34 +747,45 @@ const ReportsPage = (): JSX.Element => {
   };
 
   const renderContent = (): JSX.Element | null => {
-    if (activeTab === 'executive') return executive ? (
-      <ExecutiveReportPanel
-        data={executive}
-        isSavingSchedule={isSavingSchedule}
-        isSavingSnapshot={isSavingSnapshot}
-        locale={locale}
-        onCaptureSnapshot={captureSnapshot}
-        onScheduleChange={(cadence) => setSnapshotSchedule((prev) => prev ? { ...prev, cadence } : prev)}
-        onSaveSchedule={saveSnapshotSchedule}
-        schedule={snapshotSchedule}
-        snapshots={snapshots}
-      />
-    ) : null;
-    if (activeTab === 'financial') return financial ? <FinancialReportPanel data={financial} /> : null;
+    if (activeTab === 'executive')
+      return executive ? (
+        <ExecutiveReportPanel
+          data={executive}
+          isSavingSchedule={isSavingSchedule}
+          isSavingSnapshot={isSavingSnapshot}
+          locale={locale}
+          onCaptureSnapshot={captureSnapshot}
+          onScheduleChange={(cadence) =>
+            setSnapshotSchedule((prev) => (prev ? { ...prev, cadence } : prev))
+          }
+          onSaveSchedule={saveSnapshotSchedule}
+          schedule={snapshotSchedule}
+          snapshots={snapshots}
+        />
+      ) : null;
+    if (activeTab === 'financial')
+      return financial ? <FinancialReportPanel data={financial} /> : null;
     if (activeTab === 'clinical') return clinical ? <ClinicalReportPanel data={clinical} /> : null;
-    if (activeTab === 'inventory') return inventory ? <InventoryReportPanel data={inventory} /> : null;
-    if (activeTab === 'audit') return audit ? <AuditReportPanel data={audit} locale={locale} /> : null;
+    if (activeTab === 'inventory')
+      return inventory ? <InventoryReportPanel data={inventory} /> : null;
+    if (activeTab === 'audit')
+      return audit ? <AuditReportPanel data={audit} locale={locale} /> : null;
     return null;
   };
 
   return (
     <>
-      <Header breadcrumbs={[{ id: 'reports', isCurrent: true, label: tSidebar('reports.title') }]} />
+      <Header
+        breadcrumbs={[{ id: 'reports', isCurrent: true, label: tSidebar('reports.title') }]}
+      />
       <div className="flex flex-1 flex-col px-4 pb-6 lg:px-6 overflow-x-hidden">
         <div className="rounded-3xl border border-border/50 bg-card p-6 text-foreground shadow-lg">
           <div className="relative mb-6">
             <h1 className="text-2xl font-semibold text-foreground">Reports Dashboard</h1>
-            <p className="text-sm text-muted-foreground">Analyze clinic performance, financials, and operations</p>
+            <p className="text-sm text-muted-foreground">
+              Start with the overview, then choose a section below for money, patient care, stock,
+              or activity history.
+            </p>
           </div>
 
           <div className="relative space-y-6">
@@ -664,7 +797,9 @@ const ReportsPage = (): JSX.Element => {
                   </div>
                   <div>
                     <CardTitle className="text-base">Quick Financial Snapshot</CardTitle>
-                    <CardDescription className="text-xs">Choose a time range and review headline metrics</CardDescription>
+                    <CardDescription className="text-xs">
+                      Choose a time range and review headline metrics
+                    </CardDescription>
                   </div>
                 </div>
               </CardHeader>
@@ -687,7 +822,9 @@ const ReportsPage = (): JSX.Element => {
                       }}
                     >
                       {Object.entries(rangePresets).map(([value, preset]) => (
-                        <option key={value} value={value}>{preset.label}</option>
+                        <option key={value} value={value}>
+                          {preset.label}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -731,7 +868,11 @@ const ReportsPage = (): JSX.Element => {
                     Financial summary widgets require review access.
                   </div>
                 ) : isLoadingRangeSummary && !rangeSummary ? (
-                  <LoadingState compact title="Loading summary" description="Fetching totals for the selected range." />
+                  <LoadingState
+                    compact
+                    title="Loading summary"
+                    description="Fetching totals for the selected range."
+                  />
                 ) : (
                   <div className="space-y-4">
                     <div className="grid gap-3 xl:grid-cols-2">
@@ -739,10 +880,17 @@ const ReportsPage = (): JSX.Element => {
                         const section = rangeSummary?.currencySections?.[currency];
 
                         return (
-                          <div key={currency} className="rounded-2xl border border-border/50 bg-background/60 p-4">
+                          <div
+                            key={currency}
+                            className="rounded-2xl border border-border/50 bg-background/60 p-4"
+                          >
                             <div className="mb-3 flex items-center justify-between">
-                              <p className="text-sm font-semibold text-foreground">{currency} Section</p>
-                              <span className="rounded-full border border-border/40 px-2 py-0.5 text-[11px] text-muted-foreground bg-muted/50">Original currency</span>
+                              <p className="text-sm font-semibold text-foreground">
+                                {currency} Section
+                              </p>
+                              <span className="rounded-full border border-border/40 px-2 py-0.5 text-[11px] text-muted-foreground bg-muted/50">
+                                Original currency
+                              </span>
                             </div>
                             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                               <MetricCard
@@ -813,7 +961,9 @@ const ReportsPage = (): JSX.Element => {
                   </div>
                   <div>
                     <CardTitle className="text-base">Reports Center</CardTitle>
-                    <CardDescription className="text-xs">Filter, export, and print detailed reports</CardDescription>
+                    <CardDescription className="text-xs">
+                      Filter, export, and print detailed reports
+                    </CardDescription>
                   </div>
                 </div>
               </CardHeader>
@@ -822,16 +972,35 @@ const ReportsPage = (): JSX.Element => {
                   <div className="flex flex-col gap-3 border-b border-border/30 pb-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="outline" className="border-violet-200/50 bg-violet-50/60 text-violet-700">Filter workspace</Badge>
+                        <Badge
+                          variant="outline"
+                          className="border-violet-200/50 bg-violet-50/60 text-violet-700"
+                        >
+                          Filter workspace
+                        </Badge>
                         {hasPendingFilterChanges ? (
-                          <Badge variant="outline" className="border-amber-200/50 bg-amber-50/60 text-amber-700">Unsaved changes</Badge>
+                          <Badge
+                            variant="outline"
+                            className="border-amber-200/50 bg-amber-50/60 text-amber-700"
+                          >
+                            Unsaved changes
+                          </Badge>
                         ) : (
-                          <Badge variant="outline" className="border-emerald-200/50 bg-emerald-50/60 text-emerald-700">Filters applied</Badge>
+                          <Badge
+                            variant="outline"
+                            className="border-emerald-200/50 bg-emerald-50/60 text-emerald-700"
+                          >
+                            Filters applied
+                          </Badge>
                         )}
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-foreground">Shape your report view</p>
-                        <p className="text-xs text-muted-foreground">Filters adapt to the active report tab</p>
+                        <p className="text-sm font-semibold text-foreground">
+                          Shape your report view
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Filters adapt to the active report tab
+                        </p>
                       </div>
                     </div>
                     <div className="grid min-w-[220px] gap-2 rounded-xl border border-border/40 bg-background/70 p-3 text-xs">
@@ -841,7 +1010,9 @@ const ReportsPage = (): JSX.Element => {
                       </div>
                       <div>
                         <p className="font-medium text-foreground">Active range</p>
-                        <p className="text-muted-foreground">{draftFilters.startDate} to {draftFilters.endDate}</p>
+                        <p className="text-muted-foreground">
+                          {draftFilters.startDate} to {draftFilters.endDate}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -850,25 +1021,56 @@ const ReportsPage = (): JSX.Element => {
                     <div className="space-y-3 rounded-2xl border border-border/40 bg-card p-4">
                       <div className="space-y-1">
                         <p className="text-sm font-semibold text-foreground">Time and structure</p>
-                        <p className="text-xs text-muted-foreground">Choose reporting window and data grouping</p>
+                        <p className="text-xs text-muted-foreground">
+                          Choose reporting window and data grouping
+                        </p>
                       </div>
                       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                         {showsFilter('dateRange') ? (
                           <>
                             <div className="flex flex-col gap-1 self-start">
                               <FilterLabel>From</FilterLabel>
-                              <Input className={reportInputClassName} type="date" value={draftFilters.startDate} onChange={(event) => setDraftFilters((prev) => ({ ...prev, startDate: event.target.value }))} />
+                              <Input
+                                className={reportInputClassName}
+                                type="date"
+                                value={draftFilters.startDate}
+                                onChange={(event) =>
+                                  setDraftFilters((prev) => ({
+                                    ...prev,
+                                    startDate: event.target.value,
+                                  }))
+                                }
+                              />
                             </div>
                             <div className="flex flex-col gap-1 self-start">
                               <FilterLabel>To</FilterLabel>
-                              <Input className={reportInputClassName} type="date" value={draftFilters.endDate} onChange={(event) => setDraftFilters((prev) => ({ ...prev, endDate: event.target.value }))} />
+                              <Input
+                                className={reportInputClassName}
+                                type="date"
+                                value={draftFilters.endDate}
+                                onChange={(event) =>
+                                  setDraftFilters((prev) => ({
+                                    ...prev,
+                                    endDate: event.target.value,
+                                  }))
+                                }
+                              />
                             </div>
                           </>
                         ) : null}
                         {showsFilter('granularity') ? (
                           <div className="flex flex-col gap-1 self-start">
                             <FilterLabel>Show data by</FilterLabel>
-                            <select className={reportSelectClassName} value={draftFilters.granularity} onChange={(event) => setDraftFilters((prev) => ({ ...prev, granularity: event.target.value as FiltersState['granularity'] }))}>
+                            <select
+                              className={reportSelectClassName}
+                              value={draftFilters.granularity}
+                              onChange={(event) =>
+                                setDraftFilters((prev) => ({
+                                  ...prev,
+                                  granularity: event.target.value as FiltersState['granularity'],
+                                }))
+                              }
+                            >
                               <option value="day">Day</option>
                               <option value="month">Month</option>
                               <option value="year">Year</option>
@@ -880,14 +1082,27 @@ const ReportsPage = (): JSX.Element => {
 
                     <div className="space-y-3 rounded-2xl border border-border/40 bg-card p-4">
                       <div className="space-y-1">
-                        <p className="text-sm font-semibold text-foreground">Search and clinic filters</p>
-                        <p className="text-xs text-muted-foreground">Narrow by people, status, treatment, payment method</p>
+                        <p className="text-sm font-semibold text-foreground">
+                          Search and clinic filters
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Narrow by people, status, treatment, payment method
+                        </p>
                       </div>
                       <div className="grid gap-3 md:grid-cols-2">
                         {showsFilter('status') ? (
                           <div className="flex flex-col gap-1 self-start">
                             <FilterLabel>Appointment status</FilterLabel>
-                            <select className={reportSelectClassName} value={draftFilters.statusFilter} onChange={(event) => setDraftFilters((prev) => ({ ...prev, statusFilter: event.target.value as FiltersState['statusFilter'] }))}>
+                            <select
+                              className={reportSelectClassName}
+                              value={draftFilters.statusFilter}
+                              onChange={(event) =>
+                                setDraftFilters((prev) => ({
+                                  ...prev,
+                                  statusFilter: event.target.value as FiltersState['statusFilter'],
+                                }))
+                              }
+                            >
                               <option value="all">All statuses</option>
                               <option value="completed">Completed</option>
                               <option value="pending">Pending</option>
@@ -898,10 +1113,21 @@ const ReportsPage = (): JSX.Element => {
                         {showsFilter('dentist') ? (
                           <div className="flex flex-col gap-1 self-start">
                             <FilterLabel>Dentist</FilterLabel>
-                            <select className={reportSelectClassName} value={draftFilters.dentistFilter} onChange={(event) => setDraftFilters((prev) => ({ ...prev, dentistFilter: event.target.value }))}>
+                            <select
+                              className={reportSelectClassName}
+                              value={draftFilters.dentistFilter}
+                              onChange={(event) =>
+                                setDraftFilters((prev) => ({
+                                  ...prev,
+                                  dentistFilter: event.target.value,
+                                }))
+                              }
+                            >
                               <option value="all">All dentists</option>
                               {(filterOptions?.dentists ?? []).map((dentist) => (
-                                <option key={dentist} value={dentist}>{dentist}</option>
+                                <option key={dentist} value={dentist}>
+                                  {dentist}
+                                </option>
                               ))}
                             </select>
                           </div>
@@ -909,10 +1135,21 @@ const ReportsPage = (): JSX.Element => {
                         {showsFilter('treatment') ? (
                           <div className="flex flex-col gap-1 self-start">
                             <FilterLabel>Treatment</FilterLabel>
-                            <select className={reportSelectClassName} value={draftFilters.treatmentFilter} onChange={(event) => setDraftFilters((prev) => ({ ...prev, treatmentFilter: event.target.value }))}>
+                            <select
+                              className={reportSelectClassName}
+                              value={draftFilters.treatmentFilter}
+                              onChange={(event) =>
+                                setDraftFilters((prev) => ({
+                                  ...prev,
+                                  treatmentFilter: event.target.value,
+                                }))
+                              }
+                            >
                               <option value="all">All treatments</option>
                               {(filterOptions?.treatments ?? []).map((treatment) => (
-                                <option key={treatment} value={treatment}>{treatment}</option>
+                                <option key={treatment} value={treatment}>
+                                  {treatment}
+                                </option>
                               ))}
                             </select>
                           </div>
@@ -920,10 +1157,21 @@ const ReportsPage = (): JSX.Element => {
                         {showsFilter('paymentMethod') ? (
                           <div className="flex flex-col gap-1 self-start">
                             <FilterLabel>How the patient paid</FilterLabel>
-                            <select className={reportSelectClassName} value={draftFilters.paymentMethodFilter} onChange={(event) => setDraftFilters((prev) => ({ ...prev, paymentMethodFilter: event.target.value }))}>
+                            <select
+                              className={reportSelectClassName}
+                              value={draftFilters.paymentMethodFilter}
+                              onChange={(event) =>
+                                setDraftFilters((prev) => ({
+                                  ...prev,
+                                  paymentMethodFilter: event.target.value,
+                                }))
+                              }
+                            >
                               <option value="all">All payment methods</option>
                               {(filterOptions?.paymentMethods ?? []).map((method) => (
-                                <option key={method} value={method}>{method}</option>
+                                <option key={method} value={method}>
+                                  {method}
+                                </option>
                               ))}
                             </select>
                           </div>
@@ -931,10 +1179,21 @@ const ReportsPage = (): JSX.Element => {
                         {showsFilter('patient') ? (
                           <div className="flex flex-col gap-1 self-start">
                             <FilterLabel>Patient</FilterLabel>
-                            <select className={reportSelectClassName} value={draftFilters.patientFilter} onChange={(event) => setDraftFilters((prev) => ({ ...prev, patientFilter: event.target.value }))}>
+                            <select
+                              className={reportSelectClassName}
+                              value={draftFilters.patientFilter}
+                              onChange={(event) =>
+                                setDraftFilters((prev) => ({
+                                  ...prev,
+                                  patientFilter: event.target.value,
+                                }))
+                              }
+                            >
                               <option value="all">All patients</option>
                               {(filterOptions?.patients ?? []).map((patient) => (
-                                <option key={String(patient.id)} value={String(patient.id)}>{patient.name}</option>
+                                <option key={String(patient.id)} value={String(patient.id)}>
+                                  {patient.name}
+                                </option>
                               ))}
                             </select>
                           </div>
@@ -942,7 +1201,14 @@ const ReportsPage = (): JSX.Element => {
                         {showsFilter('search') ? (
                           <div className="flex flex-col gap-1 self-start md:col-span-2">
                             <FilterLabel>Find something specific</FilterLabel>
-                            <Input className={reportInputClassName} value={draftFilters.search} onChange={(event) => setDraftFilters((prev) => ({ ...prev, search: event.target.value }))} placeholder={activeReport.searchPlaceholder} />
+                            <Input
+                              className={reportInputClassName}
+                              value={draftFilters.search}
+                              onChange={(event) =>
+                                setDraftFilters((prev) => ({ ...prev, search: event.target.value }))
+                              }
+                              placeholder={activeReport.searchPlaceholder}
+                            />
                           </div>
                         ) : null}
                       </div>
@@ -953,36 +1219,71 @@ const ReportsPage = (): JSX.Element => {
                 <div className="grid gap-3 self-start rounded-2xl border border-border/50 bg-card p-4 text-foreground shadow-lg">
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="outline" className="border-violet-200/50 bg-violet-100/60 text-violet-700">Action panel</Badge>
-                      {workflowAccess ? <Badge variant="outline" className="border-emerald-200/50 bg-emerald-100/60 text-emerald-700">Right: {workflowAccess.user.rightLevel}</Badge> : null}
+                      <Badge
+                        variant="outline"
+                        className="border-violet-200/50 bg-violet-100/60 text-violet-700"
+                      >
+                        Action panel
+                      </Badge>
+                      {workflowAccess ? (
+                        <Badge
+                          variant="outline"
+                          className="border-emerald-200/50 bg-emerald-100/60 text-emerald-700"
+                        >
+                          Right: {workflowAccess.user.rightLevel}
+                        </Badge>
+                      ) : null}
                     </div>
                     <p className="text-base font-semibold">{activeReport.label}</p>
                     <p className="text-sm text-muted-foreground">{activeReport.description}</p>
                     <p className="text-xs text-muted-foreground">{activeReport.helperText}</p>
                     {workflowAccess?.user.roles.length ? (
-                      <p className="text-xs text-muted-foreground">Roles: {workflowAccess.user.roles.join(', ')}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Roles: {workflowAccess.user.roles.join(', ')}
+                      </p>
                     ) : null}
                   </div>
 
-                    <div className="rounded-xl border border-border/40 bg-background/70 p-3">
+                  <div className="rounded-xl border border-border/40 bg-background/70 p-3">
                     <div className="flex flex-col gap-1">
                       <p className="text-sm font-medium text-foreground">Download this report</p>
-                      <select className={`${reportSelectClassName} border-border/40 bg-background text-foreground`} value={csvExportType} onChange={(event) => setCsvExportType(event.target.value as CsvExportType)}>
+                      <select
+                        className={`${reportSelectClassName} border-border/40 bg-background text-foreground`}
+                        value={csvExportType}
+                        onChange={(event) => setCsvExportType(event.target.value as CsvExportType)}
+                      >
                         {activeReport.exportOptions.map((option) => (
-                          <option key={option.value} value={option.value}>{option.label}</option>
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
                         ))}
                       </select>
                     </div>
                   </div>
 
                   <div className="grid gap-2">
-                    <Button type="button" className="bg-emerald-500 text-white hover:bg-emerald-600" onClick={applyFilters} disabled={isLoadingFilters || isLoadingTab}>
+                    <Button
+                      type="button"
+                      className="bg-emerald-500 text-white hover:bg-emerald-600"
+                      onClick={applyFilters}
+                      disabled={isLoadingFilters || isLoadingTab}
+                    >
                       {isLoadingFilters || isLoadingTab ? 'Updating report...' : 'Apply filters'}
                     </Button>
-                    <Button type="button" className="bg-violet-500 text-white hover:bg-violet-600" onClick={handleExport}>
+                    <Button
+                      type="button"
+                      className="bg-violet-500 text-white hover:bg-violet-600"
+                      onClick={handleExport}
+                    >
                       Download CSV
                     </Button>
-                    <Button type="button" variant="outline" className="border-border/40 bg-background/80 text-foreground hover:bg-accent/40 hover:text-foreground" onClick={handlePrintReport} disabled={!hasPrintableContent || isLoadingTab}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="border-border/40 bg-background/80 text-foreground hover:bg-accent/40 hover:text-foreground"
+                      onClick={handlePrintReport}
+                      disabled={!hasPrintableContent || isLoadingTab}
+                    >
                       Print / Save PDF
                     </Button>
                   </div>
@@ -1003,19 +1304,27 @@ const ReportsPage = (): JSX.Element => {
                     </div>
                     <div className="space-y-1">
                       <p className="font-semibold text-foreground">Workflow restrictions</p>
-                      <p className="text-xs text-muted-foreground">Financial reports need review access. Audit reports need approval access.</p>
+                      <p className="text-xs text-muted-foreground">
+                        Financial reports need review access. Audit reports need approval access.
+                      </p>
                     </div>
                   </div>
                   <div className="space-y-1 text-xs text-muted-foreground">
                     {workflowAccess.requirements.slice(0, 3).map((item) => (
-                      <p key={item.action}>{item.action}: {item.allowed ? 'Allowed' : `Needs ${item.requiredRight}`}</p>
+                      <p key={item.action}>
+                        {item.action}: {item.allowed ? 'Allowed' : `Needs ${item.requiredRight}`}
+                      </p>
                     ))}
                   </div>
                 </CardContent>
               </Card>
             ) : null}
 
-            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as ReportTab)} className="space-y-4">
+            <Tabs
+              value={activeTab}
+              onValueChange={(value) => setActiveTab(value as ReportTab)}
+              className="space-y-4"
+            >
               <TabsList className="w-full justify-start overflow-auto">
                 {availableTabs.includes('executive') ? (
                   <TabsTrigger value="executive" className="flex items-center gap-2">
@@ -1052,7 +1361,11 @@ const ReportsPage = (): JSX.Element => {
               <TabsContent value={activeTab}>
                 <div ref={printableReportRef} className="space-y-4">
                   {isLoadingTab ? (
-                    <LoadingState compact title="Refreshing report" description="Fetching server-rendered report sections." />
+                    <LoadingState
+                      compact
+                      title="Refreshing report"
+                      description="Fetching server-rendered report sections."
+                    />
                   ) : (
                     renderContent()
                   )}

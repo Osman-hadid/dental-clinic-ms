@@ -68,11 +68,11 @@ final class ImplantPlanningController extends BaseApiController
             );
         }
 
-        $implantPricePerTooth = $this->currencyService->toUsd($implantPricePerToothInput, $currency, $exchangeRate);
+        $implantPricePerTooth = $this->currencyService->toAfn($implantPricePerToothInput, $currency, $exchangeRate);
         $supplierCostPerToothInput = round((float) ($validated['supplierCostPerTooth'] ?? 0), 2);
-        $supplierCostPerTooth = $this->currencyService->toUsd($supplierCostPerToothInput, $currency, $exchangeRate);
+        $supplierCostPerTooth = $this->currencyService->toAfn($supplierCostPerToothInput, $currency, $exchangeRate);
         $paidNowAmountInput = round((float) ($validated['paidNowAmount'] ?? 0), 2);
-        $paidNowAmount = $this->currencyService->toUsd($paidNowAmountInput, $currency, $exchangeRate);
+        $paidNowAmount = $this->currencyService->toAfn($paidNowAmountInput, $currency, $exchangeRate);
         $recordDate = $this->resolveRecordDate($validated['visitDate'] ?? null);
         $treatmentId = (int) $validated['treatmentId'];
 
@@ -109,6 +109,12 @@ final class ImplantPlanningController extends BaseApiController
                     httpCode: 422
                 );
             }
+        }
+
+        // This flow writes implant-company records directly, so enforce the
+        // same permission used by the dedicated implant-company endpoints.
+        if ($companyPayload['id'] !== null || $companyPayload['name'] !== '' || $companyPayload['type'] !== '') {
+            abort_unless($request->user()?->can('dental-management.implant-companies.create'), 403);
         }
 
         $this->authorize('create', VisitTreatment::class);
@@ -410,6 +416,7 @@ final class ImplantPlanningController extends BaseApiController
                     ),
                     'updated_by' => $userId,
                 ])->save();
+
                 continue;
             }
 
@@ -444,8 +451,7 @@ final class ImplantPlanningController extends BaseApiController
         float $exchangeRate,
         float $supplierPaidInput,
         float $supplierTotalInput
-    ): string
-    {
+    ): string {
         return sprintf(
             '[%s:%s] [implant_availability:%s] [currency:%s] [exchangeRate:%.6f] [supplier_paid:%.2f] [supplier_paid_input:%.2f] [supplier_total:%.2f] [supplier_total_input:%.2f]',
             self::IMPLANT_TASK_MARKER,

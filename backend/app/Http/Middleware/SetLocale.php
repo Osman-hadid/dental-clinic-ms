@@ -12,7 +12,8 @@ final class SetLocale
 {
     public function handle(Request $request, Closure $next)
     {
-        $locale = $request->cookie('NEXT_LOCALE')
+        $locale = $request->header('X-App-Locale')
+            ?? $request->cookie('NEXT_LOCALE')
             ?? $request->user()?->locale
             ?? $request->header('Accept-Language', config('app.fallback_locale'));
 

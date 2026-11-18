@@ -34,6 +34,7 @@ type EntityListClientProps<TData extends { id: string | number }> = {
   useCreate: () => { mutateAsync: (payload: any) => Promise<any> };
   useUpdate: () => { mutateAsync: (payload: { id: string | number; data: any }) => Promise<any> };
   useDelete: () => { mutateAsync: (id: string | number) => Promise<any> };
+  hideCreateButton?: boolean;
 };
 
 const MAX_PER_PAGE = 100;
@@ -50,6 +51,7 @@ const clampPerPage = (value: number): number => {
 const EntityList = <TData extends { id: string | number }>({
   config,
   fetchHook,
+  hideCreateButton = false,
   useCreate,
   useDelete,
   useUpdate,
@@ -111,8 +113,6 @@ const EntityList = <TData extends { id: string | number }>({
     config.relations || [],
     debouncedFilters
   );
-
-  useEffect(() => {}, [entities, filters]);
 
   const pageSize = pagination?.perPage ?? perPage;
   const totalItems = pagination?.total ?? entities.length;
@@ -372,20 +372,31 @@ const EntityList = <TData extends { id: string | number }>({
           queryKey: [config.singleQueryKey, id],
         });
       } else {
-        showToast(resolveErrorMessage(response.error, t('config.repository.deleteFailed', { entity })), false);
+        showToast(
+          resolveErrorMessage(response.error, t('config.repository.deleteFailed', { entity })),
+          false
+        );
       }
       return response;
     },
-    [config.singleQueryKey, config.entity, deleteMutation, queryClient, resolveErrorMessage, showToast, t]
+    [
+      config.singleQueryKey,
+      config.entity,
+      deleteMutation,
+      queryClient,
+      resolveErrorMessage,
+      showToast,
+      t,
+    ]
   );
 
   const canCreate = can(config.permissions.create);
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
       <EntityTableToolbar
         table={table}
-        canCreate={canCreate}
+        canCreate={canCreate && !hideCreateButton}
         config={config}
         search={search}
         setSearch={setSearch}

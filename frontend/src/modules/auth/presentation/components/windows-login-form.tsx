@@ -1,13 +1,13 @@
 'use client';
 
 import { JSX, useState } from 'react';
-import Image from 'next/image';
 import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utilities';
 import { useAuth } from '@/modules/auth/presentation/hooks/useAuth';
 import { useUIStore } from '@/modules/common/store/ui-store';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -35,122 +35,94 @@ export const WindowsLoginForm = ({
   };
 
   const isBusy = isLoggingIn || uiLoading;
-  const glassPill =
-    'backdrop-blur-[27px] bg-white/20 border border-white/40 shadow-[0_7px_35px_rgba(0,0,0,0.18)]';
-  const glassHover =
-    'transition-all duration-200 hover:bg-white/30 hover:border-white/60 hover:shadow-[0_12px_40px_rgba(0,0,0,0.22)]';
+  const inputClassName =
+    'h-12 rounded-xl border-white/15 bg-white/[0.08] pl-11 pr-4 text-sm text-white shadow-none placeholder:text-white/35 focus-visible:border-pink-200/60 focus-visible:ring-pink-200/25';
 
   return (
-    <>
-      <Form {...form}>
-        <form
-          onSubmit={form.handleSubmit(onSubmit)}
-          className={cn('flex w-full flex-col items-center gap-4 animate-scale-in [animation-delay:800ms]', className)}
-          {...props}
+    <Form {...form}>
+      <form
+        onSubmit={form.handleSubmit(onSubmit)}
+        className={cn('flex w-full flex-col gap-5', className)}
+        {...props}
+      >
+        <FormField
+          control={form.control}
+          name="email"
+          render={({ field }) => (
+            <FormItem className="space-y-2">
+              <label htmlFor="login-email" className="text-xs font-medium text-white/75">Email address</label>
+              <FormControl>
+                <div className="relative">
+                  <Mail className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-white/40" />
+                  <Input
+                    id="login-email"
+                    type="email"
+                    placeholder="you@clinic.com"
+                    autoComplete="username"
+                    inputMode="email"
+                    autoCapitalize="none"
+                    className={inputClassName}
+                    {...field}
+                  />
+                </div>
+              </FormControl>
+              <FormMessage className="text-xs text-rose-200" />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="password"
+          render={({ field }) => (
+            <FormItem className="space-y-2">
+              <label htmlFor="login-password" className="text-xs font-medium text-white/75">Password</label>
+              <FormControl>
+                <div className="relative">
+                  <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-white/40" />
+                  <Input
+                    id="login-password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Enter your password"
+                    autoComplete="current-password"
+                    className={cn(inputClassName, 'pr-12')}
+                    {...field}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((value) => !value)}
+                    className="absolute right-3 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-lg text-white/45 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-200/60"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+              </FormControl>
+              <FormMessage className="text-xs text-rose-200" />
+            </FormItem>
+          )}
+        />
+
+        {loginError ? (
+          <div role="alert" aria-live="polite" className="rounded-xl border border-rose-200/20 bg-rose-950/35 px-4 py-3 text-sm text-rose-100">
+            {loginError.message}
+          </div>
+        ) : null}
+
+        <button
+          type="submit"
+          disabled={isBusy}
+          className="group mt-1 flex h-13 w-full items-center justify-center gap-3 rounded-xl border border-white/70 bg-white px-5 text-sm font-semibold text-[#26132f] shadow-[0_8px_24px_rgba(10,3,20,0.18)] transition-colors duration-200 hover:border-white hover:bg-[#fff5fb] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#190d2a] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          <FormField
-            control={form.control}
-            name="email"
-            render={({ field }) => (
-              <FormItem className="w-full max-w-160 animate-scale-in [animation-delay:900ms]">
-                <FormControl>
-                  <div className={cn(glassPill, glassHover, 'rounded-full px-6 py-3')}>
-                    <Input
-                      type="email"
-                      placeholder="Email"
-                      className="glass-input h-10 border-0 bg-transparent px-0 text-base text-white placeholder:text-white/70 shadow-none focus-visible:border-0 focus-visible:ring-0 md:h-12 md:text-lg"
-                      {...field}
-                    />
-                  </div>
-                </FormControl>
-                <FormMessage className="text-xs text-rose-200/90 md:text-sm" />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="password"
-            render={({ field }) => (
-              <FormItem className="w-full max-w-180 animate-scale-in [animation-delay:1000ms]">
-                <FormControl>
-                  <div className="flex w-full items-center justify-center gap-4 md:gap-5">
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((value) => !value)}
-                      className={cn(
-                        glassPill,
-                        'flex size-12 items-center justify-center rounded-full md:size-16 animate-scale-in [animation-delay:1100ms]'
-                      )}
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    >
-                      <Image
-                        src="/figma/windows-login/eye-closed.svg"
-                        alt=""
-                        width={20}
-                        height={20}
-                        className="md:size-6"
-                      />
-                    </button>
-
-                    <div className={cn(glassPill, glassHover, 'flex-1 rounded-full px-6 py-3 md:px-8 animate-scale-in [animation-delay:1200ms]')}>
-                      <Input
-                        type={showPassword ? 'text' : 'password'}
-                        placeholder="Password"
-                        className="glass-input h-10 border-0 bg-transparent px-0 text-base text-white placeholder:text-white/70 shadow-none focus-visible:border-0 focus-visible:ring-0 md:h-12 md:text-lg"
-                        {...field}
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={isBusy}
-                      className={cn(
-                        glassPill,
-                        'flex size-12 items-center justify-center rounded-full transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 md:size-16 animate-scale-in [animation-delay:1300ms]'
-                      )}
-                      aria-label="Login"
-                    >
-                      <Image
-                        src="/figma/windows-login/arrow-circle.svg"
-                        alt=""
-                        width={22}
-                        height={22}
-                        className="md:size-7"
-                      />
-                    </button>
-                  </div>
-                </FormControl>
-                <FormMessage className="text-xs text-rose-200/90 md:text-sm" />
-              </FormItem>
-            )}
-          />
-
-          {loginError ? (
-            <div className="text-xs text-rose-200/90 md:text-sm animate-scale-in [animation-delay:1400ms]">{loginError?.message}</div>
+          {isBusy ? 'Signing in…' : 'Sign in'}
+          {!isBusy ? (
+            <span className="flex size-7 items-center justify-center rounded-full bg-[#26132f]/[0.07]">
+              <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+            </span>
           ) : null}
-
-        </form>
-      </Form>
-      
-      <style jsx>{`
-        @keyframes scale-in {
-          from {
-            opacity: 0;
-            transform: scale(0.8);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-
-        .animate-scale-in {
-          animation: scale-in 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
-          opacity: 0;
-        }
-      `}</style>
-    </>
+        </button>
+      </form>
+    </Form>
   );
 };
 

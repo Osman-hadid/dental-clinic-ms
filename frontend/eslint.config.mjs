@@ -83,7 +83,6 @@ const eslintConfig = [
       globals: { ...globals.browser, ...globals.node },
     },
     plugins: {
-      '@typescript-eslint': tseslint.plugin,
       import: importPlugin.default,
       'simple-import-sort': simpleImportSort.default,
       boundaries: boundariesPlugin.default,

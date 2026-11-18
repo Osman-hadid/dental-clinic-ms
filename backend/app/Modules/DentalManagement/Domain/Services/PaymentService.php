@@ -170,7 +170,7 @@ final readonly class PaymentService
         $amountInput = round((float) ($data['amount'] ?? $existing?->amount_input ?? $existing?->amount ?? 0), 2);
 
         $resolvedCurrency = $this->currencyService->normalizeCurrency($currency, $exchangeRate);
-        $amount = $this->currencyService->toUsd(
+        $amount = $this->currencyService->toAfn(
             amountInput: $amountInput,
             currency: $resolvedCurrency['currency'],
             exchangeRate: (float) $resolvedCurrency['exchangeRate'],

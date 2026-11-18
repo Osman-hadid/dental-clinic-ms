@@ -1,36 +1,13 @@
 'use client';
 
 import { JSX, useEffect, useMemo, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import Link from 'next/link';
 import { Header } from '@/components/header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { type Patient } from '@/modules/dental-management/domain/entities/Patient';
-import { ListStaffUseCase } from '@/modules/dental-management/application/use-cases/staff/list-staff-use-case';
-import { ListTreatmentsUseCase } from '@/modules/dental-management/application/use-cases/treatments/list-treatments-use-case';
-import { ListVisitTreatmentsUseCase } from '@/modules/dental-management/application/use-cases/visit-treatments/list-visit-treatments-use-case';
-import { ListVisitsUseCase } from '@/modules/dental-management/application/use-cases/visits/list-visits-use-case';
-import { type Staff } from '@/modules/dental-management/domain/entities/Staff';
-import { type Treatment } from '@/modules/dental-management/domain/entities/Treatment';
-import { type Visit } from '@/modules/dental-management/domain/entities/Visit';
-import { type VisitTreatment } from '@/modules/dental-management/domain/entities/VisitTreatment';
-import { PatientRepository } from '@/modules/dental-management/infrastructure/repositories/patient-repository';
-import { StaffRepository } from '@/modules/dental-management/infrastructure/repositories/staff-repository';
-import { TreatmentRepository } from '@/modules/dental-management/infrastructure/repositories/treatment-repository';
-import { VisitTreatmentRepository } from '@/modules/dental-management/infrastructure/repositories/visit-treatment-repository';
-import { VisitRepository } from '@/modules/dental-management/infrastructure/repositories/visit-repository';
-import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
-import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
-import { ClipboardCheck, Loader2, Printer, RefreshCcw, Save, ShieldAlert } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -39,15 +16,35 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  DEFAULT_AFN_PER_USD,
-  type CurrencyCode,
   convertInputToUsd,
   convertUsdToInput,
+  DEFAULT_AFN_PER_USD,
   formatCurrency,
   getExchangeRate,
   parseMoney,
+  type CurrencyCode,
 } from '@/lib/currency-utils';
+import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import { ListPatientsUseCase } from '@/modules/dental-management/application/use-cases/patients/list-patients-use-case';
+import { ListStaffUseCase } from '@/modules/dental-management/application/use-cases/staff/list-staff-use-case';
+import { ListTreatmentsUseCase } from '@/modules/dental-management/application/use-cases/treatments/list-treatments-use-case';
+import { ListVisitTreatmentsUseCase } from '@/modules/dental-management/application/use-cases/visit-treatments/list-visit-treatments-use-case';
+import { ListVisitsUseCase } from '@/modules/dental-management/application/use-cases/visits/list-visits-use-case';
+import { type Patient } from '@/modules/dental-management/domain/entities/Patient';
+import { type Staff } from '@/modules/dental-management/domain/entities/Staff';
+import { type Treatment } from '@/modules/dental-management/domain/entities/Treatment';
+import { type Visit } from '@/modules/dental-management/domain/entities/Visit';
+import { type VisitTreatment } from '@/modules/dental-management/domain/entities/VisitTreatment';
+import { PatientRepository } from '@/modules/dental-management/infrastructure/repositories/patient-repository';
+import { StaffRepository } from '@/modules/dental-management/infrastructure/repositories/staff-repository';
+import { TreatmentRepository } from '@/modules/dental-management/infrastructure/repositories/treatment-repository';
+import { VisitRepository } from '@/modules/dental-management/infrastructure/repositories/visit-repository';
+import { VisitTreatmentRepository } from '@/modules/dental-management/infrastructure/repositories/visit-treatment-repository';
+import { type PaginatedApiResponse } from '@/types/ApiResponse';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ClipboardCheck, Loader2, Printer, RefreshCcw, Save, ShieldAlert } from 'lucide-react';
+import { toast } from 'sonner';
+import styles from './implant-workspace.module.css';
 
 type LoadingProtocol = 'delayed' | 'early' | 'immediate';
 type ImplantArch = 'maxilla' | 'mandible' | 'both';
@@ -136,7 +133,6 @@ const RISK_FACTOR_LABELS: Record<RiskFactorKey, string> = {
   uncontrolledDiabetes: 'Uncontrolled diabetes',
 };
 
-
 const buildDefaultForm = (): ImplantPlanningForm => ({
   boneHeightMm: '',
   boneWidthMm: '',
@@ -144,12 +140,12 @@ const buildDefaultForm = (): ImplantPlanningForm => ({
   dentistId: '',
   exchangeRate: '',
   imagingType: 'cbct',
+  implantArch: 'maxilla',
   implantCompanyDate: new Date().toISOString().slice(0, 10),
   implantCompanyId: '',
   implantCompanyName: '',
   implantCompanyNote: '',
   implantCompanyType: '',
-  implantArch: 'maxilla',
   implantDiameterMm: '',
   implantLengthMm: '',
   implantPricePerTooth: '',
@@ -181,10 +177,6 @@ const asText = (value: unknown): string => {
   if (typeof value === 'string') return value.trim();
   if (typeof value === 'number') return String(value).trim();
   return '';
-};
-
-const truncate = (value: string, maxLength: number): string => {
-  return value.length > maxLength ? value.slice(0, maxLength) : value;
 };
 
 const isToothNumber = (value: string): boolean => /^[0-9]{2}$/.test(value);
@@ -294,7 +286,8 @@ const extractImplantTeeth = (visitTreatments: VisitTreatment[]): string[] => {
       return;
     }
 
-    const inferredCondition = parseConditionFromNotes(item.notes) ?? inferConditionFromText(item.notes);
+    const inferredCondition =
+      parseConditionFromNotes(item.notes) ?? inferConditionFromText(item.notes);
     if (inferredCondition !== 'implant') {
       return;
     }
@@ -309,10 +302,14 @@ const extractImplantTeeth = (visitTreatments: VisitTreatment[]): string[] => {
     }
   });
 
-  return Array.from(implantTeeth).sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+  return Array.from(implantTeeth).sort((left, right) =>
+    left.localeCompare(right, undefined, { numeric: true })
+  );
 };
 
-const getRiskLevel = (score: number): { label: string; tone: 'default' | 'secondary' | 'destructive' } => {
+const getRiskLevel = (
+  score: number
+): { label: string; tone: 'default' | 'secondary' | 'destructive' } => {
   if (score >= 6) return { label: 'High risk', tone: 'destructive' };
   if (score >= 3) return { label: 'Moderate risk', tone: 'secondary' };
   return { label: 'Low risk', tone: 'default' };
@@ -321,15 +318,21 @@ const getRiskLevel = (score: number): { label: string; tone: 'default' | 'second
 // eslint-disable-next-line react/function-component-definition
 export default function ImplantsPage(): JSX.Element {
   const tSidebar = useTranslations('sidebar.dentalManagement');
+  const locale = useLocale();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<ImplantPlanningForm>(() => buildDefaultForm());
   const [defaultExchangeRate, setDefaultExchangeRate] = useState(DEFAULT_AFN_PER_USD);
   const [isSavingPlan, setIsSavingPlan] = useState(false);
   const [saveSummary, setSaveSummary] = useState<SaveSummary | null>(null);
-  const [selectedTeethByPatient, setSelectedTeethByPatient] = useState<Record<string, string[]>>({});
+  const [selectedTeethByPatient, setSelectedTeethByPatient] = useState<Record<string, string[]>>(
+    {}
+  );
   const [patientSearch, setPatientSearch] = useState('');
   const [patientSearchDebounced, setPatientSearchDebounced] = useState('');
-  const patientTasksQueryKey = useMemo(() => ['patient-session-tasks', form.patientId], [form.patientId]);
+  const patientTasksQueryKey = useMemo(
+    () => ['patient-session-tasks', form.patientId],
+    [form.patientId]
+  );
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -345,11 +348,11 @@ export default function ImplantsPage(): JSX.Element {
     void getExchangeRate(client)
       .then((rate) => {
         setDefaultExchangeRate(rate);
-        setForm((prev) => (
+        setForm((prev) =>
           prev.currency === 'USD' && parseMoney(prev.exchangeRate) <= 0
             ? { ...prev, exchangeRate: String(rate) }
             : prev
-        ));
+        );
       })
       .catch(() => {
         setDefaultExchangeRate(DEFAULT_AFN_PER_USD);
@@ -363,6 +366,11 @@ export default function ImplantsPage(): JSX.Element {
     isFetching: isLoadingPatients,
     isFetchingNextPage,
   } = useInfiniteQuery({
+    getNextPageParam: (lastPage: PaginatedApiResponse<Patient[]>) =>
+      lastPage.meta.currentPage < lastPage.meta.lastPage
+        ? lastPage.meta.currentPage + 1
+        : undefined,
+    initialPageParam: 1,
     queryFn: async ({ pageParam = 1 }) => {
       const patientRepository = new PatientRepository();
       const listPatientsUseCase = new ListPatientsUseCase(patientRepository);
@@ -379,12 +387,9 @@ export default function ImplantsPage(): JSX.Element {
       }
       return response.data;
     },
-    getNextPageParam: (lastPage) =>
-      lastPage.meta.currentPage < lastPage.meta.lastPage ? lastPage.meta.currentPage + 1 : undefined,
     queryKey: ['implant-patient-options', patientSearchDebounced],
     refetchOnWindowFocus: false,
     staleTime: 5 * 60 * 1000,
-    initialPageParam: 1,
   });
   const { data: allStaff = [], isFetching: isLoadingStaff } = useQuery<Staff[]>({
     queryFn: async () => {
@@ -436,7 +441,9 @@ export default function ImplantsPage(): JSX.Element {
     refetchOnWindowFocus: false,
     staleTime: 5 * 60 * 1000,
   });
-  const { data: implantCompanies = [], isFetching: isLoadingImplantCompanies } = useQuery<ImplantCompanyRecord[]>({
+  const { data: implantCompanies = [], isFetching: isLoadingImplantCompanies } = useQuery<
+    ImplantCompanyRecord[]
+  >({
     queryFn: async () => {
       const client = new AxiosClient();
       const response = await client.get<ImplantCompanyRecord[]>(
@@ -490,7 +497,9 @@ export default function ImplantsPage(): JSX.Element {
     refetchOnWindowFocus: false,
     staleTime: 60 * 1000,
   });
-  const { data: implantTeethFromChart = [], isFetching: isLoadingImplantTeeth } = useQuery<string[]>({
+  const { data: implantTeethFromChart = [], isFetching: isLoadingImplantTeeth } = useQuery<
+    string[]
+  >({
     enabled: Boolean(form.patientId),
     queryFn: async () => {
       if (!form.patientId) {
@@ -579,7 +588,10 @@ export default function ImplantsPage(): JSX.Element {
     staleTime: 60 * 1000,
   });
 
-  const setField = <K extends keyof ImplantPlanningForm>(key: K, value: ImplantPlanningForm[K]): void => {
+  const setField = <K extends keyof ImplantPlanningForm>(
+    key: K,
+    value: ImplantPlanningForm[K]
+  ): void => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -638,7 +650,9 @@ export default function ImplantsPage(): JSX.Element {
       const current = prev[form.patientId] ?? implantTeethFromChart;
       const next = current.includes(toothNumber)
         ? current.filter((value) => value !== toothNumber)
-        : [...current, toothNumber].sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+        : [...current, toothNumber].sort((left, right) =>
+            left.localeCompare(right, undefined, { numeric: true })
+          );
 
       return {
         ...prev,
@@ -675,14 +689,17 @@ export default function ImplantsPage(): JSX.Element {
     return client;
   };
 
-
   const checklist = useMemo<ChecklistItem[]>(() => {
     const hasSite = Boolean(form.patientId && selectedImplantTeeth.length > 0);
     const hasImaging = form.imagingType !== 'none';
     const hasBoneMeasurements = Boolean(toNumber(form.boneHeightMm) && toNumber(form.boneWidthMm));
-    const hasImplantSpecs = Boolean(toNumber(form.implantDiameterMm) && toNumber(form.implantLengthMm));
+    const hasImplantSpecs = Boolean(
+      toNumber(form.implantDiameterMm) && toNumber(form.implantLengthMm)
+    );
     const hasLoadingPlan = Boolean(form.loadingProtocol.trim());
-    const hasStabilityMetrics = Boolean(toNumber(form.insertionTorqueNcm) || toNumber(form.primaryStabilityIsq));
+    const hasStabilityMetrics = Boolean(
+      toNumber(form.insertionTorqueNcm) || toNumber(form.primaryStabilityIsq)
+    );
 
     return [
       { complete: hasSite, label: 'Patient and implant site identified' },
@@ -705,22 +722,32 @@ export default function ImplantsPage(): JSX.Element {
     selectedImplantTeeth.length,
   ]);
 
-  const resolvedExchangeRate = form.currency === 'USD'
-    ? Math.max(parseMoney(form.exchangeRate) || defaultExchangeRate, DEFAULT_AFN_PER_USD)
-    : 1;
+  const resolvedExchangeRate =
+    form.currency === 'USD'
+      ? Math.max(parseMoney(form.exchangeRate) || defaultExchangeRate, DEFAULT_AFN_PER_USD)
+      : 1;
   const implantPricePerToothInput = Math.max(0, toNumber(form.implantPricePerTooth) ?? 0);
   const totalSelectedImplantsPaymentInput = implantPricePerToothInput * selectedImplantTeeth.length;
-  const invoiceNetAmount = convertInputToUsd(totalSelectedImplantsPaymentInput, form.currency, resolvedExchangeRate);
+  const invoiceNetAmount = convertInputToUsd(
+    totalSelectedImplantsPaymentInput,
+    form.currency,
+    resolvedExchangeRate
+  );
   const requestedPaidNowAmountInput = Math.max(0, toNumber(form.paidNowAmount) ?? 0);
-  const paidNowAmountInput = Math.min(totalSelectedImplantsPaymentInput, requestedPaidNowAmountInput);
+  const paidNowAmountInput = Math.min(
+    totalSelectedImplantsPaymentInput,
+    requestedPaidNowAmountInput
+  );
   const paidNowAmount = convertInputToUsd(paidNowAmountInput, form.currency, resolvedExchangeRate);
-  const remainingDebtAmountInput = Math.max(0, totalSelectedImplantsPaymentInput - paidNowAmountInput);
+  const remainingDebtAmountInput = Math.max(
+    0,
+    totalSelectedImplantsPaymentInput - paidNowAmountInput
+  );
   const remainingDebtAmount = Math.max(0, invoiceNetAmount - paidNowAmount);
-  const effectiveInvoiceStatus = remainingDebtAmount <= 0 ? 'paid' : paidNowAmount > 0 ? 'partially_paid' : 'unpaid';
+  const effectiveInvoiceStatus =
+    remainingDebtAmount <= 0 ? 'paid' : paidNowAmount > 0 ? 'partially_paid' : 'unpaid';
   const supplierCostPerToothInput = Math.max(0, toNumber(form.supplierCostPerTooth) ?? 0);
   const totalSupplierCostInput = supplierCostPerToothInput * selectedImplantTeeth.length;
-  const totalSupplierCost = convertInputToUsd(totalSupplierCostInput, form.currency, resolvedExchangeRate);
-  const supplierRemainingAmount = totalSupplierCost;
   const supplierRemainingAmountInput = totalSupplierCostInput;
 
   const formatSelectedAmount = (amountInput: number): string => {
@@ -740,7 +767,8 @@ export default function ImplantsPage(): JSX.Element {
     exchangeRate: number
   ): string => {
     if (currency === 'USD') {
-      const resolvedInput = amountInput > 0 ? amountInput : convertUsdToInput(amountAfn, currency, exchangeRate);
+      const resolvedInput =
+        amountInput > 0 ? amountInput : convertUsdToInput(amountAfn, currency, exchangeRate);
       return `${formatCurrency(resolvedInput, 'USD')} (${formatCurrency(amountAfn, 'AFN')})`;
     }
 
@@ -772,47 +800,61 @@ export default function ImplantsPage(): JSX.Element {
         id: String(patient.id),
         label: `${patient.firstName} ${patient.lastName} (${patient.patientCode})`.trim(),
       }))
-      .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: 'base' }));
+      .sort((left, right) =>
+        left.label.localeCompare(right.label, undefined, { sensitivity: 'base' })
+      );
   }, [allPatients]);
   const implantCompanyOptions = useMemo(
-    () => implantCompanies
-      .map((company) => ({
-        id: String(company.id),
-        label: `${company.companyName} — ${company.implantType}${company.recordDate ? ` (${company.recordDate})` : ''}`,
-        record: company,
-      }))
-      .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: 'base' })),
+    () =>
+      implantCompanies
+        .map((company) => ({
+          id: String(company.id),
+          label: `${company.companyName} — ${company.implantType}${company.recordDate ? ` (${company.recordDate})` : ''}`,
+          record: company,
+        }))
+        .sort((left, right) =>
+          left.label.localeCompare(right.label, undefined, { sensitivity: 'base' })
+        ),
     [implantCompanies]
   );
   const dentistOptions = useMemo(
-    () => allStaff
-      .map((staff) => ({
-        id: String(staff.id),
-        label: `${staff.fullName} (${staff.role})`,
-      }))
-      .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: 'base' })),
+    () =>
+      allStaff
+        .map((staff) => ({
+          id: String(staff.id),
+          label: `${staff.fullName} (${staff.role})`,
+        }))
+        .sort((left, right) =>
+          left.label.localeCompare(right.label, undefined, { sensitivity: 'base' })
+        ),
     [allStaff]
   );
   const treatmentOptions = useMemo(
-    () => allTreatments
-      .map((treatment) => ({
-        id: String(treatment.id),
-        label: treatment.name,
-      }))
-      .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: 'base' })),
+    () =>
+      allTreatments
+        .map((treatment) => ({
+          id: String(treatment.id),
+          label: treatment.name,
+        }))
+        .sort((left, right) =>
+          left.label.localeCompare(right.label, undefined, { sensitivity: 'base' })
+        ),
     [allTreatments]
   );
   const visitOptions = useMemo(
-    () => patientVisits
-      .map((visit) => {
-        const tag = asText(visit.tag) || `Visit #${visit.id}`;
-        const visitDate = asText(visit.visitDate);
-        return {
-          id: String(visit.id),
-          label: `${tag} (${visitDate || 'no date'})`,
-        };
-      })
-      .sort((left, right) => right.label.localeCompare(left.label, undefined, { sensitivity: 'base' })),
+    () =>
+      patientVisits
+        .map((visit) => {
+          const tag = asText(visit.tag) || `Visit #${visit.id}`;
+          const visitDate = asText(visit.visitDate);
+          return {
+            id: String(visit.id),
+            label: `${tag} (${visitDate || 'no date'})`,
+          };
+        })
+        .sort((left, right) =>
+          right.label.localeCompare(left.label, undefined, { sensitivity: 'base' })
+        ),
     [patientVisits]
   );
 
@@ -821,7 +863,9 @@ export default function ImplantsPage(): JSX.Element {
       return;
     }
 
-    const preferred = treatmentOptions.find((option) => option.label.toLowerCase().includes('implant'));
+    const preferred = treatmentOptions.find((option) =>
+      option.label.toLowerCase().includes('implant')
+    );
     setForm((prev) => ({ ...prev, treatmentId: preferred?.id ?? treatmentOptions[0].id }));
   }, [form.treatmentId, treatmentOptions]);
 
@@ -857,16 +901,25 @@ export default function ImplantsPage(): JSX.Element {
       values.push('CBCT is recommended before implant placement for 3D site assessment.');
     }
 
-    if (form.loadingProtocol === 'immediate' && ((torque !== null && torque < 30) || (isq !== null && isq < 65))) {
-      values.push('Immediate loading selected with low stability markers (torque < 30 Ncm or ISQ < 65).');
+    if (
+      form.loadingProtocol === 'immediate' &&
+      ((torque !== null && torque < 30) || (isq !== null && isq < 65))
+    ) {
+      values.push(
+        'Immediate loading selected with low stability markers (torque < 30 Ncm or ISQ < 65).'
+      );
     }
 
     if (boneWidth !== null && implantDiameter !== null && boneWidth < implantDiameter + 2) {
-      values.push('Bone width appears limited for selected implant diameter. Recheck plan or grafting need.');
+      values.push(
+        'Bone width appears limited for selected implant diameter. Recheck plan or grafting need.'
+      );
     }
 
     if (form.riskFactors.length >= 3) {
-      values.push('Multiple systemic/local risk factors detected. Consider staged protocol and tighter maintenance.');
+      values.push(
+        'Multiple systemic/local risk factors detected. Consider staged protocol and tighter maintenance.'
+      );
     }
 
     return values;
@@ -998,191 +1051,271 @@ export default function ImplantsPage(): JSX.Element {
         ]}
       />
 
-      <div className="flex flex-1 flex-col px-4 pb-6 lg:px-6">
-        <div className="grid gap-4 xl:grid-cols-[1.35fr_0.9fr]">
-          <Card>
+      <div className={`${styles.page} flex min-w-0 flex-1 flex-col px-4 pb-8 lg:px-6`}>
+        <section className={styles.hero} aria-labelledby="implant-planning-title">
+          <div>
+            <p className={styles.heroEyebrow}>IMPLANT WORKSPACE / NEW CASE</p>
+            <h1 id="implant-planning-title">Plan an implant case</h1>
+            <p className={styles.heroDescription}>
+              Bring the patient, treatment plan and costs together in one clear record.
+            </p>
+            <div className={styles.heroActions}>
+              <Link
+                href={`/${locale}/dental-management/implants/in-process`}
+                className={styles.heroLink}
+              >
+                View in-process implants
+              </Link>
+              <span className={styles.heroProgress}>
+                {completedCount} of {checklist.length} documentation items complete
+              </span>
+            </div>
+          </div>
+          <div className={styles.heroEmblem} aria-hidden="true">
+            <ClipboardCheck size={47} strokeWidth={1.25} />
+          </div>
+        </section>
+
+        <nav className={styles.sectionNav} aria-label="Implant planning sections">
+          <a href="#implant-patient">Patient and teeth</a>
+          <a href="#implant-clinical">Clinical plan</a>
+          <a href="#implant-safety">Safety and notes</a>
+          <a href="#implant-billing">Costs and review</a>
+        </nav>
+
+        <div className={styles.layout}>
+          <Card className={styles.planCard}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <ClipboardCheck className="size-4 text-primary" />
-                Implant Planning Sheet
+                Case details
               </CardTitle>
               <CardDescription>
-                Standardized fields based on common implant planning guidance (risk assessment, imaging,
-                stability, and loading protocol).
+                Work through the patient, clinical plan and costs. Save when the details are ready.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              <section className="space-y-3">
+              <section id="implant-patient" className={styles.planSection}>
                 <h3 className="text-sm font-semibold">Patient and Site</h3>
                 <div className="grid gap-3 md:grid-cols-3">
                   <div className="space-y-2">
-                    <Input
-                      placeholder="Search patient (name, code, phone)"
-                      value={patientSearch}
-                      onChange={(event) => setPatientSearch(event.target.value)}
-                    />
-                    <Select
-                      value={form.patientId || undefined}
-                      onValueChange={(value) => {
-                        setForm((prev) => ({
-                          ...prev,
-                          linkedVisitId: '',
-                          patientId: value,
-                        }));
-                      }}
-                      disabled={isLoadingPatients || patientOptions.length === 0}
-                    >
-                      <SelectTrigger>
-                        <SelectValue
-                          placeholder={isLoadingPatients ? 'Loading patients...' : 'Select patient'}
-                        />
-                      </SelectTrigger>
-                      <SelectContent
-                        onScroll={(event) => {
-                          const target = event.currentTarget;
-                          const isNearBottom = target.scrollTop + target.clientHeight >= target.scrollHeight - 20;
-                          if (isNearBottom && hasNextPage && !isFetchingNextPage) {
-                            void fetchNextPage();
-                          }
+                    <label className={styles.field}>
+                      <span>Search patient (name, code, phone)</span>
+                      <Input
+                        placeholder="Search patient (name, code, phone)"
+                        value={patientSearch}
+                        onChange={(event) => setPatientSearch(event.target.value)}
+                      />
+                    </label>
+                    <div className={styles.field}>
+                      <span>Patient</span>
+                      <Select
+                        value={form.patientId || undefined}
+                        onValueChange={(value) => {
+                          setForm((prev) => ({
+                            ...prev,
+                            linkedVisitId: '',
+                            patientId: value,
+                          }));
                         }}
+                        disabled={isLoadingPatients || patientOptions.length === 0}
                       >
-                        {patientOptions.map((patient) => (
-                          <SelectItem key={patient.id} value={patient.id}>
-                            {patient.label}
-                          </SelectItem>
-                        ))}
-                        {hasNextPage ? (
-                          <div className="px-3 py-2 text-xs text-muted-foreground space-y-2">
-                            <p>{isFetchingNextPage ? 'Loading more patients...' : 'Scroll to load more patients.'}</p>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              disabled={isFetchingNextPage}
-                              onClick={() => {
-                                void fetchNextPage();
-                              }}
-                            >
-                              {isFetchingNextPage ? (
-                                <Loader2 className="me-2 size-4 animate-spin" />
-                              ) : null}
-                              Load more
-                            </Button>
-                          </div>
-                        ) : null}
-                      </SelectContent>
-                    </Select>
+                        <SelectTrigger aria-label="Patient">
+                          <SelectValue
+                            placeholder={
+                              isLoadingPatients ? 'Loading patients...' : 'Select patient'
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent
+                          onScroll={(event) => {
+                            const target = event.currentTarget;
+                            const isNearBottom =
+                              target.scrollTop + target.clientHeight >= target.scrollHeight - 20;
+                            if (isNearBottom && hasNextPage && !isFetchingNextPage) {
+                              void fetchNextPage();
+                            }
+                          }}
+                        >
+                          {patientOptions.map((patient) => (
+                            <SelectItem key={patient.id} value={patient.id}>
+                              {patient.label}
+                            </SelectItem>
+                          ))}
+                          {hasNextPage ? (
+                            <div className="px-3 py-2 text-xs text-muted-foreground space-y-2">
+                              <p>
+                                {isFetchingNextPage
+                                  ? 'Loading more patients...'
+                                  : 'Scroll to load more patients.'}
+                              </p>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={isFetchingNextPage}
+                                onClick={() => {
+                                  void fetchNextPage();
+                                }}
+                              >
+                                {isFetchingNextPage ? (
+                                  <Loader2 className="me-2 size-4 animate-spin" />
+                                ) : null}
+                                Load more
+                              </Button>
+                            </div>
+                          ) : null}
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <p className="text-xs text-muted-foreground">
                       Type to search by name, code, or phone. Scroll to load more.
                     </p>
                   </div>
-                  <Input
-                    placeholder="Patient ID / File Number"
-                    value={selectedPatient?.patientCode ?? ''}
-                    readOnly
-                  />
-                  <Select
-                    value={form.linkedVisitId || undefined}
-                    onValueChange={(value) => {
-                      setField('linkedVisitId', value);
-                    }}
-                    disabled={!form.patientId || isLoadingPatientVisits}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={isLoadingPatientVisits ? 'Loading visits...' : 'Use existing visit (optional)'} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {visitOptions.map((visit) => (
-                        <SelectItem key={visit.id} value={visit.id}>
-                          {visit.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    type="date"
-                    value={form.visitDate}
-                    onChange={(event) => {
-                      setField('visitDate', event.target.value);
-                    }}
-                  />
-                  <Select
-                    value={form.dentistId || undefined}
-                    onValueChange={(value) => {
-                      setField('dentistId', value);
-                    }}
-                    disabled={isLoadingStaff || dentistOptions.length === 0}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={isLoadingStaff ? 'Loading dentists...' : 'Select dentist'} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {dentistOptions.map((dentist) => (
-                        <SelectItem key={dentist.id} value={dentist.id}>
-                          {dentist.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select
-                    value={form.treatmentId || undefined}
-                    onValueChange={(value) => {
-                      setField('treatmentId', value);
-                    }}
-                    disabled={isLoadingTreatments || treatmentOptions.length === 0}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={isLoadingTreatments ? 'Loading treatments...' : 'Select implant treatment'} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {treatmentOptions.map((treatment) => (
-                        <SelectItem key={treatment.id} value={treatment.id}>
-                          {treatment.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    placeholder="Implant teeth from chart"
-                    value={implantTeethFromChart.join(', ')}
-                    readOnly
-                  />
-                  {form.patientId && !isLoadingImplantTeeth && implantTeethFromChart.length === 0 ? (
+                  <label className={styles.field}>
+                    <span>Patient file number</span>
+                    <Input
+                      placeholder="Patient ID / File Number"
+                      value={selectedPatient?.patientCode ?? ''}
+                      readOnly
+                    />
+                  </label>
+                  <div className={styles.field}>
+                    <span>Existing visit (optional)</span>
+                    <Select
+                      value={form.linkedVisitId || undefined}
+                      onValueChange={(value) => {
+                        setField('linkedVisitId', value);
+                      }}
+                      disabled={!form.patientId || isLoadingPatientVisits}
+                    >
+                      <SelectTrigger aria-label="Existing visit (optional)">
+                        <SelectValue
+                          placeholder={
+                            isLoadingPatientVisits
+                              ? 'Loading visits...'
+                              : 'Use existing visit (optional)'
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {visitOptions.map((visit) => (
+                          <SelectItem key={visit.id} value={visit.id}>
+                            {visit.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <label className={styles.field}>
+                    <span>Visit date</span>
+                    <Input
+                      type="date"
+                      value={form.visitDate}
+                      onChange={(event) => {
+                        setField('visitDate', event.target.value);
+                      }}
+                    />
+                  </label>
+                  <div className={styles.field}>
+                    <span>Dentist</span>
+                    <Select
+                      value={form.dentistId || undefined}
+                      onValueChange={(value) => {
+                        setField('dentistId', value);
+                      }}
+                      disabled={isLoadingStaff || dentistOptions.length === 0}
+                    >
+                      <SelectTrigger aria-label="Dentist">
+                        <SelectValue
+                          placeholder={isLoadingStaff ? 'Loading dentists...' : 'Select dentist'}
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {dentistOptions.map((dentist) => (
+                          <SelectItem key={dentist.id} value={dentist.id}>
+                            {dentist.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className={styles.field}>
+                    <span>Implant treatment</span>
+                    <Select
+                      value={form.treatmentId || undefined}
+                      onValueChange={(value) => {
+                        setField('treatmentId', value);
+                      }}
+                      disabled={isLoadingTreatments || treatmentOptions.length === 0}
+                    >
+                      <SelectTrigger aria-label="Implant treatment">
+                        <SelectValue
+                          placeholder={
+                            isLoadingTreatments
+                              ? 'Loading treatments...'
+                              : 'Select implant treatment'
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {treatmentOptions.map((treatment) => (
+                          <SelectItem key={treatment.id} value={treatment.id}>
+                            {treatment.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {form.patientId &&
+                  !isLoadingImplantTeeth &&
+                  implantTeethFromChart.length === 0 ? (
                     <p className="text-xs text-muted-foreground md:col-span-3">
                       No implant tooth data found in the treatment chart for this patient.
                     </p>
                   ) : null}
-                  <select
-                    value={form.implantArch}
-                    onChange={(event) => {
-                      setField('implantArch', event.target.value as ImplantArch);
-                    }}
-                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  >
-                    <option value="maxilla">Maxilla</option>
-                    <option value="mandible">Mandible</option>
-                    <option value="both">Both</option>
-                  </select>
-                  <select
-                    value={form.imagingType}
-                    onChange={(event) => {
-                      setField('imagingType', event.target.value as ImagingType);
-                    }}
-                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  >
-                    <option value="cbct">CBCT</option>
-                    <option value="panoramic">Panoramic</option>
-                    <option value="none">No imaging</option>
-                  </select>
+                  <label className={styles.field}>
+                    <span>Jaw / arch</span>
+                    <select
+                      value={form.implantArch}
+                      onChange={(event) => {
+                        setField('implantArch', event.target.value as ImplantArch);
+                      }}
+                      className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      <option value="maxilla">Maxilla</option>
+                      <option value="mandible">Mandible</option>
+                      <option value="both">Both</option>
+                    </select>
+                  </label>
+                  <label className={styles.field}>
+                    <span>Imaging</span>
+                    <select
+                      value={form.imagingType}
+                      onChange={(event) => {
+                        setField('imagingType', event.target.value as ImagingType);
+                      }}
+                      className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      <option value="cbct">CBCT</option>
+                      <option value="panoramic">Panoramic</option>
+                      <option value="none">No imaging</option>
+                    </select>
+                  </label>
                 </div>
               </section>
 
               {implantTeethFromChart.length > 0 ? (
-                <section className="space-y-3">
+                <section className={styles.planSection}>
                   <div className="flex items-center justify-between gap-2">
                     <h3 className="text-sm font-semibold">Implant Teeth Selection</h3>
                     <div className="flex items-center gap-2">
-                      <Button type="button" size="sm" variant="outline" onClick={setAllImplantTeeth}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={setAllImplantTeeth}
+                      >
                         Select all
                       </Button>
                       <Button type="button" size="sm" variant="outline" onClick={clearImplantTeeth}>
@@ -1211,343 +1344,167 @@ export default function ImplantsPage(): JSX.Element {
                 </section>
               ) : null}
 
-              <section className="space-y-3">
-                <h3 className="text-sm font-semibold">Patient Payment</h3>
-                <div className="grid gap-3 md:grid-cols-4">
-                  <select
-                    value={form.currency}
-                    onChange={(event) => {
-                      const nextCurrency = event.target.value as CurrencyCode;
-                      const nextExchangeRate = nextCurrency === 'USD' ? defaultExchangeRate : 1;
-                      const convertValue = (value: string): string => {
-                        const amountInput = Math.max(0, toNumber(value) ?? 0);
-                        if (amountInput <= 0) {
-                          return value.trim() === '' ? '' : '0';
-                        }
-
-                        const amountAfn = convertInputToUsd(amountInput, form.currency, resolvedExchangeRate);
-                        const nextAmount = convertUsdToInput(amountAfn, nextCurrency, nextExchangeRate);
-                        return nextAmount.toFixed(2);
-                      };
-
-                      setForm((prev) => ({
-                        ...prev,
-                        currency: nextCurrency,
-                        exchangeRate: nextCurrency === 'USD' ? String(nextExchangeRate) : '',
-                        implantPricePerTooth: convertValue(prev.implantPricePerTooth),
-                        paidNowAmount: convertValue(prev.paidNowAmount),
-                        supplierCostPerTooth: convertValue(prev.supplierCostPerTooth),
-                      }));
-                    }}
-                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  >
-                    <option value="AFN">AFN</option>
-                    <option value="USD">USD</option>
-                  </select>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="AFN per 1 USD"
-                    value={form.exchangeRate}
-                    onChange={(event) => {
-                      setField('exchangeRate', event.target.value);
-                    }}
-                    disabled={form.currency === 'AFN'}
-                  />
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="Patient price per implant"
-                    value={form.implantPricePerTooth}
-                    onChange={(event) => {
-                      setField('implantPricePerTooth', event.target.value);
-                    }}
-                  />
-                  <Input
-                    placeholder="Selected implant teeth"
-                    value={selectedImplantTeeth.join(', ')}
-                    readOnly
-                  />
-                  <Input
-                    placeholder="Total invoice amount"
-                    value={formatSelectedAmount(totalSelectedImplantsPaymentInput)}
-                    readOnly
-                  />
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="Patient paid now"
-                    value={form.paidNowAmount}
-                    onChange={(event) => {
-                      setField('paidNowAmount', event.target.value);
-                    }}
-                  />
-                  <select
-                    value={form.paymentMethod}
-                    onChange={(event) => {
-                      setField('paymentMethod', event.target.value as ImplantPlanningForm['paymentMethod']);
-                    }}
-                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  >
-                    <option value="cash">Cash</option>
-                    <option value="card">Card</option>
-                    <option value="insurance">Insurance</option>
-                  </select>
-                  <Input
-                    placeholder="Patient remaining debt"
-                    value={formatSelectedAmount(remainingDebtAmountInput)}
-                    readOnly
-                  />
-                  <Input
-                    placeholder="Invoice status"
-                    value={effectiveInvoiceStatus}
-                    readOnly
-                  />
-                </div>
-                <div className="rounded-md border border-dashed border-border/70 bg-muted/20 p-3 text-xs text-muted-foreground">
-                  Reports stay in AFN. This plan will be recorded as{' '}
-                  <span className="font-semibold text-foreground">{formatCurrency(invoiceNetAmount, 'AFN')}</span>
-                  {form.currency === 'USD' ? ` at ${resolvedExchangeRate} AFN per 1 USD.` : '.'}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  When saved, patient paid amount is recorded as payment and moves into safe automatically.
-                </p>
-              </section>
-
-              <section className="space-y-3">
-                <h3 className="text-sm font-semibold">Third-Party Company Cost</h3>
-                <div className="grid gap-3 md:grid-cols-3">
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="Company cost per implant"
-                    value={form.supplierCostPerTooth}
-                    onChange={(event) => {
-                      setField('supplierCostPerTooth', event.target.value);
-                    }}
-                  />
-                  <Input
-                    placeholder="Total company cost"
-                    value={formatSelectedAmount(totalSupplierCostInput)}
-                    readOnly
-                  />
-                  <Input
-                    placeholder="Company remaining payable"
-                    value={formatSelectedAmount(supplierRemainingAmountInput)}
-                    readOnly
-                  />
-                </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <Select
-                    value={form.implantCompanyId || undefined}
-                    onValueChange={(value) => {
-                      const selected = implantCompanyOptions.find((option) => option.id === value);
-                      if (!selected) {
-                        setForm((prev) => ({
-                          ...prev,
-                          implantCompanyId: value,
-                        }));
-                        return;
-                      }
-
-                      setForm((prev) => ({
-                        ...prev,
-                        implantCompanyDate: selected.record.recordDate || prev.implantCompanyDate,
-                        implantCompanyId: value,
-                        implantCompanyName: selected.record.companyName,
-                        implantCompanyNote: selected.record.note ?? '',
-                        implantCompanyType: selected.record.implantType,
-                      }));
-                    }}
-                    disabled={isLoadingImplantCompanies || implantCompanyOptions.length === 0}
-                  >
-                    <SelectTrigger>
-                      <SelectValue
-                        placeholder={isLoadingImplantCompanies ? 'Loading companies...' : 'Select saved company (optional)'}
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {implantCompanyOptions.map((option) => (
-                        <SelectItem key={option.id} value={option.id}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    placeholder="Company name"
-                    value={form.implantCompanyName}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      setForm((prev) => ({
-                        ...prev,
-                        implantCompanyId: prev.implantCompanyId && prev.implantCompanyName !== value ? '' : prev.implantCompanyId,
-                        implantCompanyName: value,
-                      }));
-                    }}
-                  />
-                  <Input
-                    placeholder="Implant type"
-                    value={form.implantCompanyType}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      setForm((prev) => ({
-                        ...prev,
-                        implantCompanyId: prev.implantCompanyId && prev.implantCompanyType !== value ? '' : prev.implantCompanyId,
-                        implantCompanyType: value,
-                      }));
-                    }}
-                  />
-                  <Input
-                    type="date"
-                    value={form.implantCompanyDate}
-                    onChange={(event) => {
-                      setField('implantCompanyDate', event.target.value);
-                    }}
-                  />
-                  <Input
-                    className="md:col-span-2"
-                    placeholder="Company note"
-                    value={form.implantCompanyNote}
-                    onChange={(event) => {
-                      setField('implantCompanyNote', event.target.value);
-                    }}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Company payment is handled in the implants in-process page when status changes to in purchase.
-                </p>
-              </section>
-
-              <section className="space-y-3">
+              <section id="implant-clinical" className={styles.planSection}>
                 <h3 className="text-sm font-semibold">Diagnostics and Measurements</h3>
                 <div className="grid gap-3 md:grid-cols-3">
-                  <Input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    placeholder="Bone Height (mm)"
-                    value={form.boneHeightMm}
-                    onChange={(event) => {
-                      setField('boneHeightMm', event.target.value);
-                    }}
-                  />
-                  <Input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    placeholder="Bone Width (mm)"
-                    value={form.boneWidthMm}
-                    onChange={(event) => {
-                      setField('boneWidthMm', event.target.value);
-                    }}
-                  />
-                  <Input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    placeholder="Keratinized Tissue (mm)"
-                    value={form.keratinizedTissueMm}
-                    onChange={(event) => {
-                      setField('keratinizedTissueMm', event.target.value);
-                    }}
-                  />
+                  <label className={styles.field}>
+                    <span>Bone Height (mm)</span>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      placeholder="Bone Height (mm)"
+                      value={form.boneHeightMm}
+                      onChange={(event) => {
+                        setField('boneHeightMm', event.target.value);
+                      }}
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    <span>Bone Width (mm)</span>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      placeholder="Bone Width (mm)"
+                      value={form.boneWidthMm}
+                      onChange={(event) => {
+                        setField('boneWidthMm', event.target.value);
+                      }}
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    <span>Keratinized Tissue (mm)</span>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      placeholder="Keratinized Tissue (mm)"
+                      value={form.keratinizedTissueMm}
+                      onChange={(event) => {
+                        setField('keratinizedTissueMm', event.target.value);
+                      }}
+                    />
+                  </label>
                 </div>
               </section>
 
-              <section className="space-y-3">
+              <section className={styles.planSection}>
                 <h3 className="text-sm font-semibold">Implant and Prosthetic Plan</h3>
                 <div className="grid gap-3 md:grid-cols-2">
-                  <Input
-                    placeholder="Implant System / Brand"
-                    value={form.implantSystem}
-                    onChange={(event) => {
-                      setField('implantSystem', event.target.value);
-                    }}
-                  />
-                  <Input
-                    placeholder="Prosthesis Type (single crown, bridge...)"
-                    value={form.prosthesisType}
-                    onChange={(event) => {
-                      setField('prosthesisType', event.target.value);
-                    }}
-                  />
-                  <Input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    placeholder="Diameter (mm)"
-                    value={form.implantDiameterMm}
-                    onChange={(event) => {
-                      setField('implantDiameterMm', event.target.value);
-                    }}
-                  />
-                  <Input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    placeholder="Length (mm)"
-                    value={form.implantLengthMm}
-                    onChange={(event) => {
-                      setField('implantLengthMm', event.target.value);
-                    }}
-                  />
-                  <select
-                    value={form.surgeryGuideType}
-                    onChange={(event) => {
-                      setField('surgeryGuideType', event.target.value as ImplantPlanningForm['surgeryGuideType']);
-                    }}
-                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  >
-                    <option value="freehand">Freehand</option>
-                    <option value="pilot">Pilot guided</option>
-                    <option value="fully-guided">Fully guided</option>
-                  </select>
-                  <select
-                    value={form.loadingProtocol}
-                    onChange={(event) => {
-                      setField('loadingProtocol', event.target.value as LoadingProtocol);
-                    }}
-                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  >
-                    <option value="delayed">Delayed loading</option>
-                    <option value="early">Early loading</option>
-                    <option value="immediate">Immediate loading</option>
-                  </select>
+                  <label className={styles.field}>
+                    <span>Implant System / Brand</span>
+                    <Input
+                      placeholder="Implant System / Brand"
+                      value={form.implantSystem}
+                      onChange={(event) => {
+                        setField('implantSystem', event.target.value);
+                      }}
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    <span>Prosthesis Type (single crown, bridge...)</span>
+                    <Input
+                      placeholder="Prosthesis Type (single crown, bridge...)"
+                      value={form.prosthesisType}
+                      onChange={(event) => {
+                        setField('prosthesisType', event.target.value);
+                      }}
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    <span>Diameter (mm)</span>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      placeholder="Diameter (mm)"
+                      value={form.implantDiameterMm}
+                      onChange={(event) => {
+                        setField('implantDiameterMm', event.target.value);
+                      }}
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    <span>Length (mm)</span>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      placeholder="Length (mm)"
+                      value={form.implantLengthMm}
+                      onChange={(event) => {
+                        setField('implantLengthMm', event.target.value);
+                      }}
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    <span>Surgical guide</span>
+                    <select
+                      value={form.surgeryGuideType}
+                      onChange={(event) => {
+                        setField(
+                          'surgeryGuideType',
+                          event.target.value as ImplantPlanningForm['surgeryGuideType']
+                        );
+                      }}
+                      className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      <option value="freehand">Freehand</option>
+                      <option value="pilot">Pilot guided</option>
+                      <option value="fully-guided">Fully guided</option>
+                    </select>
+                  </label>
+                  <label className={styles.field}>
+                    <span>Loading protocol</span>
+                    <select
+                      value={form.loadingProtocol}
+                      onChange={(event) => {
+                        setField('loadingProtocol', event.target.value as LoadingProtocol);
+                      }}
+                      className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      <option value="delayed">Delayed loading</option>
+                      <option value="early">Early loading</option>
+                      <option value="immediate">Immediate loading</option>
+                    </select>
+                  </label>
                 </div>
               </section>
 
-              <section className="space-y-3">
+              <section className={styles.planSection}>
                 <h3 className="text-sm font-semibold">Primary Stability</h3>
                 <div className="grid gap-3 md:grid-cols-2">
-                  <Input
-                    type="number"
-                    step="1"
-                    min="0"
-                    placeholder="Insertion Torque (Ncm)"
-                    value={form.insertionTorqueNcm}
-                    onChange={(event) => {
-                      setField('insertionTorqueNcm', event.target.value);
-                    }}
-                  />
-                  <Input
-                    type="number"
-                    step="1"
-                    min="0"
-                    placeholder="ISQ"
-                    value={form.primaryStabilityIsq}
-                    onChange={(event) => {
-                      setField('primaryStabilityIsq', event.target.value);
-                    }}
-                  />
+                  <label className={styles.field}>
+                    <span>Insertion Torque (Ncm)</span>
+                    <Input
+                      type="number"
+                      step="1"
+                      min="0"
+                      placeholder="Insertion Torque (Ncm)"
+                      value={form.insertionTorqueNcm}
+                      onChange={(event) => {
+                        setField('insertionTorqueNcm', event.target.value);
+                      }}
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    <span>ISQ</span>
+                    <Input
+                      type="number"
+                      step="1"
+                      min="0"
+                      placeholder="ISQ"
+                      value={form.primaryStabilityIsq}
+                      onChange={(event) => {
+                        setField('primaryStabilityIsq', event.target.value);
+                      }}
+                    />
+                  </label>
                 </div>
               </section>
 
-              <section className="space-y-3">
+              <section id="implant-safety" className={styles.planSection}>
                 <h3 className="text-sm font-semibold">Risk Factors</h3>
                 <div className="grid gap-2 md:grid-cols-2">
                   {Object.entries(RISK_FACTOR_LABELS).map(([key, label]) => {
@@ -1574,9 +1531,10 @@ export default function ImplantsPage(): JSX.Element {
                 </div>
               </section>
 
-              <section className="space-y-3">
+              <section className={styles.planSection}>
                 <h3 className="text-sm font-semibold">Clinical Notes</h3>
                 <textarea
+                  aria-label="Clinical notes"
                   value={form.notes}
                   onChange={(event) => {
                     setField('notes', event.target.value);
@@ -1586,7 +1544,293 @@ export default function ImplantsPage(): JSX.Element {
                 />
               </section>
 
-              <div className="flex flex-wrap items-center gap-2">
+              <section id="implant-billing" className={styles.planSection}>
+                <h3 className="text-sm font-semibold">Patient Payment</h3>
+                <div className="grid gap-3 md:grid-cols-4">
+                  <label className={styles.field}>
+                    <span>Currency</span>
+                    <select
+                      value={form.currency}
+                      onChange={(event) => {
+                        const nextCurrency = event.target.value as CurrencyCode;
+                        const nextExchangeRate = nextCurrency === 'USD' ? defaultExchangeRate : 1;
+                        const convertValue = (value: string): string => {
+                          const amountInput = Math.max(0, toNumber(value) ?? 0);
+                          if (amountInput <= 0) {
+                            return value.trim() === '' ? '' : '0';
+                          }
+
+                          const amountAfn = convertInputToUsd(
+                            amountInput,
+                            form.currency,
+                            resolvedExchangeRate
+                          );
+                          const nextAmount = convertUsdToInput(
+                            amountAfn,
+                            nextCurrency,
+                            nextExchangeRate
+                          );
+                          return nextAmount.toFixed(2);
+                        };
+
+                        setForm((prev) => ({
+                          ...prev,
+                          currency: nextCurrency,
+                          exchangeRate: nextCurrency === 'USD' ? String(nextExchangeRate) : '',
+                          implantPricePerTooth: convertValue(prev.implantPricePerTooth),
+                          paidNowAmount: convertValue(prev.paidNowAmount),
+                          supplierCostPerTooth: convertValue(prev.supplierCostPerTooth),
+                        }));
+                      }}
+                      className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      <option value="AFN">AFN</option>
+                      <option value="USD">USD</option>
+                    </select>
+                  </label>
+                  <label className={styles.field}>
+                    <span>Exchange rate (AFN per USD)</span>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="AFN per 1 USD"
+                      value={form.exchangeRate}
+                      onChange={(event) => {
+                        setField('exchangeRate', event.target.value);
+                      }}
+                      disabled={form.currency === 'AFN'}
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    <span>Patient price per implant</span>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="Patient price per implant"
+                      value={form.implantPricePerTooth}
+                      onChange={(event) => {
+                        setField('implantPricePerTooth', event.target.value);
+                      }}
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    <span>Selected teeth</span>
+                    <Input
+                      placeholder="Selected implant teeth"
+                      value={selectedImplantTeeth.join(', ')}
+                      readOnly
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    <span>Total invoice amount</span>
+                    <Input
+                      placeholder="Total invoice amount"
+                      value={formatSelectedAmount(totalSelectedImplantsPaymentInput)}
+                      readOnly
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    <span>Patient paid now</span>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="Patient paid now"
+                      value={form.paidNowAmount}
+                      onChange={(event) => {
+                        setField('paidNowAmount', event.target.value);
+                      }}
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    <span>Payment method</span>
+                    <select
+                      value={form.paymentMethod}
+                      onChange={(event) => {
+                        setField(
+                          'paymentMethod',
+                          event.target.value as ImplantPlanningForm['paymentMethod']
+                        );
+                      }}
+                      className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      <option value="cash">Cash</option>
+                      <option value="card">Card</option>
+                      <option value="insurance">Insurance</option>
+                    </select>
+                  </label>
+                  <label className={styles.field}>
+                    <span>Patient balance due</span>
+                    <Input
+                      placeholder="Patient remaining debt"
+                      value={formatSelectedAmount(remainingDebtAmountInput)}
+                      readOnly
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    <span>Invoice status</span>
+                    <Input placeholder="Invoice status" value={effectiveInvoiceStatus} readOnly />
+                  </label>
+                </div>
+                <div className="rounded-md border border-dashed border-border/70 bg-muted/20 p-3 text-xs text-muted-foreground">
+                  Reports stay in AFN. This plan will be recorded as{' '}
+                  <span className="font-semibold text-foreground">
+                    {formatCurrency(invoiceNetAmount, 'AFN')}
+                  </span>
+                  {form.currency === 'USD' ? ` at ${resolvedExchangeRate} AFN per 1 USD.` : '.'}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  When saved, patient paid amount is recorded as payment and moves into safe
+                  automatically.
+                </p>
+              </section>
+
+              <section className={styles.planSection}>
+                <h3 className="text-sm font-semibold">Supplier costs</h3>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <label className={styles.field}>
+                    <span>Company cost per implant</span>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="Company cost per implant"
+                      value={form.supplierCostPerTooth}
+                      onChange={(event) => {
+                        setField('supplierCostPerTooth', event.target.value);
+                      }}
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    <span>Total company cost</span>
+                    <Input
+                      placeholder="Total company cost"
+                      value={formatSelectedAmount(totalSupplierCostInput)}
+                      readOnly
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    <span>Supplier balance due</span>
+                    <Input
+                      placeholder="Company remaining payable"
+                      value={formatSelectedAmount(supplierRemainingAmountInput)}
+                      readOnly
+                    />
+                  </label>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className={styles.field}>
+                    <span>Saved supplier (optional)</span>
+                    <Select
+                      value={form.implantCompanyId || undefined}
+                      onValueChange={(value) => {
+                        const selected = implantCompanyOptions.find(
+                          (option) => option.id === value
+                        );
+                        if (!selected) {
+                          setForm((prev) => ({
+                            ...prev,
+                            implantCompanyId: value,
+                          }));
+                          return;
+                        }
+
+                        setForm((prev) => ({
+                          ...prev,
+                          implantCompanyDate: selected.record.recordDate || prev.implantCompanyDate,
+                          implantCompanyId: value,
+                          implantCompanyName: selected.record.companyName,
+                          implantCompanyNote: selected.record.note ?? '',
+                          implantCompanyType: selected.record.implantType,
+                        }));
+                      }}
+                      disabled={isLoadingImplantCompanies || implantCompanyOptions.length === 0}
+                    >
+                      <SelectTrigger aria-label="Saved supplier (optional)">
+                        <SelectValue
+                          placeholder={
+                            isLoadingImplantCompanies
+                              ? 'Loading companies...'
+                              : 'Select saved company (optional)'
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {implantCompanyOptions.map((option) => (
+                          <SelectItem key={option.id} value={option.id}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <label className={styles.field}>
+                    <span>Company name</span>
+                    <Input
+                      placeholder="Company name"
+                      value={form.implantCompanyName}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setForm((prev) => ({
+                          ...prev,
+                          implantCompanyId:
+                            prev.implantCompanyId && prev.implantCompanyName !== value
+                              ? ''
+                              : prev.implantCompanyId,
+                          implantCompanyName: value,
+                        }));
+                      }}
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    <span>Implant type</span>
+                    <Input
+                      placeholder="Implant type"
+                      value={form.implantCompanyType}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setForm((prev) => ({
+                          ...prev,
+                          implantCompanyId:
+                            prev.implantCompanyId && prev.implantCompanyType !== value
+                              ? ''
+                              : prev.implantCompanyId,
+                          implantCompanyType: value,
+                        }));
+                      }}
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    <span>Supplier record date</span>
+                    <Input
+                      type="date"
+                      value={form.implantCompanyDate}
+                      onChange={(event) => {
+                        setField('implantCompanyDate', event.target.value);
+                      }}
+                    />
+                  </label>
+                  <label className={`${styles.field} md:col-span-2`}>
+                    <span>Supplier note</span>
+                    <Input
+                      className="md:col-span-2"
+                      placeholder="Company note"
+                      value={form.implantCompanyNote}
+                      onChange={(event) => {
+                        setField('implantCompanyNote', event.target.value);
+                      }}
+                    />
+                  </label>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Company payment is handled in the implants in-process page when status changes to
+                  in purchase.
+                </p>
+              </section>
+
+              <div className={`${styles.actionBar} flex flex-wrap items-center gap-2`}>
                 <Button
                   type="button"
                   disabled={isSavingPlan}
@@ -1594,7 +1838,11 @@ export default function ImplantsPage(): JSX.Element {
                     void handleSaveToRecords();
                   }}
                 >
-                  {isSavingPlan ? <Loader2 className="me-2 size-4 animate-spin" /> : <Save className="me-2 size-4" />}
+                  {isSavingPlan ? (
+                    <Loader2 className="me-2 size-4 animate-spin" />
+                  ) : (
+                    <Save className="me-2 size-4" />
+                  )}
                   Save to records
                 </Button>
                 <Button
@@ -1622,17 +1870,15 @@ export default function ImplantsPage(): JSX.Element {
             </CardContent>
           </Card>
 
-          <div className="space-y-4">
+          <div className={styles.summaryColumn}>
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Implant Case Readiness</CardTitle>
-                <CardDescription>
-                  Completion progress for the minimum implant documentation set.
-                </CardDescription>
+                <CardTitle className="text-base">Plan checklist</CardTitle>
+                <CardDescription>Track the core details documented in this plan.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-                  <span className="text-sm font-medium">Checklist Completion</span>
+                  <span className="text-sm font-medium">Details completed</span>
                   <Badge variant="secondary">
                     {completedCount}/{checklist.length}
                   </Badge>
@@ -1661,7 +1907,10 @@ export default function ImplantsPage(): JSX.Element {
                 </CardHeader>
                 <CardContent className="space-y-2 text-sm">
                   <p>
-                    Saved at: <span className="font-medium">{new Date(saveSummary.savedAt).toLocaleString()}</span>
+                    Saved at:{' '}
+                    <span className="font-medium">
+                      {new Date(saveSummary.savedAt).toLocaleString()}
+                    </span>
                   </p>
                   <p>
                     Visit #{saveSummary.visitId}{' '}
@@ -1716,19 +1965,14 @@ export default function ImplantsPage(): JSX.Element {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <ShieldAlert className="size-4 text-amber-500" />
-                  Risk Review
+                  Plan checks
                 </CardTitle>
-                <CardDescription>
-                  Quick warning checks for immediate loading and documentation gaps.
-                </CardDescription>
+                <CardDescription>Items in this plan that may need a closer review.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-                  <span className="text-sm font-medium">Risk Level</span>
+                  <span className="text-sm font-medium">Review level</span>
                   <Badge variant={riskLevel.tone}>{riskLevel.label}</Badge>
-                </div>
-                <div className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground">
-                  Calculated score: <span className="font-semibold text-foreground">{riskScore}</span>
                 </div>
                 {warnings.length > 0 ? (
                   <ul className="space-y-2">
@@ -1743,7 +1987,7 @@ export default function ImplantsPage(): JSX.Element {
                   </ul>
                 ) : (
                   <p className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-                    No major warning flags from quick checks.
+                    No additional items flagged by these plan checks.
                   </p>
                 )}
               </CardContent>

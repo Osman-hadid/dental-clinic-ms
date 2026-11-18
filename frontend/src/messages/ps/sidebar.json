@@ -43,7 +43,8 @@
     "clinicalExpenses": "کلینیکي پیرود",
     "safe": "خوندي لیجر",
     "salaries": "معاشونه",
-    "shareholders": "Shareholders"
+    "shareholders": "Shareholders",
+    "financialControl": "???? ??????"
   },
   "inventoryManagement": {
     "title": "Inventory Management",
@@ -66,7 +67,8 @@
     "invoices": "رسیدونه",
     "payments": "تادیات",
     "aiImaging": "د AI امیجنگ",
-    "aiImagingN8n": "د AI عکس اخیستل (n8n)"
+    "aiImagingN8n": "د AI عکس اخیستل (n8n)",
+    "queue": "? ?????? ????"
   },
   "clinic": {
     "title": "کلینیک",

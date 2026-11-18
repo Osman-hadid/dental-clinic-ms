@@ -1,17 +1,12 @@
 'use client';
 
 import { JSX, useEffect, useMemo, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import Link from 'next/link';
 import { Header } from '@/components/header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -36,12 +31,14 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
-  DEFAULT_AFN_PER_USD,
-  type CurrencyCode,
   convertInputToUsd,
   convertUsdToInput,
+  DEFAULT_AFN_PER_USD,
   formatCurrency,
+  type CurrencyCode,
 } from '@/lib/currency-utils';
+import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
+import { getIntlLocale } from '@/modules/common/utils/locale';
 import { ListPatientsUseCase } from '@/modules/dental-management/application/use-cases/patients/list-patients-use-case';
 import { ListVisitTreatmentsUseCase } from '@/modules/dental-management/application/use-cases/visit-treatments/list-visit-treatments-use-case';
 import { ListVisitsUseCase } from '@/modules/dental-management/application/use-cases/visits/list-visits-use-case';
@@ -49,12 +46,13 @@ import { type Patient } from '@/modules/dental-management/domain/entities/Patien
 import { type Visit } from '@/modules/dental-management/domain/entities/Visit';
 import { type VisitTreatment } from '@/modules/dental-management/domain/entities/VisitTreatment';
 import { PatientRepository } from '@/modules/dental-management/infrastructure/repositories/patient-repository';
-import { VisitTreatmentRepository } from '@/modules/dental-management/infrastructure/repositories/visit-treatment-repository';
 import { VisitRepository } from '@/modules/dental-management/infrastructure/repositories/visit-repository';
-import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
+import { VisitTreatmentRepository } from '@/modules/dental-management/infrastructure/repositories/visit-treatment-repository';
+import { type PaginatedApiResponse } from '@/types/ApiResponse';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2 } from 'lucide-react';
+import { ArrowRight, ClipboardList, Loader2, PackageCheck } from 'lucide-react';
 import { toast } from 'sonner';
+import styles from '../implant-workspace.module.css';
 
 type SessionTaskStatus = 'pending' | 'in_progress' | 'done';
 type SessionTaskMark = 'green' | 'blue' | 'yellow' | 'orange' | 'red' | 'purple';
@@ -87,7 +85,12 @@ const AVAILABILITY_TITLES: Record<ImplantAvailabilityStatus, string> = {
   in_purchase: 'In Purchase',
   not_available: 'Not Available',
 };
-const AVAILABILITY_ORDER: ImplantAvailabilityStatus[] = ['not_available', 'in_purchase', 'available', 'done'];
+const AVAILABILITY_ORDER: ImplantAvailabilityStatus[] = [
+  'not_available',
+  'in_purchase',
+  'available',
+  'done',
+];
 const FALLBACK_TASK_STATUS_TO_AVAILABILITY: Record<SessionTaskStatus, ImplantAvailabilityStatus> = {
   done: 'done',
   in_progress: 'available',
@@ -154,14 +157,22 @@ const parseAvailabilityFromTaskNotes = (notes?: string): ImplantAvailabilityStat
   }
 
   const value = match[1].toLowerCase();
-  if (value === 'not_available' || value === 'in_purchase' || value === 'available' || value === 'done') {
+  if (
+    value === 'not_available' ||
+    value === 'in_purchase' ||
+    value === 'available' ||
+    value === 'done'
+  ) {
     return value;
   }
 
   return null;
 };
 
-const parseTaggedAmount = (notes: string | undefined, key: 'supplier_paid' | 'supplier_total'): number => {
+const parseTaggedAmount = (
+  notes: string | undefined,
+  key: 'supplier_paid' | 'supplier_total'
+): number => {
   if (!notes) {
     return 0;
   }
@@ -175,7 +186,8 @@ const parseTaggedAmount = (notes: string | undefined, key: 'supplier_paid' | 'su
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 };
 
-const resolveCurrencyCode = (value?: string): CurrencyCode => value?.trim().toUpperCase() === 'USD' ? 'USD' : 'AFN';
+const resolveCurrencyCode = (value?: string): CurrencyCode =>
+  value?.trim().toUpperCase() === 'USD' ? 'USD' : 'AFN';
 
 const resolveExchangeRate = (currency: CurrencyCode, value: number): number => {
   if (currency === 'USD') {
@@ -209,10 +221,13 @@ const stripTaggedTokens = (notes: string | undefined): string => {
     return '';
   }
 
-  return notes.replace(/\[[^\]]+\]/g, ' ').replace(/\s+/g, ' ').trim();
+  return notes
+    .replace(/\[[^\]]+\]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 };
 
-const formatDateTime = (value: string): string => {
+const formatDateTime = (value: string, locale: string): string => {
   if (!value) {
     return '-';
   }
@@ -222,7 +237,7 @@ const formatDateTime = (value: string): string => {
     return value;
   }
 
-  return parsed.toLocaleString();
+  return parsed.toLocaleString(getIntlLocale(locale));
 };
 
 const formatAmountDisplay = (
@@ -232,7 +247,8 @@ const formatAmountDisplay = (
   exchangeRate: number
 ): string => {
   if (currency === 'USD') {
-    const resolvedInput = amountInput > 0 ? amountInput : convertUsdToInput(amountAfn, currency, exchangeRate);
+    const resolvedInput =
+      amountInput > 0 ? amountInput : convertUsdToInput(amountAfn, currency, exchangeRate);
     return `${formatCurrency(resolvedInput, 'USD')} (${formatCurrency(amountAfn, 'AFN')})`;
   }
 
@@ -260,13 +276,15 @@ const buildImplantTaskPayload = (
 // eslint-disable-next-line react/function-component-definition
 export default function InProcessImplantsPage(): JSX.Element {
   const tSidebar = useTranslations('sidebar.dentalManagement');
+  const locale = useLocale();
   const queryClient = useQueryClient();
   const [patientId, setPatientId] = useState('');
   const [patientSearch, setPatientSearch] = useState('');
   const [patientSearchDebounced, setPatientSearchDebounced] = useState('');
-  const [availabilityToothSaving, setAvailabilityToothSaving] = useState<string | null>(null);
-  const [supplierPayNowByTooth, setSupplierPayNowByTooth] = useState<Record<string, string>>({});
-  const [selectedPlanningRecord, setSelectedPlanningRecord] = useState<ImplantPlanningRecord | null>(null);
+  const [availabilityTaskSaving, setAvailabilityTaskSaving] = useState<number | null>(null);
+  const [supplierPayNowByTask, setSupplierPayNowByTask] = useState<Record<string, string>>({});
+  const [selectedPlanningRecord, setSelectedPlanningRecord] =
+    useState<ImplantPlanningRecord | null>(null);
   const patientTasksQueryKey = useMemo(() => ['patient-session-tasks', patientId], [patientId]);
 
   useEffect(() => {
@@ -284,6 +302,11 @@ export default function InProcessImplantsPage(): JSX.Element {
     isFetching: isLoadingPatients,
     isFetchingNextPage,
   } = useInfiniteQuery({
+    getNextPageParam: (lastPage: PaginatedApiResponse<Patient[]>) =>
+      lastPage.meta.currentPage < lastPage.meta.lastPage
+        ? lastPage.meta.currentPage + 1
+        : undefined,
+    initialPageParam: 1,
     queryFn: async ({ pageParam = 1 }) => {
       const patientRepository = new PatientRepository();
       const listPatientsUseCase = new ListPatientsUseCase(patientRepository);
@@ -302,12 +325,9 @@ export default function InProcessImplantsPage(): JSX.Element {
 
       return response.data;
     },
-    getNextPageParam: (lastPage) =>
-      lastPage.meta.currentPage < lastPage.meta.lastPage ? lastPage.meta.currentPage + 1 : undefined,
     queryKey: ['in-process-implant-patient-options', patientSearchDebounced],
     refetchOnWindowFocus: false,
     staleTime: 5 * 60 * 1000,
-    initialPageParam: 1,
   });
 
   const { data: patientSessionTasks = [] } = useQuery<SessionTask[]>({
@@ -332,141 +352,145 @@ export default function InProcessImplantsPage(): JSX.Element {
     refetchOnWindowFocus: false,
     staleTime: 60 * 1000,
   });
-  const {
-    data: implantPlanningRecords = [],
-    isFetching: isLoadingImplantPlanningRecords,
-  } = useQuery<ImplantPlanningRecord[]>({
-    enabled: Boolean(patientId),
-    queryFn: async () => {
-      if (!patientId) {
-        return [];
-      }
-
-      const visitRepository = new VisitRepository();
-      const listVisitsUseCase = new ListVisitsUseCase(visitRepository);
-      const allVisits: Visit[] = [];
-      let currentVisitPage = 1;
-      let lastVisitPage = 1;
-
-      do {
-        const visitResponse = await listVisitsUseCase.execute(
-          '',
-          [],
-          [],
-          { patientId: [patientId] },
-          currentVisitPage,
-          100
-        );
-        if (visitResponse.error || !visitResponse.data) {
+  const { data: implantPlanningRecords = [], isFetching: isLoadingImplantPlanningRecords } =
+    useQuery<ImplantPlanningRecord[]>({
+      enabled: Boolean(patientId),
+      queryFn: async () => {
+        if (!patientId) {
           return [];
         }
 
-        allVisits.push(...visitResponse.data.data);
-        lastVisitPage = visitResponse.data.meta?.lastPage ?? currentVisitPage;
-        currentVisitPage += 1;
-      } while (currentVisitPage <= lastVisitPage);
-
-      if (allVisits.length === 0) {
-        return [];
-      }
-
-      const visitIds = allVisits.map((visit) => String(visit.id));
-      const visitDateById = allVisits.reduce<Record<string, string>>((accumulator, visit) => {
-        accumulator[String(visit.id)] = visit.visitDate;
-        return accumulator;
-      }, {});
-
-      const visitTreatmentRepository = new VisitTreatmentRepository();
-      const listVisitTreatmentsUseCase = new ListVisitTreatmentsUseCase(visitTreatmentRepository);
-      const allVisitTreatments: VisitTreatment[] = [];
-      const chunkSize = 30;
-
-      for (let index = 0; index < visitIds.length; index += chunkSize) {
-        const visitIdChunk = visitIds.slice(index, index + chunkSize);
-        let currentVisitTreatmentPage = 1;
-        let lastVisitTreatmentPage = 1;
+        const visitRepository = new VisitRepository();
+        const listVisitsUseCase = new ListVisitsUseCase(visitRepository);
+        const allVisits: Visit[] = [];
+        let currentVisitPage = 1;
+        let lastVisitPage = 1;
 
         do {
-          const visitTreatmentResponse = await listVisitTreatmentsUseCase.execute(
+          const visitResponse = await listVisitsUseCase.execute(
             '',
             [],
             [],
-            { visitId: visitIdChunk },
-            currentVisitTreatmentPage,
+            { patientId: [patientId] },
+            currentVisitPage,
             100
           );
-
-          if (visitTreatmentResponse.error || !visitTreatmentResponse.data) {
-            break;
+          if (visitResponse.error || !visitResponse.data) {
+            return [];
           }
 
-          allVisitTreatments.push(...visitTreatmentResponse.data.data);
-          lastVisitTreatmentPage = visitTreatmentResponse.data.meta?.lastPage ?? currentVisitTreatmentPage;
-          currentVisitTreatmentPage += 1;
-        } while (currentVisitTreatmentPage <= lastVisitTreatmentPage);
-      }
+          allVisits.push(...visitResponse.data.data);
+          lastVisitPage = visitResponse.data.meta?.lastPage ?? currentVisitPage;
+          currentVisitPage += 1;
+        } while (currentVisitPage <= lastVisitPage);
 
-      return allVisitTreatments
-        .filter((visitTreatment) => {
-          const notes = visitTreatment.notes?.toLowerCase() ?? '';
-          return notes.includes('[condition:implant]');
-        })
-        .map((visitTreatment) => {
-          const rawNotes = visitTreatment.notes ?? '';
-          const currency = resolveCurrencyCode(parseTaggedText(rawNotes, 'currency'));
-          const exchangeRate = resolveExchangeRate(currency, parseTaggedNumber(rawNotes, 'exchangeRate'));
-          const taggedTooth = parseTaggedText(rawNotes, 'tooth');
-          const patientPriceFromNotes = parseTaggedNumber(rawNotes, 'patientPrice');
-          const patientPriceInputFromNotes = parseTaggedNumber(rawNotes, 'patientPriceInput');
-          const supplierCostFromNotes = parseTaggedNumber(rawNotes, 'supplierCost');
-          const supplierCostInputFromNotes = parseTaggedNumber(rawNotes, 'supplierCostInput');
-          const patientPriceFromRow = Number.parseFloat(visitTreatment.price);
-          const patientPrice = Number.isFinite(patientPriceFromRow)
-            ? patientPriceFromRow
-            : patientPriceFromNotes;
-          const patientPriceInput = patientPriceInputFromNotes > 0
-            ? patientPriceInputFromNotes
-            : (currency === 'USD'
-                ? convertUsdToInput(Math.max(0, patientPrice), currency, exchangeRate)
-                : Math.max(0, patientPrice));
-          const supplierCost = supplierCostFromNotes;
-          const supplierCostInput = supplierCostInputFromNotes > 0
-            ? supplierCostInputFromNotes
-            : (currency === 'USD'
-                ? convertUsdToInput(Math.max(0, supplierCost), currency, exchangeRate)
-                : Math.max(0, supplierCost));
+        if (allVisits.length === 0) {
+          return [];
+        }
 
-          return {
-            arch: parseTaggedText(rawNotes, 'arch') || '-',
-            createdAt: visitTreatment.createdAt,
-            currency,
-            dentistId: visitTreatment.dentistId,
-            diameterMm: parseTaggedText(rawNotes, 'diameter') || '-',
-            exchangeRate,
-            id: visitTreatment.id,
-            implantSystem: visitTreatment.material?.trim() || '-',
-            lengthMm: parseTaggedText(rawNotes, 'length') || '-',
-            loadingProtocol: parseTaggedText(rawNotes, 'protocol') || '-',
-            notes: stripTaggedTokens(rawNotes) || '-',
-            patientId,
-            patientPrice: Math.max(0, patientPrice),
-            patientPriceInput,
-            rawNotes: rawNotes || '-',
-            supplierCost,
-            supplierCostInput,
-            toothNumber: visitTreatment.toothNumber || taggedTooth || '-',
-            treatmentId: visitTreatment.treatmentId,
-            updatedAt: visitTreatment.updatedAt,
-            visitDate: visitDateById[visitTreatment.visitId] || '-',
-            visitId: visitTreatment.visitId,
-          } satisfies ImplantPlanningRecord;
-        })
-        .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
-    },
-    queryKey: ['in-process-implant-planning-records', patientId],
-    refetchOnWindowFocus: false,
-    staleTime: 60 * 1000,
-  });
+        const visitIds = allVisits.map((visit) => String(visit.id));
+        const visitDateById = allVisits.reduce<Record<string, string>>((accumulator, visit) => {
+          accumulator[String(visit.id)] = visit.visitDate;
+          return accumulator;
+        }, {});
+
+        const visitTreatmentRepository = new VisitTreatmentRepository();
+        const listVisitTreatmentsUseCase = new ListVisitTreatmentsUseCase(visitTreatmentRepository);
+        const allVisitTreatments: VisitTreatment[] = [];
+        const chunkSize = 30;
+
+        for (let index = 0; index < visitIds.length; index += chunkSize) {
+          const visitIdChunk = visitIds.slice(index, index + chunkSize);
+          let currentVisitTreatmentPage = 1;
+          let lastVisitTreatmentPage = 1;
+
+          do {
+            const visitTreatmentResponse = await listVisitTreatmentsUseCase.execute(
+              '',
+              [],
+              [],
+              { visitId: visitIdChunk },
+              currentVisitTreatmentPage,
+              100
+            );
+
+            if (visitTreatmentResponse.error || !visitTreatmentResponse.data) {
+              break;
+            }
+
+            allVisitTreatments.push(...visitTreatmentResponse.data.data);
+            lastVisitTreatmentPage =
+              visitTreatmentResponse.data.meta?.lastPage ?? currentVisitTreatmentPage;
+            currentVisitTreatmentPage += 1;
+          } while (currentVisitTreatmentPage <= lastVisitTreatmentPage);
+        }
+
+        return allVisitTreatments
+          .filter((visitTreatment) => {
+            const notes = visitTreatment.notes?.toLowerCase() ?? '';
+            return notes.includes('[condition:implant]');
+          })
+          .map((visitTreatment) => {
+            const rawNotes = visitTreatment.notes ?? '';
+            const currency = resolveCurrencyCode(parseTaggedText(rawNotes, 'currency'));
+            const exchangeRate = resolveExchangeRate(
+              currency,
+              parseTaggedNumber(rawNotes, 'exchangeRate')
+            );
+            const taggedTooth = parseTaggedText(rawNotes, 'tooth');
+            const patientPriceFromNotes = parseTaggedNumber(rawNotes, 'patientPrice');
+            const patientPriceInputFromNotes = parseTaggedNumber(rawNotes, 'patientPriceInput');
+            const supplierCostFromNotes = parseTaggedNumber(rawNotes, 'supplierCost');
+            const supplierCostInputFromNotes = parseTaggedNumber(rawNotes, 'supplierCostInput');
+            const patientPriceFromRow = Number.parseFloat(visitTreatment.price);
+            const patientPrice = Number.isFinite(patientPriceFromRow)
+              ? patientPriceFromRow
+              : patientPriceFromNotes;
+            const patientPriceInput =
+              patientPriceInputFromNotes > 0
+                ? patientPriceInputFromNotes
+                : currency === 'USD'
+                  ? convertUsdToInput(Math.max(0, patientPrice), currency, exchangeRate)
+                  : Math.max(0, patientPrice);
+            const supplierCost = supplierCostFromNotes;
+            const supplierCostInput =
+              supplierCostInputFromNotes > 0
+                ? supplierCostInputFromNotes
+                : currency === 'USD'
+                  ? convertUsdToInput(Math.max(0, supplierCost), currency, exchangeRate)
+                  : Math.max(0, supplierCost);
+
+            return {
+              arch: parseTaggedText(rawNotes, 'arch') || '-',
+              createdAt: visitTreatment.createdAt,
+              currency,
+              dentistId: visitTreatment.dentistId,
+              diameterMm: parseTaggedText(rawNotes, 'diameter') || '-',
+              exchangeRate,
+              id: visitTreatment.id,
+              implantSystem: visitTreatment.material?.trim() || '-',
+              lengthMm: parseTaggedText(rawNotes, 'length') || '-',
+              loadingProtocol: parseTaggedText(rawNotes, 'protocol') || '-',
+              notes: stripTaggedTokens(rawNotes) || '-',
+              patientId,
+              patientPrice: Math.max(0, patientPrice),
+              patientPriceInput,
+              rawNotes: rawNotes || '-',
+              supplierCost,
+              supplierCostInput,
+              toothNumber: visitTreatment.toothNumber || taggedTooth || '-',
+              treatmentId: visitTreatment.treatmentId,
+              updatedAt: visitTreatment.updatedAt,
+              visitDate: visitDateById[visitTreatment.visitId] || '-',
+              visitId: visitTreatment.visitId,
+            } satisfies ImplantPlanningRecord;
+          })
+          .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+      },
+      queryKey: ['in-process-implant-planning-records', patientId],
+      refetchOnWindowFocus: false,
+      staleTime: 60 * 1000,
+    });
 
   const allPatients = useMemo(
     () => (patientPages?.pages ?? []).flatMap((page) => page.data),
@@ -484,14 +508,19 @@ export default function InProcessImplantsPage(): JSX.Element {
         id: String(patient.id),
         label: `${patient.firstName} ${patient.lastName} (${patient.patientCode})`.trim(),
       }))
-      .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: 'base' }));
+      .sort((left, right) =>
+        left.label.localeCompare(right.label, undefined, { sensitivity: 'base' })
+      );
   }, [allPatients]);
 
   const implantCards = useMemo<ImplantCard[]>(() => {
     const cards = patientSessionTasks
       .map((task) => {
         const notes = task.notes ?? '';
-        if (!notes.includes(IMPLANT_TASK_MARKER) && !task.title.toLowerCase().includes('implant tooth')) {
+        if (
+          !notes.includes(IMPLANT_TASK_MARKER) &&
+          !task.title.toLowerCase().includes('implant tooth')
+        ) {
           return null;
         }
 
@@ -502,22 +531,27 @@ export default function InProcessImplantsPage(): JSX.Element {
 
         const availabilityFromNotes = parseAvailabilityFromTaskNotes(task.notes);
         const currency = resolveCurrencyCode(parseTaggedText(task.notes, 'currency'));
-        const exchangeRate = resolveExchangeRate(currency, parseTaggedNumber(task.notes, 'exchangeRate'));
+        const exchangeRate = resolveExchangeRate(
+          currency,
+          parseTaggedNumber(task.notes, 'exchangeRate')
+        );
         const supplierTotal = parseTaggedAmount(task.notes, 'supplier_total');
         const supplierPaidRaw = parseTaggedAmount(task.notes, 'supplier_paid');
         const supplierPaid = Math.min(supplierTotal, supplierPaidRaw);
         const supplierTotalInputRaw = parseTaggedNumber(task.notes, 'supplier_total_input');
-        const supplierTotalInput = supplierTotalInputRaw > 0
-          ? supplierTotalInputRaw
-          : (currency === 'USD'
+        const supplierTotalInput =
+          supplierTotalInputRaw > 0
+            ? supplierTotalInputRaw
+            : currency === 'USD'
               ? convertUsdToInput(supplierTotal, currency, exchangeRate)
-              : supplierTotal);
+              : supplierTotal;
         const supplierPaidInputRaw = parseTaggedNumber(task.notes, 'supplier_paid_input');
-        const supplierPaidInput = supplierPaidInputRaw > 0
-          ? Math.min(supplierTotalInput, supplierPaidInputRaw)
-          : (currency === 'USD'
+        const supplierPaidInput =
+          supplierPaidInputRaw > 0
+            ? Math.min(supplierTotalInput, supplierPaidInputRaw)
+            : currency === 'USD'
               ? convertUsdToInput(supplierPaid, currency, exchangeRate)
-              : supplierPaid);
+              : supplierPaid;
         const supplierRemaining = Math.max(0, supplierTotal - supplierPaid);
         const supplierRemainingInput = Math.max(0, supplierTotalInput - supplierPaidInput);
 
@@ -548,10 +582,10 @@ export default function InProcessImplantsPage(): JSX.Element {
     );
   }, [patientSessionTasks]);
 
-  const implantCardByTooth = useMemo<Record<string, ImplantCard>>(() => {
+  const implantCardByTask = useMemo<Record<string, ImplantCard>>(() => {
     const result: Record<string, ImplantCard> = {};
     implantCards.forEach((card) => {
-      result[card.toothNumber] = card;
+      result[card.taskId] = card;
     });
     return result;
   }, [implantCards]);
@@ -573,7 +607,9 @@ export default function InProcessImplantsPage(): JSX.Element {
   const unpaidSupplierRows = useMemo(() => {
     return implantCards
       .filter((card) => card.supplierRemaining > 0)
-      .sort((left, right) => left.toothNumber.localeCompare(right.toothNumber, undefined, { numeric: true }));
+      .sort((left, right) =>
+        left.toothNumber.localeCompare(right.toothNumber, undefined, { numeric: true })
+      );
   }, [implantCards]);
 
   const fetchCsrfClient = async (): Promise<AxiosClient> => {
@@ -636,7 +672,7 @@ export default function InProcessImplantsPage(): JSX.Element {
       return;
     }
 
-    const card = implantCardByTooth[toothNumber];
+    const card = implantCardByTask[taskId];
     if (!card) {
       toast.error('Implant card not found.');
       return;
@@ -644,8 +680,11 @@ export default function InProcessImplantsPage(): JSX.Element {
 
     let supplierPaidNext = card.supplierPaid;
     let supplierPaidInputNext = card.supplierPaidInput;
-    const supplierRemainingBeforeInput = Math.max(0, card.supplierTotalInput - card.supplierPaidInput);
-    const requestedPayNow = Number.parseFloat(supplierPayNowByTooth[toothNumber] ?? '');
+    const supplierRemainingBeforeInput = Math.max(
+      0,
+      card.supplierTotalInput - card.supplierPaidInput
+    );
+    const requestedPayNow = Number.parseFloat(supplierPayNowByTask[taskId] ?? '');
     const supplierPayNowInput = Number.isFinite(requestedPayNow)
       ? Math.min(Math.max(0, requestedPayNow), supplierRemainingBeforeInput)
       : 0;
@@ -655,7 +694,7 @@ export default function InProcessImplantsPage(): JSX.Element {
       return;
     }
 
-    setAvailabilityToothSaving(toothNumber);
+    setAvailabilityTaskSaving(taskId);
     try {
       if (supplierPayNowInput > 0) {
         const safeClient = await fetchCsrfClient();
@@ -681,7 +720,10 @@ export default function InProcessImplantsPage(): JSX.Element {
         }
 
         supplierPaidNext = Math.min(card.supplierTotal, card.supplierPaid + supplierPayNow);
-        supplierPaidInputNext = Math.min(card.supplierTotalInput, card.supplierPaidInput + supplierPayNowInput);
+        supplierPaidInputNext = Math.min(
+          card.supplierTotalInput,
+          card.supplierPaidInput + supplierPayNowInput
+        );
       }
 
       const response = await setImplantAvailabilityMutation.mutateAsync({
@@ -701,12 +743,16 @@ export default function InProcessImplantsPage(): JSX.Element {
         return;
       }
 
-      setSupplierPayNowByTooth((prev) => ({ ...prev, [toothNumber]: '' }));
-      toast.success(`Tooth ${toothNumber} moved to ${AVAILABILITY_TITLES[nextAvailability]}.`);
+      setSupplierPayNowByTask((prev) => ({ ...prev, [taskId]: '' }));
+      toast.success(
+        card.availability === nextAvailability
+          ? `Supplier payment recorded for tooth ${toothNumber}.`
+          : `Tooth ${toothNumber} moved to ${AVAILABILITY_TITLES[nextAvailability]}.`
+      );
     } catch {
       toast.error('Failed to update implant status.');
     } finally {
-      setAvailabilityToothSaving(null);
+      setAvailabilityTaskSaving(null);
     }
   };
 
@@ -720,17 +766,41 @@ export default function InProcessImplantsPage(): JSX.Element {
         ]}
       />
 
-      <div className="flex flex-1 flex-col px-4 pb-6 lg:px-6">
-        <Card>
+      <div className={`${styles.page} flex min-w-0 flex-1 flex-col px-4 pb-8 lg:px-6`}>
+        <section className={styles.hero} aria-labelledby="implant-progress-title">
+          <div>
+            <p className={styles.heroEyebrow}>IMPLANT WORKSPACE / CASE PROGRESS</p>
+            <h1 id="implant-progress-title">Track implant cases</h1>
+            <p className={styles.heroDescription}>
+              See where each tooth stands, record supplier payments, and move care forward.
+            </p>
+            <div className={styles.heroActions}>
+              <Link href={`/${locale}/dental-management/implants`} className={styles.heroLink}>
+                Create an implant plan
+              </Link>
+              {patientId && (
+                <span className={styles.heroProgress}>
+                  {implantCards.length} implant teeth in this patient file
+                </span>
+              )}
+            </div>
+          </div>
+          <div className={styles.heroEmblem} aria-hidden="true">
+            <PackageCheck size={47} strokeWidth={1.25} />
+          </div>
+        </section>
+
+        <Card className={styles.progressCard}>
           <CardHeader>
-            <CardTitle>In-Process Implants</CardTitle>
+            <CardTitle>Find a patient</CardTitle>
             <CardDescription>
-              Manage implant tooth lifecycle cards: not-available, in purchase, available, and done.
+              Choose a patient to view their saved plans and implant progress.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className="max-w-md space-y-2">
+            <div className={styles.patientPicker}>
               <Input
+                aria-label="Search patients"
                 placeholder="Search patient (name, code, phone)"
                 value={patientSearch}
                 onChange={(event) => setPatientSearch(event.target.value)}
@@ -740,13 +810,16 @@ export default function InProcessImplantsPage(): JSX.Element {
                 onValueChange={setPatientId}
                 disabled={isLoadingPatients || patientOptions.length === 0}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder={isLoadingPatients ? 'Loading patients...' : 'Select patient'} />
+                <SelectTrigger aria-label="Select patient">
+                  <SelectValue
+                    placeholder={isLoadingPatients ? 'Loading patients...' : 'Select patient'}
+                  />
                 </SelectTrigger>
                 <SelectContent
                   onScroll={(event) => {
                     const target = event.currentTarget;
-                    const isNearBottom = target.scrollTop + target.clientHeight >= target.scrollHeight - 20;
+                    const isNearBottom =
+                      target.scrollTop + target.clientHeight >= target.scrollHeight - 20;
                     if (isNearBottom && hasNextPage && !isFetchingNextPage) {
                       void fetchNextPage();
                     }
@@ -759,7 +832,11 @@ export default function InProcessImplantsPage(): JSX.Element {
                   ))}
                   {hasNextPage ? (
                     <div className="px-3 py-2 text-xs text-muted-foreground space-y-2">
-                      <p>{isFetchingNextPage ? 'Loading more patients...' : 'Scroll to load more patients.'}</p>
+                      <p>
+                        {isFetchingNextPage
+                          ? 'Loading more patients...'
+                          : 'Scroll to load more patients.'}
+                      </p>
                       <Button
                         type="button"
                         variant="outline"
@@ -778,20 +855,231 @@ export default function InProcessImplantsPage(): JSX.Element {
                   ) : null}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
+              <p className={`${styles.pickerHint} text-xs text-muted-foreground`}>
                 Type to search by name, code, or phone. Scroll to load more.
               </p>
             </div>
 
             {!patientId ? (
-              <p className="text-sm text-muted-foreground">Select a patient to see implant lifecycle cards.</p>
+              <div className={styles.emptyState}>
+                <ClipboardList className="size-8" aria-hidden="true" />
+                <p className="font-semibold">Choose a patient to see their implant progress</p>
+                <p className="text-sm">
+                  Their teeth, current stages and supplier balances will appear here.
+                </p>
+              </div>
             ) : (
               <div className="space-y-4">
-                <Card id="saved-implant-records">
+                <section className={styles.boardSection} aria-labelledby="implant-stage-heading">
+                  <div className={styles.boardHeading}>
+                    <div>
+                      <p className={styles.sectionEyebrow}>PATIENT PROGRESS</p>
+                      <h2 id="implant-stage-heading">Implant stages</h2>
+                      <p>
+                        Each tooth has a clear next step. Open other stage changes when a case needs
+                        a correction.
+                      </p>
+                    </div>
+                  </div>
+                  <div className={styles.stageOverview} aria-label="Teeth by implant stage">
+                    {AVAILABILITY_ORDER.map((availability) => (
+                      <div
+                        key={`summary-${availability}`}
+                        className={styles.stageSummary}
+                        data-stage={availability}
+                      >
+                        <span>{AVAILABILITY_TITLES[availability]}</span>
+                        <strong>{groupedImplants[availability].length}</strong>
+                      </div>
+                    ))}
+                  </div>
+                  <div className={styles.stageBoard}>
+                    {AVAILABILITY_ORDER.map((availability) => (
+                      <div
+                        key={availability}
+                        className={styles.stageColumn}
+                        data-stage={availability}
+                      >
+                        <div className={styles.stageColumnHeading}>
+                          <p className="text-sm font-semibold">
+                            {AVAILABILITY_TITLES[availability]}
+                          </p>
+                          <span>{groupedImplants[availability].length}</span>
+                        </div>
+
+                        {groupedImplants[availability].length === 0 ? (
+                          <p className={styles.stageEmpty}>No teeth at this stage</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {groupedImplants[availability].map((card) => {
+                              const nextAvailability =
+                                AVAILABILITY_ORDER[
+                                  AVAILABILITY_ORDER.indexOf(card.availability) + 1
+                                ];
+                              const hasPendingPayment =
+                                Number(supplierPayNowByTask[card.taskId]) > 0;
+                              const otherStages = AVAILABILITY_ORDER.filter(
+                                (stage) => stage !== card.availability && stage !== nextAvailability
+                              );
+                              return (
+                                <div
+                                  key={`${card.taskId}-${card.toothNumber}`}
+                                  className={styles.toothCard}
+                                >
+                                  <div className={styles.toothHeading}>
+                                    <span className="text-sm font-medium">
+                                      Tooth {card.toothNumber}
+                                    </span>
+                                    <span className={styles.toothStage}>
+                                      {AVAILABILITY_TITLES[card.availability]}
+                                    </span>
+                                  </div>
+                                  <div className={styles.balanceLine}>
+                                    <span>Supplier balance</span>
+                                    <strong>
+                                      {formatAmountDisplay(
+                                        card.supplierRemaining,
+                                        card.supplierRemainingInput,
+                                        card.currency,
+                                        card.exchangeRate
+                                      )}
+                                    </strong>
+                                  </div>
+                                  {nextAvailability ? (
+                                    <Button
+                                      className={styles.nextStageButton}
+                                      type="button"
+                                      size="sm"
+                                      disabled={availabilityTaskSaving === card.taskId}
+                                      onClick={() => {
+                                        void handleSetImplantAvailability(
+                                          card.taskId,
+                                          card.toothNumber,
+                                          nextAvailability
+                                        );
+                                      }}
+                                    >
+                                      {availabilityTaskSaving === card.taskId ? (
+                                        <Loader2 className="size-4 animate-spin" />
+                                      ) : (
+                                        <ArrowRight className="size-4" />
+                                      )}
+                                      {hasPendingPayment
+                                        ? 'Record payment and move to '
+                                        : 'Move to '}
+                                      {AVAILABILITY_TITLES[nextAvailability]}
+                                    </Button>
+                                  ) : (
+                                    <p className={styles.completedLabel}>Stage complete</p>
+                                  )}
+                                  {card.supplierRemainingInput > 0 ? (
+                                    <details className={styles.cardDetails}>
+                                      <summary>Record supplier payment</summary>
+                                      <div className={styles.paymentPanel}>
+                                        <label htmlFor={`supplier-payment-${card.taskId}`}>
+                                          Amount to pay ({card.currency})
+                                        </label>
+                                        <Input
+                                          id={`supplier-payment-${card.taskId}`}
+                                          type="number"
+                                          step="0.01"
+                                          min="0"
+                                          max={card.supplierRemainingInput}
+                                          placeholder="Enter amount"
+                                          value={supplierPayNowByTask[card.taskId] ?? ''}
+                                          onChange={(event) => {
+                                            setSupplierPayNowByTask((prev) => ({
+                                              ...prev,
+                                              [card.taskId]: event.target.value,
+                                            }));
+                                          }}
+                                        />
+                                        <p>
+                                          Paid so far:{' '}
+                                          {formatAmountDisplay(
+                                            card.supplierPaid,
+                                            card.supplierPaidInput,
+                                            card.currency,
+                                            card.exchangeRate
+                                          )}
+                                        </p>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          disabled={
+                                            !hasPendingPayment ||
+                                            availabilityTaskSaving === card.taskId
+                                          }
+                                          onClick={() => {
+                                            void handleSetImplantAvailability(
+                                              card.taskId,
+                                              card.toothNumber,
+                                              card.availability
+                                            );
+                                          }}
+                                        >
+                                          {availabilityTaskSaving === card.taskId ? (
+                                            <Loader2 className="size-4 animate-spin" />
+                                          ) : null}
+                                          Record payment
+                                        </Button>
+                                      </div>
+                                    </details>
+                                  ) : null}
+                                  {otherStages.length > 0 ? (
+                                    <details className={styles.cardDetails}>
+                                      <summary>Other stage changes</summary>
+                                      <div className={styles.otherStages}>
+                                        {otherStages.map((targetAvailability) => (
+                                          <Button
+                                            key={targetAvailability}
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={availabilityTaskSaving === card.taskId}
+                                            onClick={() => {
+                                              void handleSetImplantAvailability(
+                                                card.taskId,
+                                                card.toothNumber,
+                                                targetAvailability
+                                              );
+                                            }}
+                                          >
+                                            {hasPendingPayment
+                                              ? `Record payment and set ${AVAILABILITY_TITLES[targetAvailability]}`
+                                              : `Set ${AVAILABILITY_TITLES[targetAvailability]}`}
+                                          </Button>
+                                        ))}
+                                      </div>
+                                    </details>
+                                  ) : null}
+                                  <div className={styles.costDetails}>
+                                    <span>
+                                      Total cost:{' '}
+                                      {formatAmountDisplay(
+                                        card.supplierTotal,
+                                        card.supplierTotalInput,
+                                        card.currency,
+                                        card.exchangeRate
+                                      )}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                <Card id="saved-implant-records" className={styles.recordsCard}>
                   <CardHeader>
-                    <CardTitle className="text-base">Saved Implant Records</CardTitle>
+                    <CardTitle className="text-base">Planning records</CardTitle>
                     <CardDescription>
-                      Implant records created from the Implant Planning page. Click a card to view full data.
+                      Open a saved plan to see its full clinical and cost details.
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -801,14 +1089,16 @@ export default function InProcessImplantsPage(): JSX.Element {
                         Loading implant records...
                       </div>
                     ) : implantPlanningRecords.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No saved implant planning records found.</p>
+                      <p className="text-sm text-muted-foreground">
+                        No saved implant planning records found.
+                      </p>
                     ) : (
                       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                         {implantPlanningRecords.map((record) => (
                           <button
                             key={`planning-record-${record.id}`}
                             type="button"
-                            className="rounded-md border border-border p-3 text-start transition-colors hover:bg-muted/40"
+                            className={styles.recordTile}
                             onClick={() => {
                               setSelectedPlanningRecord(record);
                             }}
@@ -821,17 +1111,37 @@ export default function InProcessImplantsPage(): JSX.Element {
                               <p>
                                 Patient price:{' '}
                                 <span className="font-medium text-foreground">
-                                  {formatAmountDisplay(record.patientPrice, record.patientPriceInput, record.currency, record.exchangeRate)}
+                                  {formatAmountDisplay(
+                                    record.patientPrice,
+                                    record.patientPriceInput,
+                                    record.currency,
+                                    record.exchangeRate
+                                  )}
                                 </span>
                               </p>
                               <p>
                                 Supplier cost:{' '}
                                 <span className="font-medium text-foreground">
-                                  {formatAmountDisplay(record.supplierCost, record.supplierCostInput, record.currency, record.exchangeRate)}
+                                  {formatAmountDisplay(
+                                    record.supplierCost,
+                                    record.supplierCostInput,
+                                    record.currency,
+                                    record.exchangeRate
+                                  )}
                                 </span>
                               </p>
-                              <p>Implant system: <span className="font-medium text-foreground">{record.implantSystem}</span></p>
-                              <p>Saved at: <span className="font-medium text-foreground">{formatDateTime(record.createdAt)}</span></p>
+                              <p>
+                                Implant system:{' '}
+                                <span className="font-medium text-foreground">
+                                  {record.implantSystem}
+                                </span>
+                              </p>
+                              <p>
+                                Saved at:{' '}
+                                <span className="font-medium text-foreground">
+                                  {formatDateTime(record.createdAt, locale)}
+                                </span>
+                              </p>
                             </div>
                           </button>
                         ))}
@@ -839,95 +1149,13 @@ export default function InProcessImplantsPage(): JSX.Element {
                     )}
                   </CardContent>
                 </Card>
-
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  {AVAILABILITY_ORDER.map((availability) => (
-                    <div key={availability} className="space-y-2 rounded-md border border-border p-3">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-semibold">{AVAILABILITY_TITLES[availability]}</p>
-                        <Badge variant={availability === 'done' || availability === 'available' ? 'default' : availability === 'in_purchase' ? 'secondary' : 'destructive'}>
-                          {groupedImplants[availability].length}
-                        </Badge>
-                      </div>
-
-                      {groupedImplants[availability].length === 0 ? (
-                        <p className="text-xs text-muted-foreground">No implant cards in this state.</p>
-                      ) : (
-                        <div className="space-y-2">
-                          {groupedImplants[availability].map((card) => (
-                            <div key={`${card.taskId}-${card.toothNumber}`} className="rounded-md border border-border p-2">
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium">Tooth {card.toothNumber}</span>
-                                <Badge variant="outline">{AVAILABILITY_TITLES[card.availability]}</Badge>
-                              </div>
-                              <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-                                <p>
-                                  Total company cost:{' '}
-                                  <span className="font-medium text-foreground">
-                                    {formatAmountDisplay(card.supplierTotal, card.supplierTotalInput, card.currency, card.exchangeRate)}
-                                  </span>
-                                </p>
-                                <p>
-                                  Paid to company:{' '}
-                                  <span className="font-medium text-foreground">
-                                    {formatAmountDisplay(card.supplierPaid, card.supplierPaidInput, card.currency, card.exchangeRate)}
-                                  </span>
-                                </p>
-                                <p>
-                                  Unpaid company amount:{' '}
-                                  <span className="font-medium text-foreground">
-                                    {formatAmountDisplay(card.supplierRemaining, card.supplierRemainingInput, card.currency, card.exchangeRate)}
-                                  </span>
-                                </p>
-                              </div>
-                              <div className="mt-2 flex items-center gap-2">
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  placeholder={`Company pay now (${card.currency})`}
-                                  value={supplierPayNowByTooth[card.toothNumber] ?? ''}
-                                  onChange={(event) => {
-                                    setSupplierPayNowByTooth((prev) => ({
-                                      ...prev,
-                                      [card.toothNumber]: event.target.value,
-                                    }));
-                                  }}
-                                />
-                              </div>
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                {AVAILABILITY_ORDER.map((targetAvailability) => (
-                                  <Button
-                                    key={targetAvailability}
-                                    type="button"
-                                    size="sm"
-                                    variant={card.availability === targetAvailability ? 'default' : 'outline'}
-                                    disabled={availabilityToothSaving === card.toothNumber}
-                                    onClick={() => {
-                                      void handleSetImplantAvailability(card.taskId, card.toothNumber, targetAvailability);
-                                    }}
-                                  >
-                                    {availabilityToothSaving === card.toothNumber && card.availability !== targetAvailability ? (
-                                      <Loader2 className="me-2 size-4 animate-spin" />
-                                    ) : null}
-                                    {AVAILABILITY_TITLES[targetAvailability]}
-                                  </Button>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
               </div>
             )}
 
             {patientId ? (
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Unpaid Third-Company Payments</CardTitle>
+                  <CardTitle className="text-base">Supplier balances</CardTitle>
                   <CardDescription>
                     Outstanding clinic payments to implant supplier by tooth.
                   </CardDescription>
@@ -951,9 +1179,30 @@ export default function InProcessImplantsPage(): JSX.Element {
                           <TableRow key={`unpaid-${row.taskId}-${row.toothNumber}`}>
                             <TableCell>Tooth {row.toothNumber}</TableCell>
                             <TableCell>{AVAILABILITY_TITLES[row.availability]}</TableCell>
-                            <TableCell>{formatAmountDisplay(row.supplierTotal, row.supplierTotalInput, row.currency, row.exchangeRate)}</TableCell>
-                            <TableCell>{formatAmountDisplay(row.supplierPaid, row.supplierPaidInput, row.currency, row.exchangeRate)}</TableCell>
-                            <TableCell>{formatAmountDisplay(row.supplierRemaining, row.supplierRemainingInput, row.currency, row.exchangeRate)}</TableCell>
+                            <TableCell>
+                              {formatAmountDisplay(
+                                row.supplierTotal,
+                                row.supplierTotalInput,
+                                row.currency,
+                                row.exchangeRate
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {formatAmountDisplay(
+                                row.supplierPaid,
+                                row.supplierPaidInput,
+                                row.currency,
+                                row.exchangeRate
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {formatAmountDisplay(
+                                row.supplierRemaining,
+                                row.supplierRemainingInput,
+                                row.currency,
+                                row.exchangeRate
+                              )}
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -977,21 +1226,23 @@ export default function InProcessImplantsPage(): JSX.Element {
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              Implant Record {selectedPlanningRecord ? `#${selectedPlanningRecord.id}` : ''}
+              {selectedPlanningRecord
+                ? `Tooth ${selectedPlanningRecord.toothNumber} implant plan`
+                : 'Implant plan'}
             </DialogTitle>
-            <DialogDescription>
-              Full record data saved from the Implant Planning page.
-            </DialogDescription>
+            <DialogDescription>Clinical and cost details from the saved plan.</DialogDescription>
           </DialogHeader>
 
           {selectedPlanningRecord ? (
             <div className="grid gap-2 text-sm md:grid-cols-2">
-              <p><span className="text-muted-foreground">Patient ID:</span> {selectedPlanningRecord.patientId}</p>
-              <p><span className="text-muted-foreground">Visit ID:</span> {selectedPlanningRecord.visitId}</p>
-              <p><span className="text-muted-foreground">Visit date:</span> {selectedPlanningRecord.visitDate}</p>
-              <p><span className="text-muted-foreground">Treatment ID:</span> {selectedPlanningRecord.treatmentId}</p>
-              <p><span className="text-muted-foreground">Dentist ID:</span> {selectedPlanningRecord.dentistId || '-'}</p>
-              <p><span className="text-muted-foreground">Tooth:</span> {selectedPlanningRecord.toothNumber}</p>
+              <p>
+                <span className="text-muted-foreground">Visit date:</span>{' '}
+                {selectedPlanningRecord.visitDate}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Tooth:</span>{' '}
+                {selectedPlanningRecord.toothNumber}
+              </p>
               <p>
                 <span className="text-muted-foreground">Patient price:</span>{' '}
                 {formatAmountDisplay(
@@ -1010,21 +1261,49 @@ export default function InProcessImplantsPage(): JSX.Element {
                   selectedPlanningRecord.exchangeRate
                 )}
               </p>
-              <p><span className="text-muted-foreground">Implant system:</span> {selectedPlanningRecord.implantSystem}</p>
-              <p><span className="text-muted-foreground">Diameter (mm):</span> {selectedPlanningRecord.diameterMm}</p>
-              <p><span className="text-muted-foreground">Length (mm):</span> {selectedPlanningRecord.lengthMm}</p>
-              <p><span className="text-muted-foreground">Arch:</span> {selectedPlanningRecord.arch}</p>
-              <p><span className="text-muted-foreground">Loading protocol:</span> {selectedPlanningRecord.loadingProtocol}</p>
-              <p><span className="text-muted-foreground">Created:</span> {formatDateTime(selectedPlanningRecord.createdAt)}</p>
-              <p><span className="text-muted-foreground">Updated:</span> {formatDateTime(selectedPlanningRecord.updatedAt)}</p>
+              <p>
+                <span className="text-muted-foreground">Implant system:</span>{' '}
+                {selectedPlanningRecord.implantSystem}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Diameter (mm):</span>{' '}
+                {selectedPlanningRecord.diameterMm}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Length (mm):</span>{' '}
+                {selectedPlanningRecord.lengthMm}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Arch:</span> {selectedPlanningRecord.arch}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Loading protocol:</span>{' '}
+                {selectedPlanningRecord.loadingProtocol}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Created:</span>{' '}
+                {formatDateTime(selectedPlanningRecord.createdAt, locale)}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Updated:</span>{' '}
+                {formatDateTime(selectedPlanningRecord.updatedAt, locale)}
+              </p>
               <div className="space-y-1 md:col-span-2">
                 <p className="text-muted-foreground">Notes:</p>
-                <p className="rounded-md border border-border bg-muted/20 p-2">{selectedPlanningRecord.notes}</p>
+                <p className="rounded-md border border-border bg-muted/20 p-2">
+                  {selectedPlanningRecord.notes}
+                </p>
               </div>
-              <div className="space-y-1 md:col-span-2">
-                <p className="text-muted-foreground">Raw record:</p>
-                <p className="rounded-md border border-border bg-muted/20 p-2 text-xs">{selectedPlanningRecord.rawNotes}</p>
-              </div>
+              <details className={`${styles.cardDetails} md:col-span-2`}>
+                <summary>Technical record details</summary>
+                <div className={styles.technicalDetails}>
+                  <p>Patient ID: {selectedPlanningRecord.patientId}</p>
+                  <p>Visit ID: {selectedPlanningRecord.visitId}</p>
+                  <p>Treatment ID: {selectedPlanningRecord.treatmentId}</p>
+                  <p>Dentist ID: {selectedPlanningRecord.dentistId || '-'}</p>
+                  <p>Raw record: {selectedPlanningRecord.rawNotes}</p>
+                </div>
+              </details>
             </div>
           ) : null}
         </DialogContent>

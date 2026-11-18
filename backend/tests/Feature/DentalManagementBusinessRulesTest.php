@@ -66,7 +66,6 @@ final class DentalManagementBusinessRulesTest extends TestCase
             'endTime' => '09:30',
             'patientId' => $patient->id,
             'startTime' => '09:00',
-            'tag' => 'MANUAL-TAG-SHOULD-BE-IGNORED',
         ]);
 
         $secondResponse = $this->postJson('/api/v1/dental-management/appointments', [
@@ -86,11 +85,11 @@ final class DentalManagementBusinessRulesTest extends TestCase
         ]);
 
         $firstResponse->assertCreated();
-        $firstResponse->assertJsonPath('data.tag', 'DCA#1#20260222');
+        $firstResponse->assertJsonPath('data.tag', 'A#1-2026-02-22');
         $secondResponse->assertCreated();
-        $secondResponse->assertJsonPath('data.tag', 'DCA#2#20260222');
+        $secondResponse->assertJsonPath('data.tag', 'A#2-2026-02-22');
         $thirdResponse->assertCreated();
-        $thirdResponse->assertJsonPath('data.tag', 'DCA#1#20260223');
+        $thirdResponse->assertJsonPath('data.tag', 'A#1-2026-02-23');
     }
 
     public function test_payment_cannot_exceed_invoice_balance(): void
@@ -191,11 +190,15 @@ final class DentalManagementBusinessRulesTest extends TestCase
         );
     }
 
-    public function test_payment_with_afn_currency_is_converted_and_persisted_with_rate_metadata(): void
+    public function test_payment_with_afn_currency_is_stored_as_the_base_amount(): void
     {
         $this->actingAsSuperAdmin();
 
         ['invoice' => $invoice] = $this->createInvoiceContext();
+        $invoice->update([
+            'total_amount' => 7000,
+            'net_amount' => 7000,
+        ]);
 
         $response = $this->postJson('/api/v1/dental-management/payments', [
             'amount' => 7000,
@@ -211,18 +214,47 @@ final class DentalManagementBusinessRulesTest extends TestCase
 
         $this->assertDatabaseHas('payments', [
             'id' => $paymentId,
-            'amount' => 100.00,
+            'amount' => 7000.00,
             'amount_input' => 7000.00,
             'currency' => 'AFN',
-            'exchange_rate' => 70.000000,
+            'exchange_rate' => 1.000000,
         ]);
 
         $this->assertDatabaseHas('safe_transactions', [
             'source_type' => 'payment',
             'source_id' => $paymentId,
-            'amount' => 100.00,
+            'amount' => 7000.00,
             'amount_input' => 7000.00,
             'currency' => 'AFN',
+            'exchange_rate' => 1.000000,
+        ]);
+    }
+
+    public function test_payment_with_usd_currency_is_converted_to_afn_base_amount(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        ['invoice' => $invoice] = $this->createInvoiceContext();
+        $invoice->update([
+            'total_amount' => 7000,
+            'net_amount' => 7000,
+        ]);
+
+        $response = $this->postJson('/api/v1/dental-management/payments', [
+            'amount' => 100,
+            'currency' => 'USD',
+            'exchangeRate' => 70,
+            'invoiceId' => $invoice->id,
+            'method' => 'cash',
+            'paymentDate' => '2026-02-22',
+        ]);
+
+        $response->assertCreated();
+        $this->assertDatabaseHas('payments', [
+            'id' => $response->json('data.id'),
+            'amount' => 7000.00,
+            'amount_input' => 100.00,
+            'currency' => 'USD',
             'exchange_rate' => 70.000000,
         ]);
     }

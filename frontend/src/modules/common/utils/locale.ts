@@ -4,6 +4,18 @@ export const getDirection = (locale: string): Direction => {
   return ['dr', 'ps'].includes(locale) ? 'rtl' : 'ltr';
 };
 
+export const getLanguageTag = (locale: string): string => {
+  if (locale === 'dr') return 'prs-AF';
+  if (locale === 'ps') return 'ps-AF';
+  return locale;
+};
+
+export const getIntlLocale = (locale: string): string => {
+  if (locale === 'dr') return 'fa-AF';
+  if (locale === 'ps') return 'ps-AF';
+  return locale;
+};
+
 export const LOCALE_TO_FIELD_SUFFIX: Record<string, string> = {
   dr: 'Dr',
   en: 'En',

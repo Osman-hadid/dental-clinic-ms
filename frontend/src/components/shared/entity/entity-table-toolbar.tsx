@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utilities';
 import { type EntityModuleConfig } from '@/types/EntityModuleConfig';
 import { type Table } from '@tanstack/react-table';
-import { Check, PlusIcon, X } from 'lucide-react';
+import { Check, PlusIcon, Search, SlidersHorizontal, X } from 'lucide-react';
 import { EntityTableFacetedFilter } from './entity-table-faceted-filter';
 
 type EntityTableToolbarProps<TData> = {
@@ -63,22 +63,25 @@ export const EntityTableToolbar = <TData,>({
   const tGlobal = useTranslations('global');
 
   return (
-    <div className="flex items-center justify-between">
-      <div className="flex flex-1 items-center gap-2">
-        <Input
-          id="search"
-          name="search"
-          placeholder={tGlobal('search', { field: tGlobal('multipleFields') })}
-          value={search ?? ''}
-          onChange={handleSearchChange}
-          className="h-8 w-[150px] lg:w-[250px]"
-        />
+    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-1 flex-wrap items-center gap-2">
+        <div className="relative min-w-[14rem] flex-1 lg:max-w-md">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            id="search"
+            name="search"
+            placeholder={tGlobal('search', { field: tGlobal('multipleFields') })}
+            value={search ?? ''}
+            onChange={handleSearchChange}
+            className="h-10 bg-background/85 pl-9"
+          />
+        </div>
         {config.searchFields && (
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8 border-dashed">
-                <PlusIcon className="h-4 w-4" />
-                {tGlobal('selectSearchFields')}
+              <Button variant="outline" size="sm" className="border-dashed bg-background/70">
+                <SlidersHorizontal className="h-4 w-4" />
+                Fields
                 <span>({selectedSearchFields.length})</span>
               </Button>
             </PopoverTrigger>
@@ -149,10 +152,10 @@ export const EntityTableToolbar = <TData,>({
           </Button>
         )}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 lg:justify-end">
         {/* Disable creation for 'permissions' as it is managed the backend */}
         {canCreate && config.queryKey !== 'permissions' && (
-          <Button onClick={onTrigger}>
+          <Button onClick={onTrigger} className="min-w-max">
             <PlusIcon className="w-4 h-4" />
             {drawerTriggerLabel || t(config.createButton)}
           </Button>

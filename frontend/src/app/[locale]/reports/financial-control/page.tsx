@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { type CurrencyCode, formatCurrency, parseMoney } from '@/lib/currency-utils';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import { fetchReport, toInputDate } from '@/modules/dental-management/presentation/reports/report-client';
+import { ReportPageIntro } from '@/modules/dental-management/presentation/reports/report-page-intro';
 import { AlertTriangle, ShieldCheck, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -134,7 +135,7 @@ const emptyCollectorSections = (): CollectorRow['currencySections'] => ({
   },
 });
 
-export default function FinancialControlPage(): JSX.Element {
+const FinancialControlPage = (): JSX.Element => {
   const tSidebar = useTranslations('sidebar');
   const [closingDate, setClosingDate] = useState(() => toInputDate(new Date()));
   const [report, setReport] = useState<FinancialControlResponse | null>(null);
@@ -252,7 +253,8 @@ export default function FinancialControlPage(): JSX.Element {
       />
       <div className="flex flex-1 flex-col">
         <div className="@container/main flex flex-1 flex-col gap-2">
-          <div className="flex flex-col gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6">
+          <div className="flex min-w-0 flex-col gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6">
+            <ReportPageIntro title="Daily cash close" description="Compare expected cash with the amount counted at closing, then review collection totals and any past differences." />
             <Card className="rounded-3xl border border-border/50 bg-card">
               <CardHeader>
                 <CardTitle className="inline-flex items-center gap-2">
@@ -293,7 +295,7 @@ export default function FinancialControlPage(): JSX.Element {
                               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">{currency} Close Snapshot</p>
                               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                                 <div>
-                                  <p className="text-xs text-muted-foreground">Expected Safe Balance</p>
+                                  <p className="text-xs text-muted-foreground">Expected cash in safe</p>
                                   <p className="mt-2 text-2xl font-semibold">{formatCurrency(section.expectedBalance, currency)}</p>
                                 </div>
                                 <div>
@@ -304,7 +306,7 @@ export default function FinancialControlPage(): JSX.Element {
                                   </p>
                                 </div>
                                 <div>
-                                  <p className="text-xs text-muted-foreground">Safe Movement</p>
+                                  <p className="text-xs text-muted-foreground">Money moved in or out</p>
                                   <p className="mt-2 text-2xl font-semibold">
                                     {formatCurrency(Number((section.safeInTotal - section.safeOutTotal).toFixed(2)), currency)}
                                   </p>
@@ -313,7 +315,7 @@ export default function FinancialControlPage(): JSX.Element {
                                   </p>
                                 </div>
                                 <div>
-                                  <p className="text-xs text-muted-foreground">Open Debt Snapshot</p>
+                                  <p className="text-xs text-muted-foreground">Unpaid patient balances</p>
                                   <p className="mt-2 text-2xl font-semibold">{formatCurrency(section.openDebtTotal, currency)}</p>
                                   <p className="text-xs text-muted-foreground">
                                     {report?.summary.openDebtCount ?? 0} open / {report?.summary.overdueDebtCount ?? 0} overdue
@@ -330,7 +332,7 @@ export default function FinancialControlPage(): JSX.Element {
 
                 <div className="rounded-2xl border bg-background/90 p-4">
                   <div className="space-y-1">
-                    <p className="text-sm font-semibold text-foreground">Cashier Reconciliation</p>
+                    <p className="text-sm font-semibold text-foreground">Count cash and reconcile</p>
                     <p className="text-xs text-muted-foreground">
                       Enter the amount physically counted at day end and save the reconciliation result.
                     </p>
@@ -360,10 +362,10 @@ export default function FinancialControlPage(): JSX.Element {
                               <AlertTriangle className={`mt-0.5 size-4 ${discrepancyPreview[entry.currency] === 0 ? 'text-emerald-700' : 'text-amber-700'}`} />
                               <div>
                                 <p className="text-sm font-semibold">
-                                  Difference {formatCurrency(discrepancyPreview[entry.currency], entry.currency)}
+                                  Difference from expected: {formatCurrency(discrepancyPreview[entry.currency], entry.currency)}
                                 </p>
                                 <p className="mt-1 text-xs text-muted-foreground">
-                                  Compared against expected safe balance {formatCurrency(summaryCurrencySections[entry.currency].expectedBalance, entry.currency)}.
+                                  A positive amount means cash is over; a negative amount means cash is short. Expected: {formatCurrency(summaryCurrencySections[entry.currency].expectedBalance, entry.currency)}.
                                 </p>
                               </div>
                             </div>
@@ -519,4 +521,6 @@ export default function FinancialControlPage(): JSX.Element {
       </div>
     </>
   );
-}
+};
+
+export default FinancialControlPage;

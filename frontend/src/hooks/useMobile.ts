@@ -8,20 +8,20 @@ export const useIsMobile = (): boolean => {
   React.useEffect(() => {
     const mql = globalThis.matchMedia?.(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`);
 
-    const onChange = (): void => {
-      setIsMobile(globalThis.innerWidth < MOBILE_BREAKPOINT);
-    };
-
     if (mql) {
+      const onChange = (): void => setIsMobile(mql.matches);
+
+      onChange();
       mql.addEventListener('change', onChange);
-      setIsMobile(globalThis.innerWidth < MOBILE_BREAKPOINT);
+
+      return () => {
+        mql.removeEventListener('change', onChange);
+      };
     } else {
       setIsMobile(globalThis.innerWidth < MOBILE_BREAKPOINT);
     }
 
-    return () => {
-      mql?.removeEventListener('change', onChange);
-    };
+    return undefined;
   }, []);
 
   return !!isMobile;

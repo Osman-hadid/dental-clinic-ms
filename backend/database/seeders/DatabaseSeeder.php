@@ -10,14 +10,19 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        $this->call([
+        $seeders = [
             ModulesSeeder::class,
             PermissionsSeeder::class,
             RolesSeeder::class,
             AssignPermissionsToModuleRolesSeeder::class,
             SuperAdminUserSeeder::class,
             AdminUserSeeder::class,
-            // ThreeMonthsTestDataSeeder::class,
-        ]);
+        ];
+
+        if (filter_var(env('SOURIRE_SEED_DEMO_DATA', false), FILTER_VALIDATE_BOOL)) {
+            $seeders[] = ThreeMonthsTestDataSeeder::class;
+        }
+
+        $this->call($seeders);
     }
 }

@@ -1,0 +1,41 @@
+{
+  "title": "زما حساب",
+  "description": "د سورییر کلینیک کاري چاپېریال لپاره ستاسو د پروفایل او لاسرسي معلومات.",
+  "backToDashboard": "بېرته ډشبورډ ته",
+  "signedIn": "سورییر ته ننوتلي یاست",
+  "profileOverview": "د حساب لنډیز",
+  "personalDetails": "شخصي معلومات",
+  "personalDetailsDescription": "ستاسو له حساب سره تړلي د پروفایل معلومات.",
+  "fullName": "بشپړ نوم",
+  "emailAddress": "برېښنالیک",
+  "accountId": "د حساب پېژندشمېره",
+  "accountStatus": "د ناستې حالت",
+  "active": "فعاله ناسته",
+  "workspaceAccess": "کاري چاپېریال ته لاسرسی",
+  "workspaceAccessDescription": "دې حساب ته ټاکل شوي رولونه او د لاسرسي اجازې.",
+  "roles": "ټاکل شوي رولونه",
+  "permissionLevel": "د لاسرسي کچه",
+  "permissions": "د لاسرسي اجازې",
+  "permissionCount": "{count} اجازې ټاکل شوې",
+  "noRoles": "کوم رول نه دی ټاکل شوی",
+  "noPermissions": "دې حساب ته د لاسرسي اجازه نه ده ټاکل شوې.",
+  "roleFallback": "د کاري چاپېریال غړی",
+  "levels": {
+    "create": "جوړول",
+    "review": "کتنه",
+    "approval": "منظوري"
+  },
+  "preferences": "د حساب غوره‌توبونه",
+  "preferencesDescription": "وټاکئ چې ستاسو حساب له سورییر څخه څنګه کار واخلي.",
+  "language": "د اپلېکېشن ژبه",
+  "languageDescription": "په خپل کاري چاپېریال کې د کارولو ژبه وټاکئ.",
+  "languageOptions": {
+    "en": "انګلیسي",
+    "dr": "دري",
+    "ps": "پښتو"
+  },
+  "languageSaving": "ژبه بدلېږي…",
+  "languageUpdated": "د ژبې غوره‌توب تازه شو.",
+  "languageFailed": "د ژبې غوره‌توب تازه نه شو.",
+  "accountUnavailable": "ستاسو د حساب معلومات نشته."
+}

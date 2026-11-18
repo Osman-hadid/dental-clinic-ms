@@ -10,8 +10,8 @@ use App\Modules\Common\Infrastructure\Resources\PaginatedResource;
 use App\Modules\DentalManagement\Domain\Entities\InventoryAdjustment;
 use App\Modules\DentalManagement\Domain\Entities\InventoryItem;
 use App\Modules\DentalManagement\Domain\Entities\SafeTransaction;
-use App\Modules\DentalManagement\Infrastructure\Http\Requests\InventoryItem\StoreInventoryAdjustmentRequest;
 use App\Modules\DentalManagement\Infrastructure\Http\Requests\InventoryItem\ListInventoryItemsRequest;
+use App\Modules\DentalManagement\Infrastructure\Http\Requests\InventoryItem\StoreInventoryAdjustmentRequest;
 use App\Modules\DentalManagement\Infrastructure\Http\Requests\InventoryItem\StoreInventoryItemRequest;
 use App\Modules\DentalManagement\Infrastructure\Http\Requests\InventoryItem\UpdateInventoryItemRequest;
 use App\Modules\DentalManagement\Infrastructure\Resources\InventoryAdjustmentResource;
@@ -24,6 +24,7 @@ final class InventoryItemController extends BaseApiController
 {
     public function index(ListInventoryItemsRequest $request): JsonResponse
     {
+        $this->authorize('viewAny', InventoryItem::class);
         $queryData = $request->validated();
         $filters = $queryData['filters'] ?? [];
 
@@ -62,11 +63,13 @@ final class InventoryItemController extends BaseApiController
 
     public function store(StoreInventoryItemRequest $request): JsonResponse
     {
+        $this->authorize('create', InventoryItem::class);
         $payload = $this->toDatabasePayload($request->validated());
 
         $item = DB::transaction(function () use ($payload): InventoryItem {
             $item = InventoryItem::query()->create($payload);
             $this->syncSafeTransaction($item);
+
             return $item;
         });
 
@@ -79,6 +82,7 @@ final class InventoryItemController extends BaseApiController
 
     public function show(int $id): JsonResponse
     {
+        $this->authorize('view', InventoryItem::class);
         $item = InventoryItem::query()->findOrFail($id);
 
         return $this->successResponse(
@@ -89,6 +93,7 @@ final class InventoryItemController extends BaseApiController
 
     public function update(UpdateInventoryItemRequest $request, int $id): JsonResponse
     {
+        $this->authorize('update', InventoryItem::class);
         $payload = $this->toDatabasePayload($request->validated());
 
         $item = DB::transaction(function () use ($id, $payload): InventoryItem {
@@ -96,6 +101,7 @@ final class InventoryItemController extends BaseApiController
             $item->fill($payload);
             $item->save();
             $this->syncSafeTransaction($item);
+
             return $item;
         });
 
@@ -107,6 +113,7 @@ final class InventoryItemController extends BaseApiController
 
     public function destroy(int $id): JsonResponse
     {
+        $this->authorize('delete', InventoryItem::class);
         DB::transaction(function () use ($id): void {
             $item = InventoryItem::query()->findOrFail($id);
             $item->delete();
@@ -125,6 +132,7 @@ final class InventoryItemController extends BaseApiController
 
     public function adjustments(Request $request): JsonResponse
     {
+        $this->authorize('viewAny', InventoryItem::class);
         $validated = $request->validate([
             'inventoryItemId' => 'nullable|integer|exists:inventory_items,id',
             'perPage' => 'nullable|integer|min:1|max:100',
@@ -149,6 +157,7 @@ final class InventoryItemController extends BaseApiController
 
     public function recordAdjustment(StoreInventoryAdjustmentRequest $request, int $id): JsonResponse
     {
+        $this->authorize('update', InventoryItem::class);
         $validated = $request->validated();
         $userId = $request->user()?->id;
 
@@ -209,6 +218,7 @@ final class InventoryItemController extends BaseApiController
             if ($entry->exists) {
                 $entry->delete();
             }
+
             return;
         }
 
@@ -277,6 +287,7 @@ final class InventoryItemController extends BaseApiController
     {
         if ($trashedFilter === 'with') {
             $query->withTrashed();
+
             return;
         }
 

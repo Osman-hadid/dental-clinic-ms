@@ -38,8 +38,8 @@ abstract class BulkDeleteRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'ids.max' => "Cannot delete more than 100 {$this->entityName()} at once.",
-            'ids.min' => "At least one {$this->entityName()} ID is required.",
+            'ids.max' => __('validation.bulk_delete_max', ['entity' => $this->entityName()]),
+            'ids.min' => __('validation.bulk_delete_min', ['entity' => $this->entityName()]),
         ];
     }
 }

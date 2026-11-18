@@ -206,9 +206,9 @@ final readonly class InvoiceService
         $data['total_amount_input'] = $totalInput;
         $data['discount_input'] = $discountInput;
         $data['net_amount_input'] = $netInput;
-        $data['total_amount'] = $this->currencyService->toUsd($totalInput, $data['currency'], (float) $data['exchange_rate']);
-        $data['discount'] = $this->currencyService->toUsd($discountInput, $data['currency'], (float) $data['exchange_rate']);
-        $data['net_amount'] = $this->currencyService->toUsd($netInput, $data['currency'], (float) $data['exchange_rate']);
+        $data['total_amount'] = $this->currencyService->toAfn($totalInput, $data['currency'], (float) $data['exchange_rate']);
+        $data['discount'] = $this->currencyService->toAfn($discountInput, $data['currency'], (float) $data['exchange_rate']);
+        $data['net_amount'] = $this->currencyService->toAfn($netInput, $data['currency'], (float) $data['exchange_rate']);
 
         return $data;
     }

@@ -14,6 +14,7 @@ final class AiImagingController extends BaseApiController
 {
     public function analyze(AnalyzeDentalImageRequest $request): JsonResponse
     {
+        abort_unless($request->user()?->can('dental-management.ai-imaging.create'), 403);
         $file = $request->file('image');
         if (!$file) {
             return $this->errorResponse(
@@ -158,6 +159,7 @@ final class AiImagingController extends BaseApiController
             $stderr = trim($process->getErrorOutput());
             $stdout = trim($process->getOutput());
             $message = $stderr !== '' ? $stderr : ($stdout !== '' ? $stdout : $exception->getMessage());
+
             return [[], $message];
         }
 
@@ -579,6 +581,7 @@ PROMPT;
     private function normalizeInt(mixed $value, int $default, int $min, int $max): int
     {
         $number = is_numeric($value) ? (int) $value : $default;
+
         return max($min, min($max, $number));
     }
 

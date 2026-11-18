@@ -31,7 +31,6 @@ use App\Modules\DentalManagement\Domain\Entities\VisitTreatmentMaterial;
 use App\Modules\DentalManagement\Domain\Services\DebtService;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
@@ -41,6 +40,18 @@ final class ThreeMonthsTestDataSeeder extends Seeder
 {
     public function run(): void
     {
+        $explicitlyEnabled = filter_var(env('SOURIRE_ENABLE_DEMO_DATA', false), FILTER_VALIDATE_BOOL);
+        if (!app()->environment(['local', 'testing']) && !$explicitlyEnabled) {
+            $this->command?->warn('Demo data seeding skipped outside local/testing. Set SOURIRE_ENABLE_DEMO_DATA=true only for a disposable environment.');
+
+            return;
+        }
+
+        $demoPassword = trim((string) env('SOURIRE_DEMO_USER_PASSWORD', ''));
+        if ($demoPassword === '') {
+            throw new \RuntimeException('SOURIRE_DEMO_USER_PASSWORD must be set before demo data is enabled.');
+        }
+
         $this->ensureCoreSeeders();
 
         $start = now()->startOfMonth()->subMonthsNoOverflow(2)->startOfDay();
@@ -63,7 +74,7 @@ final class ThreeMonthsTestDataSeeder extends Seeder
                 'whatsapp_number' => $this->seedPhone('079', $seed, $i),
                 'report_to_id' => $actor,
                 'main_organization_id' => 1,
-                'password' => Hash::make('SeedUser123!'),
+                'password' => Hash::make($demoPassword),
                 'locale' => ['en', 'dr', 'ps'][($i - 1) % 3],
                 'rights' => $i <= 2 ? 'approval' : 'review',
                 'notifications' => true,

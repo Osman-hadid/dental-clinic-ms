@@ -52,6 +52,7 @@ import {
   YAxis,
 } from 'recharts';
 import { toast } from 'sonner';
+import styles from './patient-profile.module.css';
 
 type ConditionKey =
   | 'caries'
@@ -586,7 +587,7 @@ export default function PatientProfilePage(): JSX.Element {
     () => ({ patientId: patientId ? [patientId] : ['-1'] }),
     [patientId]
   );
-  const { entities: visits, isFetching: isLoadingVisits } = useVisitList(
+  const { entities: visits } = useVisitList(
     1,
     MAX_PER_PAGE,
     '',
@@ -773,17 +774,15 @@ export default function PatientProfilePage(): JSX.Element {
   }, [typedVisitTreatments, toothById, visitOrderIndexById]);
 
   const conditionStats = useMemo(() => {
-    const totalTeeth = RING_TEETH.length;
-    const entries = Object.keys(CONDITIONS).map((conditionKey) => {
-      const key = conditionKey as ConditionKey;
-      const count = RING_TEETH.filter((tooth) => toothConditionMap[tooth] === key).length;
-      return { count, key, percent: Math.round((count / totalTeeth) * 100) };
-    });
-
+    const entries = Object.keys(CONDITIONS)
+      .map((conditionKey) => {
+        const key = conditionKey as ConditionKey;
+        const count = RING_TEETH.filter((tooth) => toothConditionMap[tooth] === key).length;
+        return { count, key };
+      })
+      .filter((entry) => entry.count > 0);
     const affected = RING_TEETH.filter((tooth) => Boolean(toothConditionMap[tooth])).length;
-    const overall =
-      totalTeeth === 0 ? 0 : Math.max(0, Math.round(((totalTeeth - affected) / totalTeeth) * 100));
-    return { entries, overall };
+    return { affected, entries };
   }, [toothConditionMap]);
 
   const latestVisit = useMemo(() => {
@@ -823,8 +822,8 @@ export default function PatientProfilePage(): JSX.Element {
         return {
           content,
           createdAt: row.prescription?.createdAt || row.createdAt || '',
-          diagnosisNotes: asText(visit?.diagnosisNotes),
           dentistName: asText(visit?.dentistName || visit?.dentistId),
+          diagnosisNotes: asText(visit?.diagnosisNotes),
           id: String(row.prescription?.id ?? row.id),
           treatmentName,
           visitDate: visit?.visitDate || '',
@@ -1011,9 +1010,6 @@ export default function PatientProfilePage(): JSX.Element {
     [incomeTrend]
   );
   const latestIncome = incomeTrend.length > 0 ? incomeTrend[incomeTrend.length - 1].income : 0;
-  const latestDebt = incomeTrend.length > 0 ? incomeTrend[incomeTrend.length - 1].debt : 0;
-  const averageIncome =
-    incomeTrend.length > 0 ? Number((totalIncome / incomeTrend.length).toFixed(2)) : 0;
 
   const fetchCsrfClient = async (): Promise<AxiosClient> => {
     const client = new AxiosClient();
@@ -2144,218 +2140,612 @@ export default function PatientProfilePage(): JSX.Element {
   return (
     <>
       <Header breadcrumbs={breadcrumbs} />
-      <div className="flex flex-1 flex-col overflow-x-hidden px-4 pb-6 lg:px-6">
-        <div className="rounded-3xl border border-border/60 bg-card/95 p-6 text-foreground shadow-lg">
-
-          <div className="relative mb-6 flex flex-wrap items-center justify-between gap-3">
+      <div className={`${styles.profilePage} flex min-w-0 flex-1 flex-col px-4 pb-8 lg:px-6`}>
+        <div className={styles.profileWorkspace}>
+          <div className={styles.toolbar}>
             <Button
               type="button"
               variant="outline"
-              className="border-border/50 bg-background/60 text-foreground hover:bg-accent/50 hover:text-accent-foreground rounded-xl"
+              className={styles.backButton}
               onClick={() => {
                 router.push(`/${locale}/dental-management/patients`);
               }}
             >
-              <ArrowLeft className="me-2 size-4" />
-              Back To Patients
+              <ArrowLeft className="me-2 size-4 rtl:rotate-180" />
+              All patients
             </Button>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="border-border/50 bg-background/60 text-foreground hover:bg-accent/50 hover:text-accent-foreground rounded-xl"
-                onClick={handlePrintPatientRecord}
-              >
-                <Printer className="me-2 size-4" />
-                Print Patient Record
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="border-border/50 bg-background/60 text-foreground hover:bg-accent/50 hover:text-accent-foreground rounded-xl"
-                onClick={handlePrintPrescriptionRecord}
-              >
-                <Printer className="me-2 size-4" />
-                Print Prescriptions
-              </Button>
-            </div>
+            <span className={styles.fileLabel}>
+              PATIENT FILE / {patient?.patientCode || patientId}
+            </span>
           </div>
 
-          <div className="grid min-w-0 gap-6 xl:grid-cols-[1.4fr_1fr]">
-            <div className="min-w-0 space-y-6">
+          <section className={styles.hero} aria-labelledby="patient-profile-name">
+            <div className={styles.heroIdentity}>
+              <div className={styles.avatar} aria-hidden="true">
+                {fullName.slice(0, 1).toUpperCase()}
+              </div>
+              <div className={styles.heroName}>
+                <p className={styles.heroEyebrow}>Patient profile</p>
+                <h1 id="patient-profile-name">
+                  {isLoadingPatient ? 'Loading patient...' : fullName}
+                </h1>
+                <p>Record {patient?.patientCode || patientId}</p>
+              </div>
+              <div className={styles.heroFacts}>
+                <div>
+                  <span>Age</span>
+                  <strong>{patientAge === null ? '—' : `${patientAge} years`}</strong>
+                </div>
+                <div>
+                  <span>Sex</span>
+                  <strong>{patient?.gender || '—'}</strong>
+                </div>
+                <div>
+                  <span>Blood group</span>
+                  <strong>{patient?.bloodGroup || '—'}</strong>
+                </div>
+                <div>
+                  <span>Phone</span>
+                  <strong>{patient?.contactNumber || '—'}</strong>
+                </div>
+              </div>
+            </div>
+            <div className={styles.heroFooter}>
+              <div className={styles.heroStats}>
+                <div>
+                  <strong>{visits.length}</strong>
+                  <span>Visits</span>
+                </div>
+                <div>
+                  <strong>{typedVisitTreatments.length}</strong>
+                  <span>Treatments</span>
+                </div>
+                <div>
+                  <strong>{prescriptionRecords.length}</strong>
+                  <span>Prescriptions</span>
+                </div>
+              </div>
+              <div className={styles.heroActions}>
+                {latestVisit && (
+                  <Button
+                    type="button"
+                    className={styles.primaryAction}
+                    onClick={() =>
+                      router.push(
+                        `/${locale}/dental-management/visits/chart?visitId=${encodeURIComponent(String(latestVisit.id))}`
+                      )
+                    }
+                  >
+                    <Stethoscope className="me-2 size-4" /> Open latest visit
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={styles.secondaryAction}
+                  onClick={handlePrintPatientRecord}
+                  disabled={!patient}
+                >
+                  <Printer className="me-2 size-4" /> Print record
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={styles.secondaryAction}
+                  onClick={handlePrintPrescriptionRecord}
+                  disabled={!patient || prescriptionRecords.length === 0}
+                >
+                  <FileText className="me-2 size-4" /> Print prescriptions
+                </Button>
+              </div>
+            </div>
+          </section>
+
+          <nav className={styles.sectionNav} aria-label="Patient profile sections">
+            <a href="#dental-scheme-section">Dental chart</a>
+            <a href="#patient-visits-section">Visits</a>
+            <a href="#session-tasks-section">Tasks</a>
+            <a href="#prescriptions-section">Prescriptions</a>
+            <a href="#payments-section">Payments</a>
+            <a href="#questionnaire-section">Questionnaire</a>
+          </nav>
+
+          <div className={styles.contentGrid}>
+            <div className={styles.chartColumn}>
+              <Card
+                id="dental-scheme-section"
+                className="min-w-0 rounded-2xl border border-border/60 bg-card shadow-lg"
+              >
+                <CardHeader className="pb-4 border-b border-border/40">
+                  <CardTitle className="flex items-center justify-between text-sm font-semibold tracking-tight">
+                    <span className="text-foreground">Dental chart</span>
+                    <div className="rounded-lg bg-primary/10 p-2">
+                      <Stethoscope className="size-4 text-primary" />
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-6">
+                  <div className="relative mx-auto aspect-square w-full max-w-90 overflow-hidden">
+                    {RING_TEETH.map((toothNumber, index) => {
+                      const angle = (index / RING_TEETH.length) * Math.PI * 2 - Math.PI / 2;
+                      const markerRadius = 38;
+                      const labelRadius = 47;
+                      const markerX = 50 + markerRadius * Math.cos(angle);
+                      const markerY = 50 + markerRadius * Math.sin(angle);
+                      const labelX = 50 + labelRadius * Math.cos(angle);
+                      const labelY = 50 + labelRadius * Math.sin(angle);
+                      const condition = toothConditionMap[toothNumber];
+                      const conditionColor = condition ? CONDITIONS[condition].color : '#d6ccc2';
+
+                      return (
+                        <div key={toothNumber}>
+                          <div
+                            className={`${styles.toothMarker} absolute size-7 -translate-x-1/2 -translate-y-1/2 rounded-full transition-all duration-300 ${condition ? 'border-2' : 'border-0'}`}
+                            style={{
+                              backgroundColor: condition
+                                ? hexToRgba(conditionColor, 0.95)
+                                : '#e8e4e0',
+                              borderColor: condition ? conditionColor : '#c6ac8f',
+                              boxShadow: condition
+                                ? `0 4px 12px ${hexToRgba(conditionColor, 0.35)}, 0 2px 4px ${hexToRgba(conditionColor, 0.2)}`
+                                : '0 2px 4px rgba(0,0,0,0.08)',
+                              left: `${markerX}%`,
+                              top: `${markerY}%`,
+                            }}
+                          />
+                          <span
+                            className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 text-[11px] font-bold text-foreground/90"
+                            style={{
+                              left: `${labelX}%`,
+                              top: `${labelY}%`,
+                            }}
+                          >
+                            {toothNumber}
+                          </span>
+                        </div>
+                      );
+                    })}
+
+                    <div className="absolute left-1/2 top-1/2 flex size-32 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full border-2 border-border/40 bg-card shadow-xl">
+                      <div className="rounded-xl bg-primary/5 p-2.5 mb-2">
+                        <Sparkles className="size-6 text-primary" />
+                      </div>
+                      <p className="text-xs font-semibold text-foreground/80">Patient chart</p>
+                      <p className="text-sm font-bold text-foreground">
+                        {RING_TEETH.length} positions
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="mt-6 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Condition legend
+                  </p>
+                  <div className={`${styles.chartLegend} mt-3 grid grid-cols-2 gap-2 text-xs`}>
+                    {Object.entries(CONDITIONS).map(([key, condition]) => (
+                      <div
+                        key={key}
+                        className="flex items-center gap-2.5 rounded-lg border border-border/40 bg-background/60 px-3 py-2.5 transition-all hover:border-border/60 hover:bg-background/80"
+                      >
+                        <span
+                          className="size-3 rounded-full shadow-sm"
+                          style={{
+                            backgroundColor: condition.color,
+                            boxShadow: `0 2px 4px ${hexToRgba(condition.color, 0.3)}`,
+                          }}
+                        />
+                        <span className="font-medium text-foreground/90">{condition.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-4 text-xs text-muted-foreground/80">
+                    {isLoadingTreatments ? (
+                      <span>Loading treatment chart...</span>
+                    ) : (
+                      <span>{typedVisitTreatments.length} recorded treatment entries</span>
+                    )}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+            <div className={styles.primaryColumn}>
               <Card className="rounded-3xl border border-border/50 bg-card shadow-sm">
-                <CardContent className="p-6">
-                  <div className="grid gap-4 md:grid-cols-[auto_1fr_1fr] md:items-center">
-                    <div className="flex size-20 items-center justify-center rounded-2xl bg-linear-to-br from-primary to-primary/80 text-2xl font-semibold text-primary-foreground shadow-lg">
-                      {fullName.slice(0, 1).toUpperCase()}
+                <CardHeader className="pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-xl border border-rose-200/50 bg-rose-100/60 p-2 dark:border-rose-400/20 dark:bg-rose-500/16">
+                      <HeartPulse className="size-5 text-rose-600 dark:text-rose-300" />
                     </div>
                     <div>
-                      <p className="text-2xl font-semibold text-foreground">
-                        {isLoadingPatient ? 'Loading...' : fullName}
-                      </p>
-                      <p className="text-sm text-muted-foreground">{patient?.patientCode || '-'}</p>
+                      <CardTitle className="text-base text-foreground">Dental findings</CardTitle>
+                      <CardDescription>Findings from recorded treatment entries</CardDescription>
                     </div>
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div className="rounded-xl border border-border/50 bg-background/60 px-3 py-2">
-                        <p className="text-xs text-muted-foreground">Age</p>
-                        <p className="font-semibold text-foreground">{patientAge ?? '-'}</p>
-                      </div>
-                      <div className="rounded-xl border border-border/50 bg-background/60 px-3 py-2">
-                        <p className="text-xs text-muted-foreground">Sex</p>
-                        <p className="font-semibold text-foreground">{patient?.gender || '-'}</p>
-                      </div>
-                      <div className="rounded-xl border border-border/50 bg-background/60 px-3 py-2">
-                        <p className="text-xs text-muted-foreground">Blood</p>
-                        <p className="font-semibold text-foreground">
-                          {patient?.bloodGroup || '-'}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="mx-auto flex size-24 shrink-0 items-center justify-center rounded-full border-4 border-teal-200/60 bg-linear-to-br from-teal-50/80 to-teal-100/50 shadow-lg dark:border-teal-400/20 dark:from-teal-500/14 dark:to-teal-500/6 sm:mx-0">
+                      <div className="text-center">
+                        <p className="text-3xl font-bold text-teal-900 dark:text-teal-50">
+                          {conditionStats.affected}
+                        </p>
+                        <p className="text-xs font-medium text-teal-700 dark:text-teal-200/80">
+                          marked teeth
                         </p>
                       </div>
-                      <div className="rounded-xl border border-border/50 bg-background/60 px-3 py-2">
-                        <p className="text-xs text-muted-foreground">Tel</p>
-                        <p className="font-semibold text-foreground">
-                          {patient?.contactNumber || '-'}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {conditionStats.entries.length === 0 && (
+                        <p className="text-sm text-muted-foreground">
+                          No conditions marked in recorded treatments.
                         </p>
-                      </div>
+                      )}
+                      {conditionStats.entries.map((entry) => (
+                        <div
+                          key={entry.key}
+                          className="flex items-center gap-2 rounded-lg border border-border/50 bg-background px-3 py-2 shadow-sm"
+                        >
+                          <div
+                            className="size-2 rounded-full"
+                            style={{ backgroundColor: CONDITIONS[entry.key].color }}
+                          />
+                          <span className="text-xs font-medium text-foreground">
+                            {CONDITIONS[entry.key].label}
+                          </span>
+                          <span className="text-xs font-semibold text-muted-foreground">
+                            {entry.count} {entry.count === 1 ? 'tooth' : 'teeth'}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card className="rounded-3xl border border-border/50 bg-card shadow-sm">
-                <CardHeader className="pb-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="rounded-xl border border-emerald-200/50 bg-emerald-100/60 p-2 dark:border-emerald-400/20 dark:bg-emerald-500/16">
-                        <Wallet className="size-5 text-emerald-600 dark:text-emerald-300" />
-                      </div>
-                      <div>
-                        <CardTitle className="text-base text-foreground">Income Diagram</CardTitle>
-                        <CardDescription>Financial overview and trends</CardDescription>
-                      </div>
-                    </div>
-                  </div>
+              <Card
+                id="patient-visits-section"
+                className="border-border bg-card text-card-foreground"
+              >
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center justify-between text-base">
+                    <span>Patient Visits</span>
+                    <CalendarDays className="size-4 text-primary" />
+                  </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  {incomeTrend.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-8 text-center">
-                      <div className="rounded-xl border border-border/50 bg-muted/30 p-4 mb-3">
-                        <Wallet className="size-8 text-muted-foreground" />
+                <CardContent className="space-y-2">
+                  {orderedVisits.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No visits recorded yet.</p>
+                  ) : (
+                    orderedVisits.map((visit) => (
+                      <button
+                        key={visit.id}
+                        type="button"
+                        onClick={() => {
+                          const encodedVisitId = encodeURIComponent(String(visit.id));
+                          router.push(
+                            `/${locale}/dental-management/visits/chart?visitId=${encodedVisitId}`
+                          );
+                        }}
+                        className="w-full rounded-lg border border-border bg-background p-3 text-start transition hover:border-primary/40 hover:bg-accent/20"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-sm font-semibold text-foreground">
+                            {visit.tag || visit.appointmentTag || `Visit #${visit.id}`}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatDisplayDate(visit.visitDate)}
+                          </p>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Dentist: {visit.dentistName || visit.dentistId || '-'}
+                        </p>
+                        {visit.nextVisitDate ? (
+                          <p className="text-xs text-muted-foreground">
+                            Next Visit: {visit.nextVisitDate}
+                          </p>
+                        ) : null}
+                        {visit.diagnosisNotes ? (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {visit.diagnosisNotes}
+                          </p>
+                        ) : null}
+                      </button>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card
+                id="session-tasks-section"
+                className="border-border bg-card text-card-foreground"
+              >
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center justify-between text-base">
+                    <span>Session Tasks</span>
+                    <ClipboardCheck className="size-4 text-primary" />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className={styles.taskComposer}>
+                    <Input
+                      aria-label="Task title"
+                      value={taskTitle}
+                      onChange={(event) => setTaskTitle(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && taskTitle.trim() && !isTaskMutationLoading) {
+                          event.preventDefault();
+                          void handleAddTask();
+                        }
+                      }}
+                      placeholder="Add a follow-up task"
+                      className="bg-background"
+                    />
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        void handleAddTask();
+                      }}
+                      disabled={!taskTitle.trim() || isTaskMutationLoading}
+                    >
+                      Add task
+                    </Button>
+                  </div>
+                  <details className={styles.taskOptions}>
+                    <summary>Optional details: notes, marker and status</summary>
+                    <div className="mt-3 space-y-3">
+                      <div>
+                        <p className="mb-2 text-xs text-muted-foreground">Task marker</p>
+                        <div className="flex flex-wrap gap-2">
+                          {TASK_MARKS.map((mark) => (
+                            <button
+                              key={mark.value}
+                              type="button"
+                              aria-pressed={taskMark === mark.value}
+                              onClick={() => setTaskMark(mark.value)}
+                              className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs ${taskMark === mark.value ? 'border-primary' : 'border-border'}`}
+                            >
+                              <span
+                                className="size-2.5 rounded-full"
+                                style={{ backgroundColor: mark.color }}
+                              />
+                              <span>{mark.label}</span>
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        No income or debt data available yet.
-                      </p>
+                      <textarea
+                        aria-label="Task notes"
+                        value={taskNotes}
+                        onChange={(event) => setTaskNotes(event.target.value)}
+                        placeholder="Notes (optional)"
+                        className="min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
+                      />
+                      <label className="flex items-center gap-3 text-xs text-muted-foreground">
+                        Status
+                        <select
+                          value={taskStatus}
+                          onChange={(event) =>
+                            setTaskStatus(event.target.value as SessionTaskStatus)
+                          }
+                          className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="in_progress">In Progress</option>
+                          <option value="done">Done</option>
+                        </select>
+                      </label>
                     </div>
+                  </details>
+                  {taskError ? <p className="text-xs text-destructive">{taskError}</p> : null}
+
+                  <div className="space-y-2">
+                    {isLoadingManualTasks ? (
+                      <p className="text-sm text-muted-foreground">Loading tasks...</p>
+                    ) : manualTasks.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No manual tasks added yet.</p>
+                    ) : (
+                      manualTasks.map((task) => (
+                        <div
+                          key={task.id}
+                          className="rounded-lg border border-border bg-background p-3"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <p className="text-sm font-semibold text-foreground">{task.title}</p>
+                              <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <span
+                                  className="size-2.5 rounded-full"
+                                  style={{
+                                    backgroundColor:
+                                      TASK_MARKS.find((item) => item.value === task.mark)?.color ||
+                                      '#94a3b8',
+                                  }}
+                                />
+                                <span>
+                                  Mark:{' '}
+                                  {TASK_MARKS.find((item) => item.value === task.mark)?.label ||
+                                    task.mark}
+                                </span>
+                              </p>
+                              {task.notes ? (
+                                <p className="mt-1 text-xs text-muted-foreground">{task.notes}</p>
+                              ) : null}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <select
+                                aria-label={`Status for ${task.title}`}
+                                value={task.status}
+                                onChange={(event) => {
+                                  void handleStatusChange(
+                                    task.id,
+                                    event.target.value as SessionTaskStatus
+                                  );
+                                }}
+                                disabled={isTaskMutationLoading}
+                                className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                              >
+                                <option value="pending">Pending</option>
+                                <option value="in_progress">In Progress</option>
+                                <option value="done">Done</option>
+                              </select>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                aria-label={`Delete task ${task.title}`}
+                                className="size-8"
+                                disabled={isTaskMutationLoading}
+                                onClick={() => {
+                                  void handleDeleteTask(task.id);
+                                }}
+                              >
+                                <Trash2 className="size-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card
+                id="prescriptions-section"
+                className="border-border bg-card text-card-foreground"
+              >
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center justify-between text-base">
+                    <span>Prescriptions</span>
+                    <FileText className="size-4 text-primary" />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {prescriptionRecords.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No prescriptions recorded yet.</p>
+                  ) : (
+                    prescriptionRecords.map((record) => (
+                      <div
+                        key={`prescription-${record.id}`}
+                        className="rounded-lg border border-border bg-background p-3"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-sm font-semibold text-foreground">
+                            {record.treatmentName}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatDisplayDate(record.visitDate)}
+                          </p>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{record.visitLabel}</p>
+                        <p className="mt-1 whitespace-pre-wrap text-xs text-foreground">
+                          {record.content}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card
+                id="questionnaire-section"
+                className="border-border bg-card text-card-foreground"
+              >
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center justify-between gap-3 text-base">
+                    <span>Questionnaire</span>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                        {answeredQuestionnaireCount}/{questionnaireResponses.length} answered
+                      </span>
+                      <FileText className="size-4 text-primary" />
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {questionnaireResponses.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No questionnaire responses recorded yet.
+                    </p>
                   ) : (
                     <>
-                      <div className="grid gap-3 rounded-2xl border border-border/50 bg-muted/15 p-4 text-xs sm:grid-cols-5">
-                        <div className="rounded-xl border border-emerald-200/60 bg-linear-to-br from-emerald-50/80 to-emerald-100/50 px-3 py-2 dark:border-emerald-400/20 dark:from-emerald-500/16 dark:to-emerald-500/6">
-                          <p className="text-xs text-emerald-700 dark:text-emerald-200/80">
-                            Total Income
-                          </p>
-                          <p className="mt-1 text-sm font-bold text-emerald-900 dark:text-emerald-50">
-                            {formatCurrency(totalIncome)}
-                          </p>
-                        </div>
-                        <div className="rounded-xl border border-orange-200/60 bg-linear-to-br from-orange-50/80 to-orange-100/50 px-3 py-2 dark:border-orange-400/20 dark:from-orange-500/16 dark:to-orange-500/6">
-                          <p className="text-xs text-orange-700 dark:text-orange-200/80">
-                            Total Debt
-                          </p>
-                          <p className="mt-1 text-sm font-bold text-orange-900 dark:text-orange-50">
-                            {formatCurrency(totalDebt)}
-                          </p>
-                        </div>
-                        <div className="rounded-xl border border-blue-200/60 bg-linear-to-br from-blue-50/80 to-blue-100/50 px-3 py-2 dark:border-blue-400/20 dark:from-blue-500/16 dark:to-blue-500/6">
-                          <p className="text-xs text-blue-700 dark:text-blue-200/80">
-                            Latest Month
-                          </p>
-                          <p className="mt-1 text-sm font-bold text-blue-900 dark:text-blue-50">
-                            {formatCurrency(latestIncome)}
-                          </p>
-                        </div>
-                        <div className="rounded-xl border border-red-200/60 bg-linear-to-br from-red-50/80 to-red-100/50 px-3 py-2 dark:border-red-400/20 dark:from-red-500/16 dark:to-red-500/6">
-                          <p className="text-xs text-red-700 dark:text-red-200/80">Latest Debt</p>
-                          <p className="mt-1 text-sm font-bold text-red-900 dark:text-red-50">
-                            {formatCurrency(latestDebt)}
-                          </p>
-                        </div>
-                        <div className="rounded-xl border border-violet-200/60 bg-linear-to-br from-violet-50/80 to-violet-100/50 px-3 py-2 dark:border-violet-400/20 dark:from-violet-500/16 dark:to-violet-500/6">
-                          <p className="text-xs text-violet-700 dark:text-violet-200/80">
-                            Avg / Month
-                          </p>
-                          <p className="mt-1 text-sm font-bold text-violet-900 dark:text-violet-50">
-                            {formatCurrency(averageIncome)}
-                          </p>
-                        </div>
+                      <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/15 p-3 text-xs sm:grid-cols-3">
+                        <p className="text-muted-foreground">
+                          Total Questions
+                          <span className="mt-1 block text-sm font-semibold text-foreground">
+                            {questionnaireResponses.length}
+                          </span>
+                        </p>
+                        <p className="text-muted-foreground">
+                          Answered
+                          <span className="mt-1 block text-sm font-semibold text-foreground">
+                            {answeredQuestionnaireCount}
+                          </span>
+                        </p>
+                        <p className="text-muted-foreground">
+                          Completion
+                          <span className="mt-1 block text-sm font-semibold text-foreground">
+                            {Math.round(
+                              (answeredQuestionnaireCount / questionnaireResponses.length) * 100
+                            )}
+                            %
+                          </span>
+                        </p>
                       </div>
 
-                      <div className="h-72 rounded-2xl border border-border/50 bg-background/70 p-4">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart
-                            data={incomeTrend}
-                            margin={{ bottom: 8, left: 0, right: 10, top: 8 }}
-                          >
-                            <defs>
-                              <linearGradient
-                                id="patientIncomeGradient"
-                                x1="0"
-                                x2="0"
-                                y1="0"
-                                y2="1"
-                              >
-                                <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.45} />
-                                <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0.04} />
-                              </linearGradient>
-                              <linearGradient id="patientDebtGradient" x1="0" x2="0" y1="0" y2="1">
-                                <stop offset="5%" stopColor="#f97316" stopOpacity={0.35} />
-                                <stop offset="95%" stopColor="#f97316" stopOpacity={0.04} />
-                              </linearGradient>
-                            </defs>
-                            <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3" />
-                            <XAxis
-                              axisLine={false}
-                              dataKey="label"
-                              tick={{ fill: 'var(--chart-axis)', fontSize: 11 }}
-                              tickLine={false}
-                              tickMargin={8}
-                            />
-                            <YAxis
-                              axisLine={false}
-                              tick={{ fill: 'var(--chart-axis)', fontSize: 11 }}
-                              tickFormatter={(value) => `AFN ${Number(value).toFixed(0)}`}
-                              tickLine={false}
-                              width={64}
-                            />
-                            <RechartsTooltip
-                              contentStyle={{
-                                backgroundColor: 'var(--chart-tooltip-background)',
-                                border: '1px solid var(--chart-tooltip-border)',
-                                borderRadius: '8px',
-                                boxShadow: '0 8px 22px rgba(15, 23, 42, 0.12)',
-                                color: 'var(--chart-tooltip-foreground)',
-                              }}
-                              formatter={(value, key) => [
-                                formatCurrency(Number(value ?? 0)),
-                                key === 'debt' ? 'Debt' : 'Income',
-                              ]}
-                              labelFormatter={(label) => `Month: ${label}`}
-                            />
-                            <Area
-                              dataKey="income"
-                              fill="url(#patientIncomeGradient)"
-                              stroke="#0ea5e9"
-                              strokeWidth={2.2}
-                              type="monotone"
-                            />
-                            <Area
-                              dataKey="debt"
-                              fill="url(#patientDebtGradient)"
-                              stroke="#f97316"
-                              strokeWidth={1.8}
-                              type="monotone"
-                            />
-                          </AreaChart>
-                        </ResponsiveContainer>
+                      <div className="overflow-hidden rounded-xl border border-border/70 bg-background shadow-sm">
+                        <Table>
+                          <TableHeader className="bg-muted/40">
+                            <TableRow className="hover:bg-transparent">
+                              <TableHead className="w-12">#</TableHead>
+                              <TableHead className="min-w-65">Question</TableHead>
+                              <TableHead className="min-w-55">Answer</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {questionnaireResponses.map((response, index) => (
+                              <TableRow key={response.id} className="align-top">
+                                <TableCell className="text-xs text-muted-foreground">
+                                  {String(index + 1).padStart(2, '0')}
+                                </TableCell>
+                                <TableCell className="whitespace-normal">
+                                  <p className="font-medium text-foreground">
+                                    {response.questionLabel}
+                                  </p>
+                                  {response.helpText ? (
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                      {response.helpText}
+                                    </p>
+                                  ) : null}
+                                  <span
+                                    className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                                      response.isRequired
+                                        ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/16 dark:text-rose-200'
+                                        : 'bg-slate-100 text-slate-700 dark:bg-slate-500/16 dark:text-slate-200'
+                                    }`}
+                                  >
+                                    {response.isRequired ? 'Required' : 'Optional'}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="whitespace-normal">
+                                  {response.rawAnswer ? (
+                                    <p className="whitespace-pre-wrap text-sm text-foreground">
+                                      {response.answerLabel}
+                                    </p>
+                                  ) : (
+                                    <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-500/16 dark:text-amber-200">
+                                      Not answered
+                                    </span>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
                       </div>
+
+                      <p className="text-xs text-muted-foreground">
+                        These answers are included in the printable patient record with a signature
+                        section.
+                      </p>
                     </>
                   )}
                 </CardContent>
@@ -2609,280 +2999,128 @@ export default function PatientProfilePage(): JSX.Element {
 
               <Card className="rounded-3xl border border-border/50 bg-card shadow-sm">
                 <CardHeader className="pb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="rounded-xl border border-rose-200/50 bg-rose-100/60 p-2 dark:border-rose-400/20 dark:bg-rose-500/16">
-                      <HeartPulse className="size-5 text-rose-600 dark:text-rose-300" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-base text-foreground">Dental Condition</CardTitle>
-                      <CardDescription>Overall dental health status</CardDescription>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-xl border border-emerald-200/50 bg-emerald-100/60 p-2 dark:border-emerald-400/20 dark:bg-emerald-500/16">
+                        <Wallet className="size-5 text-emerald-600 dark:text-emerald-300" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-base text-foreground">
+                          Financial history
+                        </CardTitle>
+                        <CardDescription>Payments and remaining balances by month</CardDescription>
+                      </div>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="mx-auto flex size-24 items-center justify-center rounded-full border-4 border-rose-200/60 bg-linear-to-br from-rose-50/80 to-rose-100/50 shadow-lg dark:border-rose-400/20 dark:from-rose-500/14 dark:to-rose-500/6 sm:mx-0">
-                      <div className="text-center">
-                        <p className="text-3xl font-bold text-rose-900 dark:text-rose-50">
-                          {conditionStats.overall}%
-                        </p>
-                        <p className="text-xs font-medium text-rose-700 dark:text-rose-200/80">
-                          overall
-                        </p>
+                  {incomeTrend.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                      <div className="rounded-xl border border-border/50 bg-muted/30 p-4 mb-3">
+                        <Wallet className="size-8 text-muted-foreground" />
                       </div>
+                      <p className="text-sm text-muted-foreground">
+                        No invoices or payments recorded yet.
+                      </p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {conditionStats.entries.map((entry) => (
-                        <div
-                          key={entry.key}
-                          className="flex items-center gap-2 rounded-lg border border-border/50 bg-background px-3 py-2 shadow-sm"
-                        >
-                          <div
-                            className="size-2 rounded-full"
-                            style={{ backgroundColor: CONDITIONS[entry.key].color }}
-                          />
-                          <span className="text-xs font-medium text-foreground">
-                            {CONDITIONS[entry.key].label}
-                          </span>
-                          <span className="text-xs font-semibold text-muted-foreground">
-                            {entry.percent}%
-                          </span>
+                  ) : (
+                    <>
+                      <div className="grid gap-3 rounded-2xl border border-border/50 bg-muted/15 p-4 text-xs sm:grid-cols-3">
+                        <div className="rounded-xl border border-emerald-200/60 bg-linear-to-br from-emerald-50/80 to-emerald-100/50 px-3 py-2 dark:border-emerald-400/20 dark:from-emerald-500/16 dark:to-emerald-500/6">
+                          <p className="text-xs text-emerald-700 dark:text-emerald-200/80">
+                            Payments received
+                          </p>
+                          <p className="mt-1 text-sm font-bold text-emerald-900 dark:text-emerald-50">
+                            {formatCurrency(totalIncome)}
+                          </p>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                        <div className="rounded-xl border border-orange-200/60 bg-linear-to-br from-orange-50/80 to-orange-100/50 px-3 py-2 dark:border-orange-400/20 dark:from-orange-500/16 dark:to-orange-500/6">
+                          <p className="text-xs text-orange-700 dark:text-orange-200/80">
+                            Still owed
+                          </p>
+                          <p className="mt-1 text-sm font-bold text-orange-900 dark:text-orange-50">
+                            {formatCurrency(totalDebt)}
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-blue-200/60 bg-linear-to-br from-blue-50/80 to-blue-100/50 px-3 py-2 dark:border-blue-400/20 dark:from-blue-500/16 dark:to-blue-500/6">
+                          <p className="text-xs text-blue-700 dark:text-blue-200/80">
+                            Paid in latest month
+                          </p>
+                          <p className="mt-1 text-sm font-bold text-blue-900 dark:text-blue-50">
+                            {formatCurrency(latestIncome)}
+                          </p>
+                        </div>
+                      </div>
 
-              <Card
-                id="session-tasks-section"
-                className="border-border bg-card text-card-foreground"
-              >
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center justify-between text-base">
-                    <span>Session Tasks</span>
-                    <ClipboardCheck className="size-4 text-primary" />
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="grid gap-2 md:grid-cols-2">
-                    <Input
-                      value={taskTitle}
-                      onChange={(event) => {
-                        setTaskTitle(event.target.value);
-                      }}
-                      placeholder="Task title"
-                      className="bg-background"
-                    />
-                    <div className="rounded-md border border-input bg-background p-2">
-                      <p className="mb-2 text-xs text-muted-foreground">Mark Color</p>
-                      <div className="flex flex-wrap gap-2">
-                        {TASK_MARKS.map((mark) => (
-                          <button
-                            key={mark.value}
-                            type="button"
-                            onClick={() => {
-                              setTaskMark(mark.value);
-                            }}
-                            className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs ${taskMark === mark.value ? 'border-primary' : 'border-border'}`}
+                      <div className="h-72 rounded-2xl border border-border/50 bg-background/70 p-4">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart
+                            data={incomeTrend}
+                            margin={{ bottom: 8, left: 0, right: 10, top: 8 }}
                           >
-                            <span
-                              className="size-2.5 rounded-full"
-                              style={{ backgroundColor: mark.color }}
+                            <defs>
+                              <linearGradient
+                                id="patientIncomeGradient"
+                                x1="0"
+                                x2="0"
+                                y1="0"
+                                y2="1"
+                              >
+                                <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.45} />
+                                <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0.04} />
+                              </linearGradient>
+                              <linearGradient id="patientDebtGradient" x1="0" x2="0" y1="0" y2="1">
+                                <stop offset="5%" stopColor="#f97316" stopOpacity={0.35} />
+                                <stop offset="95%" stopColor="#f97316" stopOpacity={0.04} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3" />
+                            <XAxis
+                              axisLine={false}
+                              dataKey="label"
+                              tick={{ fill: 'var(--chart-axis)', fontSize: 11 }}
+                              tickLine={false}
+                              tickMargin={8}
                             />
-                            <span>{mark.label}</span>
-                          </button>
-                        ))}
+                            <YAxis
+                              axisLine={false}
+                              tick={{ fill: 'var(--chart-axis)', fontSize: 11 }}
+                              tickFormatter={(value) => `AFN ${Number(value).toFixed(0)}`}
+                              tickLine={false}
+                              width={64}
+                            />
+                            <RechartsTooltip
+                              contentStyle={{
+                                backgroundColor: 'var(--chart-tooltip-background)',
+                                border: '1px solid var(--chart-tooltip-border)',
+                                borderRadius: '8px',
+                                boxShadow: '0 8px 22px rgba(15, 23, 42, 0.12)',
+                                color: 'var(--chart-tooltip-foreground)',
+                              }}
+                              formatter={(value, key) => [
+                                formatCurrency(Number(value ?? 0)),
+                                key === 'debt' ? 'Debt' : 'Income',
+                              ]}
+                              labelFormatter={(label) => `Month: ${label}`}
+                            />
+                            <Area
+                              dataKey="income"
+                              fill="url(#patientIncomeGradient)"
+                              stroke="#0ea5e9"
+                              strokeWidth={2.2}
+                              type="monotone"
+                            />
+                            <Area
+                              dataKey="debt"
+                              fill="url(#patientDebtGradient)"
+                              stroke="#f97316"
+                              strokeWidth={1.8}
+                              type="monotone"
+                            />
+                          </AreaChart>
+                        </ResponsiveContainer>
                       </div>
-                    </div>
-                  </div>
-                  <textarea
-                    value={taskNotes}
-                    onChange={(event) => {
-                      setTaskNotes(event.target.value);
-                    }}
-                    placeholder="Task notes"
-                    className="min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
-                  />
-                  <div className="flex flex-wrap items-center gap-2">
-                    <select
-                      value={taskStatus}
-                      onChange={(event) => {
-                        setTaskStatus(event.target.value as SessionTaskStatus);
-                      }}
-                      className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-                    >
-                      <option value="pending">Pending</option>
-                      <option value="in_progress">In Progress</option>
-                      <option value="done">Done</option>
-                    </select>
-                    <Button
-                      type="button"
-                      onClick={() => {
-                        void handleAddTask();
-                      }}
-                      disabled={!taskTitle.trim() || isTaskMutationLoading}
-                      className="bg-primary text-primary-foreground hover:bg-accent hover:text-accent-foreground"
-                    >
-                      Add Task
-                    </Button>
-                  </div>
-                  {taskError ? <p className="text-xs text-destructive">{taskError}</p> : null}
-
-                  <div className="space-y-2">
-                    {isLoadingManualTasks ? (
-                      <p className="text-sm text-muted-foreground">Loading tasks...</p>
-                    ) : manualTasks.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No manual tasks added yet.</p>
-                    ) : (
-                      manualTasks.map((task) => (
-                        <div
-                          key={task.id}
-                          className="rounded-lg border border-border bg-background p-3"
-                        >
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div>
-                              <p className="text-sm font-semibold text-foreground">{task.title}</p>
-                              <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                                <span
-                                  className="size-2.5 rounded-full"
-                                  style={{
-                                    backgroundColor:
-                                      TASK_MARKS.find((item) => item.value === task.mark)?.color ||
-                                      '#94a3b8',
-                                  }}
-                                />
-                                <span>
-                                  Mark:{' '}
-                                  {TASK_MARKS.find((item) => item.value === task.mark)?.label ||
-                                    task.mark}
-                                </span>
-                              </p>
-                              {task.notes ? (
-                                <p className="mt-1 text-xs text-muted-foreground">{task.notes}</p>
-                              ) : null}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <select
-                                value={task.status}
-                                onChange={(event) => {
-                                  void handleStatusChange(
-                                    task.id,
-                                    event.target.value as SessionTaskStatus
-                                  );
-                                }}
-                                disabled={isTaskMutationLoading}
-                                className="h-8 rounded-md border border-input bg-background px-2 text-xs"
-                              >
-                                <option value="pending">Pending</option>
-                                <option value="in_progress">In Progress</option>
-                                <option value="done">Done</option>
-                              </select>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon"
-                                className="size-8"
-                                disabled={isTaskMutationLoading}
-                                onClick={() => {
-                                  void handleDeleteTask(task.id);
-                                }}
-                              >
-                                <Trash2 className="size-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card
-                id="patient-visits-section"
-                className="border-border bg-card text-card-foreground"
-              >
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center justify-between text-base">
-                    <span>Patient Visits</span>
-                    <CalendarDays className="size-4 text-primary" />
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {orderedVisits.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No visits recorded yet.</p>
-                  ) : (
-                    orderedVisits.map((visit) => (
-                      <button
-                        key={visit.id}
-                        type="button"
-                        onClick={() => {
-                          const encodedVisitId = encodeURIComponent(String(visit.id));
-                          router.push(
-                            `/${locale}/dental-management/visits/chart?visitId=${encodedVisitId}`
-                          );
-                        }}
-                        className="w-full rounded-lg border border-border bg-background p-3 text-left transition hover:border-primary/40 hover:bg-accent/20"
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-sm font-semibold text-foreground">
-                            {visit.tag || visit.appointmentTag || `Visit #${visit.id}`}
-                          </p>
-                          <p className="text-xs text-muted-foreground">{visit.visitDate || '-'}</p>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          Dentist: {visit.dentistName || visit.dentistId || '-'}
-                        </p>
-                        {visit.nextVisitDate ? (
-                          <p className="text-xs text-muted-foreground">
-                            Next Visit: {visit.nextVisitDate}
-                          </p>
-                        ) : null}
-                        {visit.diagnosisNotes ? (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {visit.diagnosisNotes}
-                          </p>
-                        ) : null}
-                      </button>
-                    ))
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card
-                id="prescriptions-section"
-                className="border-border bg-card text-card-foreground"
-              >
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center justify-between text-base">
-                    <span>Prescriptions</span>
-                    <FileText className="size-4 text-primary" />
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {prescriptionRecords.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No prescriptions recorded yet.</p>
-                  ) : (
-                    prescriptionRecords.map((record) => (
-                      <div
-                        key={`prescription-${record.id}`}
-                        className="rounded-lg border border-border bg-background p-3"
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-sm font-semibold text-foreground">
-                            {record.treatmentName}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatDisplayDate(record.visitDate)}
-                          </p>
-                        </div>
-                        <p className="text-xs text-muted-foreground">{record.visitLabel}</p>
-                        <p className="mt-1 whitespace-pre-wrap text-xs text-foreground">
-                          {record.content}
-                        </p>
-                      </div>
-                    ))
+                    </>
                   )}
                 </CardContent>
               </Card>
@@ -2928,197 +3166,7 @@ export default function PatientProfilePage(): JSX.Element {
                   </p>
                 </CardContent>
               </Card>
-
-              <Card className="border-border bg-card text-card-foreground">
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center justify-between gap-3 text-base">
-                    <span>Questionnaire</span>
-                    <div className="flex items-center gap-2">
-                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-                        {answeredQuestionnaireCount}/{questionnaireResponses.length} answered
-                      </span>
-                      <FileText className="size-4 text-primary" />
-                    </div>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {questionnaireResponses.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      No questionnaire responses recorded yet.
-                    </p>
-                  ) : (
-                    <>
-                      <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/15 p-3 text-xs sm:grid-cols-3">
-                        <p className="text-muted-foreground">
-                          Total Questions
-                          <span className="mt-1 block text-sm font-semibold text-foreground">
-                            {questionnaireResponses.length}
-                          </span>
-                        </p>
-                        <p className="text-muted-foreground">
-                          Answered
-                          <span className="mt-1 block text-sm font-semibold text-foreground">
-                            {answeredQuestionnaireCount}
-                          </span>
-                        </p>
-                        <p className="text-muted-foreground">
-                          Completion
-                          <span className="mt-1 block text-sm font-semibold text-foreground">
-                            {Math.round(
-                              (answeredQuestionnaireCount / questionnaireResponses.length) * 100
-                            )}
-                            %
-                          </span>
-                        </p>
-                      </div>
-
-                      <div className="overflow-hidden rounded-xl border border-border/70 bg-background shadow-sm">
-                        <Table>
-                          <TableHeader className="bg-muted/40">
-                            <TableRow className="hover:bg-transparent">
-                              <TableHead className="w-12">#</TableHead>
-                              <TableHead className="min-w-65">Question</TableHead>
-                              <TableHead className="min-w-55">Answer</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {questionnaireResponses.map((response, index) => (
-                              <TableRow key={response.id} className="align-top">
-                                <TableCell className="text-xs text-muted-foreground">
-                                  {String(index + 1).padStart(2, '0')}
-                                </TableCell>
-                                <TableCell className="whitespace-normal">
-                                  <p className="font-medium text-foreground">
-                                    {response.questionLabel}
-                                  </p>
-                                  {response.helpText ? (
-                                    <p className="mt-1 text-xs text-muted-foreground">
-                                      {response.helpText}
-                                    </p>
-                                  ) : null}
-                                  <span
-                                    className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                                      response.isRequired
-                                        ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/16 dark:text-rose-200'
-                                        : 'bg-slate-100 text-slate-700 dark:bg-slate-500/16 dark:text-slate-200'
-                                    }`}
-                                  >
-                                    {response.isRequired ? 'Required' : 'Optional'}
-                                  </span>
-                                </TableCell>
-                                <TableCell className="whitespace-normal">
-                                  {response.rawAnswer ? (
-                                    <p className="whitespace-pre-wrap text-sm text-foreground">
-                                      {response.answerLabel}
-                                    </p>
-                                  ) : (
-                                    <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-500/16 dark:text-amber-200">
-                                      Not answered
-                                    </span>
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-
-                      <p className="text-xs text-muted-foreground">
-                        These answers are included in the printable patient record with a signature
-                        section.
-                      </p>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
             </div>
-
-            <Card className="min-w-0 rounded-2xl border border-border/60 bg-card shadow-lg">
-              <CardHeader className="pb-4 border-b border-border/40">
-                <CardTitle className="flex items-center justify-between text-sm font-semibold tracking-tight">
-                  <span className="text-foreground">Dental Scheme</span>
-                  <div className="rounded-lg bg-primary/10 p-2">
-                    <Stethoscope className="size-4 text-primary" />
-                  </div>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-6">
-                <div className="relative mx-auto h-90 w-full max-w-90 overflow-hidden">
-                  {RING_TEETH.map((toothNumber, index) => {
-                    const angle = (index / RING_TEETH.length) * Math.PI * 2 - Math.PI / 2;
-                    const markerRadius = 38;
-                    const labelRadius = 47;
-                    const markerX = 50 + markerRadius * Math.cos(angle);
-                    const markerY = 50 + markerRadius * Math.sin(angle);
-                    const labelX = 50 + labelRadius * Math.cos(angle);
-                    const labelY = 50 + labelRadius * Math.sin(angle);
-                    const condition = toothConditionMap[toothNumber];
-                    const conditionColor = condition ? CONDITIONS[condition].color : '#d6ccc2';
-
-                    return (
-                      <div key={toothNumber}>
-                        <div
-                          className={`absolute size-7 -translate-x-1/2 -translate-y-1/2 rounded-full transition-all duration-300 hover:scale-125 hover:z-10 ${condition ? 'border-2' : 'border-0'}`}
-                          style={{
-                            backgroundColor: condition
-                              ? hexToRgba(conditionColor, 0.95)
-                              : '#e8e4e0',
-                            borderColor: condition ? conditionColor : '#c6ac8f',
-                            left: `${markerX}%`,
-                            top: `${markerY}%`,
-                            boxShadow: condition
-                              ? `0 4px 12px ${hexToRgba(conditionColor, 0.35)}, 0 2px 4px ${hexToRgba(conditionColor, 0.2)}`
-                              : '0 2px 4px rgba(0,0,0,0.08)',
-                          }}
-                        />
-                        <span
-                          className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 text-[11px] font-bold text-foreground/90"
-                          style={{
-                            left: `${labelX}%`,
-                            top: `${labelY}%`,
-                          }}
-                        >
-                          {toothNumber}
-                        </span>
-                      </div>
-                    );
-                  })}
-
-                  <div className="absolute left-1/2 top-1/2 flex size-32 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full border-2 border-border/40 bg-card shadow-xl">
-                    <div className="rounded-xl bg-primary/5 p-2.5 mb-2">
-                      <Sparkles className="size-6 text-primary" />
-                    </div>
-                    <p className="text-xs font-semibold text-foreground/80">Teeth Map</p>
-                    <p className="text-sm font-bold text-foreground">{RING_TEETH.length} teeth</p>
-                  </div>
-                </div>
-
-                <div className="mt-6 grid grid-cols-2 gap-3 text-xs">
-                  {Object.entries(CONDITIONS).map(([key, condition]) => (
-                    <div
-                      key={key}
-                      className="flex items-center gap-2.5 rounded-lg border border-border/40 bg-background/60 px-3 py-2.5 transition-all hover:border-border/60 hover:bg-background/80"
-                    >
-                      <span
-                        className="size-3 rounded-full shadow-sm"
-                        style={{
-                          backgroundColor: condition.color,
-                          boxShadow: `0 2px 4px ${hexToRgba(condition.color, 0.3)}`,
-                        }}
-                      />
-                      <span className="font-medium text-foreground/90">{condition.label}</span>
-                    </div>
-                  ))}
-                </div>
-                <p className="mt-4 text-xs text-muted-foreground/80">
-                  {isLoadingTreatments ? (
-                    <span>Loading treatment chart...</span>
-                  ) : (
-                    <span>{typedVisitTreatments.length} recorded treatment entries</span>
-                  )}
-                </p>
-              </CardContent>
-            </Card>
           </div>
         </div>
       </div>

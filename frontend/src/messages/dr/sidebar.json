@@ -6,8 +6,8 @@
     "overview": "نمای کلی"
   },
   "backupManagement": {
-    "title": "Backup Management",
-    "backups": "Backups"
+    "title": "?????? ???????? ???????",
+    "backups": "???????? ???????"
   },
   "userManagement": {
     "title": "مدیریت کاربر",
@@ -43,18 +43,19 @@
     "clinicalExpenses": "خریدهای کلینیکی",
     "safe": "دفتر کل امن",
     "salaries": "معاشات",
-    "shareholders": "Shareholders"
+    "shareholders": "??????????",
+    "financialControl": "????? ????"
   },
   "inventoryManagement": {
-    "title": "Inventory Management",
-    "inventory": "Inventory"
+    "title": "?????? ??????",
+    "inventory": "??????"
   },
   "dentalManagement": {
     "title": "مدیریت دندان",
     "patients": "بیماران",
-    "patientQuestions": "Patient Questions",
+    "patientQuestions": "???????? ??????",
     "staff": "کارکنان",
-    "shareholders": "Shareholders",
+    "shareholders": "??????????",
     "staffProfiles": "مشخصات کارکنان",
     "appointments": "قرار ملاقات‌ها",
     "visits": "ویزیت‌ها",
@@ -66,10 +67,11 @@
     "invoices": "رسیدها",
     "payments": "پرداخت‌ها",
     "aiImaging": "تصویربرداری AI",
-    "aiImagingN8n": "تصویربرداری AI (n8n)"
+    "aiImagingN8n": "تصویربرداری AI (n8n)",
+    "queue": "???? ??????"
   },
   "clinic": {
     "title": "کلینیک",
-    "clinicProfile": "Clinic Profile"
+    "clinicProfile": "?????? ??????"
   }
 }

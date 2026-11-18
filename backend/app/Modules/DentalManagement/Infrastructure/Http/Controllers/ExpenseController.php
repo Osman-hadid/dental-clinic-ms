@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\DentalManagement\Infrastructure\Http\Controllers;
 
+use App\Modules\Common\Application\Exceptions\ApiException;
 use App\Modules\Common\Infrastructure\Http\Controllers\BaseApiController;
 use App\Modules\Common\Infrastructure\Resources\PaginatedResource;
-use App\Modules\Common\Application\Exceptions\ApiException;
 use App\Modules\DentalManagement\Domain\Entities\Expense;
 use App\Modules\DentalManagement\Domain\Entities\SafeTransaction;
 use App\Modules\DentalManagement\Domain\Services\CurrencyService;
@@ -23,6 +23,7 @@ final class ExpenseController extends BaseApiController
 
     public function index(ListExpensesRequest $listExpensesRequest): JsonResponse
     {
+        $this->authorize('viewAny', Expense::class);
         $queryData = $listExpensesRequest->validated();
         $filters = $queryData['filters'] ?? [];
 
@@ -61,6 +62,7 @@ final class ExpenseController extends BaseApiController
 
     public function store(StoreExpenseRequest $storeExpenseRequest): JsonResponse
     {
+        $this->authorize('create', Expense::class);
         $data = $this->toDatabasePayload($storeExpenseRequest->validated());
 
         $expense = DB::transaction(function () use ($data): Expense {
@@ -79,6 +81,7 @@ final class ExpenseController extends BaseApiController
 
     public function show(int $id): JsonResponse
     {
+        $this->authorize('view', Expense::class);
         $expense = Expense::query()->with('staff')->findOrFail($id);
 
         return $this->successResponse(
@@ -89,6 +92,7 @@ final class ExpenseController extends BaseApiController
 
     public function update(UpdateExpenseRequest $updateExpenseRequest, int $id): JsonResponse
     {
+        $this->authorize('update', Expense::class);
         $data = $this->toDatabasePayload($updateExpenseRequest->validated());
 
         $expense = DB::transaction(function () use ($data, $id): Expense {
@@ -108,6 +112,7 @@ final class ExpenseController extends BaseApiController
 
     public function destroy(int $id): JsonResponse
     {
+        $this->authorize('delete', Expense::class);
         DB::transaction(function () use ($id): void {
             $expense = Expense::query()->findOrFail($id);
             $expense->delete();
@@ -171,13 +176,13 @@ final class ExpenseController extends BaseApiController
             exchangeRate: isset($data['exchangeRate']) ? (float) $data['exchangeRate'] : null,
         );
         $amountInput = round((float) ($data['amount'] ?? 0), 2);
-        $amount = $this->currencyService->toUsd(
+        $amount = $this->currencyService->toAfn(
             amountInput: $amountInput,
             currency: $resolvedCurrency['currency'],
             exchangeRate: (float) $resolvedCurrency['exchangeRate'],
         );
         $unitCost = $unitCostInput !== null
-            ? $this->currencyService->toUsd(
+            ? $this->currencyService->toAfn(
                 amountInput: $unitCostInput,
                 currency: $resolvedCurrency['currency'],
                 exchangeRate: (float) $resolvedCurrency['exchangeRate'],
@@ -212,6 +217,7 @@ final class ExpenseController extends BaseApiController
     {
         if ($trashedFilter === 'with') {
             $query->withTrashed();
+
             return;
         }
 

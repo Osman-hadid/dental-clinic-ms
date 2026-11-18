@@ -1,4 +1,7 @@
 {
+  "sidebar": "فهرست کناری",
+  "mobileSidebarDescription": "فهرست کناری موبایل را نمایش می‌دهد.",
+  "toggleSidebar": "باز و بسته کردن فهرست کناری",
   "selectLocale": "انتخاب زبان",
   "searchForACommand": "برای اجرای فرمان جستجو کنید...",
   "commandPalette": "فهرست فرمان‌ها",

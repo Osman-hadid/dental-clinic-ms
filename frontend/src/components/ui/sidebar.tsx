@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { JSX } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
@@ -15,6 +16,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useIsMobile } from '@/hooks/useMobile';
 import { cn } from '@/lib/utilities';
+import { getDirection } from '@/modules/common/utils/locale';
 import { Slot } from '@radix-ui/react-slot';
 import { cva, VariantProps } from 'class-variance-authority';
 import { PanelLeftIcon } from 'lucide-react';
@@ -171,6 +173,11 @@ const Sidebar = ({
   collapsible?: 'offcanvas' | 'icon' | 'none';
 }): JSX.Element => {
   const { isMobile, openMobile, setOpenMobile, state } = useSidebar();
+  const locale = useLocale();
+  const t = useTranslations('component');
+  const physicalSide = getDirection(locale) === 'rtl' ? (side === 'left' ? 'right' : 'left') : side;
+  const desktopOffset =
+    state === 'collapsed' && collapsible === 'offcanvas' ? 'calc(var(--sidebar-width) * -1)' : 0;
 
   if (collapsible === 'none') {
     return (
@@ -198,15 +205,26 @@ const Sidebar = ({
           style={
             {
               '--sidebar-width': SIDEBAR_WIDTH_MOBILE,
+              left: physicalSide === 'left' ? 0 : 'auto',
+              right: physicalSide === 'right' ? 0 : 'auto',
             } as React.CSSProperties
           }
-          side={side}
+          side={physicalSide}
         >
           <SheetHeader className="sr-only">
-            <SheetTitle>Sidebar</SheetTitle>
-            <SheetDescription>Displays the mobile sidebar.</SheetDescription>
+            <SheetTitle>{t('sidebar')}</SheetTitle>
+            <SheetDescription>{t('mobileSidebarDescription')}</SheetDescription>
           </SheetHeader>
-          <div className="flex h-full w-full flex-col">{children}</div>
+          <div
+            className="flex h-full w-full flex-col"
+            onClick={(event) => {
+              if ((event.target as HTMLElement).closest('a')) {
+                setOpenMobile(false);
+              }
+            }}
+          >
+            {children}
+          </div>
         </SheetContent>
       </Sheet>
     );
@@ -247,6 +265,12 @@ const Sidebar = ({
           className
         )}
         {...props}
+        style={{
+          // Keep placement correct for Dari's prs language tag in exported utility CSS.
+          left: physicalSide === 'left' ? desktopOffset : 'auto',
+          right: physicalSide === 'right' ? desktopOffset : 'auto',
+          ...props.style,
+        }}
       >
         <div
           data-sidebar="sidebar"
@@ -266,11 +290,14 @@ const SidebarTrigger = ({
   ...props
 }: React.ComponentProps<typeof Button>): JSX.Element => {
   const { toggleSidebar } = useSidebar();
+  const t = useTranslations('component');
 
   return (
     <Button
       data-sidebar="trigger"
       data-slot="sidebar-trigger"
+      aria-label={t('toggleSidebar')}
+      title={t('toggleSidebar')}
       variant="ghost"
       size="icon"
       className={cn('size-7', className)}
@@ -281,7 +308,7 @@ const SidebarTrigger = ({
       {...props}
     >
       <PanelLeftIcon />
-      <span className="sr-only">Toggle Sidebar</span>
+      <span className="sr-only">{t('toggleSidebar')}</span>
     </Button>
   );
 };
@@ -316,7 +343,7 @@ const SidebarInset = ({ className, ...props }: React.ComponentProps<'main'>): JS
     <main
       data-slot="sidebar-inset"
       className={cn(
-        'bg-background relative flex w-full flex-1 flex-col',
+        'bg-background relative flex w-full min-w-0 flex-1 flex-col',
         'md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ms-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ms-2',
         className
       )}

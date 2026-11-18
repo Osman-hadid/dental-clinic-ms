@@ -1,18 +1,24 @@
 'use client';
 
-import React, { FormEvent, JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, JSX, useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Header } from '@/components/header';
 import { LoadingState } from '@/components/shared/loading-state';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { type CurrencyCode, formatCurrency } from '@/lib/currency-utils';
+import { formatCurrency, type CurrencyCode } from '@/lib/currency-utils';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
-import { createDefaultReportRange, fetchReport, toInputDate } from '@/modules/dental-management/presentation/reports/report-client';
-import { Wallet } from 'lucide-react';
+import { getIntlLocale } from '@/modules/common/utils/locale';
+import {
+  createDefaultReportRange,
+  fetchReport,
+  toInputDate,
+} from '@/modules/dental-management/presentation/reports/report-client';
+import { ReportPageIntro } from '@/modules/dental-management/presentation/reports/report-page-intro';
+import { Check, CircleDollarSign, FileText, Search, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
+import { useDebounce } from 'use-debounce';
 
 type DebtRow = {
   agingBucket: string;
@@ -33,11 +39,14 @@ type DebtRow = {
   status: string;
 };
 
-type DebtCurrencySections = Record<CurrencyCode, {
-  totalDebt: number;
-  totalNet: number;
-  totalPaid: number;
-}>;
+type DebtCurrencySections = Record<
+  CurrencyCode,
+  {
+    totalDebt: number;
+    totalNet: number;
+    totalPaid: number;
+  }
+>;
 
 type DebtReportResponse = {
   aging: Array<{ amount: number; bucket: string; count: number }>;
@@ -73,15 +82,18 @@ const extractApiErrorMessage = (
   fallback: string,
   remainingTemplate: (remaining: string) => string
 ): string => {
-  const payload = (error as {
-    response?: { data?: { error?: { details?: Record<string, unknown>; message?: string } } };
-  })?.response?.data?.error;
+  const payload = (
+    error as {
+      response?: { data?: { error?: { details?: Record<string, unknown>; message?: string } } };
+    }
+  )?.response?.data?.error;
 
   if (!payload) return fallback;
   const currency = String(payload.details?.currency ?? 'AFN') === 'USD' ? 'USD' : 'AFN';
-  const amountLimit = payload.details?.outstandingAmountInput
-    ?? payload.details?.outstandingBalance
-    ?? payload.details?.outstandingAmount;
+  const amountLimit =
+    payload.details?.outstandingAmountInput ??
+    payload.details?.outstandingBalance ??
+    payload.details?.outstandingAmount;
   if (typeof amountLimit === 'number') {
     return remainingTemplate(formatCurrency(amountLimit, currency));
   }
@@ -114,18 +126,19 @@ const getSettledNote = (baseNote: string, row: DebtRow): string => {
   return note ? `${prefix} - ${note}` : prefix;
 };
 
-export default function DebtsPage(): JSX.Element {
+const DebtsPage = (): JSX.Element => {
   const locale = useLocale();
   const tDebts = useTranslations('app.debtsPage');
   const tSidebar = useTranslations('sidebar');
   const tReports = useTranslations('sidebar.reports');
   const range = createDefaultReportRange(90);
   const [report, setReport] = useState<DebtReportResponse | null>(null);
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [form, setForm] = useState<SettleFormState>(() => createDefaultForm());
   const [startDate, setStartDate] = useState(range.startDate);
   const [endDate, setEndDate] = useState(range.endDate);
   const [search, setSearch] = useState('');
+  const [debouncedSearch] = useDebounce(search, 350);
   const [invoiceId, setInvoiceId] = useState('');
   const [agingBucket, setAgingBucket] = useState('all');
   const [page, setPage] = useState(1);
@@ -137,39 +150,54 @@ export default function DebtsPage(): JSX.Element {
   const activePage = report?.rows.meta.currentPage ?? page;
   const lastPage = report?.rows.meta.lastPage ?? 1;
 
-  const refreshDebts = useCallback(async (pageNumber = page): Promise<void> => {
-    setIsLoading(true);
-    try {
-      const data = await fetchReport<DebtReportResponse>('/api/v1/dental-management/reports/debts', {
-        debtAgingBucket: agingBucket,
-        endDate,
-        invoiceId,
-        page: pageNumber,
-        perPage: 12,
-        search,
-        sortBy: 'invoiceDate',
-        sortDirection: 'desc',
-        startDate,
-      });
-      setReport(data);
-      setPage(pageNumber);
-      const validIds = new Set(data.rows.data.map((row) => row.id));
-      setSelectedIds((previous) => previous.filter((id) => validIds.has(id)));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [agingBucket, endDate, invoiceId, page, search, startDate]);
+  const refreshDebts = useCallback(
+    async (pageNumber = 1): Promise<void> => {
+      setIsLoading(true);
+      try {
+        const data = await fetchReport<DebtReportResponse>(
+          '/api/v1/dental-management/reports/debts',
+          {
+            debtAgingBucket: agingBucket,
+            endDate,
+            invoiceId,
+            page: pageNumber,
+            perPage: 12,
+            search: debouncedSearch,
+            sortBy: 'invoiceDate',
+            sortDirection: 'desc',
+            startDate,
+          }
+        );
+        setReport(data);
+        setPage(pageNumber);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [agingBucket, debouncedSearch, endDate, invoiceId, startDate]
+  );
 
   useEffect(() => {
-    void refreshDebts(page);
-  }, [agingBucket, endDate, invoiceId, page, search, startDate, refreshDebts]);
+    void refreshDebts(1);
+  }, [refreshDebts]);
 
-  const selectedRows = useMemo(() => {
-    const ids = new Set(selectedIds);
-    return (report?.rows.data ?? []).filter((row) => ids.has(row.id));
-  }, [report?.rows.data, selectedIds]);
+  useEffect(() => {
+    if (selectedId !== null && report && !report.rows.data.some((row) => row.id === selectedId)) {
+      setSelectedId(null);
+      setForm((previous) => ({ ...previous, amount: '' }));
+    }
+  }, [report, selectedId]);
 
-  const selectedDebt = selectedRows.length === 1 ? selectedRows[0] : null;
+  const selectedDebt = report?.rows.data.find((row) => row.id === selectedId) ?? null;
+  const patientGroups = useMemo(() => {
+    const groups = new Map<string, { patientName: string; invoices: DebtRow[] }>();
+    for (const row of report?.rows.data ?? []) {
+      const group = groups.get(row.patientId) ?? { invoices: [], patientName: row.patientName };
+      group.invoices.push(row);
+      groups.set(row.patientId, group);
+    }
+    return Array.from(groups.entries()).map(([patientId, group]) => ({ patientId, ...group }));
+  }, [report?.rows.data]);
   const enteredAmount = Number.parseFloat(form.amount);
   const normalizedEnteredAmount = Number.isFinite(enteredAmount) ? Math.max(0, enteredAmount) : 0;
   const selectedDebtAmount = selectedDebt?.debtAmountInput ?? 0;
@@ -178,45 +206,27 @@ export default function DebtsPage(): JSX.Element {
     ? Math.max(0, Number((selectedDebtAmount - normalizedEnteredAmount).toFixed(2)))
     : 0;
 
-  const renderMoney = (amountInput: number, currency: CurrencyCode, amountAfn: number): JSX.Element => (
+  const renderMoney = (amountInput: number, currency: CurrencyCode): JSX.Element => (
     <div>{formatCurrency(amountInput, currency)}</div>
   );
 
-  const toggleSelectAll = (checked: boolean): void => {
-    if (checked) {
-      setSelectedIds((report?.rows.data ?? []).map((row) => row.id));
-      return;
-    }
-    setSelectedIds([]);
+  const selectDebt = (row: DebtRow): void => {
+    setSelectedId(row.id);
+    setForm((previous) => ({ ...previous, amount: '' }));
   };
 
-  const toggleRow = (id: number, checked: boolean): void => {
-    setSelectedIds((previous) => {
-      if (checked) {
-        return previous.includes(id) ? previous : [...previous, id];
-      }
-      return previous.filter((item) => item !== id);
-    });
-  };
-
-  const togglePatientRows = (patientId: string, checked: boolean): void => {
-    const patientInvoices = (report?.rows.data ?? [])
-      .filter((row) => row.patientId === patientId)
-      .map((row) => row.id);
-    
-    setSelectedIds((previous) => {
-      if (checked) {
-        const newIds = patientInvoices.filter((id) => !previous.includes(id));
-        return [...previous, ...newIds];
-      }
-      return previous.filter((id) => !patientInvoices.includes(id));
-    });
+  const resetFilters = (): void => {
+    setStartDate(range.startDate);
+    setEndDate(range.endDate);
+    setSearch('');
+    setInvoiceId('');
+    setAgingBucket('all');
   };
 
   const handleSettleSelected = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
-    if (selectedRows.length === 0) {
-      toast.error(tDebts('selectAtLeastOne'));
+    if (!selectedDebt) {
+      toast.error('Choose an invoice before recording a payment.');
       return;
     }
 
@@ -226,44 +236,33 @@ export default function DebtsPage(): JSX.Element {
       return;
     }
 
-    if (selectedRows.length !== 1) {
-      toast.error('Select exactly one invoice. Debt payments are entered in that invoice currency.');
-      return;
-    }
-
-    if (parsedAmount - selectedRows[0].debtAmountInput > 0.01) {
-      toast.error(`Amount cannot be greater than remaining debt ${formatCurrency(selectedRows[0].debtAmountInput, selectedRows[0].currency)}.`);
+    if (parsedAmount - selectedDebt.debtAmountInput > 0.01) {
+      toast.error(
+        `Amount cannot be greater than remaining debt ${formatCurrency(selectedDebt.debtAmountInput, selectedDebt.currency)}.`
+      );
       return;
     }
 
     setIsSubmitting(true);
 
-    void Promise.allSettled(
-      selectedRows.map(async (row) => {
-        await client.post(`/api/v1/dental-management/debts/${row.id}/settle`, {
-          amount: parsedAmount,
-          method: form.method,
-          notes: getSettledNote(form.notes, row),
-          paymentDate: form.paymentDate,
-        });
+    void client
+      .post(`/api/v1/dental-management/debts/${selectedDebt.id}/settle`, {
+        amount: parsedAmount,
+        method: form.method,
+        notes: getSettledNote(form.notes, selectedDebt),
+        paymentDate: form.paymentDate,
       })
-    )
-      .then(async (results) => {
-        const successCount = results.filter((result) => result.status === 'fulfilled').length;
-        const firstFailure = results.find((result) => result.status === 'rejected') as PromiseRejectedResult | undefined;
-
-        if (successCount > 0) {
-          toast.success(tDebts('savedSuccess', { count: successCount }));
-          await refreshDebts(1);
-        }
-
-        if (firstFailure) {
-          toast.error(extractApiErrorMessage(
-            firstFailure.reason,
-            tDebts('partialFailure'),
-            (remaining) => tDebts('remainingError', { remaining }),
-          ));
-        }
+      .then(async () => {
+        toast.success(tDebts('savedSuccess', { count: 1 }));
+        setForm((previous) => ({ ...previous, amount: '' }));
+        await refreshDebts(1);
+      })
+      .catch((error: unknown) => {
+        toast.error(
+          extractApiErrorMessage(error, 'Payment could not be recorded.', (remaining) =>
+            tDebts('remainingError', { remaining })
+          )
+        );
       })
       .finally(() => {
         setIsSubmitting(false);
@@ -280,294 +279,474 @@ export default function DebtsPage(): JSX.Element {
       />
       <div className="flex flex-1 flex-col">
         <div className="@container/main flex flex-1 flex-col gap-2">
-          <div className="flex flex-col gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6">
-            <Card className="rounded-3xl border border-border/50 bg-card">
-              <CardHeader>
-                <CardTitle className="inline-flex items-center gap-2">
-                  <Wallet className="size-5 text-rose-500" />
-                  {tDebts('title')}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
-                <form onSubmit={handleSettleSelected} className="grid gap-3 rounded-2xl border bg-background/90 p-4">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-xl border bg-background/80 p-3 dark:border-border/60">
-                      <p className="text-xs text-muted-foreground">Selected Debt</p>
-                      <div className="text-lg font-semibold text-rose-600">
-                        {selectedDebt ? renderMoney(selectedDebt.debtAmountInput, selectedDebt.currency, selectedDebt.debtAmount) : formatCurrency(0, 'AFN')}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {selectedDebt
-                          ? `Invoice #${selectedDebt.invoiceId} - ${selectedDebt.patientName}`
-                          : selectedRows.length > 1
-                          ? `${selectedRows.length} invoices selected. Select one to pay in its own currency.`
-                          : 'Select one invoice to see the debt amount.'}
-                      </p>
-                    </div>
-                    <div className="rounded-xl border bg-background/80 p-3 dark:border-border/60">
-                      <p className="text-xs text-muted-foreground">Remaining After Payment</p>
-                      <div className="text-lg font-semibold text-amber-600">
-                        {selectedDebt ? formatCurrency(remainingAfterPayment, selectedDebtCurrency) : formatCurrency(0, 'AFN')}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        This updates in the selected invoice currency.
-                      </p>
-                    </div>
-                  </div>
+          <div className="flex min-w-0 flex-col gap-5 px-4 py-4 md:gap-6 md:px-6 md:py-6">
+            <ReportPageIntro
+              title="Outstanding debts"
+              description="Find unpaid invoices, follow up on older balances, and record a payment against one invoice."
+            />
 
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="grid gap-1.5">
-                      <Label htmlFor="debt-date">{tDebts('paymentDate')}</Label>
-                      <Input id="debt-date" type="date" value={form.paymentDate} onChange={(event) => setForm((previous) => ({ ...previous, paymentDate: event.target.value }))} required />
+            <section aria-label="Debt summary" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <Card className="min-h-32 min-w-0 border-rose-200/70 bg-gradient-to-br from-rose-50 to-card dark:border-rose-500/20 dark:from-rose-500/10">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm text-muted-foreground">Total still owed</p>
+                      <p className="mt-2 break-words text-2xl font-semibold text-rose-700 dark:text-rose-200">
+                        {formatCurrency(report?.summary.totalDebt ?? 0, 'AFN')}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">Combined value in AFN</p>
                     </div>
-                    <div className="grid gap-1.5">
-                      <Label htmlFor="debt-amount">Amount To Pay {selectedDebt ? `(${selectedDebt.currency})` : ''}</Label>
-                      <Input id="debt-amount" type="number" min="0" step="0.01" value={form.amount ?? ''} onChange={(event) => setForm((previous) => ({ ...previous, amount: event.target.value }))} placeholder={selectedDebt ? `Enter paid amount in ${selectedDebt.currency}` : 'Select one invoice first'} required />
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-200">
+                      <CircleDollarSign className="size-5" aria-hidden="true" />
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="min-h-32 min-w-0">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Invoices to follow up</p>
+                      <p className="mt-2 text-2xl font-semibold">
+                        {totalDebts.toLocaleString(getIntlLocale(locale))}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">Unpaid or partly paid</p>
+                    </div>
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      <FileText className="size-5" aria-hidden="true" />
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+              {(['AFN', 'USD'] as CurrencyCode[]).map((currency) => (
+                <Card className="min-h-32 min-w-0" key={currency}>
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm text-muted-foreground">Outstanding in {currency}</p>
+                        <p className="mt-2 break-words text-2xl font-semibold">
+                          {formatCurrency(currencySections[currency].totalDebt, currency)}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">Invoice currency</p>
+                      </div>
+                      <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                        <span className="text-[10px] font-bold tracking-tight">{currency}</span>
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </section>
+
+            <details className="group rounded-2xl border bg-card px-4 py-3">
+              <summary className="cursor-pointer list-none text-sm font-medium marker:hidden">
+                <span className="flex items-center justify-between gap-3">
+                  <span>View paid and invoice totals by currency</span>
+                  <span className="text-xs text-muted-foreground group-open:hidden">
+                    Show details
+                  </span>
+                  <span className="hidden text-xs text-muted-foreground group-open:inline">
+                    Hide details
+                  </span>
+                </span>
+              </summary>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {(['AFN', 'USD'] as CurrencyCode[]).map((currency) => (
+                  <div className="rounded-xl border bg-muted/20 p-4" key={currency}>
+                    <h2 className="text-sm font-semibold">{currency} invoices</h2>
+                    <div className="mt-3 grid grid-cols-2 gap-3">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Invoice total</p>
+                        <p className="mt-1 font-medium">
+                          {formatCurrency(currencySections[currency].totalNet, currency)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Already paid</p>
+                        <p className="mt-1 font-medium">
+                          {formatCurrency(currencySections[currency].totalPaid, currency)}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                  <div className="grid gap-1.5">
-                      <Label htmlFor="debt-method">{tDebts('paymentMethod')}</Label>
-                      <select id="debt-method" className="h-9 rounded-md border bg-background px-3 text-sm" value={form.method} onChange={(event) => setForm((previous) => ({ ...previous, method: event.target.value as SettleFormState['method'] }))}>
-                        <option value="cash">{tDebts('methods.cash')}</option>
-                        <option value="card">{tDebts('methods.card')}</option>
-                        <option value="insurance">{tDebts('methods.insurance')}</option>
-                      </select>
-                    </div>
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="debt-notes">{tDebts('notes')}</Label>
-                    <Input id="debt-notes" value={form.notes} onChange={(event) => setForm((previous) => ({ ...previous, notes: event.target.value }))} placeholder={tDebts('notesPlaceholder')} />
+                ))}
+              </div>
+            </details>
+
+            <Card className="min-w-0 rounded-3xl border-border/60">
+              <CardHeader className="flex flex-row items-start justify-between gap-3 pb-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <CardTitle>Find an invoice</CardTitle>
+                    <CardDescription className="mt-1">
+                      Search by patient or invoice number. Results update as you change filters.
+                    </CardDescription>
                   </div>
-                  <Button type="submit" disabled={isSubmitting || selectedRows.length !== 1}>
-                    {isSubmitting ? tDebts('saving') : tDebts('settleSelected', { count: selectedRows.length })}
+                  <Button type="button" variant="ghost" size="sm" onClick={resetFilters}>
+                    Reset filters
                   </Button>
-                </form>
-
-                <div className="grid gap-3">
-                  <div className="grid gap-3 xl:grid-cols-[1fr_1fr_1.15fr]">
-                    {(['AFN', 'USD'] as CurrencyCode[]).map((currency) => (
-                      <div key={currency} className="rounded-xl border bg-background/80 p-3 dark:border-border/60">
-                        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">{currency} Summary</p>
-                        <div className="mt-3 grid gap-3">
-                          <div>
-                            <p className="text-xs text-muted-foreground">Open Debt</p>
-                            <p className="text-lg font-semibold">{formatCurrency(currencySections[currency].totalDebt, currency)}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground">Net Invoices</p>
-                            <p className="text-lg font-semibold">{formatCurrency(currencySections[currency].totalNet, currency)}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground">Paid</p>
-                            <p className="text-lg font-semibold">{formatCurrency(currencySections[currency].totalPaid, currency)}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-xl border bg-background/80 p-3 dark:border-border/60">
-                        <p className="text-xs text-muted-foreground">AFN Base Open Debt</p>
-                        <p className="text-lg font-semibold">{formatCurrency(report?.summary.totalDebt ?? 0, 'AFN')}</p>
-                        <p className="text-xs text-muted-foreground">Includes unpaid and partially paid invoice balances.</p>
-                      </div>
-                      <div className="rounded-xl border bg-background/80 p-3 dark:border-border/60">
-                        <p className="text-xs text-muted-foreground">AFN Base Net Invoices</p>
-                        <p className="text-lg font-semibold">{formatCurrency(report?.summary.totalNet ?? 0, 'AFN')}</p>
-                      </div>
-                      <div className="rounded-xl border bg-background/80 p-3 dark:border-border/60">
-                        <p className="text-xs text-muted-foreground">AFN Base Paid</p>
-                        <p className="text-lg font-semibold">{formatCurrency(report?.summary.totalPaid ?? 0, 'AFN')}</p>
-                      </div>
-                      <div className="rounded-xl border bg-background/80 p-3 dark:border-border/60">
-                        <p className="text-xs text-muted-foreground">Total Debts</p>
-                        <p className="text-lg font-semibold">{totalDebts.toLocaleString(locale)}</p>
-                        <p className="text-xs text-muted-foreground">Number of outstanding invoices in this range.</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 rounded-2xl border bg-background/80 p-4 dark:border-border/60 md:grid-cols-4">
-                    <div className="grid gap-1.5">
-                      <Label>Start Date</Label>
-                      <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
-                    </div>
-                    <div className="grid gap-1.5">
-                      <Label>End Date</Label>
-                      <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
-                    </div>
-                    <div className="grid gap-1.5">
-                      <Label>Invoice ID</Label>
-                      <Input value={invoiceId} onChange={(event) => setInvoiceId(event.target.value)} placeholder="Invoice number" />
-                    </div>
-                    <div className="grid gap-1.5">
-                      <Label>Aging Bucket</Label>
-                      <select className="h-9 rounded-md border bg-background px-3 text-sm" value={agingBucket} onChange={(event) => setAgingBucket(event.target.value)}>
-                        <option value="all">All buckets</option>
-                        <option value="0-30 days">0-30 days</option>
-                        <option value="31-60 days">31-60 days</option>
-                        <option value="61-90 days">61-90 days</option>
-                        <option value="90+ days">90+ days</option>
-                      </select>
-                    </div>
-                    <div className="grid gap-1.5 md:col-span-3">
-                      <Label>Search</Label>
-                      <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Patient or invoice..." />
-                    </div>
-                    <div className="flex items-end">
-                      <Button type="button" onClick={() => void refreshDebts(1)}>Apply Filters</Button>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border bg-background/80 p-4 dark:border-border/60">
-                    <p className="mb-2 text-sm font-medium">Aging Snapshot</p>
-                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                      {(report?.aging ?? []).map((row) => (
-                        <div key={row.bucket} className="rounded-xl border bg-background/80 p-3 dark:border-border/60">
-                          <p className="text-xs text-muted-foreground">{row.bucket}</p>
-                          <p className="text-base font-semibold">{formatCurrency(row.amount, 'AFN')}</p>
-                          <p className="text-xs text-muted-foreground">{row.count} invoices · AFN accounting base</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
                 </div>
+              </CardHeader>
+              <CardContent className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
+                <label className="grid gap-1.5 text-sm font-medium" htmlFor="debt-search">
+                  <span>Search invoices</span>
+                  <span className="relative">
+                    <Search
+                      className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    <Input
+                      id="debt-search"
+                      aria-label="Search patients or invoices"
+                      className="pl-9"
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="Patient name or invoice number"
+                    />
+                  </span>
+                </label>
+                <label className="grid gap-1.5 text-sm font-medium">
+                  <span>Time unpaid</span>
+                  <select
+                    className="h-10 rounded-md border bg-background px-3 text-sm font-normal"
+                    value={agingBucket}
+                    onChange={(event) => setAgingBucket(event.target.value)}
+                  >
+                    <option value="all">Any age</option>
+                    <option value="0-30 days">0-30 days</option>
+                    <option value="31-60 days">31-60 days</option>
+                    <option value="61-90 days">61-90 days</option>
+                    <option value="90+ days">Over 90 days</option>
+                  </select>
+                </label>
+                <details className="rounded-xl border bg-muted/10 p-3 md:col-span-2">
+                  <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-medium">
+                    Date range and invoice number
+                  </summary>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                    <label className="grid gap-1.5 text-xs text-muted-foreground">
+                      From
+                      <Input
+                        aria-label="From date"
+                        type="date"
+                        value={startDate}
+                        onChange={(event) => setStartDate(event.target.value)}
+                      />
+                    </label>
+                    <label className="grid gap-1.5 text-xs text-muted-foreground">
+                      To
+                      <Input
+                        aria-label="To date"
+                        type="date"
+                        value={endDate}
+                        onChange={(event) => setEndDate(event.target.value)}
+                      />
+                    </label>
+                    <label className="grid gap-1.5 text-xs text-muted-foreground">
+                      Invoice number
+                      <Input
+                        aria-label="Invoice number"
+                        value={invoiceId}
+                        onChange={(event) => setInvoiceId(event.target.value)}
+                        placeholder="Enter invoice number"
+                      />
+                    </label>
+                  </div>
+                </details>
+                <p className="text-xs text-muted-foreground md:col-span-2">
+                  Filters update automatically. Search refreshes after you pause typing.
+                </p>
               </CardContent>
             </Card>
 
-            <Card className="rounded-3xl border">
-              <CardHeader>
-                <CardTitle>Outstanding Invoices</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {isLoading && report === null ? (
-                  <LoadingState compact title="Loading debts" description="Fetching open debt rows." />
-                ) : (
-                  <div className="space-y-4">
-                    <div className="grid gap-1.5">
-                      <Label>Search Invoices</Label>
-                      <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by patient name or invoice ID..." />
-                    </div>
-                    <div className="overflow-x-auto rounded-2xl border">
-                      <table className="min-w-full text-sm">
-                        <thead className="bg-muted/30 text-left text-muted-foreground">
-                          <tr>
-                            <th className="px-3 py-2">
-                              <input
-                                type="checkbox"
-                                checked={(report?.rows.data.length ?? 0) > 0 && selectedRows.length === (report?.rows.data.length ?? 0)}
-                                onChange={(event) => toggleSelectAll(event.target.checked)}
-                              />
-                            </th>
-                            <th className="px-3 py-2">Invoice</th>
-                            <th className="px-3 py-2">Date</th>
-                            <th className="px-3 py-2">Patient</th>
-                            <th className="px-3 py-2">Paid</th>
-                            <th className="px-3 py-2">Debt</th>
-                            <th className="px-3 py-2">Bucket</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(() => {
-                            const groupedByPatient = (report?.rows.data ?? []).reduce((groups, row) => {
-                              const key = row.patientId;
-                              if (!groups[key]) {
-                                groups[key] = {
-                                  patientId: row.patientId,
-                                  patientName: row.patientName,
-                                  invoices: []
-                                };
-                              }
-                              groups[key].invoices.push(row);
-                              return groups;
-                            }, {} as Record<string, { patientId: string; patientName: string; invoices: DebtRow[] }>);
+            <section
+              className="rounded-3xl border bg-card p-4 sm:p-5"
+              aria-labelledby="aging-summary-title"
+            >
+              <div className="mb-3">
+                <h2 id="aging-summary-title" className="font-semibold">
+                  How long balances have been unpaid
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  See the age and value of open balances for your current filters.
+                </p>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+                <div className="rounded-xl border bg-background p-3">
+                  <p className="text-xs text-muted-foreground">Matching invoices</p>
+                  <p className="mt-1 font-semibold">
+                    {totalDebts.toLocaleString(getIntlLocale(locale))} invoices
+                  </p>
+                  <p className="mt-1 text-sm font-medium">
+                    {formatCurrency(report?.summary.totalDebt ?? 0, 'AFN')}
+                  </p>
+                </div>
+                {(report?.aging ?? []).map((row) => (
+                  <div key={row.bucket} className="rounded-xl border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">{row.bucket}</p>
+                    <p className="mt-1 font-semibold">
+                      {row.count.toLocaleString(getIntlLocale(locale))} invoices
+                    </p>
+                    <p className="mt-1 text-sm font-medium">{formatCurrency(row.amount, 'AFN')}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Amounts are combined and shown in AFN equivalent.
+              </p>
+            </section>
 
-                            return Object.values(groupedByPatient).map((patient, patientIndex) => {
-                              const allPatientInvoicesSelected = patient.invoices.every(invoice => selectedIds.includes(invoice.id));
-                              const somePatientInvoicesSelected = patient.invoices.some(invoice => selectedIds.includes(invoice.id));
-                              
+            <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(300px,0.8fr)]">
+              <Card className="min-w-0 rounded-3xl border-border/60">
+                <CardHeader className="flex flex-col gap-1">
+                  <CardTitle>Invoices to follow up</CardTitle>
+                  <CardDescription>Select one invoice to see its payment form.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {isLoading && report === null ? (
+                    <LoadingState
+                      compact
+                      title="Loading invoices"
+                      description="Getting outstanding balances."
+                    />
+                  ) : patientGroups.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed p-8 text-center">
+                      <p className="font-medium">No outstanding invoices found</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Try a different date range or clear the filters.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="mt-4"
+                        onClick={resetFilters}
+                      >
+                        Clear filters
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {patientGroups.map((patient) => (
+                        <section
+                          key={patient.patientId}
+                          className="overflow-hidden rounded-2xl border bg-background"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/20 px-4 py-3">
+                            <div className="font-medium">{patient.patientName}</div>
+                            <span className="text-xs text-muted-foreground">
+                              {patient.invoices.length}{' '}
+                              {patient.invoices.length === 1 ? 'invoice' : 'invoices'}
+                            </span>
+                          </div>
+                          <div className="divide-y">
+                            {patient.invoices.map((row) => {
+                              const isSelected = selectedId === row.id;
                               return (
-                                <React.Fragment key={patient.patientId}>
-                                  <tr className="border-b-2 border-border/50 bg-background/70">
-                                    <td colSpan={7} className="px-4 py-3">
-                                      <div className="flex items-center gap-3">
-                                        <input
-                                          type="checkbox"
-                                          checked={allPatientInvoicesSelected}
-                                          ref={(el) => {
-                                            if (el) el.indeterminate = somePatientInvoicesSelected && !allPatientInvoicesSelected;
-                                          }}
-                                          onChange={(event) => togglePatientRows(patient.patientId, event.target.checked)}
-                                          className="h-4 w-4 rounded border-border/60"
-                                        />
-                                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-blue-700 text-xs font-semibold dark:bg-blue-500/15 dark:text-blue-100">
-                                          {patient.patientId.slice(-4)}
-                                        </div>
-                                        <div>
-                                            <span className="font-semibold text-foreground">{patient.patientName}</span>
-                                            <span className="ml-2 text-sm text-muted-foreground">ID: {patient.patientId}</span>
-                                            <span className="ml-2 rounded-full bg-rose-100 px-2 py-1 text-xs font-medium text-rose-700 dark:bg-rose-500/15 dark:text-rose-100">
-                                            {patient.invoices.length} invoice{patient.invoices.length > 1 ? 's' : ''}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                  {patient.invoices.map((row, invoiceIndex) => (
-                                    <tr key={row.id} className={`border-b border-border/50 transition-colors hover:bg-accent/30 ${
-                                      patient.invoices.length === 1 
-                                        ? 'bg-background'
-                                        : 'bg-background/70'
-                                    }`}>
-                                      <td className="px-4 py-3">
-                                        <input type="checkbox" checked={selectedIds.includes(row.id)} onChange={(event) => toggleRow(row.id, event.target.checked)} className="h-4 w-4 rounded border-border/60" />
-                                      </td>
-                                      <td className="px-4 py-3 font-medium text-foreground">#{row.invoiceId}</td>
-                                      <td className="px-4 py-3 text-muted-foreground">{new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(row.invoiceDate))}</td>
-                                      <td className="px-4 py-3 text-muted-foreground">{row.patientName}</td>
-                                      <td className="px-4 py-3 text-muted-foreground">{renderMoney(row.paidAmountInput, row.currency, row.paidAmount)}</td>
-                                      <td className="px-4 py-3 font-semibold text-rose-600 dark:text-rose-100">
-                                        {renderMoney(row.debtAmountInput, row.currency, row.debtAmount)}
-                                      </td>
-                                      <td className="px-4 py-3">
-                                        <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
-                                          row.agingBucket === '0-30 days' ? 'bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-100' :
-                                          row.agingBucket === '31-60 days' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/15 dark:text-yellow-100' :
-                                          row.agingBucket === '61-90 days' ? 'bg-orange-100 text-orange-800 dark:bg-orange-500/15 dark:text-orange-100' :
-                                          'bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-100'
-                                        }`}>
+                                <button
+                                  type="button"
+                                  key={row.id}
+                                  disabled={isLoading}
+                                  aria-pressed={isSelected}
+                                  onClick={() => selectDebt(row)}
+                                  className={`grid w-full gap-3 p-4 text-left transition sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center ${isSelected ? 'bg-primary/5 ring-2 ring-inset ring-primary/40' : 'hover:bg-accent/30'}`}
+                                >
+                                  <span className="flex min-w-0 items-start gap-3">
+                                    <span
+                                      className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border ${isSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40 text-transparent'}`}
+                                      aria-hidden="true"
+                                    >
+                                      {isSelected ? (
+                                        <Check className="size-3" strokeWidth={3} />
+                                      ) : null}
+                                    </span>
+                                    <span className="min-w-0">
+                                      <span className="flex flex-wrap items-center gap-2 font-semibold">
+                                        Invoice #{row.invoiceId}
+                                        <span
+                                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${row.agingBucket === '0-30 days' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-100' : row.agingBucket === '31-60 days' ? 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-100' : row.agingBucket === '61-90 days' ? 'bg-orange-100 text-orange-800 dark:bg-orange-500/15 dark:text-orange-100' : 'bg-rose-100 text-rose-800 dark:bg-rose-500/15 dark:text-rose-100'}`}
+                                        >
                                           {row.agingBucket}
                                         </span>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </React.Fragment>
+                                      </span>
+                                      <span className="mt-1 block text-sm text-muted-foreground">
+                                        {new Intl.DateTimeFormat(getIntlLocale(locale), {
+                                          dateStyle: 'medium',
+                                        }).format(new Date(row.invoiceDate))}
+                                      </span>
+                                    </span>
+                                  </span>
+                                  <span className="grid grid-cols-2 gap-4 pl-8 sm:min-w-[220px] sm:pl-0">
+                                    <span>
+                                      <span className="block text-xs text-muted-foreground">
+                                        Paid
+                                      </span>
+                                      <span className="mt-1 block text-sm font-medium">
+                                        {renderMoney(row.paidAmountInput, row.currency)}
+                                      </span>
+                                    </span>
+                                    <span>
+                                      <span className="block text-xs text-muted-foreground">
+                                        Still owed
+                                      </span>
+                                      <span className="mt-1 block text-sm font-semibold text-rose-700 dark:text-rose-200">
+                                        {renderMoney(row.debtAmountInput, row.currency)}
+                                      </span>
+                                    </span>
+                                  </span>
+                                </button>
                               );
-                            });
-                          })()}
-                        </tbody>
-                      </table>
+                            })}
+                          </div>
+                        </section>
+                      ))}
                     </div>
+                  )}
 
-                    <div className="flex items-center justify-between text-sm text-muted-foreground">
-                      <span>{report?.rows.meta.total ?? 0} open invoices</span>
-                      <div className="flex items-center gap-2">
-                        <Button type="button" variant="outline" disabled={isLoading || activePage <= 1} onClick={() => void refreshDebts(activePage - 1)}>
-                          Previous
-                        </Button>
-                        <span>
-                          Page {activePage} of {lastPage}
-                        </span>
-                        <Button type="button" variant="outline" disabled={isLoading || activePage >= lastPage} onClick={() => void refreshDebts(activePage + 1)}>
-                          Next
-                        </Button>
-                      </div>
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4 text-sm text-muted-foreground">
+                    <span>{report?.rows.meta.total ?? 0} open invoices</span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={isLoading || activePage <= 1}
+                        onClick={() => void refreshDebts(activePage - 1)}
+                      >
+                        Previous
+                      </Button>
+                      <span>
+                        Page {activePage} of {lastPage}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={isLoading || activePage >= lastPage}
+                        onClick={() => void refreshDebts(activePage + 1)}
+                      >
+                        Next
+                      </Button>
                     </div>
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+
+              <Card className="min-w-0 self-start rounded-3xl border-border/60 xl:sticky xl:top-4">
+                <CardHeader className="flex flex-row items-start gap-3">
+                  <div className="flex items-start gap-3">
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      <Wallet className="size-5" aria-hidden="true" />
+                    </span>
+                    <div className="space-y-1">
+                      <CardTitle>Record a payment</CardTitle>
+                      <CardDescription>Payments use the invoice currency.</CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {selectedDebt ? (
+                    <form onSubmit={handleSettleSelected} className="grid gap-4">
+                      <div className="rounded-2xl border bg-muted/20 p-4">
+                        <p className="text-xs text-muted-foreground">Selected invoice</p>
+                        <p className="mt-1 font-semibold">
+                          #{selectedDebt.invoiceId} | {selectedDebt.patientName}
+                        </p>
+                        <div className="mt-3 grid grid-cols-2 gap-3">
+                          <div>
+                            <p className="text-xs text-muted-foreground">Still owed</p>
+                            <p className="mt-1 font-semibold text-rose-700 dark:text-rose-200">
+                              {formatCurrency(selectedDebtAmount, selectedDebtCurrency)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">After payment</p>
+                            <p className="mt-1 font-semibold">
+                              {formatCurrency(remainingAfterPayment, selectedDebtCurrency)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <label className="grid gap-1.5 text-sm font-medium" htmlFor="debt-amount">
+                        Amount received ({selectedDebt.currency})
+                        <Input
+                          id="debt-amount"
+                          type="number"
+                          min="0.01"
+                          max={selectedDebt.debtAmountInput}
+                          step="0.01"
+                          value={form.amount}
+                          onChange={(event) =>
+                            setForm((previous) => ({ ...previous, amount: event.target.value }))
+                          }
+                          placeholder={`Up to ${selectedDebt.debtAmountInput}`}
+                          required
+                        />
+                      </label>
+                      <label className="grid gap-1.5 text-sm font-medium" htmlFor="debt-date">
+                        {tDebts('paymentDate')}
+                        <Input
+                          id="debt-date"
+                          type="date"
+                          value={form.paymentDate}
+                          onChange={(event) =>
+                            setForm((previous) => ({
+                              ...previous,
+                              paymentDate: event.target.value,
+                            }))
+                          }
+                          required
+                        />
+                      </label>
+                      <label className="grid gap-1.5 text-sm font-medium" htmlFor="debt-method">
+                        {tDebts('paymentMethod')}
+                        <select
+                          id="debt-method"
+                          className="h-10 rounded-md border bg-background px-3 text-sm font-normal"
+                          value={form.method}
+                          onChange={(event) =>
+                            setForm((previous) => ({
+                              ...previous,
+                              method: event.target.value as SettleFormState['method'],
+                            }))
+                          }
+                        >
+                          <option value="cash">{tDebts('methods.cash')}</option>
+                          <option value="card">{tDebts('methods.card')}</option>
+                          <option value="insurance">{tDebts('methods.insurance')}</option>
+                        </select>
+                      </label>
+                      <label className="grid gap-1.5 text-sm font-medium" htmlFor="debt-notes">
+                        {tDebts('notes')}{' '}
+                        <span className="font-normal text-muted-foreground">(optional)</span>
+                        <Input
+                          id="debt-notes"
+                          value={form.notes}
+                          onChange={(event) =>
+                            setForm((previous) => ({ ...previous, notes: event.target.value }))
+                          }
+                          placeholder={tDebts('notesPlaceholder')}
+                        />
+                      </label>
+                      <Button type="submit" className="w-full" disabled={isSubmitting || isLoading}>
+                        {isSubmitting ? tDebts('saving') : 'Record payment'}
+                      </Button>
+                    </form>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed p-6 text-center">
+                      <p className="font-medium">Choose an invoice first</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Select an invoice from the list to see its balance and record a payment.
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </div>
       </div>
     </>
   );
-}
+};
+
+export default DebtsPage;

@@ -7,10 +7,13 @@ namespace App\Modules\DentalManagement\Infrastructure\Providers;
 use App\Modules\DentalManagement\Application\Policies\AppointmentPolicy;
 use App\Modules\DentalManagement\Application\Policies\DebtPolicy;
 use App\Modules\DentalManagement\Application\Policies\DentalBackupPolicy;
+use App\Modules\DentalManagement\Application\Policies\ExpensePolicy;
+use App\Modules\DentalManagement\Application\Policies\InventoryItemPolicy;
 use App\Modules\DentalManagement\Application\Policies\InvoicePolicy;
 use App\Modules\DentalManagement\Application\Policies\PatientPolicy;
 use App\Modules\DentalManagement\Application\Policies\PatientQuestionPolicy;
 use App\Modules\DentalManagement\Application\Policies\PaymentPolicy;
+use App\Modules\DentalManagement\Application\Policies\SalaryPaymentPolicy;
 use App\Modules\DentalManagement\Application\Policies\ShareholderPolicy;
 use App\Modules\DentalManagement\Application\Policies\ShareholderTransactionPolicy;
 use App\Modules\DentalManagement\Application\Policies\StaffPolicy;
@@ -21,10 +24,13 @@ use App\Modules\DentalManagement\Application\Policies\VisitTreatmentPolicy;
 use App\Modules\DentalManagement\Domain\Entities\Appointment;
 use App\Modules\DentalManagement\Domain\Entities\Debt;
 use App\Modules\DentalManagement\Domain\Entities\DentalBackup;
+use App\Modules\DentalManagement\Domain\Entities\Expense;
+use App\Modules\DentalManagement\Domain\Entities\InventoryItem;
 use App\Modules\DentalManagement\Domain\Entities\Invoice;
 use App\Modules\DentalManagement\Domain\Entities\Patient;
 use App\Modules\DentalManagement\Domain\Entities\PatientQuestion;
 use App\Modules\DentalManagement\Domain\Entities\Payment;
+use App\Modules\DentalManagement\Domain\Entities\SalaryPayment;
 use App\Modules\DentalManagement\Domain\Entities\Shareholder;
 use App\Modules\DentalManagement\Domain\Entities\ShareholderTransaction;
 use App\Modules\DentalManagement\Domain\Entities\Staff;
@@ -60,12 +66,15 @@ final class DentalManagementServiceProvider extends BaseAuthServiceProvider
         Appointment::class => AppointmentPolicy::class,
         Debt::class => DebtPolicy::class,
         DentalBackup::class => DentalBackupPolicy::class,
+        Expense::class => ExpensePolicy::class,
         Invoice::class => InvoicePolicy::class,
+        InventoryItem::class => InventoryItemPolicy::class,
         Patient::class => PatientPolicy::class,
         PatientQuestion::class => PatientQuestionPolicy::class,
         Payment::class => PaymentPolicy::class,
         Shareholder::class => ShareholderPolicy::class,
         ShareholderTransaction::class => ShareholderTransactionPolicy::class,
+        SalaryPayment::class => SalaryPaymentPolicy::class,
         Staff::class => StaffPolicy::class,
         Tooth::class => ToothPolicy::class,
         Treatment::class => TreatmentPolicy::class,

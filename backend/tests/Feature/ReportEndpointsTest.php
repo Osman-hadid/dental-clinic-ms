@@ -221,7 +221,8 @@ final class ReportEndpointsTest extends TestCase
             ->assertJsonPath('data.data.0.correctionHistory.0.event', 'corrected')
             ->assertJsonPath('data.data.0.correctionHistory.0.correctionReason', 'Adjusted treatment pricing after chart review');
 
-        $this->getJson('/api/v1/dental-management/reports/clinical?startDate=2026-02-01&endDate=2026-03-31&granularity=month')
+        $reportDate = now()->toDateString();
+        $this->getJson("/api/v1/dental-management/reports/clinical?startDate={$reportDate}&endDate={$reportDate}&granularity=day")
             ->assertOk()
             ->assertJsonPath('data.summary.correctedTreatments', 1)
             ->assertJsonPath('data.tables.treatmentCorrections.0.correctionReason', 'Adjusted treatment pricing after chart review')

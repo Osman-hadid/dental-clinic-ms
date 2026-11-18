@@ -17,6 +17,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar';
+import { Link } from '@/i18n/navigation';
 import { useAuth } from '@/modules/auth/presentation/hooks/useAuth';
 import { BadgeCheck, Bell, ChevronsUpDown, LogOut, User } from 'lucide-react';
 
@@ -71,9 +72,11 @@ export const NavUser = React.memo(function NavUser({
             sideOffset={4}
           >
             <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <BadgeCheck />
-                {t('navUser.account', { defaultValue: 'Account' })}
+              <DropdownMenuItem asChild>
+                <Link href="/account" className="flex cursor-pointer items-center gap-2">
+                  <BadgeCheck />
+                  {t('navUser.account', { defaultValue: 'Account' })}
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <Bell />

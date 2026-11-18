@@ -98,11 +98,13 @@ export const EntityForm = ({
   submitText,
 }: EntityFormProps): JSX.Element => {
   const tComponent = useTranslations('component');
+  const tGlobal = useTranslations('global');
   const normalizedDefaults = buildDefaultValues(defaultValues, formConfig);
   const methods = useForm({ defaultValues: normalizedDefaults });
   const isSchedulingForm = config.queryKey === 'appointments' || config.queryKey === 'visits';
+  const requiredFields = formConfig.filter((field) => field.required);
+  const optionalFields = formConfig.filter((field) => !field.required);
 
-  const fieldByName = new Map(formConfig.map((field) => [field.name, field]));
   const peopleFieldNames = isSchedulingForm
     ? config.queryKey === 'appointments'
       ? ['tag', 'patientId', 'dentistId', 'status']
@@ -122,12 +124,14 @@ export const EntityForm = ({
   const additionalFields = formConfig.filter((field) => !usedFieldNames.has(field.name));
 
   const {
-    formState: { isSubmitting },
+    formState: { errors: fieldErrors, isSubmitting },
     handleSubmit,
     reset,
     setError,
     trigger,
   } = methods;
+  const fieldByName = new Map(formConfig.map((field) => [field.name, field]));
+  const hasOptionalFieldError = optionalFields.some((field) => fieldErrors[field.name]);
 
   useEffect(() => {
     if (errors) setServerErrors(errors, setError);
@@ -165,7 +169,7 @@ export const EntityForm = ({
         console.error('Form submission error:', error);
       }
     },
-    [config.queryKey, formConfig, onSubmit, onSuccess, reset, trigger]
+    [config.queryKey, formConfig, keepValuesOnSuccess, onSubmit, onSuccess, reset, trigger]
   );
 
   return (
@@ -251,9 +255,26 @@ export const EntityForm = ({
           </>
         ) : (
           <>
-            {formConfig.map((field) => (
+            {requiredFields.map((field) => (
               <EntityFormField key={field.name} field={field} config={config} />
             ))}
+
+            {optionalFields.length > 0 ? (
+              <details
+                key={`${defaultValues?.id ?? 'new'}-${hasOptionalFieldError ? 'invalid' : 'valid'}`}
+                open={Boolean(defaultValues || hasOptionalFieldError)}
+                className="rounded-xl border border-border/70 bg-muted/20 px-4"
+              >
+                <summary className="cursor-pointer py-3 text-sm font-medium text-muted-foreground marker:text-primary">
+                  {tGlobal('optional')} ({optionalFields.length})
+                </summary>
+                <div className="space-y-4 pb-4">
+                  {optionalFields.map((field) => (
+                    <EntityFormField key={field.name} field={field} config={config} />
+                  ))}
+                </div>
+              </details>
+            ) : null}
 
             <Button type="submit" disabled={isSubmitting} className="float-end">
               {isSubmitting ? tComponent('submitting') : submitText}

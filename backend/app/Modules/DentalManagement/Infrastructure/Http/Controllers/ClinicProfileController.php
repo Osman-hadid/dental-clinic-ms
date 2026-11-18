@@ -22,6 +22,7 @@ final class ClinicProfileController extends BaseApiController
 
     public function show(): JsonResponse
     {
+        abort_unless(auth()->user()?->can('dental-management.clinic-profile.view'), 403);
         $profile = ClinicProfile::query()->first();
 
         return $this->successResponse(
@@ -32,6 +33,7 @@ final class ClinicProfileController extends BaseApiController
 
     public function update(UpdateClinicProfileRequest $request): JsonResponse
     {
+        abort_unless(auth()->user()?->can('dental-management.clinic-profile.update'), 403);
         $profile = ClinicProfile::query()->first();
         $data = $request->validated();
 

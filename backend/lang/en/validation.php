@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 return [
+    'bulk_delete_max' => 'Cannot delete more than 100 :entity at once.',
+    'bulk_delete_min' => 'At least one :entity ID is required.',
 
     /*
     |--------------------------------------------------------------------------

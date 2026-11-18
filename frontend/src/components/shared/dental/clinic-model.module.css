@@ -1,0 +1,481 @@
+.scene {
+  min-width: 0;
+  position: relative;
+  padding: 14px 20px 22px 10px;
+  direction: ltr;
+}
+
+.compactScene {
+  padding: 6px 16px 16px;
+}
+
+.compactScene .viewport,
+.compactScene .viewerPlaceholder {
+  height: 255px;
+}
+
+.compactScene .station {
+  padding: 10px 8px;
+  border-color: var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: none;
+  color: var(--foreground);
+  text-align: start;
+}
+
+.compactScene .stationIcon {
+  width: 28px;
+  height: 30px;
+  border-radius: 7px;
+  background: var(--muted);
+  color: var(--primary);
+}
+
+.compactScene .station small,
+.compactScene .station > svg {
+  color: var(--muted-foreground);
+}
+
+:global([dir='rtl']) .compactScene .stations {
+  direction: rtl;
+}
+
+:global(.dark) .compactScene .station {
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: none;
+  color: var(--foreground);
+}
+
+:global(.dark) .compactScene .stationIcon {
+  background: var(--muted);
+  color: var(--primary);
+}
+
+.viewerShell {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 22px;
+  background: radial-gradient(ellipse at 50% 65%, #c9e3d780, transparent 70%);
+}
+
+.viewport,
+.viewerPlaceholder {
+  position: relative;
+  width: 100%;
+  height: 360px;
+}
+
+.canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+  touch-action: none;
+  outline-offset: -4px;
+}
+
+.canvas:active {
+  cursor: grabbing !important;
+}
+
+.viewerToolbar {
+  position: absolute;
+  inset: 10px 10px auto 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.modelBadge {
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.16em;
+  color: #648477;
+}
+
+.viewControls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid #ffffffd9;
+  border-radius: 12px;
+  background: #ffffffc9;
+  box-shadow: 0 3px 12px #234d3810;
+  backdrop-filter: blur(12px);
+  pointer-events: auto;
+}
+
+.viewControls button {
+  display: grid;
+  place-items: center;
+  width: 29px;
+  height: 29px;
+  border-radius: 8px;
+  color: #3a6657;
+  transition: background 0.2s;
+}
+
+.viewControls button:hover {
+  background: #e3f0e8;
+}
+
+.viewControls button:focus-visible {
+  outline: 2px solid #368578;
+  outline-offset: 2px;
+}
+
+.viewControls button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.controlDivider {
+  width: 1px;
+  height: 14px;
+  margin-inline: 2px;
+  background: #cfdfd5;
+}
+
+.viewHint {
+  position: absolute;
+  inset: auto 0 12px;
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+  font-size: 9px;
+  color: #648477;
+  pointer-events: none;
+}
+
+.viewHint span {
+  opacity: 0.6;
+}
+
+.stations {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 6px;
+}
+
+.station {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 11px 9px;
+  border: 1px solid #d1e3d7;
+  border-radius: 14px;
+  background: #ffffffc9;
+  box-shadow: 0 3px 0 #cfdfd4;
+  text-align: left;
+  color: #264f43;
+  transition:
+    transform 0.2s,
+    background 0.2s;
+}
+
+.station:hover {
+  transform: translateY(-2px);
+  background: #fff;
+}
+
+.stationIcon {
+  display: grid;
+  place-items: center;
+  width: 31px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  color: #3f7b68;
+  background: #e6f2e9;
+}
+
+.station > span:nth-child(2) {
+  min-width: 0;
+}
+
+.station > svg {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: #698b7c;
+}
+
+.station strong {
+  display: block;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.station small {
+  display: block;
+  margin-top: 3px;
+  color: #698477;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.loading,
+.viewerPlaceholder {
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  color: #648477;
+}
+
+.loading,
+.poster {
+  position: absolute;
+  inset: 0;
+}
+
+.posterImage {
+  object-fit: contain;
+}
+
+.fallbackHint {
+  position: absolute;
+  inset: auto 0 12px;
+  text-align: center;
+  font-size: 10px;
+  color: #648477;
+}
+
+.expanded {
+  position: fixed;
+  inset: 24px;
+  z-index: 100;
+  border: 1px solid #bdd5c6;
+  border-radius: 24px;
+  background: radial-gradient(ellipse at 50% 60%, #d7e9df, #f6faf7 75%);
+  box-shadow: 0 0 0 100vmax #0a241ed9;
+}
+
+.expanded .viewport {
+  height: 100%;
+}
+
+.expanded .viewerToolbar {
+  inset: 18px 18px auto;
+}
+
+.expanded .viewHint {
+  bottom: 24px;
+  font-size: 12px;
+}
+
+.expanded .modelBadge {
+  font-size: 11px;
+}
+
+:global(.dark) .viewerShell {
+  background: radial-gradient(ellipse at 50% 65%, #42715a30, transparent 72%);
+}
+
+:global(.dark) .modelBadge,
+:global(.dark) .viewHint {
+  color: #a7c6b4;
+}
+
+:global(.dark) .viewControls {
+  background: #17382eeb;
+  border-color: #436153;
+}
+
+:global(.dark) .viewControls button {
+  color: #cee2d3;
+}
+
+:global(.dark) .viewControls button:hover {
+  background: #2c5140;
+}
+
+:global(.dark) .controlDivider {
+  background: #436153;
+}
+
+:global(.dark) .station {
+  background: #1a3d30;
+  border-color: #436153;
+  box-shadow: 0 3px 0 #0d291e;
+  color: #deecdf;
+}
+
+:global(.dark) .station:hover {
+  background: #254b39;
+}
+
+:global(.dark) .stationIcon {
+  background: #315341;
+  color: #b9d7c4;
+}
+
+:global(.dark) .station small,
+:global(.dark) .station > svg {
+  color: #a6c2ae;
+}
+
+:global(.dark) .expanded {
+  background: radial-gradient(ellipse at 50% 60%, #294b3d, #173329 75%);
+  border-color: #436153;
+}
+
+@media (min-width: 1500px) {
+  .viewport,
+  .viewerPlaceholder {
+    height: 395px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .scene {
+    padding-inline: 4px 14px;
+  }
+  .viewport,
+  .viewerPlaceholder {
+    height: 325px;
+  }
+  .station {
+    flex-direction: column;
+    gap: 5px;
+    padding: 9px 4px;
+    text-align: center;
+  }
+  .station > svg {
+    display: none;
+  }
+  .station small {
+    font-size: 8px;
+  }
+  .modelBadge {
+    font-size: 8px;
+    letter-spacing: 0.1em;
+  }
+}
+
+@media (max-width: 700px) {
+  .scene {
+    padding: 15px 14px 20px;
+  }
+  .viewport,
+  .viewerPlaceholder {
+    height: 300px;
+  }
+  .viewerToolbar {
+    inset: 5px 2px auto;
+  }
+  .viewHint {
+    font-size: 8px;
+    bottom: 8px;
+  }
+  .stations {
+    gap: 6px;
+  }
+  .stationIcon {
+    width: 29px;
+    height: 29px;
+  }
+  .expanded {
+    inset: 8px;
+    border-radius: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .station,
+  .viewControls button {
+    transition: none;
+  }
+  .station:hover {
+    transform: none;
+  }
+}
+
+.immersiveViewer:not(.expanded) {
+  position: absolute;
+  inset: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.immersiveViewer .viewport {
+  height: 100%;
+}
+
+.immersiveViewer .viewerToolbar {
+  inset: auto 16px 104px;
+  justify-content: center;
+}
+
+.immersiveViewer .modelBadge {
+  display: none;
+}
+
+.immersiveViewer .viewControls {
+  gap: 3px;
+  padding: 5px;
+  border: 1px solid #ffffffed;
+  border-radius: 999px;
+  background: #fbfcf3c4;
+  box-shadow:
+    0 10px 30px #244d3c12,
+    inset 0 1px 0 #ffffff;
+}
+
+.immersiveViewer .viewControls button {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+}
+
+.immersiveViewer .viewHint {
+  bottom: 160px;
+  font-size: 10px;
+  letter-spacing: 0.015em;
+  color: #456354;
+}
+
+.immersiveViewer.expanded .viewerToolbar {
+  inset: auto 16px 28px;
+}
+
+.immersiveViewer.expanded .viewHint {
+  bottom: 86px;
+}
+
+:global(.dark) .immersiveViewer:not(.expanded) {
+  background: transparent;
+}
+
+:global(.dark) .immersiveViewer .viewControls {
+  border-color: #8aa39159;
+  background: #1f3931de;
+  box-shadow:
+    0 10px 30px #06160f33,
+    inset 0 1px 0 #b6d2bf14;
+}
+
+:global(.dark) .immersiveViewer .viewHint {
+  color: #a7c6b4;
+}
+
+@container (max-width: 760px) {
+  .immersiveViewer:not(.expanded) .viewHint {
+    display: none;
+  }
+
+  @media (max-height: 819px) {
+    .immersiveViewer:not(.expanded) .canvas {
+      /* Vertical swipes scroll the tall atlas; horizontal drag and custom pinch stay available. */
+      touch-action: pan-y !important;
+    }
+  }
+}

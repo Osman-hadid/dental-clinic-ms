@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/sidebar';
 import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utilities';
+import { getDirection } from '@/modules/common/utils/locale';
 import { ChevronRight, type LucideIcon } from 'lucide-react';
 
 export const NavMain = ({
@@ -42,7 +43,7 @@ export const NavMain = ({
 }): React.ReactElement => {
   const pathname = usePathname();
   const locale = useLocale();
-  const isRtl = ['dr', 'ps'].includes(locale);
+  const isRtl = getDirection(locale) === 'rtl';
   const { state } = useSidebar();
   const isCollapsed = state === 'collapsed';
   const [openExpandedItem, setOpenExpandedItem] = React.useState<string | null>(null);
@@ -207,7 +208,7 @@ export const NavMain = ({
                   <SidebarMenuButton
                     tooltip={item.title}
                     isActive={!!isParentActive}
-                    className="h-10 rounded-xl border border-transparent px-3 text-[13px] [&>svg]:size-4 [&>svg]:stroke-[1.8] data-[active=true]:border-sidebar-primary/40 data-[active=true]:bg-sidebar-primary/20 data-[active=true]:shadow-sm"
+                    className="h-10 rounded-xl border border-transparent px-3 text-[13px] [&>svg]:size-4 [&>svg]:stroke-[1.8] data-[active=true]:border-sidebar-primary/40 data-[active=true]:bg-sidebar-primary/20 data-[active=true]:text-sidebar-foreground data-[active=true]:shadow-sm"
                   >
                     {item.icon && <item.icon />}
                     <span>{item.title}</span>

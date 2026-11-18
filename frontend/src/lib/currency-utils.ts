@@ -25,12 +25,12 @@ export const parseMoney = (value: unknown): number => {
 
 export const roundMoney = (value: number): number => Math.round(value * 100) / 100;
 
-export const convertInputToUsd = (
+/** Convert an entered amount to the AFN ledger base amount. */
+export const convertInputToAfn = (
   amountInput: number,
   currency: CurrencyCode,
   afnPerUsd: number
 ): number => {
-  // Legacy helper name kept for compatibility. This returns the AFN base amount.
   if (currency === 'USD') {
     return roundMoney(amountInput * normalizeExchangeRate(afnPerUsd));
   }
@@ -38,7 +38,11 @@ export const convertInputToUsd = (
   return roundMoney(amountInput);
 };
 
-export const convertUsdToInput = (
+/** @deprecated Use convertInputToAfn; the ledger base currency is AFN. */
+export const convertInputToUsd = convertInputToAfn;
+
+/** Convert an AFN ledger amount into the selected display/input currency. */
+export const convertAfnToInput = (
   amountAfn: number,
   currency: CurrencyCode,
   afnPerUsd: number
@@ -49,6 +53,9 @@ export const convertUsdToInput = (
 
   return roundMoney(amountAfn);
 };
+
+/** @deprecated Use convertAfnToInput; the source amount is AFN. */
+export const convertUsdToInput = convertAfnToInput;
 
 export const formatCurrency = (value: number, currency: CurrencyCode): string => {
   const fractionDigits = currency === 'AFN' ? 0 : 2;
@@ -61,12 +68,15 @@ export const formatCurrency = (value: number, currency: CurrencyCode): string =>
   }).format(value);
 };
 
-export const formatDualFromUsd = (amountAfn: number, afnPerUsd: number): string => {
+export const formatDualFromAfn = (amountAfn: number, afnPerUsd: number): string => {
   const normalizedAmount = roundMoney(amountAfn);
-  const usdEquivalent = convertUsdToInput(normalizedAmount, 'USD', afnPerUsd);
+  const usdEquivalent = convertAfnToInput(normalizedAmount, 'USD', afnPerUsd);
 
   return `${formatCurrency(normalizedAmount, 'AFN')} / ${formatCurrency(usdEquivalent, 'USD')}`;
 };
+
+/** @deprecated Use formatDualFromAfn; the source amount is AFN. */
+export const formatDualFromUsd = formatDualFromAfn;
 
 export const getExchangeRate = async (client: AxiosClient): Promise<number> => {
   const response = await client.get<{ afnPerUsd: number }>(

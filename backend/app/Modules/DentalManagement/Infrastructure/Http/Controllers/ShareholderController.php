@@ -156,7 +156,7 @@ final class ShareholderController extends BaseApiController
         );
 
         $initialCapitalInput = round((float) ($data['initialCapital'] ?? 0), 2);
-        $initialCapital = $this->currencyService->toUsd(
+        $initialCapital = $this->currencyService->toAfn(
             amountInput: $initialCapitalInput,
             currency: $resolvedCurrency['currency'],
             exchangeRate: (float) $resolvedCurrency['exchangeRate'],

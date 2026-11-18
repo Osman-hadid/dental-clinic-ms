@@ -70,14 +70,26 @@ final class CurrencyService
         ];
     }
 
-    public function toUsd(float $amountInput, string $currency, float $exchangeRate): float
+    /**
+     * Convert an entered amount to the ledger's base currency (AFN).
+     *
+     * The old method name, toUsd(), was misleading: the database and all
+     * financial reports store AFN as the base amount. Keeping the conversion
+     * here prevents individual modules from applying different rules.
+     */
+    public function toAfn(float $amountInput, string $currency, float $exchangeRate): float
     {
-        // Legacy method name kept for compatibility. This returns the AFN base amount.
         if (strtoupper(trim($currency)) === 'USD') {
             return round($amountInput * $this->normalizeExchangeRate($exchangeRate), 2);
         }
 
         return round($amountInput, 2);
+    }
+
+    /** @deprecated Use toAfn() so the base-currency direction is explicit. */
+    public function toUsd(float $amountInput, string $currency, float $exchangeRate): float
+    {
+        return $this->toAfn($amountInput, $currency, $exchangeRate);
     }
 
     private function normalizeExchangeRate(float $value): float

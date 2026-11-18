@@ -2,6 +2,28 @@
 
 import { JSX, useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  convertInputToUsd,
+  convertUsdToInput,
+  DEFAULT_AFN_PER_USD,
+  formatCurrency,
+  getExchangeRate,
+  type CurrencyCode,
+} from '@/lib/currency-utils';
+import { cn } from '@/lib/utilities';
 import { useAuthStore } from '@/modules/auth/application/stores/auth-store';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import { fetchAllRows } from '@/modules/common/infrastructure/api/fetch-all-rows';
@@ -14,40 +36,35 @@ import {
   type VisitTreatmentImageModality,
   type VisitTreatmentImageSource,
 } from '@/modules/dental-management/domain/entities/VisitTreatment';
+import { writePendingInvoiceFlow } from '@/modules/dental-management/presentation/components/invoices/invoice-flow-storage';
 import {
   useCreateVisitTreatment,
-  useUpdateVisitTreatment,
   usePatientList,
   useStaffList,
   useToothList,
   useTreatmentList,
+  useUpdateVisitTreatment,
   useVisitList,
   useVisitTreatmentList,
 } from '@/modules/dental-management/presentation/hooks';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
-  DEFAULT_AFN_PER_USD,
-  type CurrencyCode,
-  convertInputToUsd,
-  convertUsdToInput,
-  formatCurrency,
-  getExchangeRate,
-} from '@/lib/currency-utils';
-import { writePendingInvoiceFlow } from '@/modules/dental-management/presentation/components/invoices/invoice-flow-storage';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { cn } from '@/lib/utilities';
-import { Camera, Eraser, ImagePlus, Loader2, Paintbrush, Pencil, Printer, RotateCcw, ScanLine, Stethoscope, UserRound } from 'lucide-react';
+  Camera,
+  Check,
+  ClipboardList,
+  Eraser,
+  ImagePlus,
+  Loader2,
+  MousePointer2,
+  Paintbrush,
+  Pencil,
+  Printer,
+  RotateCcw,
+  Save,
+  ScanLine,
+  Stethoscope,
+} from 'lucide-react';
 import { toast } from 'sonner';
+import { DentalMouthChart } from './dental-mouth-chart';
 
 type ConditionKey =
   | 'caries'
@@ -138,8 +155,42 @@ const CONDITIONS: Record<ConditionKey, ConditionMeta> = {
   surgery: { color: '#f9a8d4', label: 'Surgery' },
 };
 
-const UPPER_ARCH = ['18', '17', '16', '15', '14', '13', '12', '11', '21', '22', '23', '24', '25', '26', '27', '28'];
-const LOWER_ARCH = ['48', '47', '46', '45', '44', '43', '42', '41', '31', '32', '33', '34', '35', '36', '37', '38'];
+const UPPER_ARCH = [
+  '18',
+  '17',
+  '16',
+  '15',
+  '14',
+  '13',
+  '12',
+  '11',
+  '21',
+  '22',
+  '23',
+  '24',
+  '25',
+  '26',
+  '27',
+  '28',
+];
+const LOWER_ARCH = [
+  '48',
+  '47',
+  '46',
+  '45',
+  '44',
+  '43',
+  '42',
+  '41',
+  '31',
+  '32',
+  '33',
+  '34',
+  '35',
+  '36',
+  '37',
+  '38',
+];
 const ALL_TEETH = [...UPPER_ARCH, ...LOWER_ARCH];
 type ToothVisualType =
   | 'central_incisor'
@@ -150,20 +201,11 @@ type ToothVisualType =
   | 'first_molar'
   | 'second_molar'
   | 'third_molar';
-type ToothArch = 'maxilla' | 'mandible';
 type ToothDisplayMeta = {
   fullLabel: string;
   shortLabel: string;
   visualType: ToothVisualType;
 };
-type ToothGlyphSpec = {
-  crownPath: string;
-  mandibularRoots: number;
-  maxillaryRoots: number;
-  rootTipY: number;
-  rootWidth: number;
-};
-
 const TOOTH_POSITION_META: Record<number, ToothDisplayMeta> = {
   1: { fullLabel: 'Central Incisor', shortLabel: 'CI', visualType: 'central_incisor' },
   2: { fullLabel: 'Lateral Incisor', shortLabel: 'LI', visualType: 'lateral_incisor' },
@@ -173,64 +215,6 @@ const TOOTH_POSITION_META: Record<number, ToothDisplayMeta> = {
   6: { fullLabel: 'First Molar', shortLabel: 'M1', visualType: 'first_molar' },
   7: { fullLabel: 'Second Molar', shortLabel: 'M2', visualType: 'second_molar' },
   8: { fullLabel: 'Third Molar (Wisdom)', shortLabel: 'M3', visualType: 'third_molar' },
-};
-const TOOTH_GLYPH_SPECS: Record<ToothVisualType, ToothGlyphSpec> = {
-  canine: {
-    crownPath: 'M25 36 C22 25 26 18 31 9 C33 6 39 6 41 9 C46 18 50 25 47 36 Z',
-    mandibularRoots: 1,
-    maxillaryRoots: 1,
-    rootTipY: 80,
-    rootWidth: 4.2,
-  },
-  central_incisor: {
-    crownPath: 'M24 35 C20 23 22 14 28 10 C32 7 40 7 44 10 C50 14 52 23 48 35 Z',
-    mandibularRoots: 1,
-    maxillaryRoots: 1,
-    rootTipY: 76,
-    rootWidth: 3.8,
-  },
-  first_molar: {
-    crownPath: 'M15 37 C13 27 18 19 24 15 C29 12 33 13 36 15 C39 12 43 12 48 15 C54 19 59 27 57 37 Z',
-    mandibularRoots: 2,
-    maxillaryRoots: 3,
-    rootTipY: 82,
-    rootWidth: 4.8,
-  },
-  first_premolar: {
-    crownPath: 'M20 36 C18 25 22 16 28 12 C32 10 40 10 44 12 C50 16 54 25 52 36 Z',
-    mandibularRoots: 1,
-    maxillaryRoots: 2,
-    rootTipY: 79,
-    rootWidth: 4.4,
-  },
-  lateral_incisor: {
-    crownPath: 'M25 35 C21 24 23 15 29 11 C33 9 39 9 43 11 C49 15 51 24 47 35 Z',
-    mandibularRoots: 1,
-    maxillaryRoots: 1,
-    rootTipY: 77,
-    rootWidth: 3.9,
-  },
-  second_molar: {
-    crownPath: 'M16 37 C14 28 19 20 25 16 C30 13 34 14 36 16 C38 14 42 13 47 16 C53 20 58 28 56 37 Z',
-    mandibularRoots: 2,
-    maxillaryRoots: 3,
-    rootTipY: 80,
-    rootWidth: 4.7,
-  },
-  second_premolar: {
-    crownPath: 'M19 36 C17 26 22 17 28 13 C33 11 39 11 44 13 C50 17 55 26 53 36 Z',
-    mandibularRoots: 1,
-    maxillaryRoots: 2,
-    rootTipY: 78,
-    rootWidth: 4.3,
-  },
-  third_molar: {
-    crownPath: 'M15 38 C13 30 17 22 24 18 C28 16 31 15 34 17 C37 14 41 14 45 17 C52 20 58 29 57 38 C53 39 49 41 43 42 C39 43 33 43 29 42 C23 41 19 40 15 38 Z',
-    mandibularRoots: 2,
-    maxillaryRoots: 3,
-    rootTipY: 79,
-    rootWidth: 4.5,
-  },
 };
 const PRESCRIPTION_FREQUENCY_OPTIONS = [
   'Once per day',
@@ -279,299 +263,12 @@ const isToothNumber = (value: string): boolean => /^[0-9]{2}$/.test(value);
 
 const resolveToothDisplayMeta = (toothNumber: string): ToothDisplayMeta => {
   const position = Number.parseInt(toothNumber[1] || '', 10);
-  return TOOTH_POSITION_META[position] ?? {
-    fullLabel: 'Tooth',
-    shortLabel: '?',
-    visualType: 'central_incisor',
-  };
-};
-
-const resolveToothQuadrantCode = (toothNumber: string): string => {
-  const quadrant = toothNumber.charAt(0);
-  const position = toothNumber.charAt(1);
-  const prefix = quadrant === '1'
-    ? 'UR'
-    : quadrant === '2'
-      ? 'UL'
-      : quadrant === '3'
-        ? 'LL'
-        : 'LR';
-  return `${prefix}${position}`;
-};
-
-const rootCentersByCount = (count: number): number[] => {
-  if (count <= 1) return [36];
-  if (count === 2) return [30, 42];
-  return [24, 36, 48];
-};
-
-const TOOTH_SURFACE_DETAILS: Record<ToothVisualType, string[]> = {
-  canine: [
-    'M35 12 C35.5 20 35.5 27 35 35',
-  ],
-  central_incisor: [
-    'M31 13 C33 20 33 27 32 34',
-    'M41 13 C39 20 39 27 40 34',
-  ],
-  first_molar: [
-    'M23 21 C28 18 32 18 36 21',
-    'M36 21 C40 18 44 18 49 21',
-    'M28 29 C33 26 39 26 44 29',
-  ],
-  first_premolar: [
-    'M27 20 C31 17 35 17 39 20',
-    'M33 29 C35 27 37 27 39 29',
-  ],
-  lateral_incisor: [
-    'M31 14 C32.5 21 32.5 27 32 34',
-    'M40 14 C38.5 21 38.5 27 39 34',
-  ],
-  second_molar: [
-    'M24 22 C29 19 33 19 36.5 22',
-    'M36.5 22 C40 19 44 19 48 22',
-    'M29 29 C34 27 39 27 43.5 29',
-  ],
-  second_premolar: [
-    'M28 21 C32 18 36 18 40 21',
-    'M33 29 C36 27 39 27 41 29',
-  ],
-  third_molar: [
-    'M22 22 C27 19 31 19 35 22',
-    'M35 22 C39 19 43 19 47 22',
-    'M27 30 C32 28 38 28 43 30',
-  ],
-};
-
-const buildRootPath = (
-  centerX: number,
-  startY: number,
-  tipY: number,
-  rootWidth: number,
-  leftTilt: number,
-  rightTilt: number
-): string => {
-  const controlY = (startY + tipY) / 2;
-  return `M${(centerX - rootWidth).toFixed(2)} ${startY.toFixed(2)} C${(centerX - rootWidth * 1.15 - leftTilt).toFixed(2)} ${controlY.toFixed(2)} ${(centerX - rootWidth * 0.5 - leftTilt).toFixed(2)} ${(tipY - 2).toFixed(2)} ${centerX.toFixed(2)} ${tipY.toFixed(2)} C${(centerX + rootWidth * 0.5 + rightTilt).toFixed(2)} ${(tipY - 2).toFixed(2)} ${(centerX + rootWidth * 1.15 + rightTilt).toFixed(2)} ${controlY.toFixed(2)} ${(centerX + rootWidth).toFixed(2)} ${startY.toFixed(2)} Z`;
-};
-
-const ToothGlyph = ({
-  arch,
-  isActive,
-  visualType,
-}: {
-  arch: ToothArch;
-  isActive: boolean;
-  visualType: ToothVisualType;
-}): JSX.Element => {
-  const uid = useId().replace(/:/g, '-');
-  const spec = TOOTH_GLYPH_SPECS[visualType];
-  const rootCount = arch === 'maxilla' ? spec.maxillaryRoots : spec.mandibularRoots;
-  const rootCenters = rootCentersByCount(rootCount);
-  const crownDetailPaths = TOOTH_SURFACE_DETAILS[visualType];
-  const crownGradientId = `${uid}-crown`;
-  const rootGradientId = `${uid}-root`;
-  const glossGradientId = `${uid}-gloss`;
-  const enamelGradientId = `${uid}-enamel`;
-  const highlightGradientId = `${uid}-highlight`;
-  const shadowGradientId = `${uid}-shadow`;
-  const innerHighlightId = `${uid}-inner-highlight`;
-  const strokeColor = isActive ? '#e5e7eb' : '#c3ccd8';
-  const crownHighlight = '#fafbfc';
-  const crownMidLight = isActive ? '#f5f9fd' : '#f2f6fa';
-  const crownMid = isActive ? '#f0f4f8' : '#edf1f5';
-  const crownBase = isActive ? '#e8ecf2' : '#e5e9ed';
-  const crownDepth = isActive ? '#dce0e8' : '#d9dde5';
-  const crownShadow = isActive ? '#cfd4da' : '#ccd1d7';
-  const rootTop = isActive ? '#e8ecf2' : '#e5e9ed';
-  const rootMid = isActive ? '#d4dce4' : '#d1d9e1';
-  const rootBottom = isActive ? '#b8c2cc' : '#b5bfd9';
-  const rootShadow = isActive ? '#a8b2be' : '#a5b0bc';
-  const detailColor = isActive ? 'rgba(255,255,255,0.8)' : 'rgba(100,116,139,0.45)';
-  const shadowColor = isActive ? 'rgba(88, 28, 135, 0.32)' : 'rgba(15, 23, 42, 0.16)';
-
   return (
-    <svg viewBox="0 0 72 88" className="h-16 w-16" aria-hidden="true">
-      <defs>
-        <linearGradient id={crownGradientId} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor={crownHighlight} />
-          <stop offset="15%" stopColor={crownMidLight} />
-          <stop offset="30%" stopColor={crownMid} />
-          <stop offset="50%" stopColor={crownBase} />
-          <stop offset="70%" stopColor={crownDepth} />
-          <stop offset="90%" stopColor={crownShadow} />
-          <stop offset="100%" stopColor={crownShadow} stopOpacity={0.95} />
-        </linearGradient>
-        <linearGradient id={rootGradientId} x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor={rootTop} />
-          <stop offset="30%" stopColor={rootMid} />
-          <stop offset="70%" stopColor={rootBottom} />
-          <stop offset="100%" stopColor={rootShadow} />
-        </linearGradient>
-        <radialGradient id={glossGradientId} cx="30%" cy="18%" r="65%">
-          <stop offset="0%" stopColor="rgba(255,255,255,0.92)" />
-          <stop offset="30%" stopColor="rgba(255,255,255,0.45)" />
-          <stop offset="60%" stopColor="rgba(255,255,255,0.18)" />
-          <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-        </radialGradient>
-        <radialGradient id={enamelGradientId} cx="45%" cy="35%" r="55%">
-          <stop offset="0%" stopColor="rgba(255,255,255,0.18)" />
-          <stop offset="50%" stopColor="rgba(255,255,255,0.08)" />
-          <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-        </radialGradient>
-        <radialGradient id={highlightGradientId} cx="26%" cy="16%" r="38%">
-          <stop offset="0%" stopColor="rgba(255,255,255,0.95)" />
-          <stop offset="40%" stopColor="rgba(255,255,255,0.5)" />
-          <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-        </radialGradient>
-        <radialGradient id={shadowGradientId} cx="70%" cy="80%" r="60%">
-          <stop offset="0%" stopColor="rgba(0,0,0,0)" />
-          <stop offset="50%" stopColor="rgba(0,0,0,0.05)" />
-          <stop offset="100%" stopColor="rgba(0,0,0,0.12)" />
-        </radialGradient>
-        <radialGradient id={innerHighlightId} cx="35%" cy="25%" r="30%">
-          <stop offset="0%" stopColor="rgba(255,255,255,0.6)" />
-          <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-        </radialGradient>
-      </defs>
-
-      {/* Crown base with multi-stop gradient */}
-      <path
-        d={spec.crownPath}
-        fill={`url(#${crownGradientId})`}
-        stroke={strokeColor}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={1.9}
-        style={{ filter: `drop-shadow(0 3px 5px ${shadowColor})` }}
-      />
-
-      {/* Enamel texture overlay */}
-      <path
-        d={spec.crownPath}
-        fill={`url(#${enamelGradientId})`}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        opacity={0.7}
-      />
-
-      {/* Shadow gradient overlay */}
-      <path
-        d={spec.crownPath}
-        fill={`url(#${shadowGradientId})`}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        opacity={0.4}
-      />
-
-      {/* Primary gloss effect */}
-      <path
-        d={spec.crownPath}
-        fill={`url(#${glossGradientId})`}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-
-      {/* Inner highlight spot */}
-      <ellipse
-        cx="26"
-        cy="16"
-        rx="14"
-        ry="9"
-        fill={`url(#${innerHighlightId})`}
-        opacity={0.6}
-      />
-
-      {/* Main highlight ellipse */}
-      <ellipse
-        cx="26"
-        cy="16"
-        rx="13"
-        ry="8.5"
-        fill={`url(#${highlightGradientId})`}
-        opacity={0.55}
-      />
-
-      {/* Secondary highlight */}
-      <ellipse
-        cx="42"
-        cy="22"
-        rx="6"
-        ry="4"
-        fill="rgba(255,255,255,0.25)"
-        opacity={0.5}
-      />
-
-      {/* Crown separation line */}
-      <path
-        d="M22 34 C28 32 44 32 50 34"
-        fill="none"
-        stroke="rgba(148,163,184,0.45)"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={1.3}
-      />
-
-      {/* Enhanced surface details */}
-      {crownDetailPaths.map((detailPath, index) => (
-        <path
-          key={`${visualType}-detail-${index}`}
-          d={detailPath}
-          fill="none"
-          stroke={detailColor}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.3}
-          opacity={0.85}
-        />
-      ))}
-
-      {/* Roots with enhanced gradient */}
-      {rootCenters.map((centerX, index) => (
-        <path
-          key={`${visualType}-${arch}-root-${index}`}
-          d={buildRootPath(
-            centerX,
-            35,
-            spec.rootTipY + (rootCount === 3 && index === 1 ? 3 : 0),
-            spec.rootWidth,
-            rootCount === 3 && index === 0 ? 1.6 : 0.6,
-            rootCount === 3 && index === rootCount - 1 ? 1.6 : 0.6
-          )}
-          fill={`url(#${rootGradientId})`}
-          stroke={strokeColor}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2.1}
-          style={{ filter: `drop-shadow(0 2px 4px ${shadowColor})` }}
-        />
-      ))}
-
-      {/* Root texture lines */}
-      {rootCenters.map((centerX, index) => (
-        <path
-          key={`${visualType}-${arch}-root-texture-${index}`}
-          d={`M${centerX - 2.5} 46 Q${centerX} 56 ${centerX + 2.5} 66`}
-          fill="none"
-          stroke="rgba(148,163,184,0.28)"
-          strokeLinecap="round"
-          strokeWidth={0.9}
-          opacity={0.55}
-        />
-      ))}
-
-      {/* Root highlight lines */}
-      {rootCenters.map((centerX, index) => (
-        <path
-          key={`${visualType}-${arch}-root-highlight-${index}`}
-          d={`M${centerX - 1} 48 Q${centerX - 0.5} 54 ${centerX} 60`}
-          fill="none"
-          stroke="rgba(255,255,255,0.15)"
-          strokeLinecap="round"
-          strokeWidth={0.6}
-          opacity={0.5}
-        />
-      ))}
-    </svg>
+    TOOTH_POSITION_META[position] ?? {
+      fullLabel: 'Tooth',
+      shortLabel: '?',
+      visualType: 'central_incisor',
+    }
   );
 };
 
@@ -705,7 +402,10 @@ const parseCurrencyCodeFromNotes = (value?: string): CurrencyCode => {
 
 const parseExchangeRateFromNotes = (value: string | undefined, currency: CurrencyCode): number => {
   if (currency === 'USD') {
-    return Math.max(parseTagNumberFromNotes(value, 'exchangeRate') || DEFAULT_AFN_PER_USD, DEFAULT_AFN_PER_USD);
+    return Math.max(
+      parseTagNumberFromNotes(value, 'exchangeRate') || DEFAULT_AFN_PER_USD,
+      DEFAULT_AFN_PER_USD
+    );
   }
 
   return 1;
@@ -727,7 +427,8 @@ const formatStoredAmount = (
   exchangeRate: number
 ): string => {
   if (currency === 'USD') {
-    const resolvedInput = amountInput > 0 ? amountInput : convertUsdToInput(amountAfn, currency, exchangeRate);
+    const resolvedInput =
+      amountInput > 0 ? amountInput : convertUsdToInput(amountAfn, currency, exchangeRate);
     return `${formatCurrency(resolvedInput, 'USD')} (${formatCurrency(amountAfn, 'AFN')})`;
   }
 
@@ -842,19 +543,6 @@ const hexToRgba = (hex: string, alpha: number): string => {
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 };
 
-const isLightColor = (hex: string): boolean => {
-  const normalized = hex.replace('#', '');
-  if (normalized.length !== 6) {
-    return false;
-  }
-  const bigint = Number.parseInt(normalized, 16);
-  const red = (bigint >> 16) & 255;
-  const green = (bigint >> 8) & 255;
-  const blue = bigint & 255;
-  const luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255;
-  return luminance > 0.7;
-};
-
 const createMaterialSelectionRow = (): MaterialSelectionRow => ({
   inventoryItemId: '',
   key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -886,38 +574,37 @@ const formatPrescriptionSummary = (
 ): string => {
   if (!prescription) return '-';
 
-  const formatSingle = (source: Partial<{
-    amount: string;
-    foodTiming: string;
-    frequency: string;
-    name: string;
-  }>): string => {
+  const formatSingle = (
+    source: Partial<{
+      amount: string;
+      foodTiming: string;
+      frequency: string;
+      name: string;
+    }>
+  ): string => {
     const name = asText(source.name);
     const amount = asText(source.amount);
     const frequency = asText(source.frequency);
     const foodTimingRaw = asText(source.foodTiming);
-    const foodTiming = (foodTimingRaw in PRESCRIPTION_FOOD_TIMING_LABELS
-      ? PRESCRIPTION_FOOD_TIMING_LABELS[foodTimingRaw as PrescriptionFoodTiming]
-      : foodTimingRaw);
+    const foodTiming =
+      foodTimingRaw in PRESCRIPTION_FOOD_TIMING_LABELS
+        ? PRESCRIPTION_FOOD_TIMING_LABELS[foodTimingRaw as PrescriptionFoodTiming]
+        : foodTimingRaw;
 
     if (!name && !amount && !frequency && !foodTiming) {
       return '';
     }
 
     const dose = amount;
-    const parts = [
-      name ? (dose ? `${name} (${dose})` : name) : dose,
-      frequency,
-      foodTiming,
-    ].filter(Boolean);
+    const parts = [name ? (dose ? `${name} (${dose})` : name) : dose, frequency, foodTiming].filter(
+      Boolean
+    );
 
     return parts.join(', ');
   };
 
   if (Array.isArray(prescription.items) && prescription.items.length > 0) {
-    const rows = prescription.items
-      .map((item) => formatSingle(item))
-      .filter(Boolean);
+    const rows = prescription.items.map((item) => formatSingle(item)).filter(Boolean);
     if (rows.length > 0) {
       return rows.join('; ');
     }
@@ -955,13 +642,13 @@ export const TreatmentChartWorkspace = ({
   const authenticatedEmail = asText(authenticatedUser?.email).toLowerCase();
   const createVisitTreatment = useCreateVisitTreatment();
   const updateVisitTreatment = useUpdateVisitTreatment();
-  const defaultPatientId = initialPatientId !== undefined && initialPatientId !== null
-    ? String(initialPatientId)
-    : '';
-  const defaultVisitId = initialVisitId !== undefined && initialVisitId !== null
-    ? String(initialVisitId)
-    : '';
+  const defaultPatientId =
+    initialPatientId !== undefined && initialPatientId !== null ? String(initialPatientId) : '';
+  const defaultVisitId =
+    initialVisitId !== undefined && initialVisitId !== null ? String(initialVisitId) : '';
 
+  const editorId = useId();
+  const [editorTab, setEditorTab] = useState('treatment');
   const [activeCondition, setActiveCondition] = useState<ConditionKey | null>(null);
   const [editingTreatmentId, setEditingTreatmentId] = useState<number | null>(null);
   const [selectedPatientId, setSelectedPatientId] = useState<string>(defaultPatientId);
@@ -975,7 +662,9 @@ export const TreatmentChartWorkspace = ({
   const [requiresImage, setRequiresImage] = useState<boolean>(false);
   const [imagePrice, setImagePrice] = useState<string>('');
   const [treatmentImages, setTreatmentImages] = useState<File[]>([]);
-  const [persistedTreatmentImages, setPersistedTreatmentImages] = useState<VisitTreatmentImage[]>([]);
+  const [persistedTreatmentImages, setPersistedTreatmentImages] = useState<VisitTreatmentImage[]>(
+    []
+  );
   const [imageModality, setImageModality] = useState<VisitTreatmentImageModality>('xray');
   const [imageSource, setImageSource] = useState<VisitTreatmentImageSource>('upload');
   const [materialSelections, setMaterialSelections] = useState<MaterialSelectionRow[]>([]);
@@ -983,19 +672,34 @@ export const TreatmentChartWorkspace = ({
   const [isLoadingInventoryMaterials, setIsLoadingInventoryMaterials] = useState<boolean>(false);
   const [notes, setNotes] = useState<string>('');
   const [correctionReason, setCorrectionReason] = useState<string>('');
-  const [prescriptionSelections, setPrescriptionSelections] = useState<PrescriptionSelectionRow[]>([]);
-  const [conditionOverrides, setConditionOverrides] = useState<Record<string, ConditionKey | null>>({});
+  const [prescriptionSelections, setPrescriptionSelections] = useState<PrescriptionSelectionRow[]>(
+    []
+  );
+  const [conditionOverrides, setConditionOverrides] = useState<Record<string, ConditionKey | null>>(
+    {}
+  );
   const [autoHydratedVisitId, setAutoHydratedVisitId] = useState<string>('');
 
   const { entities: patients } = usePatientList(1, 100);
 
-  const visitFilters = useMemo(() => ({ patientId: [selectedPatientId || '-1'] }), [selectedPatientId]);
-  const { entities: visits, isFetching: isLoadingVisits } = useVisitList(1, 100, '', [], ['patient', 'dentist'], visitFilters);
+  const visitFilters = useMemo(
+    () => ({ patientId: [selectedPatientId || '-1'] }),
+    [selectedPatientId]
+  );
+  const { entities: visits, isFetching: isLoadingVisits } = useVisitList(
+    1,
+    100,
+    '',
+    [],
+    ['patient', 'dentist'],
+    visitFilters
+  );
 
   const patientVisitIds = useMemo(() => visits.map((visit) => String(visit.id)), [visits]);
-  const resolvedExchangeRate = currency === 'USD'
-    ? Math.max(parseCurrency(exchangeRate) || defaultExchangeRate, DEFAULT_AFN_PER_USD)
-    : 1;
+  const resolvedExchangeRate =
+    currency === 'USD'
+      ? Math.max(parseCurrency(exchangeRate) || defaultExchangeRate, DEFAULT_AFN_PER_USD)
+      : 1;
   const visitTreatmentFilters = useMemo(
     () => ({ visitId: patientVisitIds.length > 0 ? patientVisitIds : ['-1'] }),
     [patientVisitIds]
@@ -1005,13 +709,25 @@ export const TreatmentChartWorkspace = ({
     100,
     '',
     [],
-    ['treatment', 'tooth', 'dentist', 'prescription', 'prescription.items', 'materialItems', 'treatmentImages', 'activityLogs', 'activityLogs.causer'],
+    [
+      'treatment',
+      'tooth',
+      'dentist',
+      'prescription',
+      'prescription.items',
+      'materialItems',
+      'treatmentImages',
+      'activityLogs',
+      'activityLogs.causer',
+    ],
     visitTreatmentFilters
   );
 
   const { entities: treatments } = useTreatmentList(1, 100, '', [], [], { enabled: ['1'] });
   const { entities: teeth } = useToothList(1, 100);
-  const { entities: staff } = useStaffList(1, 100, authenticatedEmail, ['email'], [], { enabled: ['1'] });
+  const { entities: staff } = useStaffList(1, 100, authenticatedEmail, ['email'], [], {
+    enabled: ['1'],
+  });
 
   useEffect(() => {
     const client = new AxiosClient();
@@ -1019,9 +735,11 @@ export const TreatmentChartWorkspace = ({
     void getExchangeRate(client)
       .then((rate) => {
         setDefaultExchangeRate(rate);
-        setExchangeRate((previous) => (currency === 'USD' && (parseCurrency(previous) <= 0 || previous === '1')
-          ? String(rate)
-          : previous));
+        setExchangeRate((previous) =>
+          currency === 'USD' && (parseCurrency(previous) <= 0 || previous === '1')
+            ? String(rate)
+            : previous
+        );
       })
       .catch(() => {
         setDefaultExchangeRate(DEFAULT_AFN_PER_USD);
@@ -1045,15 +763,23 @@ export const TreatmentChartWorkspace = ({
     () => new Map(visits.map((visit) => [String(visit.id), visit])),
     [visits]
   );
-  const toothById = useMemo(() => new Map(teeth.map((tooth) => [String(tooth.id), tooth])), [teeth]);
-  const toothByNumber = useMemo(() => new Map(teeth.map((tooth) => [tooth.toothNumber, tooth])), [teeth]);
+  const toothById = useMemo(
+    () => new Map(teeth.map((tooth) => [String(tooth.id), tooth])),
+    [teeth]
+  );
+  const toothByNumber = useMemo(
+    () => new Map(teeth.map((tooth) => [tooth.toothNumber, tooth])),
+    [teeth]
+  );
 
   const authenticatedDentist = useMemo(() => {
     if (!authenticatedEmail) {
       return null;
     }
 
-    const matches = staff.filter((member) => asText(member.email).toLowerCase() === authenticatedEmail);
+    const matches = staff.filter(
+      (member) => asText(member.email).toLowerCase() === authenticatedEmail
+    );
 
     if (matches.length === 0) {
       return null;
@@ -1062,7 +788,9 @@ export const TreatmentChartWorkspace = ({
     return matches.find((member) => member.role === 'dentist') ?? matches[0];
   }, [authenticatedEmail, staff]);
 
-  const selectedTreatment = selectedTreatmentId ? treatmentById.get(selectedTreatmentId) : undefined;
+  const selectedTreatment = selectedTreatmentId
+    ? treatmentById.get(selectedTreatmentId)
+    : undefined;
   const selectedVisit = selectedVisitId ? visitById.get(selectedVisitId) : undefined;
   const uploadInputId = useId();
   const captureInputId = useId();
@@ -1075,7 +803,10 @@ export const TreatmentChartWorkspace = ({
         return leftDate - rightDate;
       }
 
-      return String(left.id).localeCompare(String(right.id), undefined, { numeric: true, sensitivity: 'base' });
+      return String(left.id).localeCompare(String(right.id), undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      });
     });
 
     const map = new Map<string, number>();
@@ -1102,19 +833,28 @@ export const TreatmentChartWorkspace = ({
   const orderedChartTreatments = useMemo(() => {
     const rows = [...chartSourceTreatments];
     rows.sort((left, right) => {
-      const leftVisitIndex = visitOrderIndexById.get(String(left.visitId)) ?? Number.MAX_SAFE_INTEGER;
-      const rightVisitIndex = visitOrderIndexById.get(String(right.visitId)) ?? Number.MAX_SAFE_INTEGER;
+      const leftVisitIndex =
+        visitOrderIndexById.get(String(left.visitId)) ?? Number.MAX_SAFE_INTEGER;
+      const rightVisitIndex =
+        visitOrderIndexById.get(String(right.visitId)) ?? Number.MAX_SAFE_INTEGER;
       if (leftVisitIndex !== rightVisitIndex) {
         return leftVisitIndex - rightVisitIndex;
       }
 
       const leftCreated = new Date(left.createdAt || '').getTime();
       const rightCreated = new Date(right.createdAt || '').getTime();
-      if (!Number.isNaN(leftCreated) && !Number.isNaN(rightCreated) && leftCreated !== rightCreated) {
+      if (
+        !Number.isNaN(leftCreated) &&
+        !Number.isNaN(rightCreated) &&
+        leftCreated !== rightCreated
+      ) {
         return leftCreated - rightCreated;
       }
 
-      return String(left.id).localeCompare(String(right.id), undefined, { numeric: true, sensitivity: 'base' });
+      return String(left.id).localeCompare(String(right.id), undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      });
     });
     return rows;
   }, [chartSourceTreatments, visitOrderIndexById]);
@@ -1127,55 +867,68 @@ export const TreatmentChartWorkspace = ({
     return rows.slice().sort((left, right) => {
       const leftCreated = new Date(left.createdAt || '').getTime();
       const rightCreated = new Date(right.createdAt || '').getTime();
-      if (!Number.isNaN(leftCreated) && !Number.isNaN(rightCreated) && leftCreated !== rightCreated) {
+      if (
+        !Number.isNaN(leftCreated) &&
+        !Number.isNaN(rightCreated) &&
+        leftCreated !== rightCreated
+      ) {
         return rightCreated - leftCreated;
       }
-      return String(right.id).localeCompare(String(left.id), undefined, { numeric: true, sensitivity: 'base' });
+      return String(right.id).localeCompare(String(left.id), undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      });
     });
   }, [selectedVisitId, typedVisitTreatments]);
 
-  const resolveRowTeeth = useCallback((row: VisitTreatmentWithRelations): string[] => {
-    const fromChartMetadata = Object.keys(parseToothConditionMapFromNotes(row.notes));
-    if (fromChartMetadata.length > 0) {
-      return fromChartMetadata;
-    }
+  const resolveRowTeeth = useCallback(
+    (row: VisitTreatmentWithRelations): string[] => {
+      const fromChartMetadata = Object.keys(parseToothConditionMapFromNotes(row.notes));
+      if (fromChartMetadata.length > 0) {
+        return fromChartMetadata;
+      }
 
-    const fromToothNumber = parseToothNumbersFromValue(row.toothNumber);
-    if (fromToothNumber.length > 0) {
-      return fromToothNumber;
-    }
+      const fromToothNumber = parseToothNumbersFromValue(row.toothNumber);
+      if (fromToothNumber.length > 0) {
+        return fromToothNumber;
+      }
 
-    const toothNumber =
-      row.tooth?.toothNumber
-      ?? toothById.get(String(row.toothId))?.toothNumber
-      ?? parseToothNumberFromNotes(row.notes);
+      const toothNumber =
+        row.tooth?.toothNumber ??
+        toothById.get(String(row.toothId))?.toothNumber ??
+        parseToothNumberFromNotes(row.notes);
 
-    return toothNumber ? [toothNumber] : [];
-  }, [toothById]);
-  const resolveRowConditionMap = useCallback((row: VisitTreatmentWithRelations): Record<string, ConditionKey> => {
-    const fromChartMetadata = parseToothConditionMapFromNotes(row.notes);
-    if (Object.keys(fromChartMetadata).length > 0) {
-      return fromChartMetadata;
-    }
+      return toothNumber ? [toothNumber] : [];
+    },
+    [toothById]
+  );
+  const resolveRowConditionMap = useCallback(
+    (row: VisitTreatmentWithRelations): Record<string, ConditionKey> => {
+      const fromChartMetadata = parseToothConditionMapFromNotes(row.notes);
+      if (Object.keys(fromChartMetadata).length > 0) {
+        return fromChartMetadata;
+      }
 
-    const condition =
-      parseConditionFromNotes(row.notes)
-      ?? inferConditionFromText(row.treatment?.category)
-      ?? inferConditionFromText(row.treatment?.name);
+      const condition =
+        parseConditionFromNotes(row.notes) ??
+        inferConditionFromText(row.treatment?.category) ??
+        inferConditionFromText(row.treatment?.name);
 
-    if (!condition) {
-      return {};
-    }
+      if (!condition) {
+        return {};
+      }
 
-    const teeth = resolveRowTeeth(row);
-    const mapped: Record<string, ConditionKey> = {};
+      const teeth = resolveRowTeeth(row);
+      const mapped: Record<string, ConditionKey> = {};
 
-    for (const toothNumber of teeth) {
-      mapped[toothNumber] = condition;
-    }
+      for (const toothNumber of teeth) {
+        mapped[toothNumber] = condition;
+      }
 
-    return mapped;
-  }, [resolveRowTeeth]);
+      return mapped;
+    },
+    [resolveRowTeeth]
+  );
   const resolveRowMaterialSummary = useCallback((row: VisitTreatmentWithRelations): string => {
     const directMaterial = asText(row.material);
     if (directMaterial) {
@@ -1194,9 +947,8 @@ export const TreatmentChartWorkspace = ({
           : `Item #${item.inventoryItemId ?? '-'}`;
         const quantityUsed = 'quantityUsed' in item ? item.quantityUsed : undefined;
         const quantityFromPayload = 'quantity' in item ? item.quantity : undefined;
-        const quantity = typeof quantityUsed === 'number'
-          ? quantityUsed
-          : Number(quantityFromPayload ?? 0);
+        const quantity =
+          typeof quantityUsed === 'number' ? quantityUsed : Number(quantityFromPayload ?? 0);
         if (!Number.isFinite(quantity) || quantity <= 0) {
           return itemName;
         }
@@ -1288,16 +1040,16 @@ export const TreatmentChartWorkspace = ({
     }
 
     return 'Unassigned doctor';
-  }, [
-    authenticatedDentist?.fullName,
-    selectedVisit?.dentistName,
-  ]);
+  }, [authenticatedDentist?.fullName, selectedVisit?.dentistName]);
   const patientName = useMemo(() => {
     if (!selectedPatient) {
       return selectedPatientId ? `Patient #${selectedPatientId}` : 'N/A';
     }
 
-    return [selectedPatient.firstName, selectedPatient.lastName].filter(Boolean).join(' ') || `Patient #${selectedPatient.id}`;
+    return (
+      [selectedPatient.firstName, selectedPatient.lastName].filter(Boolean).join(' ') ||
+      `Patient #${selectedPatient.id}`
+    );
   }, [selectedPatient, selectedPatientId]);
   const materialSummary = useMemo(() => {
     const parts = materialSelections
@@ -1333,16 +1085,18 @@ export const TreatmentChartWorkspace = ({
 
         const availableQuantity = item.availableQuantity;
         const remainingQuantity = availableQuantity - requestedQuantity;
-        const status: MaterialReviewRow['status'] = remainingQuantity < 0
-          ? 'shortage'
-          : remainingQuantity <= item.minStock
-            ? 'low_after'
-            : 'healthy';
+        const status: MaterialReviewRow['status'] =
+          remainingQuantity < 0
+            ? 'shortage'
+            : remainingQuantity <= item.minStock
+              ? 'low_after'
+              : 'healthy';
         const substituteOptions = inventoryMaterials
-          .filter((candidate) =>
-            candidate.id !== item.id &&
-            candidate.category === item.category &&
-            candidate.availableQuantity >= requestedQuantity
+          .filter(
+            (candidate) =>
+              candidate.id !== item.id &&
+              candidate.category === item.category &&
+              candidate.availableQuantity >= requestedQuantity
           )
           .sort((left, right) => right.availableQuantity - left.availableQuantity)
           .slice(0, 3);
@@ -1436,9 +1190,10 @@ export const TreatmentChartWorkspace = ({
       return;
     }
 
-    const defaultPriceInput = currency === 'USD'
-      ? convertUsdToInput(defaultPrice, currency, resolvedExchangeRate)
-      : defaultPrice;
+    const defaultPriceInput =
+      currency === 'USD'
+        ? convertUsdToInput(defaultPrice, currency, resolvedExchangeRate)
+        : defaultPrice;
     setPrice(defaultPriceInput.toFixed(2));
   };
 
@@ -1494,7 +1249,9 @@ export const TreatmentChartWorkspace = ({
     setImageSource(source);
     setTreatmentImages((previous) => {
       const merged = [...previous];
-      const seen = new Set(previous.map((file) => `${file.name}-${file.size}-${file.lastModified}`));
+      const seen = new Set(
+        previous.map((file) => `${file.name}-${file.size}-${file.lastModified}`)
+      );
       const persistedCount = persistedTreatmentImages.length;
 
       imageFiles.forEach((file) => {
@@ -1531,9 +1288,7 @@ export const TreatmentChartWorkspace = ({
       return;
     }
 
-    setPersistedTreatmentImages((previous) =>
-      previous.filter((image) => image.id !== imageId)
-    );
+    setPersistedTreatmentImages((previous) => previous.filter((image) => image.id !== imageId));
   };
 
   const fetchInventoryMaterials = useCallback(async (): Promise<void> => {
@@ -1560,15 +1315,18 @@ export const TreatmentChartWorkspace = ({
           location: asText(row.location),
           minStock: asNumber(row.minStock ?? row.min_stock),
           quantity: asNumber(row.quantity),
-          stockState: (asText(row.stockState ?? row.stock_state) as InventoryMaterialOption['stockState']) || 'in_stock',
+          stockState:
+            (asText(row.stockState ?? row.stock_state) as InventoryMaterialOption['stockState']) ||
+            'in_stock',
           supplier: asText(row.supplier),
           unit: asText(row.unit) || 'unit',
           unitCost: asNumber(row.unitCost ?? row.unit_cost),
         });
       }
 
-      const materials = Array.from(uniqueMaterials.values())
-        .sort((left, right) => left.itemName.localeCompare(right.itemName, undefined, { sensitivity: 'base' }));
+      const materials = Array.from(uniqueMaterials.values()).sort((left, right) =>
+        left.itemName.localeCompare(right.itemName, undefined, { sensitivity: 'base' })
+      );
       setInventoryMaterials(materials);
     } catch {
       toast.error('Failed to load inventory materials.');
@@ -1581,58 +1339,64 @@ export const TreatmentChartWorkspace = ({
     void fetchInventoryMaterials();
   }, [fetchInventoryMaterials]);
 
-  const startEditingTreatment = useCallback((row: VisitTreatmentWithRelations): void => {
-    const rowTeeth = resolveRowTeeth(row);
-    const rowConditionMap = resolveRowConditionMap(row);
-    const firstCondition = Object.values(rowConditionMap)[0] ?? null;
-    const persistedImagesFromRow = Array.isArray(row.treatmentImages)
-      ? row.treatmentImages.filter((image): image is VisitTreatmentImage => !(image instanceof File))
-      : [];
-    const materialSelectionsFromRow = Array.isArray(row.materialItems)
-      ? row.materialItems.map((item) => {
-          const quantity = 'quantityUsed' in item && typeof item.quantityUsed === 'number'
-            ? item.quantityUsed
-            : Number('quantity' in item ? item.quantity : 1);
+  const startEditingTreatment = useCallback(
+    (row: VisitTreatmentWithRelations): void => {
+      const rowTeeth = resolveRowTeeth(row);
+      const rowConditionMap = resolveRowConditionMap(row);
+      const firstCondition = Object.values(rowConditionMap)[0] ?? null;
+      const persistedImagesFromRow = Array.isArray(row.treatmentImages)
+        ? row.treatmentImages.filter(
+            (image): image is VisitTreatmentImage => !(image instanceof File)
+          )
+        : [];
+      const materialSelectionsFromRow = Array.isArray(row.materialItems)
+        ? row.materialItems.map((item) => {
+            const quantity =
+              'quantityUsed' in item && typeof item.quantityUsed === 'number'
+                ? item.quantityUsed
+                : Number('quantity' in item ? item.quantity : 1);
 
-          return {
-            inventoryItemId: String(item.inventoryItemId ?? ''),
+            return {
+              inventoryItemId: String(item.inventoryItemId ?? ''),
+              key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              quantity: Number.isFinite(quantity) && quantity > 0 ? String(quantity) : '1',
+            };
+          })
+        : [];
+      const prescriptionSelectionsFromRow = Array.isArray(row.prescription?.items)
+        ? row.prescription.items.map((item) => ({
+            amount: item.amount ?? '',
+            foodTiming: item.foodTiming ?? '',
+            frequency: item.frequency ?? '',
             key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            quantity: Number.isFinite(quantity) && quantity > 0 ? String(quantity) : '1',
-          };
-        })
-      : [];
-    const prescriptionSelectionsFromRow = Array.isArray(row.prescription?.items)
-      ? row.prescription.items.map((item) => ({
-          amount: item.amount ?? '',
-          foodTiming: item.foodTiming ?? '',
-          frequency: item.frequency ?? '',
-          key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          name: item.name ?? '',
-        }))
-      : [];
-    const rowCurrency = parseCurrencyCodeFromNotes(row.notes);
-    const rowExchangeRate = parseExchangeRateFromNotes(row.notes, rowCurrency);
+            name: item.name ?? '',
+          }))
+        : [];
+      const rowCurrency = parseCurrencyCodeFromNotes(row.notes);
+      const rowExchangeRate = parseExchangeRateFromNotes(row.notes, rowCurrency);
 
-    setEditingTreatmentId(row.id);
-    setSelectedVisitId(String(row.visitId));
-    setSelectedTreatmentId(String(row.treatmentId));
-    setSelectedToothNumber(rowTeeth[0] ?? parseToothNumbersFromValue(row.toothNumber)[0] ?? '');
-    setActiveCondition(firstCondition);
-    setConditionOverrides(Object.keys(rowConditionMap).length > 0 ? rowConditionMap : {});
-    setCurrency(rowCurrency);
-    setExchangeRate(String(rowCurrency === 'USD' ? rowExchangeRate : 1));
-    setPrice(parsePriceValueFromNotes(row.notes, row.price));
-    setRequiresImage(parseRequiresImageFromNotes(row.notes));
-    setImagePrice(parseImagePriceValueFromNotes(row.notes));
-    setTreatmentImages([]);
-    setPersistedTreatmentImages(persistedImagesFromRow);
-    setImageModality(row.imageModality ?? 'xray');
-    setImageSource(row.imageSource ?? 'upload');
-    setMaterialSelections(materialSelectionsFromRow);
-    setNotes(stripMetadataPrefixes(row.notes));
-    setCorrectionReason('');
-    setPrescriptionSelections(prescriptionSelectionsFromRow);
-  }, [resolveRowConditionMap, resolveRowTeeth]);
+      setEditingTreatmentId(row.id);
+      setSelectedVisitId(String(row.visitId));
+      setSelectedTreatmentId(String(row.treatmentId));
+      setSelectedToothNumber(rowTeeth[0] ?? parseToothNumbersFromValue(row.toothNumber)[0] ?? '');
+      setActiveCondition(firstCondition);
+      setConditionOverrides(Object.keys(rowConditionMap).length > 0 ? rowConditionMap : {});
+      setCurrency(rowCurrency);
+      setExchangeRate(String(rowCurrency === 'USD' ? rowExchangeRate : 1));
+      setPrice(parsePriceValueFromNotes(row.notes, row.price));
+      setRequiresImage(parseRequiresImageFromNotes(row.notes));
+      setImagePrice(parseImagePriceValueFromNotes(row.notes));
+      setTreatmentImages([]);
+      setPersistedTreatmentImages(persistedImagesFromRow);
+      setImageModality(row.imageModality ?? 'xray');
+      setImageSource(row.imageSource ?? 'upload');
+      setMaterialSelections(materialSelectionsFromRow);
+      setNotes(stripMetadataPrefixes(row.notes));
+      setCorrectionReason('');
+      setPrescriptionSelections(prescriptionSelectionsFromRow);
+    },
+    [resolveRowConditionMap, resolveRowTeeth]
+  );
 
   useEffect(() => {
     if (!hidePatientVisitSelectors || !lockVisitSelection || !selectedVisitId) {
@@ -1701,7 +1465,10 @@ export const TreatmentChartWorkspace = ({
       ? convertInputToUsd(rawImageChargeInput, currency, resolvedExchangeRate)
       : 0;
 
-    const normalizedMaterialItemsMap = new Map<string, { inventoryItemId: string; quantity: number }>();
+    const normalizedMaterialItemsMap = new Map<
+      string,
+      { inventoryItemId: string; quantity: number }
+    >();
     for (const selection of materialSelections) {
       const inventoryItemId = selection.inventoryItemId.trim();
       const quantityRaw = selection.quantity.trim();
@@ -1728,7 +1495,9 @@ export const TreatmentChartWorkspace = ({
 
     const materialItemsPayload = Array.from(normalizedMaterialItemsMap.values());
     if (hasBlockingMaterialIssue) {
-      toast.error('One or more selected materials do not have enough stock. Use a substitute or lower the requested quantity.');
+      toast.error(
+        'One or more selected materials do not have enough stock. Use a substitute or lower the requested quantity.'
+      );
       return;
     }
     const materialSummaryForPayload = materialItemsPayload
@@ -1761,9 +1530,10 @@ export const TreatmentChartWorkspace = ({
       return;
     }
 
-    const targets = paintedTeeth.length > 0
-      ? paintedTeeth
-      : [{ condition: fallbackCondition as ConditionKey, toothNumber: selectedToothNumber }];
+    const targets =
+      paintedTeeth.length > 0
+        ? paintedTeeth
+        : [{ condition: fallbackCondition as ConditionKey, toothNumber: selectedToothNumber }];
     const uniqueTargets = Array.from(
       new Map(targets.map((target) => [target.toothNumber, target])).values()
     );
@@ -1780,7 +1550,8 @@ export const TreatmentChartWorkspace = ({
       return;
     }
     const primaryToothNumber = uniqueTargets[0]?.toothNumber ?? selectedToothNumber;
-    const targetTooth = uniqueTargets.length === 1 ? toothByNumber.get(primaryToothNumber) : undefined;
+    const targetTooth =
+      uniqueTargets.length === 1 ? toothByNumber.get(primaryToothNumber) : undefined;
 
     const payload: Omit<VisitTreatment, 'id' | 'createdAt' | 'updatedAt'> = {
       notes: combinedNote,
@@ -1824,7 +1595,9 @@ export const TreatmentChartWorkspace = ({
       payload.toothId = String(targetTooth.id);
     }
 
-    const dentistIdForPayload = asText(selectedVisit?.dentistId) || (authenticatedDentist ? String(authenticatedDentist.id) : '');
+    const dentistIdForPayload =
+      asText(selectedVisit?.dentistId) ||
+      (authenticatedDentist ? String(authenticatedDentist.id) : '');
     if (dentistIdForPayload) {
       payload.dentistId = dentistIdForPayload;
     }
@@ -1839,19 +1612,21 @@ export const TreatmentChartWorkspace = ({
       payload.correctionReason = normalizedCorrectionReason;
     }
 
-    const response = editingTreatmentId !== null
-      ? await updateVisitTreatment.mutateAsync({
-          data: payload,
-          id: editingTreatmentId,
-        })
-      : await createVisitTreatment.mutateAsync(payload);
+    const response =
+      editingTreatmentId !== null
+        ? await updateVisitTreatment.mutateAsync({
+            data: payload,
+            id: editingTreatmentId,
+          })
+        : await createVisitTreatment.mutateAsync(payload);
     if (!response.success) {
       const errorText =
         typeof response.error?.details === 'string'
           ? response.error.details
-          : response.error?.message || (editingTreatmentId !== null
-            ? 'Failed to update treatment entry.'
-            : 'Failed to save treatment entry.');
+          : response.error?.message ||
+            (editingTreatmentId !== null
+              ? 'Failed to update treatment entry.'
+              : 'Failed to save treatment entry.');
       toast.error(errorText);
       return;
     }
@@ -1861,7 +1636,9 @@ export const TreatmentChartWorkspace = ({
 
     const shouldStartBillingFlow =
       editingTreatmentId === null &&
-      hidePatientVisitSelectors && lockPatientSelection && lockVisitSelection;
+      hidePatientVisitSelectors &&
+      lockPatientSelection &&
+      lockVisitSelection;
 
     if (shouldStartBillingFlow) {
       const searchParameters = new URLSearchParams({
@@ -1879,9 +1656,13 @@ export const TreatmentChartWorkspace = ({
       return;
     }
 
-    toast.success(editingTreatmentId !== null ? 'Treatment entry updated.' : 'Treatment added to patient chart.');
+    toast.success(
+      editingTreatmentId !== null ? 'Treatment entry updated.' : 'Treatment added to patient chart.'
+    );
     if (hasLowStockMaterialIssue) {
-      toast.warning('Some materials are now at or below minimum stock. Check the inventory panel for reorder planning.');
+      toast.warning(
+        'Some materials are now at or below minimum stock. Check the inventory panel for reorder planning.'
+      );
     }
   };
 
@@ -1938,13 +1719,12 @@ export const TreatmentChartWorkspace = ({
         const teeth = resolveRowTeeth(row);
         const teethLabel = teeth.length > 0 ? teeth.join(', ') : '-';
         const treatmentName =
-          row.treatment?.name || treatmentById.get(String(row.treatmentId))?.name || `Treatment ${row.treatmentId}`;
+          row.treatment?.name ||
+          treatmentById.get(String(row.treatmentId))?.name ||
+          `Treatment ${row.treatmentId}`;
         const rowConditionMap = resolveRowConditionMap(row);
         const uniqueConditions = Array.from(new Set(Object.values(rowConditionMap)));
-        const condition =
-          uniqueConditions.length === 1
-            ? uniqueConditions[0]
-            : null;
+        const condition = uniqueConditions.length === 1 ? uniqueConditions[0] : null;
         const conditionLabel =
           uniqueConditions.length === 0
             ? 'Unspecified'
@@ -1965,16 +1745,13 @@ export const TreatmentChartWorkspace = ({
           rowCurrency,
           rowExchangeRate
         );
-        const dentistLabel =
-          row.dentist
-            ? asText(row.dentist.fullName)
-            : '';
+        const dentistLabel = row.dentist ? asText(row.dentist.fullName) : '';
         const resolvedDentist = dentistLabel || asText(visit?.dentistName) || doctorName;
         const imageCharge = parseImageChargeFromNotes(row.notes);
         const visitLabel = visit
-          ? (visit.tag
-              ? `${visit.tag} (${visit.visitDate})`
-              : `Visit ${visit.id} (${visit.visitDate})`)
+          ? visit.tag
+            ? `${visit.tag} (${visit.visitDate})`
+            : `Visit ${visit.id} (${visit.visitDate})`
           : `Visit ${row.visitId}`;
 
         return `
@@ -2008,7 +1785,9 @@ export const TreatmentChartWorkspace = ({
         const teeth = resolveRowTeeth(row);
         const teethLabel = teeth.length > 0 ? teeth.join(', ') : '-';
         const treatmentName =
-          row.treatment?.name || treatmentById.get(String(row.treatmentId))?.name || `Treatment ${row.treatmentId}`;
+          row.treatment?.name ||
+          treatmentById.get(String(row.treatmentId))?.name ||
+          `Treatment ${row.treatmentId}`;
 
         return `
           <tr>
@@ -2122,8 +1901,9 @@ export const TreatmentChartWorkspace = ({
 
   <div class="section">
     <h2>Notes</h2>
-    ${noteRows
-    ? `<table>
+    ${
+      noteRows
+        ? `<table>
       <thead>
         <tr>
           <th>Teeth</th>
@@ -2133,7 +1913,8 @@ export const TreatmentChartWorkspace = ({
       </thead>
       <tbody>${noteRows}</tbody>
     </table>`
-    : '<p class="muted">No notes were recorded for this patient.</p>'}
+        : '<p class="muted">No notes were recorded for this patient.</p>'
+    }
   </div>
 </body>
 </html>`;
@@ -2196,259 +1977,499 @@ export const TreatmentChartWorkspace = ({
   };
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[2fr_1fr]">
-      <Card className="py-4">
-        <CardHeader className="px-4">
-          <CardTitle>Treatment Chart</CardTitle>
+    <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_380px] xl:[grid-template-rows:auto_1fr] 2xl:grid-cols-[minmax(0,1fr)_420px]">
+      <div className="min-w-0 space-y-5">
+        <Card className="gap-0 overflow-hidden rounded-2xl py-0">
+          <CardHeader className="border-b p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl bg-primary/10 p-2.5">
+                  <Stethoscope className="size-5 text-primary" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">Dental chart</CardTitle>
+                  <CardDescription className="mt-1">
+                    Select a tooth to review or record treatment.
+                  </CardDescription>
+                </div>
+              </div>
+              <Badge variant="outline" className="gap-1.5 rounded-full px-3 py-1">
+                Permanent dentition / FDI
+              </Badge>
+            </div>
+          </CardHeader>
+          <div className="space-y-3 border-b bg-muted/25 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Chart tools
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={clearSelectedTooth}
+                disabled={!selectedToothNumber || isSubmitting}
+                className="h-8 gap-2 text-xs"
+              >
+                <Eraser className="size-3.5" />
+                Clear selected
+              </Button>
+            </div>
+            <div
+              className="flex flex-wrap gap-2"
+              role="group"
+              aria-label="Chart mode and condition"
+            >
+              <Button
+                type="button"
+                size="sm"
+                variant={activeCondition === null ? 'default' : 'outline'}
+                aria-pressed={activeCondition === null}
+                onClick={() => {
+                  setActiveCondition(null);
+                }}
+                className="h-8 gap-1.5 text-xs"
+              >
+                <MousePointer2 className="size-3.5" />
+                Inspect
+              </Button>
+              {(Object.keys(CONDITIONS) as ConditionKey[]).map((key) => (
+                <Button
+                  key={key}
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  aria-pressed={activeCondition === key}
+                  onClick={() => {
+                    setActiveCondition(key);
+                  }}
+                  className={cn(
+                    'h-8 gap-1.5 text-xs',
+                    activeCondition === key && 'border-primary bg-primary/10 ring-1 ring-primary'
+                  )}
+                >
+                  <span
+                    className="size-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: CONDITIONS[key].color }}
+                  />
+                  {CONDITIONS[key].label}
+                  {activeCondition === key ? <Check className="size-3" /> : null}
+                </Button>
+              ))}
+            </div>
+            <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
+              {activeCondition ? (
+                <Paintbrush className="size-3.5 shrink-0 text-primary" />
+              ) : (
+                <MousePointer2 className="size-3.5 shrink-0" />
+              )}
+              {activeCondition
+                ? `${CONDITIONS[activeCondition].label} selected. Click a tooth to apply; save the treatment to record changes.`
+                : 'Inspect mode. Select a tooth to view its recorded condition.'}
+            </p>
+          </div>
+          <CardContent className="px-0">
+            <DentalMouthChart
+              disabled={isSubmitting}
+              lowerTeeth={LOWER_ARCH.map((number) => ({
+                color: toothConditions[number]
+                  ? CONDITIONS[toothConditions[number]].color
+                  : undefined,
+                condition: toothConditions[number]
+                  ? CONDITIONS[toothConditions[number]].label
+                  : undefined,
+                label: resolveToothDisplayMeta(number).fullLabel,
+                number,
+              }))}
+              onSelect={paintTooth}
+              selectedToothNumber={selectedToothNumber}
+              upperTeeth={UPPER_ARCH.map((number) => ({
+                color: toothConditions[number]
+                  ? CONDITIONS[toothConditions[number]].color
+                  : undefined,
+                condition: toothConditions[number]
+                  ? CONDITIONS[toothConditions[number]].label
+                  : undefined,
+                label: resolveToothDisplayMeta(number).fullLabel,
+                number,
+              }))}
+            />
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t bg-muted/20 px-5 py-3 text-xs">
+              <span className="font-medium">Chart overview</span>
+              {conditionStats
+                .filter((item) => item.count > 0)
+                .map(({ count, key }) => (
+                  <span key={key} className="flex items-center gap-1.5 text-muted-foreground">
+                    <span
+                      className="size-2 rounded-full"
+                      style={{ backgroundColor: CONDITIONS[key].color }}
+                    />
+                    {CONDITIONS[key].label}
+                    <span className="font-semibold text-foreground">{count}</span>
+                  </span>
+                ))}
+              {conditionStats.every((item) => item.count === 0) ? (
+                <span className="text-muted-foreground">No conditions marked</span>
+              ) : null}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+      <Card
+        id={editorId}
+        className="min-w-0 scroll-mt-20 gap-0 overflow-hidden rounded-2xl py-0 xl:sticky xl:top-20 xl:max-h-[max(28rem,calc(100dvh-20rem))] xl:col-start-2 xl:row-span-2 xl:row-start-1"
+      >
+        <CardHeader className="shrink-0 border-b p-5">
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ClipboardList className="size-4 text-primary" />
+              {editingTreatmentId !== null ? 'Edit treatment' : 'New treatment'}
+            </CardTitle>
+            {editingTreatmentId !== null ? (
+              <Button type="button" variant="ghost" size="sm" onClick={resetEditor}>
+                New entry
+              </Button>
+            ) : (
+              <Badge variant="outline">Draft</Badge>
+            )}
+          </div>
           <CardDescription>
-            Link treatments directly to a patient visit, set a condition color, and save the treatment details.
+            {patientName} / {doctorName}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4 px-4">
+        <CardContent className="min-h-0 space-y-4 p-4 xl:overflow-y-auto">
+          <div
+            className="flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 p-3"
+            role="status"
+          >
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-card text-lg font-semibold text-primary">
+              {selectedToothNumber || '--'}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold">
+                {selectedToothNumber
+                  ? resolveToothDisplayMeta(selectedToothNumber).fullLabel
+                  : 'Select a tooth'}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {selectedToothNumber
+                  ? `${getToothRegion(selectedToothNumber)} - ${selectedCondition ? CONDITIONS[selectedCondition].label : 'No condition recorded'}`
+                  : 'Choose a tooth on the chart to begin.'}
+              </p>
+            </div>
+          </div>
           {editingTreatmentId !== null ? (
             <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
               <div className="space-y-1">
-                <p className="text-sm font-semibold text-amber-900">Editing saved treatment #{editingTreatmentId}</p>
+                <p className="text-sm font-semibold text-amber-900">
+                  Editing saved treatment #{editingTreatmentId}
+                </p>
                 <p className="text-xs text-amber-800">
-                  Update the saved entry, keep or remove old images, and add a correction reason so the audit history stays clear.
+                  Update the saved entry, keep or remove old images, and add a correction reason so
+                  the audit history stays clear.
                 </p>
               </div>
-              <Button type="button" variant="outline" size="sm" className="gap-2" onClick={resetEditor}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={resetEditor}
+              >
                 <RotateCcw className="size-4" />
                 Cancel Edit
               </Button>
             </div>
           ) : null}
 
-          <div className="grid gap-4 rounded-lg border bg-background p-4 md:grid-cols-2 lg:grid-cols-3">
-            {!hidePatientVisitSelectors ? (
+          {!hidePatientVisitSelectors ? (
+            <div className="space-y-2">
+              <Label htmlFor={`${editorId}-patient`}>Patient</Label>
+              <Select
+                value={selectedPatientId}
+                onValueChange={handlePatientChange}
+                disabled={lockPatientSelection}
+              >
+                <SelectTrigger id={`${editorId}-patient`} className="w-full">
+                  <SelectValue placeholder="Select patient" />
+                </SelectTrigger>
+                <SelectContent>
+                  {patients.map((patient) => (
+                    <SelectItem key={patient.id} value={String(patient.id)}>
+                      {[patient.firstName, patient.lastName].filter(Boolean).join(' ') ||
+                        `Patient #${patient.id}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
+
+          {!hidePatientVisitSelectors ? (
+            <div className="space-y-2">
+              <Label htmlFor={`${editorId}-visit`}>Visit</Label>
+              <Select
+                value={selectedVisitId}
+                onValueChange={(value) => {
+                  if (!lockVisitSelection) {
+                    resetEditor();
+                    setSelectedVisitId(value);
+                  }
+                }}
+                disabled={lockVisitSelection || !selectedPatientId || isLoadingVisits}
+              >
+                <SelectTrigger id={`${editorId}-visit`} className="w-full">
+                  <SelectValue
+                    placeholder={isLoadingVisits ? 'Loading visits...' : 'Select visit'}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {visits.map((visit) => (
+                    <SelectItem key={visit.id} value={String(visit.id)}>
+                      {visit.tag
+                        ? `${visit.tag} - ${visit.visitDate}`
+                        : `Visit ${visit.id} - ${visit.visitDate}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedPatientId && !isLoadingVisits && visits.length === 0 ? (
+                <p className="text-xs text-destructive">
+                  No visits found for this patient. Create a visit first.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          <Tabs value={editorTab} onValueChange={setEditorTab} className="gap-4">
+            <TabsList className="grid h-auto w-full grid-cols-4 p-1">
+              <TabsTrigger value="treatment" className="px-1 py-2 text-xs">
+                Treatment
+              </TabsTrigger>
+              <TabsTrigger value="imaging" className="px-1 py-2 text-xs">
+                Images{attachedImageCount > 0 ? ` (${attachedImageCount})` : ''}
+              </TabsTrigger>
+              <TabsTrigger value="materials" className="px-1 py-2 text-xs">
+                Materials{materialSelections.length > 0 ? ` (${materialSelections.length})` : ''}
+              </TabsTrigger>
+              <TabsTrigger value="prescription" className="px-1 py-2 text-xs">
+                Rx{prescriptionSelections.length > 0 ? ` (${prescriptionSelections.length})` : ''}
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="treatment" className="space-y-4">
               <div className="space-y-2">
-                <Label>Patient</Label>
-                <Select value={selectedPatientId} onValueChange={handlePatientChange} disabled={lockPatientSelection}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select patient" />
+                <Label htmlFor={`${editorId}-treatment`}>Treatment</Label>
+                <Select value={selectedTreatmentId} onValueChange={handleTreatmentChange}>
+                  <SelectTrigger id={`${editorId}-treatment`} className="w-full">
+                    <SelectValue placeholder="Select treatment" />
                   </SelectTrigger>
                   <SelectContent>
-                    {patients.map((patient) => (
-                      <SelectItem key={patient.id} value={String(patient.id)}>
-                        {[patient.firstName, patient.lastName].filter(Boolean).join(' ') || `Patient #${patient.id}`}
+                    {treatments.map((treatment) => (
+                      <SelectItem key={treatment.id} value={String(treatment.id)}>
+                        {`${treatment.name} (${treatment.category})`}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-            ) : null}
 
-            {!hidePatientVisitSelectors ? (
               <div className="space-y-2">
-                <Label>Visit</Label>
+                <Label htmlFor={`${editorId}-currency`}>Currency</Label>
                 <Select
-                  value={selectedVisitId}
+                  value={currency}
                   onValueChange={(value) => {
-                    if (!lockVisitSelection) {
-                      resetEditor();
-                      setSelectedVisitId(value);
-                    }
+                    const nextCurrency = value as CurrencyCode;
+                    const nextExchangeRate = nextCurrency === 'USD' ? defaultExchangeRate : 1;
+                    setPrice(convertEditorValue(price, nextCurrency, nextExchangeRate));
+                    setImagePrice(
+                      requiresImage
+                        ? convertEditorValue(imagePrice, nextCurrency, nextExchangeRate)
+                        : ''
+                    );
+                    setCurrency(nextCurrency);
+                    setExchangeRate(String(nextExchangeRate));
                   }}
-                  disabled={lockVisitSelection || !selectedPatientId || isLoadingVisits}
                 >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder={isLoadingVisits ? 'Loading visits...' : 'Select visit'} />
+                  <SelectTrigger id={`${editorId}-currency`} className="w-full">
+                    <SelectValue placeholder="Select currency" />
                   </SelectTrigger>
                   <SelectContent>
-                    {visits.map((visit) => (
-                      <SelectItem key={visit.id} value={String(visit.id)}>
-                        {visit.tag ? `${visit.tag} - ${visit.visitDate}` : `Visit ${visit.id} - ${visit.visitDate}`}
+                    <SelectItem value="AFN">AFN</SelectItem>
+                    <SelectItem value="USD">USD</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor={`${editorId}-exchange-rate`}>Exchange Rate</Label>
+                <Input
+                  id={`${editorId}-exchange-rate`}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={exchangeRate}
+                  onChange={(event) => {
+                    setExchangeRate(event.target.value);
+                  }}
+                  placeholder="AFN per 1 USD"
+                  disabled={currency === 'AFN'}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor={`${editorId}-price`}>{`Price (${currency})`}</Label>
+                <Input
+                  id={`${editorId}-price`}
+                  inputMode="decimal"
+                  value={price}
+                  onChange={(event) => {
+                    setPrice(event.target.value);
+                  }}
+                  placeholder={currency === 'USD' ? 'e.g. 25' : 'e.g. 1000'}
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Saved in reports as{' '}
+                  {formatCurrency(
+                    convertInputToUsd(parseCurrency(price), currency, resolvedExchangeRate),
+                    'AFN'
+                  )}
+                  .
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor={`${editorId}-note`}>Note</Label>
+                <textarea
+                  id={`${editorId}-note`}
+                  value={notes}
+                  onChange={(event) => {
+                    setNotes(event.target.value);
+                  }}
+                  rows={4}
+                  placeholder="Enter treatment note"
+                  className="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 flex min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none"
+                />
+              </div>
+
+              {editingTreatmentId !== null ? (
+                <div className="space-y-2 col-span-full">
+                  <Label htmlFor={`${editorId}-correction`}>Correction Reason</Label>
+                  <textarea
+                    id={`${editorId}-correction`}
+                    value={correctionReason}
+                    onChange={(event) => {
+                      setCorrectionReason(event.target.value);
+                    }}
+                    rows={3}
+                    placeholder="Explain why this saved treatment is being corrected"
+                    className="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 flex min-h-20 w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none"
+                  />
+                </div>
+              ) : null}
+            </TabsContent>
+            <TabsContent value="imaging" className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor={`${editorId}-imaging-type`}>Imaging Type</Label>
+                <Select
+                  value={imageModality}
+                  onValueChange={(value) => {
+                    setImageModality(value as VisitTreatmentImageModality);
+                  }}
+                >
+                  <SelectTrigger id={`${editorId}-imaging-type`} className="w-full">
+                    <SelectValue placeholder="Select imaging type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(
+                      Object.keys(TREATMENT_IMAGE_MODALITY_LABELS) as VisitTreatmentImageModality[]
+                    ).map((value) => (
+                      <SelectItem key={value} value={value}>
+                        {TREATMENT_IMAGE_MODALITY_LABELS[value]}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {selectedPatientId && !isLoadingVisits && visits.length === 0 ? (
-                  <p className="text-xs text-destructive">No visits found for this patient. Create a visit first.</p>
-                ) : null}
               </div>
-            ) : null}
 
-            {hidePatientVisitSelectors ? (
-              <div className="rounded-md border border-primary/25 bg-primary/5 p-3 text-xs text-muted-foreground md:col-span-2 lg:col-span-3">
-                <p>
-                  Linked patient: <span className="font-semibold text-foreground">{patientName}</span>
-                </p>
-                <p className="mt-1">
-                  Linked visit:{' '}
-                  <span className="font-semibold text-foreground">
-                    {selectedVisit
-                      ? (selectedVisit.tag ? `${selectedVisit.tag} (${selectedVisit.visitDate})` : `Visit #${selectedVisit.id}`)
-                      : (selectedVisitId ? `Visit #${selectedVisitId}` : 'Not selected')}
-                  </span>
-                </p>
-              </div>
-            ) : null}
+              <div className="space-y-2 col-span-full">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Label>Treatment Images (Optional)</Label>
+                  <Badge variant="outline">{attachedImageCount} attached</Badge>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <label htmlFor={uploadInputId}>
+                    <Button type="button" variant="outline" className="gap-2" asChild>
+                      <span>
+                        <ImagePlus className="size-4" />
+                        Upload Images
+                      </span>
+                    </Button>
+                  </label>
+                  <input
+                    id={uploadInputId}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/bmp,image/tiff"
+                    multiple
+                    className="sr-only"
+                    onChange={(event) => {
+                      handleTreatmentImagesSelected(event.target.files, 'upload');
+                      event.target.value = '';
+                    }}
+                  />
 
-            <div className="space-y-2">
-              <Label>Treatment</Label>
-              <Select value={selectedTreatmentId} onValueChange={handleTreatmentChange}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select treatment" />
-                </SelectTrigger>
-                <SelectContent>
-                  {treatments.map((treatment) => (
-                    <SelectItem key={treatment.id} value={String(treatment.id)}>
-                      {`${treatment.name} (${treatment.category})`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                  <label htmlFor={captureInputId}>
+                    <Button type="button" variant="outline" className="gap-2" asChild>
+                      <span>
+                        <Camera className="size-4" />
+                        Capture Now
+                      </span>
+                    </Button>
+                  </label>
+                  <input
+                    id={captureInputId}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    multiple
+                    className="sr-only"
+                    onChange={(event) => {
+                      handleTreatmentImagesSelected(event.target.files, 'camera');
+                      event.target.value = '';
+                    }}
+                  />
 
-            <div className="space-y-2">
-              <Label>Currency</Label>
-              <Select
-                value={currency}
-                onValueChange={(value) => {
-                  const nextCurrency = value as CurrencyCode;
-                  const nextExchangeRate = nextCurrency === 'USD' ? defaultExchangeRate : 1;
-                  setPrice(convertEditorValue(price, nextCurrency, nextExchangeRate));
-                  setImagePrice(requiresImage ? convertEditorValue(imagePrice, nextCurrency, nextExchangeRate) : '');
-                  setCurrency(nextCurrency);
-                  setExchangeRate(String(nextExchangeRate));
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select currency" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="AFN">AFN</SelectItem>
-                  <SelectItem value="USD">USD</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Exchange Rate</Label>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={exchangeRate}
-                onChange={(event) => {
-                  setExchangeRate(event.target.value);
-                }}
-                placeholder="AFN per 1 USD"
-                disabled={currency === 'AFN'}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>{`Price (${currency})`}</Label>
-              <Input
-                value={price}
-                onChange={(event) => {
-                  setPrice(event.target.value);
-                }}
-                placeholder={currency === 'USD' ? 'e.g. 25' : 'e.g. 1000'}
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Saved in reports as {formatCurrency(convertInputToUsd(parseCurrency(price), currency, resolvedExchangeRate), 'AFN')}.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Imaging Type</Label>
-              <Select
-                value={imageModality}
-                onValueChange={(value) => {
-                  setImageModality(value as VisitTreatmentImageModality);
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select imaging type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(Object.keys(TREATMENT_IMAGE_MODALITY_LABELS) as VisitTreatmentImageModality[]).map((value) => (
-                    <SelectItem key={value} value={value}>
-                      {TREATMENT_IMAGE_MODALITY_LABELS[value]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2 md:col-span-2 lg:col-span-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <Label>Treatment Images (Optional)</Label>
-                <Badge variant="outline">
-                  {attachedImageCount} attached
-                </Badge>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <label htmlFor={uploadInputId}>
-                  <Button type="button" variant="outline" className="gap-2" asChild>
-                    <span>
-                      <ImagePlus className="size-4" />
-                      Upload Images
-                    </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => {
+                      setImageSource('device_import');
+                      const input = document.getElementById(
+                        uploadInputId
+                      ) as HTMLInputElement | null;
+                      input?.click();
+                    }}
+                  >
+                    <ScanLine className="size-4" />
+                    Import Device Export
                   </Button>
-                </label>
-                <input
-                  id={uploadInputId}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,image/bmp,image/tiff"
-                  multiple
-                  className="sr-only"
-                  onChange={(event) => {
-                    handleTreatmentImagesSelected(event.target.files, 'upload');
-                    event.target.value = '';
-                  }}
-                />
-
-                <label htmlFor={captureInputId}>
-                  <Button type="button" variant="outline" className="gap-2" asChild>
-                    <span>
-                      <Camera className="size-4" />
-                      Capture Now
-                    </span>
-                  </Button>
-                </label>
-                <input
-                  id={captureInputId}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  multiple
-                  className="sr-only"
-                  onChange={(event) => {
-                    handleTreatmentImagesSelected(event.target.files, 'camera');
-                    event.target.value = '';
-                  }}
-                />
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="gap-2"
-                  onClick={() => {
-                    setImageSource('device_import');
-                    const input = document.getElementById(uploadInputId) as HTMLInputElement | null;
-                    input?.click();
-                  }}
-                >
-                  <ScanLine className="size-4" />
-                  Import Device Export
-                </Button>
-              </div>
-              <p className="text-[11px] text-muted-foreground">
-                Attach images when available. CBCT and dental X-ray machines can be used by importing their exported
-                images here. Full direct device control needs vendor-specific software or SDK support.
-              </p>
-              {attachedImageCount === 0 ? (
-                <p className="rounded-md border border-dashed border-border/70 px-3 py-3 text-xs text-muted-foreground">
-                  No images attached yet.
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Attach images when available. CBCT and dental X-ray machines can be used by
+                  importing their exported images here. Use exported image files from your imaging
+                  software.
                 </p>
-              ) : (
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {persistedTreatmentImages.map((image) => (
-                      <div key={`persisted-${image.id ?? image.url}`} className="overflow-hidden rounded-lg border bg-background">
+                {attachedImageCount === 0 ? (
+                  <p className="rounded-md border border-dashed border-border/70 px-3 py-3 text-xs text-muted-foreground">
+                    No images attached yet.
+                  </p>
+                ) : (
+                  <div className="grid gap-3 grid-cols-2">
+                    {persistedTreatmentImages.map((image) => (
+                      <div
+                        key={`persisted-${image.id ?? image.url}`}
+                        className="overflow-hidden rounded-lg border bg-background"
+                      >
                         {image.url ? (
                           <img
                             src={image.url}
@@ -2461,7 +2482,9 @@ export const TreatmentChartWorkspace = ({
                           </div>
                         )}
                         <div className="space-y-2 p-3">
-                          <p className="truncate text-xs font-medium">{image.originalName || `Image #${image.id}`}</p>
+                          <p className="truncate text-xs font-medium">
+                            {image.originalName || `Image #${image.id}`}
+                          </p>
                           <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
                             <span>Saved on chart</span>
                             <Button
@@ -2478,806 +2501,549 @@ export const TreatmentChartWorkspace = ({
                         </div>
                       </div>
                     ))}
-                  {treatmentImagePreviews.map((preview) => (
-                    <div key={preview.key} className="overflow-hidden rounded-lg border bg-background">
-                      <img
-                        src={preview.url}
-                        alt={preview.file.name}
-                        className="h-32 w-full bg-muted object-cover"
-                      />
-                      <div className="space-y-2 p-3">
-                        <p className="truncate text-xs font-medium">{preview.file.name}</p>
-                        <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-                          <span>{TREATMENT_IMAGE_SOURCE_LABELS[imageSource]}</span>
+                    {treatmentImagePreviews.map((preview) => (
+                      <div
+                        key={preview.key}
+                        className="overflow-hidden rounded-lg border bg-background"
+                      >
+                        <img
+                          src={preview.url}
+                          alt={preview.file.name}
+                          className="h-32 w-full bg-muted object-cover"
+                        />
+                        <div className="space-y-2 p-3">
+                          <p className="truncate text-xs font-medium">{preview.file.name}</p>
+                          <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                            <span>{TREATMENT_IMAGE_SOURCE_LABELS[imageSource]}</span>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                removeTreatmentImage(preview.key);
+                              }}
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label className="inline-flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={requiresImage}
+                    onChange={(event) => {
+                      setRequiresImage(event.target.checked);
+                      if (!event.target.checked) {
+                        setImagePrice('');
+                      }
+                    }}
+                  />
+                  Add Imaging Charge
+                </Label>
+                <Input
+                  value={imagePrice}
+                  onChange={(event) => {
+                    setImagePrice(event.target.value);
+                  }}
+                  placeholder={`Imaging charge in ${currency}`}
+                  disabled={!requiresImage}
+                />
+              </div>
+            </TabsContent>
+            <TabsContent value="materials" className="space-y-4">
+              <div className="space-y-2 col-span-full">
+                <div className="flex items-center justify-between gap-2">
+                  <Label>Materials (Inventory)</Label>
+                  <Button type="button" size="sm" variant="outline" onClick={addMaterialSelection}>
+                    Add Material
+                  </Button>
+                </div>
+
+                {materialSelections.length === 0 ? (
+                  <p className="rounded-md border border-dashed border-border/70 px-3 py-2 text-xs text-muted-foreground">
+                    No material selected.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {materialSelections.map((selection) => (
+                      <div key={selection.key} className="grid gap-2 grid-cols-1">
+                        <Select
+                          value={selection.inventoryItemId || '__none__'}
+                          onValueChange={(value) => {
+                            updateMaterialSelection(selection.key, {
+                              inventoryItemId: value === '__none__' ? '' : value,
+                            });
+                          }}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue
+                              placeholder={
+                                isLoadingInventoryMaterials
+                                  ? 'Loading materials...'
+                                  : 'Select material'
+                              }
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Select material</SelectItem>
+                            {inventoryMaterials.map((item) => (
+                              <SelectItem key={item.id} value={item.id}>
+                                {`${item.itemName} (${item.quantity} ${item.unit})`}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={selection.quantity}
+                          onChange={(event) => {
+                            updateMaterialSelection(selection.key, {
+                              quantity: event.target.value,
+                            });
+                          }}
+                          placeholder="Qty"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            removeMaterialSelection(selection.key);
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <p className="text-[11px] text-muted-foreground">
+                  {materialSummary
+                    ? `Selected: ${materialSummary}`
+                    : 'Selected materials will be deducted from inventory after saving this treatment.'}
+                </p>
+
+                {materialReviewRows.length > 0 ? (
+                  <div className="space-y-2 rounded-lg border border-border/70 bg-muted/20 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold">Material Review</p>
+                      <div className="flex items-center gap-2">
+                        {hasBlockingMaterialIssue ? (
+                          <Badge className="bg-rose-600 text-white">Stock blocked</Badge>
+                        ) : null}
+                        {!hasBlockingMaterialIssue && hasLowStockMaterialIssue ? (
+                          <Badge className="bg-amber-500 text-white">Low stock warning</Badge>
+                        ) : null}
+                        {!hasBlockingMaterialIssue && !hasLowStockMaterialIssue ? (
+                          <Badge className="bg-emerald-600 text-white">Ready</Badge>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {materialReviewRows.map((row) => (
+                        <div
+                          key={`review-${row.key}`}
+                          className="rounded-md border bg-background p-3"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <p className="text-sm font-medium">{row.itemName}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Requested {row.requestedQuantity} {row.unit} | Available{' '}
+                                {row.availableQuantity} | After save {row.remainingQuantity}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Min stock {row.minStock} {row.unit}
+                                {row.location ? ` | Location ${row.location}` : ''}
+                                {row.supplier ? ` | Supplier ${row.supplier}` : ''}
+                              </p>
+                            </div>
+                            {row.status === 'shortage' ? (
+                              <Badge className="bg-rose-600 text-white">Shortage</Badge>
+                            ) : row.status === 'low_after' ? (
+                              <Badge className="bg-amber-500 text-white">Low after save</Badge>
+                            ) : (
+                              <Badge className="bg-emerald-600 text-white">Healthy</Badge>
+                            )}
+                          </div>
+                          {row.substituteOptions.length > 0 ? (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {row.substituteOptions.map((option) => (
+                                <Button
+                                  key={`${row.key}-${option.id}`}
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2 text-[11px]"
+                                  onClick={() => {
+                                    applyMaterialSubstitute(row.key, option.id);
+                                  }}
+                                >
+                                  Use {option.itemName} ({option.availableQuantity})
+                                </Button>
+                              ))}
+                            </div>
+                          ) : row.status !== 'healthy' ? (
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              No same-category substitute with enough stock is available right now.
+                            </p>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </TabsContent>
+            <TabsContent value="prescription" className="space-y-4">
+              {prescriptionSelections.length > 0 ? (
+                <p className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
+                  {prescriptionDraftSummary}
+                </p>
+              ) : null}
+              <div className="space-y-2 col-span-full">
+                <div className="flex items-center justify-between gap-2">
+                  <Label>Prescription</Label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={addPrescriptionSelection}
+                  >
+                    Add Medicine
+                  </Button>
+                </div>
+
+                {prescriptionSelections.length === 0 ? (
+                  <p className="rounded-md border border-dashed border-border/70 px-3 py-2 text-xs text-muted-foreground">
+                    No prescription items added.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {prescriptionSelections.map((selection) => (
+                      <div key={selection.key} className="rounded-md border border-border/70 p-3">
+                        <div className="mb-2 grid gap-2 grid-cols-1">
+                          <Input
+                            value={selection.name}
+                            onChange={(event) => {
+                              updatePrescriptionSelection(selection.key, {
+                                name: event.target.value,
+                              });
+                            }}
+                            placeholder="Medicine name"
+                          />
+                          <Input
+                            value={selection.amount}
+                            onChange={(event) => {
+                              updatePrescriptionSelection(selection.key, {
+                                amount: event.target.value,
+                              });
+                            }}
+                            placeholder="Amount (e.g. 2)"
+                          />
+                        </div>
+                        <div className="grid gap-2 grid-cols-1">
+                          <Select
+                            value={selection.frequency || '__none__'}
+                            onValueChange={(value) => {
+                              updatePrescriptionSelection(selection.key, {
+                                frequency: value === '__none__' ? '' : value,
+                              });
+                            }}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Frequency" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">Select frequency</SelectItem>
+                              {PRESCRIPTION_FREQUENCY_OPTIONS.map((frequency) => (
+                                <SelectItem key={frequency} value={frequency}>
+                                  {frequency}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Select
+                            value={selection.foodTiming || '__none__'}
+                            onValueChange={(value) => {
+                              updatePrescriptionSelection(selection.key, {
+                                foodTiming:
+                                  value === '__none__' ? '' : (value as PrescriptionFoodTiming),
+                              });
+                            }}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Food timing" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">Select food timing</SelectItem>
+                              {(
+                                Object.keys(
+                                  PRESCRIPTION_FOOD_TIMING_LABELS
+                                ) as PrescriptionFoodTiming[]
+                              ).map((timing) => (
+                                <SelectItem key={timing} value={timing}>
+                                  {PRESCRIPTION_FOOD_TIMING_LABELS[timing]}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           <Button
                             type="button"
-                            size="sm"
-                            variant="ghost"
+                            variant="outline"
                             onClick={() => {
-                              removeTreatmentImage(preview.key);
+                              removePrescriptionSelection(selection.key);
                             }}
                           >
                             Remove
                           </Button>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {editingTreatmentId !== null ? (
-              <div className="space-y-2 md:col-span-2 lg:col-span-3">
-                <Label>Correction Reason</Label>
-                <textarea
-                  value={correctionReason}
-                  onChange={(event) => {
-                    setCorrectionReason(event.target.value);
-                  }}
-                  rows={3}
-                  placeholder="Explain why this saved treatment is being corrected"
-                  className="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 flex min-h-20 w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none"
-                />
-              </div>
-            ) : null}
-
-            <div className="space-y-2">
-              <Label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={requiresImage}
-                  onChange={(event) => {
-                    setRequiresImage(event.target.checked);
-                    if (!event.target.checked) {
-                      setImagePrice('');
-                    }
-                  }}
-                />
-                Add Imaging Charge
-              </Label>
-              <Input
-                value={imagePrice}
-                onChange={(event) => {
-                  setImagePrice(event.target.value);
-                }}
-                placeholder={`Imaging charge in ${currency}`}
-                disabled={!requiresImage}
-              />
-            </div>
-
-            <div className="space-y-2 md:col-span-2 lg:col-span-3">
-              <div className="flex items-center justify-between gap-2">
-                <Label>Materials (Inventory)</Label>
-                <Button type="button" size="sm" variant="outline" onClick={addMaterialSelection}>
-                  Add Material
-                </Button>
-              </div>
-
-              {materialSelections.length === 0 ? (
-                <p className="rounded-md border border-dashed border-border/70 px-3 py-2 text-xs text-muted-foreground">
-                  No material selected.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {materialSelections.map((selection) => (
-                    <div key={selection.key} className="grid gap-2 sm:grid-cols-[1fr_140px_auto]">
-                      <Select
-                        value={selection.inventoryItemId || '__none__'}
-                        onValueChange={(value) => {
-                          updateMaterialSelection(selection.key, {
-                            inventoryItemId: value === '__none__' ? '' : value,
-                          });
-                        }}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue
-                            placeholder={isLoadingInventoryMaterials ? 'Loading materials...' : 'Select material'}
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__">Select material</SelectItem>
-                          {inventoryMaterials.map((item) => (
-                            <SelectItem key={item.id} value={item.id}>
-                              {`${item.itemName} (${item.quantity} ${item.unit})`}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        type="number"
-                        min={1}
-                        value={selection.quantity}
-                        onChange={(event) => {
-                          updateMaterialSelection(selection.key, { quantity: event.target.value });
-                        }}
-                        placeholder="Qty"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          removeMaterialSelection(selection.key);
-                        }}
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <p className="text-[11px] text-muted-foreground">
-                {materialSummary
-                  ? `Selected: ${materialSummary}`
-                  : 'Selected materials will be deducted from inventory after saving this treatment.'}
-              </p>
-
-              {materialReviewRows.length > 0 ? (
-                <div className="space-y-2 rounded-lg border border-border/70 bg-muted/20 p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-semibold">Material Review</p>
-                    <div className="flex items-center gap-2">
-                      {hasBlockingMaterialIssue ? <Badge className="bg-rose-600 text-white">Stock blocked</Badge> : null}
-                      {!hasBlockingMaterialIssue && hasLowStockMaterialIssue ? <Badge className="bg-amber-500 text-white">Low stock warning</Badge> : null}
-                      {!hasBlockingMaterialIssue && !hasLowStockMaterialIssue ? <Badge className="bg-emerald-600 text-white">Ready</Badge> : null}
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    {materialReviewRows.map((row) => (
-                      <div key={`review-${row.key}`} className="rounded-md border bg-background p-3">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div>
-                            <p className="text-sm font-medium">{row.itemName}</p>
-                            <p className="text-xs text-muted-foreground">
-                              Requested {row.requestedQuantity} {row.unit} | Available {row.availableQuantity} | After save {row.remainingQuantity}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              Min stock {row.minStock} {row.unit}{row.location ? ` | Location ${row.location}` : ''}{row.supplier ? ` | Supplier ${row.supplier}` : ''}
-                            </p>
-                          </div>
-                          {row.status === 'shortage' ? (
-                            <Badge className="bg-rose-600 text-white">Shortage</Badge>
-                          ) : row.status === 'low_after' ? (
-                            <Badge className="bg-amber-500 text-white">Low after save</Badge>
-                          ) : (
-                            <Badge className="bg-emerald-600 text-white">Healthy</Badge>
-                          )}
-                        </div>
-                        {row.substituteOptions.length > 0 ? (
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {row.substituteOptions.map((option) => (
-                              <Button
-                                key={`${row.key}-${option.id}`}
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                className="h-7 px-2 text-[11px]"
-                                onClick={() => {
-                                  applyMaterialSubstitute(row.key, option.id);
-                                }}
-                              >
-                                Use {option.itemName} ({option.availableQuantity})
-                              </Button>
-                            ))}
-                          </div>
-                        ) : row.status !== 'healthy' ? (
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            No same-category substitute with enough stock is available right now.
-                          </p>
-                        ) : null}
-                      </div>
                     ))}
                   </div>
-                </div>
-              ) : null}
-            </div>
-
-            <div className="space-y-2">
-              <Label>Note</Label>
-              <textarea
-                value={notes}
-                onChange={(event) => {
-                  setNotes(event.target.value);
-                }}
-                rows={4}
-                placeholder="Enter treatment note"
-                className="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 flex min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none"
-              />
-            </div>
-
-            <div className="space-y-2 md:col-span-2 lg:col-span-3">
-              <div className="flex items-center justify-between gap-2">
-                <Label>Prescription</Label>
-                <Button type="button" size="sm" variant="outline" onClick={addPrescriptionSelection}>
-                  Add Medicine
-                </Button>
-              </div>
-
-              {prescriptionSelections.length === 0 ? (
-                <p className="rounded-md border border-dashed border-border/70 px-3 py-2 text-xs text-muted-foreground">
-                  No prescription items added.
+                )}
+                <p className="text-[11px] text-muted-foreground">
+                  Saved with this visit treatment and shown in patient records.
                 </p>
-              ) : (
-                <div className="space-y-2">
-                  {prescriptionSelections.map((selection) => (
-                    <div key={selection.key} className="rounded-md border border-border/70 p-3">
-                      <div className="mb-2 grid gap-2 md:grid-cols-2">
-                        <Input
-                          value={selection.name}
-                          onChange={(event) => {
-                            updatePrescriptionSelection(selection.key, { name: event.target.value });
-                          }}
-                          placeholder="Medicine name"
-                        />
-                        <Input
-                          value={selection.amount}
-                          onChange={(event) => {
-                            updatePrescriptionSelection(selection.key, { amount: event.target.value });
-                          }}
-                          placeholder="Amount (e.g. 2)"
-                        />
-                      </div>
-                      <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
-                        <Select
-                          value={selection.frequency || '__none__'}
-                          onValueChange={(value) => {
-                            updatePrescriptionSelection(selection.key, {
-                              frequency: value === '__none__' ? '' : value,
-                            });
-                          }}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Frequency" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">Select frequency</SelectItem>
-                            {PRESCRIPTION_FREQUENCY_OPTIONS.map((frequency) => (
-                              <SelectItem key={frequency} value={frequency}>
-                                {frequency}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Select
-                          value={selection.foodTiming || '__none__'}
-                          onValueChange={(value) => {
-                            updatePrescriptionSelection(selection.key, {
-                              foodTiming: value === '__none__' ? '' : (value as PrescriptionFoodTiming),
-                            });
-                          }}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Food timing" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">Select food timing</SelectItem>
-                            {(Object.keys(PRESCRIPTION_FOOD_TIMING_LABELS) as PrescriptionFoodTiming[]).map((timing) => (
-                              <SelectItem key={timing} value={timing}>
-                                {PRESCRIPTION_FOOD_TIMING_LABELS[timing]}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+              </div>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+        <div className="shrink-0 space-y-3 border-t bg-card p-4">
+          <div className="flex items-baseline justify-between gap-3 text-sm">
+            <span className="min-w-0 truncate text-muted-foreground">
+              {selectedTreatment?.name || 'Treatment'}
+              {requiresImage ? ' + imaging' : ''}
+            </span>
+            <strong className="text-lg tabular-nums">
+              {formatCurrency(
+                parseCurrency(price) + (requiresImage ? parseCurrency(imagePrice) : 0),
+                currency
+              )}
+            </strong>
+          </div>
+          <Button
+            type="button"
+            onClick={handleSave}
+            disabled={!canSave}
+            className="h-11 w-full gap-2 rounded-xl"
+          >
+            {isSubmitting ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Save className="size-4" />
+            )}
+            {editingTreatmentId !== null ? 'Update treatment' : 'Save treatment'}
+          </Button>
+          <p className="text-center text-xs text-muted-foreground" role="status">
+            {!selectedToothNumber
+              ? 'Select a tooth to continue.'
+              : !selectedTreatmentId
+                ? 'Choose a treatment to continue.'
+                : !price.trim()
+                  ? 'Enter a treatment price to continue.'
+                  : editingTreatmentId !== null
+                    ? 'Changes are recorded in correction history.'
+                    : hidePatientVisitSelectors && lockVisitSelection
+                      ? 'Saving continues to payment and invoice.'
+                      : 'Review the details before saving this treatment.'}
+          </p>
+        </div>
+      </Card>
+      <div className="min-w-0 xl:col-start-1 xl:row-start-2">
+        <div className="rounded-2xl border bg-card p-5 shadow-sm">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-base font-semibold">Saved treatments</h2>
+            <div className="flex items-center gap-2">
+              {isLoadingVisitTreatments ? (
+                <Loader2 className="size-4 animate-spin text-muted-foreground" />
+              ) : null}
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handlePrintRecord}
+                disabled={!selectedPatient || displayedVisitTreatments.length === 0}
+                className="gap-2"
+              >
+                <Printer className="size-4" />
+                Print
+              </Button>
+            </div>
+          </div>
+          {displayedVisitTreatments.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              {isLoadingVisitTreatments
+                ? 'Loading saved treatments...'
+                : selectedVisitId
+                  ? 'No treatments saved for this visit yet. Select a tooth and add the first treatment.'
+                  : 'No treatment records yet for this patient.'}
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {displayedVisitTreatments.map((row) => {
+                const teeth = resolveRowTeeth(row);
+                const teethLabel = teeth.length > 0 ? teeth.join(', ') : '-';
+                const treatmentName =
+                  row.treatment?.name ||
+                  treatmentById.get(String(row.treatmentId))?.name ||
+                  `Treatment ${row.treatmentId}`;
+                const rowConditionMap = resolveRowConditionMap(row);
+                const uniqueConditions = Array.from(new Set(Object.values(rowConditionMap)));
+                const cleanedNotes = stripMetadataPrefixes(row.notes);
+                const visit = visitById.get(String(row.visitId));
+                const rowCurrency = parseCurrencyCodeFromNotes(row.notes);
+                const rowExchangeRate = parseExchangeRateFromNotes(row.notes, rowCurrency);
+                const rowPriceLabel = formatStoredAmount(
+                  parseCurrency(row.price),
+                  parseTagNumberFromNotes(row.notes, 'priceInput'),
+                  rowCurrency,
+                  rowExchangeRate
+                );
+                const rowImages = (row.treatmentImages ?? []).filter(
+                  (image): image is Exclude<typeof image, File> =>
+                    !(image instanceof File) &&
+                    typeof image?.url === 'string' &&
+                    image.url.length > 0
+                );
+                const rowImageModalityLabel = row.imageModality
+                  ? TREATMENT_IMAGE_MODALITY_LABELS[row.imageModality]
+                  : 'Image';
+
+                return (
+                  <div key={row.id} className="rounded-xl border bg-background/50 p-4">
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold">{treatmentName}</p>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">Total: {rowPriceLabel}</Badge>
                         <Button
                           type="button"
+                          size="sm"
                           variant="outline"
+                          className="h-7 gap-1 px-2 text-[11px]"
                           onClick={() => {
-                            removePrescriptionSelection(selection.key);
+                            startEditingTreatment(row);
+                            setEditorTab('treatment');
+                            document
+                              .getElementById(editorId)
+                              ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                           }}
                         >
-                          Remove
+                          <Pencil className="size-3.5" />
+                          Edit
                         </Button>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-              <p className="text-[11px] text-muted-foreground">
-                Saved with this visit treatment and shown in patient records.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-background p-2">
-            {(Object.keys(CONDITIONS) as ConditionKey[]).map((conditionKey) => {
-              const condition = CONDITIONS[conditionKey];
-              const isActive = conditionKey === activeCondition;
-
-              return (
-                <Button
-                  key={conditionKey}
-                  type="button"
-                  variant={isActive ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => {
-                    setActiveCondition(conditionKey);
-                  }}
-                  className="gap-2"
-                  style={
-                    isActive
-                      ? {
-                          backgroundColor: condition.color,
-                          borderColor: condition.color,
-                          color: isLightColor(condition.color) ? '#0f172a' : '#ffffff',
-                        }
-                      : undefined
-                  }
-                >
-                  <span
-                    className="size-2.5 rounded-full border"
-                    style={{ backgroundColor: condition.color, borderColor: condition.color }}
-                  />
-                  {condition.label}
-                </Button>
-              );
-            })}
-            <Button type="button" variant="outline" size="sm" onClick={clearSelectedTooth} className="ml-auto gap-2">
-              <Eraser className="size-4" />
-              Clear Selected
-            </Button>
-          </div>
-
-          <Card className="overflow-hidden rounded-2xl border border-border/50 bg-card shadow-sm">
-            <CardHeader className="relative pb-4">
-              <div className="flex items-center gap-2">
-                <div className="rounded-xl border border-emerald-200/50 bg-emerald-100/60 p-2">
-                  <Stethoscope className="size-5 text-emerald-600" />
-                </div>
-                <div>
-                  <CardTitle className="text-base text-foreground">Maxilla (Upper Arch)</CardTitle>
-                  <CardDescription>Upper teeth - click to mark conditions</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="relative">
-              <div className="grid grid-cols-4 gap-2 sm:grid-cols-8 xl:grid-cols-16">
-                {UPPER_ARCH.map((toothNumber) => {
-                  const condition = toothConditions[toothNumber];
-                  const isSelected = selectedToothNumber === toothNumber;
-                  const toothMeta = resolveToothDisplayMeta(toothNumber);
-                  const toothCode = resolveToothQuadrantCode(toothNumber);
-                  const conditionColor = condition ? CONDITIONS[condition].color : '#d1d5db';
-                  const selectionColor = condition ? conditionColor : (activeCondition ? CONDITIONS[activeCondition].color : '#94a3b8');
-
-                  return (
-                    <button
-                      key={toothNumber}
-                      type="button"
-                      onClick={() => {
-                        paintTooth(toothNumber);
-                      }}
-                      className={cn(
-                        'relative flex h-28 min-w-0 flex-col items-center justify-between overflow-visible rounded-2xl border px-1.5 py-2 text-[10px] font-semibold transition-[border-color,background-color,box-shadow,transform] duration-200',
-                        'hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-sm active:translate-y-0',
-                        isSelected ? 'ring-2 ring-offset-1' : ''
-                      )}
-                      style={{
-                        backgroundColor: isSelected
-                          ? hexToRgba(selectionColor, 0.18)
-                          : condition
-                            ? hexToRgba(conditionColor, 0.1)
-                            : 'var(--background)',
-                        borderColor: isSelected ? selectionColor : condition ? hexToRgba(conditionColor, 0.4) : 'var(--border)',
-                        boxShadow: isSelected
-                          ? `0 10px 24px ${hexToRgba(selectionColor, 0.18)}`
-                          : '0 1px 2px rgba(15,23,42,0.04)',
-                        color: 'var(--foreground)',
-                      }}
-                      aria-label={`Tooth ${toothNumber} ${toothMeta.fullLabel}`}
-                      title={`${toothCode} - ${toothMeta.fullLabel}`}
-                    >
-                      <span className="text-sm leading-none text-muted-foreground">
-                        {toothCode}
-                      </span>
-                      <ToothGlyph
-                        arch="maxilla"
-                        isActive={isSelected}
-                        visualType={toothMeta.visualType}
-                      />
-                      <span
-                        className="absolute -bottom-2 left-1/2 block size-5 -translate-x-1/2 rounded-full border-2 border-background transition-transform duration-300"
-                        style={{ backgroundColor: conditionColor }}
-                      />
-                    </button>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="overflow-hidden rounded-2xl border border-border/50 bg-card shadow-sm">
-            <CardHeader className="relative pb-4">
-              <div className="flex items-center gap-2">
-                <div className="rounded-xl border border-blue-200/50 bg-blue-100/60 p-2">
-                  <Stethoscope className="size-5 text-blue-600" />
-                </div>
-                <div>
-                  <CardTitle className="text-base text-foreground">Mandible (Lower Arch)</CardTitle>
-                  <CardDescription>Lower teeth - click to mark conditions</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="relative">
-              <div className="grid grid-cols-4 gap-2 sm:grid-cols-8 xl:grid-cols-16">
-                {LOWER_ARCH.map((toothNumber) => {
-                  const condition = toothConditions[toothNumber];
-                  const isSelected = selectedToothNumber === toothNumber;
-                  const toothMeta = resolveToothDisplayMeta(toothNumber);
-                  const toothCode = resolveToothQuadrantCode(toothNumber);
-                  const conditionColor = condition ? CONDITIONS[condition].color : '#d1d5db';
-                  const selectionColor = condition ? conditionColor : (activeCondition ? CONDITIONS[activeCondition].color : '#94a3b8');
-
-                  return (
-                    <button
-                      key={toothNumber}
-                      type="button"
-                      onClick={() => {
-                        paintTooth(toothNumber);
-                      }}
-                      className={cn(
-                        'relative flex h-28 min-w-0 flex-col items-center justify-between overflow-visible rounded-2xl border px-1.5 py-2 text-[10px] font-semibold transition-[border-color,background-color,box-shadow,transform] duration-200',
-                        'hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-sm active:translate-y-0',
-                        isSelected ? 'ring-2 ring-offset-1' : ''
-                      )}
-                      style={{
-                        backgroundColor: isSelected
-                          ? hexToRgba(selectionColor, 0.18)
-                          : condition
-                            ? hexToRgba(conditionColor, 0.1)
-                            : 'var(--background)',
-                        borderColor: isSelected ? selectionColor : condition ? hexToRgba(conditionColor, 0.4) : 'var(--border)',
-                        boxShadow: isSelected
-                          ? `0 10px 24px ${hexToRgba(selectionColor, 0.18)}`
-                          : '0 1px 2px rgba(15,23,42,0.04)',
-                        color: 'var(--foreground)',
-                      }}
-                      aria-label={`Tooth ${toothNumber} ${toothMeta.fullLabel}`}
-                      title={`${toothCode} - ${toothMeta.fullLabel}`}
-                    >
-                      <span className="text-sm leading-none text-muted-foreground">
-                        {toothCode}
-                      </span>
-                      <ToothGlyph
-                        arch="mandible"
-                        isActive={isSelected}
-                        visualType={toothMeta.visualType}
-                      />
-                      <span
-                        className="absolute -bottom-2 left-1/2 block size-5 -translate-x-1/2 rounded-full border-2 border-background transition-transform duration-300"
-                        style={{ backgroundColor: conditionColor }}
-                      />
-                    </button>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl border border-border/50 bg-card shadow-sm">
-            <CardHeader className="pb-4">
-              <div className="flex items-center gap-2">
-                <div className="rounded-xl border border-violet-200/50 bg-violet-100/60 p-2">
-                  <Paintbrush className="size-5 text-violet-600" />
-                </div>
-                <div>
-                  <CardTitle className="text-base text-foreground">Condition Summary</CardTitle>
-                  <CardDescription>Dental conditions distribution across all teeth</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {(Object.keys(CONDITIONS) as ConditionKey[]).map((key) => {
-                  const count = conditionStats.find((item) => item.key === key)?.count ?? 0;
-                  const percent = conditionStats.find((item) => item.key === key)?.percent ?? 0;
-                  const color = CONDITIONS[key].color;
-
-                  return (
-                    <div key={key} className="rounded-xl border border-border/50 bg-background/60 p-3">
-                      <div className="mb-2 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="size-3 rounded-full" style={{ backgroundColor: color }} />
-                          <span className="text-xs font-medium text-foreground">{CONDITIONS[key].label}</span>
-                        </div>
-                        <span className="text-xs font-bold text-foreground">{percent}%</span>
-                      </div>
-                      <div className="h-2.5 rounded-full bg-muted overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{
-                            backgroundColor: color,
-                            width: `${percent}%`,
-                          }}
-                        />
-                      </div>
-                      <p className="mt-2 text-[11px] text-muted-foreground">{count} teeth affected</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="flex items-center justify-between rounded-lg border bg-background p-4">
-            <div className="space-y-1">
-              <p className="text-sm font-semibold">
-                Selected tooth: <span className="text-primary">{selectedToothNumber || 'None'}</span>
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {selectedTreatment
-                  ? `Treatment: ${selectedTreatment.name} (${selectedTreatment.category})`
-                  : 'Select a treatment to save the selected condition on this tooth.'}
-              </p>
-            </div>
-            <Button type="button" onClick={handleSave} disabled={!canSave}>
-              {isSubmitting ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-              {editingTreatmentId !== null ? 'Update Treatment' : 'Save Treatment'}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="py-4">
-        <CardHeader className="px-4">
-          <CardTitle>Selected</CardTitle>
-          <CardDescription>Patient context, assigned doctor, and selected tooth details from patient records.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4 px-4">
-          <div className="rounded-lg border bg-background p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-sm font-semibold">
-                {selectedToothNumber ? `${getToothRegion(selectedToothNumber)} ${selectedToothNumber}` : 'No tooth selected'}
-              </p>
-              {selectedToothNumber && selectedCondition ? (
-                <Badge style={{ backgroundColor: CONDITIONS[selectedCondition].color, color: '#111827' }}>
-                  {CONDITIONS[selectedCondition].label}
-                </Badge>
-              ) : selectedToothNumber ? (
-                <Badge variant="outline">Healthy</Badge>
-              ) : (
-                <Badge variant="outline">Select a tooth</Badge>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">Last manipulation: {new Date().toLocaleDateString()}</p>
-          </div>
-
-          <div className="rounded-lg border bg-background p-4 text-sm">
-            <p className="mb-2 flex items-center gap-2 font-medium">
-              <UserRound className="size-4" />
-              Patient
-            </p>
-            {selectedPatient ? (
-              <div className="space-y-1 text-xs text-muted-foreground">
-                <p className="font-semibold text-foreground">
-                  {[selectedPatient.firstName, selectedPatient.lastName].filter(Boolean).join(' ') || `Patient #${selectedPatient.id}`}
-                </p>
-                <p>{selectedPatient.patientCode}</p>
-                <p>{selectedPatient.contactNumber || '-'}</p>
-              </div>
-            ) : selectedPatientId ? (
-              <div className="space-y-1 text-xs text-muted-foreground">
-                <p className="font-semibold text-foreground">Patient #{selectedPatientId}</p>
-                <p>Patient details are outside the current fetch range.</p>
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">Select a patient to link the chart.</p>
-            )}
-          </div>
-
-          <div className="space-y-2 rounded-lg border bg-background p-4 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Doctor</span>
-              <span className="font-medium">{doctorName}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Planned action</span>
-              <span className="font-medium">{selectedCondition ? CONDITIONS[selectedCondition].label : 'Monitoring'}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Material</span>
-              <span className="font-medium">{materialSummary || '-'}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Imaging</span>
-              <span className="font-medium">
-                {treatmentImages.length > 0
-                  ? `${treatmentImages.length} ${TREATMENT_IMAGE_MODALITY_LABELS[imageModality]}`
-                  : '-'}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Treatment</span>
-              <span className="font-medium">{selectedTreatment?.name || '-'}</span>
-            </div>
-            <div className="pt-1">
-              <p className="text-muted-foreground">Prescription</p>
-              <p className="mt-1 rounded-md border border-border/70 bg-muted/30 p-2 text-xs text-foreground">
-                {prescriptionDraftSummary}
-              </p>
-            </div>
-          </div>
-
-          <div className="rounded-lg border bg-background p-4">
-            <p className="mb-2 flex items-center gap-2 text-sm font-medium">
-              <Paintbrush className="size-4" />
-              Paint mode
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Active condition:{' '}
-              <span className="font-medium">
-                {activeCondition ? CONDITIONS[activeCondition].label : 'None'}
-              </span>
-              . Click any tooth to apply this color.
-            </p>
-          </div>
-
-          <div className="rounded-lg border bg-background p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-sm font-medium">Recorded Treatments (Patient Record)</p>
-              <div className="flex items-center gap-2">
-                {isLoadingVisitTreatments ? <Loader2 className="size-4 animate-spin text-muted-foreground" /> : null}
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={handlePrintRecord}
-                  disabled={!selectedPatient || displayedVisitTreatments.length === 0}
-                  className="gap-2"
-                >
-                  <Printer className="size-4" />
-                  Print
-                </Button>
-              </div>
-            </div>
-            {displayedVisitTreatments.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                {selectedVisitId ? 'No treatment records yet for this visit.' : 'No treatment records yet for this patient.'}
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {displayedVisitTreatments.map((row) => {
-                  const teeth = resolveRowTeeth(row);
-                  const teethLabel = teeth.length > 0 ? teeth.join(', ') : '-';
-                  const treatmentName =
-                    row.treatment?.name || treatmentById.get(String(row.treatmentId))?.name || `Treatment ${row.treatmentId}`;
-                  const rowConditionMap = resolveRowConditionMap(row);
-                  const uniqueConditions = Array.from(new Set(Object.values(rowConditionMap)));
-                  const cleanedNotes = stripMetadataPrefixes(row.notes);
-                  const visit = visitById.get(String(row.visitId));
-                  const rowCurrency = parseCurrencyCodeFromNotes(row.notes);
-                  const rowExchangeRate = parseExchangeRateFromNotes(row.notes, rowCurrency);
-                  const rowPriceLabel = formatStoredAmount(
-                    parseCurrency(row.price),
-                    parseTagNumberFromNotes(row.notes, 'priceInput'),
-                    rowCurrency,
-                    rowExchangeRate
-                  );
-                  const rowImages = (row.treatmentImages ?? []).filter(
-                    (image): image is Exclude<typeof image, File> =>
-                      !(image instanceof File) && typeof image?.url === 'string' && image.url.length > 0
-                  );
-                  const rowImageModalityLabel = row.imageModality
-                    ? TREATMENT_IMAGE_MODALITY_LABELS[row.imageModality]
-                    : 'Image';
-
-                  return (
-                    <div key={row.id} className="rounded-md border p-2">
-                      <div className="mb-1 flex items-center justify-between gap-2">
-                        <p className="text-xs font-semibold">
-                          {treatmentName}
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline">Total: {rowPriceLabel}</Badge>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-7 gap-1 px-2 text-[11px]"
-                            onClick={() => {
-                              startEditingTreatment(row);
+                    <p className="mb-1 text-xs text-muted-foreground">Teeth: {teethLabel}</p>
+                    <div className="mb-1 flex items-center gap-2">
+                      {uniqueConditions.length > 0 ? (
+                        uniqueConditions.map((condition) => (
+                          <Badge
+                            key={`${row.id}-${condition}`}
+                            style={{
+                              backgroundColor: CONDITIONS[condition].color,
+                              color: '#111827',
                             }}
                           >
-                            <Pencil className="size-3.5" />
-                            Edit
-                          </Button>
-                        </div>
-                      </div>
-                      <p className="mb-1 text-xs text-muted-foreground">Teeth: {teethLabel}</p>
-                      <div className="mb-1 flex items-center gap-2">
-                        {uniqueConditions.length > 0 ? (
-                          uniqueConditions.map((condition) => (
-                            <Badge key={`${row.id}-${condition}`} style={{ backgroundColor: CONDITIONS[condition].color, color: '#111827' }}>
-                              {CONDITIONS[condition].label}
-                            </Badge>
-                          ))
-                        ) : (
-                          <Badge variant="outline">Unspecified</Badge>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground">Material: {resolveRowMaterialSummary(row)}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Imaging: {rowImages.length > 0 ? `${rowImages.length} ${rowImageModalityLabel}` : 'No images'}
-                      </p>
-                      <p className="text-xs text-muted-foreground">Note: {cleanedNotes || '-'}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Prescription: {formatPrescriptionSummary(row.prescription)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Visit: {visit
-                          ? (visit.tag
-                              ? `${visit.tag} (${visit.visitDate})`
-                              : `Visit ${visit.id} (${visit.visitDate})`)
-                          : `Visit ${row.visitId}`}
-                      </p>
-                      {Array.isArray(row.correctionHistory) && row.correctionHistory.length > 0 ? (
-                        <div className="mt-2 rounded-md border border-dashed border-border/70 bg-muted/20 p-2">
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                            Correction History
-                          </p>
-                          <div className="mt-2 space-y-2">
-                            {row.correctionHistory.slice(0, 3).map((entry) => (
-                              <div key={`${row.id}-${entry.id ?? entry.createdAt}`} className="rounded-md bg-background/90 p-2 text-xs">
-                                <p className="font-medium text-foreground">
-                                  {entry.event === 'corrected' ? 'Corrected' : (entry.description || entry.event || 'Updated')}
-                                </p>
-                                <p className="text-muted-foreground">
-                                  {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : '-'} by {entry.changedBy || 'System'}
-                                </p>
-                                <p className="mt-1 text-muted-foreground">
-                                  Reason: {entry.correctionReason || '-'}
-                                </p>
-                                {Array.isArray(entry.changes) && entry.changes.length > 0 ? (
-                                  <p className="mt-1 text-muted-foreground">
-                                    Changed: {entry.changes.slice(0, 3).map((change) => change.label || change.field || 'Field').join(', ')}
-                                  </p>
-                                ) : null}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-                      {rowImages.length > 0 ? (
-                        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                          {rowImages.map((image) => (
-                            <a
-                              key={`${row.id}-${image.id ?? image.url}`}
-                              href={image.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="overflow-hidden rounded-md border bg-muted/30"
+                            {CONDITIONS[condition].label}
+                          </Badge>
+                        ))
+                      ) : (
+                        <Badge variant="outline">Unspecified</Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Material: {resolveRowMaterialSummary(row)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Imaging:{' '}
+                      {rowImages.length > 0
+                        ? `${rowImages.length} ${rowImageModalityLabel}`
+                        : 'No images'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Note: {cleanedNotes || '-'}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Prescription: {formatPrescriptionSummary(row.prescription)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Visit:{' '}
+                      {visit
+                        ? visit.tag
+                          ? `${visit.tag} (${visit.visitDate})`
+                          : `Visit ${visit.id} (${visit.visitDate})`
+                        : `Visit ${row.visitId}`}
+                    </p>
+                    {Array.isArray(row.correctionHistory) && row.correctionHistory.length > 0 ? (
+                      <div className="mt-2 rounded-md border border-dashed border-border/70 bg-muted/20 p-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Correction History
+                        </p>
+                        <div className="mt-2 space-y-2">
+                          {row.correctionHistory.slice(0, 3).map((entry) => (
+                            <div
+                              key={`${row.id}-${entry.id ?? entry.createdAt}`}
+                              className="rounded-md bg-background/90 p-2 text-xs"
                             >
-                              <img
-                                src={image.url}
-                                alt={image.originalName || `${treatmentName} image`}
-                                className="h-20 w-full object-cover"
-                              />
-                            </a>
+                              <p className="font-medium text-foreground">
+                                {entry.event === 'corrected'
+                                  ? 'Corrected'
+                                  : entry.description || entry.event || 'Updated'}
+                              </p>
+                              <p className="text-muted-foreground">
+                                {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : '-'}{' '}
+                                by {entry.changedBy || 'System'}
+                              </p>
+                              <p className="mt-1 text-muted-foreground">
+                                Reason: {entry.correctionReason || '-'}
+                              </p>
+                              {Array.isArray(entry.changes) && entry.changes.length > 0 ? (
+                                <p className="mt-1 text-muted-foreground">
+                                  Changed:{' '}
+                                  {entry.changes
+                                    .slice(0, 3)
+                                    .map((change) => change.label || change.field || 'Field')
+                                    .join(', ')}
+                                </p>
+                              ) : null}
+                            </div>
                           ))}
                         </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-lg border bg-background p-4 text-sm">
-            <p className="mb-2 flex items-center gap-2 font-medium">
-              <Stethoscope className="size-4" />
-              Doctor Mapping
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {selectedVisit?.dentistName
-                ? `Using visit doctor: ${selectedVisit.dentistName}`
-                : authenticatedDentist
-                  ? `Using linked staff record: #${authenticatedDentist.id}`
-                  : 'No visit doctor or linked staff record found.'}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+                      </div>
+                    ) : null}
+                    {rowImages.length > 0 ? (
+                      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        {rowImages.map((image) => (
+                          <a
+                            key={`${row.id}-${image.id ?? image.url}`}
+                            href={image.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="overflow-hidden rounded-md border bg-muted/30"
+                          >
+                            <img
+                              src={image.url}
+                              alt={image.originalName || `${treatmentName} image`}
+                              className="h-20 w-full object-cover"
+                            />
+                          </a>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

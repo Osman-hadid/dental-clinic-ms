@@ -2,15 +2,17 @@
 
 import { FormEvent, JSX, useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useDebounce } from 'use-debounce';
 import { Header } from '@/components/header';
 import { LoadingState } from '@/components/shared/loading-state';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { DEFAULT_AFN_PER_USD, type CurrencyCode, formatCurrency, getExchangeRate, parseMoney } from '@/lib/currency-utils';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import { createDefaultReportRange, fetchReport, toInputDate } from '@/modules/dental-management/presentation/reports/report-client';
+import { ReportPageIntro } from '@/modules/dental-management/presentation/reports/report-page-intro';
 import { ShoppingBag, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
@@ -128,11 +130,12 @@ const ClinicalExpensesPage = (): JSX.Element => {
   const [endDate, setEndDate] = useState(range.endDate);
   const [category, setCategory] = useState('all');
   const [search, setSearch] = useState('');
+  const [debouncedSearch] = useDebounce(search, 350);
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchExpenses = useCallback(async (pageNumber = page): Promise<void> => {
+  const fetchExpenses = useCallback(async (pageNumber = 1): Promise<void> => {
     setIsLoading(true);
     try {
       const data = await fetchReport<ClinicalExpenseReportResponse>('/api/v1/dental-management/reports/clinical-expenses', {
@@ -140,7 +143,7 @@ const ClinicalExpensesPage = (): JSX.Element => {
         endDate,
         page: pageNumber,
         perPage: 10,
-        search,
+        search: debouncedSearch,
         sortBy: 'expenseDate',
         sortDirection: 'desc',
         startDate,
@@ -150,7 +153,7 @@ const ClinicalExpensesPage = (): JSX.Element => {
     } finally {
       setIsLoading(false);
     }
-  }, [category, endDate, page, search, startDate]);
+  }, [category, debouncedSearch, endDate, startDate]);
 
   useEffect(() => {
     void fetchExpenses(1);
@@ -236,13 +239,15 @@ const ClinicalExpensesPage = (): JSX.Element => {
       />
       <div className="flex flex-1 flex-col">
         <div className="@container/main flex flex-1 flex-col gap-2">
-          <div className="flex flex-col gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6">
+          <div className="flex min-w-0 flex-col gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6">
+            <ReportPageIntro title="Clinical purchases" description="Track materials and supplies bought for patient care. Compare spending by category and keep vendor details with each purchase." />
             <Card className="overflow-hidden rounded-3xl border border-border/50 bg-card">
               <CardHeader>
                 <CardTitle className="inline-flex items-center gap-2">
                   <ShoppingBag className="size-5 text-cyan-700" />
-                  Clinical Buys Expenses
+                  Record a purchase
                 </CardTitle>
+                <CardDescription>Enter the quantity and cost per item. The total is calculated from those values.</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
                 <form onSubmit={handleCreate} className="grid gap-3 rounded-2xl border bg-background/85 p-4">
@@ -362,26 +367,29 @@ const ClinicalExpensesPage = (): JSX.Element => {
                       <Label>Search</Label>
                       <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Item, note, vendor..." />
                     </div>
-                    <div className="md:col-span-4">
-                      <Button type="button" onClick={() => void fetchExpenses(1)}>Apply Filters</Button>
+                    <div className="flex flex-wrap items-end justify-between gap-2 md:col-span-4">
+                      <p className="text-xs text-muted-foreground">Filters update automatically. Category chart amounts are shown in AFN equivalent.</p>
                     </div>
                   </div>
 
-                  <div className="h-72 rounded-2xl border bg-background/80 p-3">
-                    {isLoading ? (
-                      <LoadingState compact title="Refreshing report" description="Fetching clinical expense breakdown." />
-                    ) : (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie data={report?.breakdown ?? []} dataKey="amount" nameKey="category" outerRadius={95}>
-                            {(report?.breakdown ?? []).map((entry, index) => (
-                              <Cell key={`${entry.category}-${index}`} fill={categoryColors[index % categoryColors.length]} />
-                            ))}
-                          </Pie>
-                          <Tooltip formatter={(value) => formatCurrency(Number(value), 'AFN')} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    )}
+                  <div className="rounded-2xl border bg-background/80 p-3">
+                    <p className="px-2 pb-2 text-sm font-medium">Spending by category (AFN equivalent)</p>
+                    <div className="h-60">
+                      {isLoading ? (
+                        <LoadingState compact title="Refreshing report" description="Fetching clinical expense breakdown." />
+                      ) : (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie data={report?.breakdown ?? []} dataKey="amount" nameKey="category" outerRadius={95}>
+                              {(report?.breakdown ?? []).map((entry, index) => (
+                                <Cell key={`${entry.category}-${index}`} fill={categoryColors[index % categoryColors.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip formatter={(value) => formatCurrency(Number(value), 'AFN')} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      )}
+                    </div>
                   </div>
                 </div>
               </CardContent>

@@ -1,0 +1,41 @@
+{
+  "title": "My account",
+  "description": "Your profile and access details for the Sourire clinic workspace.",
+  "backToDashboard": "Back to dashboard",
+  "signedIn": "Signed in to Sourire",
+  "profileOverview": "Profile overview",
+  "personalDetails": "Personal details",
+  "personalDetailsDescription": "The profile information attached to your account.",
+  "fullName": "Full name",
+  "emailAddress": "Email address",
+  "accountId": "Account ID",
+  "accountStatus": "Session status",
+  "active": "Active session",
+  "workspaceAccess": "Workspace access",
+  "workspaceAccessDescription": "Roles and access permissions assigned to this account.",
+  "roles": "Assigned roles",
+  "permissionLevel": "Permission level",
+  "permissions": "Access permissions",
+  "permissionCount": "{count} permissions assigned",
+  "noRoles": "No roles assigned",
+  "noPermissions": "No permissions assigned",
+  "roleFallback": "Workspace member",
+  "levels": {
+    "create": "Create",
+    "review": "Review",
+    "approval": "Approval"
+  },
+  "preferences": "Account preferences",
+  "preferencesDescription": "Choose how your account uses Sourire.",
+  "language": "App language",
+  "languageDescription": "Choose the language used across your workspace.",
+  "languageOptions": {
+    "en": "English",
+    "dr": "Dari",
+    "ps": "Pashto"
+  },
+  "languageSaving": "Updating language…",
+  "languageUpdated": "Language preference updated.",
+  "languageFailed": "Could not update your language preference.",
+  "accountUnavailable": "Your account details are unavailable."
+}

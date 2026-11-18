@@ -2,12 +2,14 @@
 
 declare(strict_types=1);
 
-use App\Http\Middleware\SetLocale;
 use App\Http\Middleware\RequestContextMiddleware;
+use App\Http\Middleware\SetLocale;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -19,6 +21,13 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->trustProxies(at: '*');
         $middleware->statefulApi();
+        $middleware->redirectGuestsTo(static function (Request $request): ?string {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return null;
+            }
+
+            return '/'.config('app.locale', 'en').'/auth/login';
+        });
         $middleware->append(RequestContextMiddleware::class);
         $middleware->alias([
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
@@ -27,6 +36,17 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->renderable(static function (AuthenticationException $exception, Request $request) {
+            if ($request->is('api/*')) {
+                return response()->json([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'UNAUTHENTICATED',
+                        'message' => 'Authentication is required.',
+                    ],
+                ], 401);
+            }
+        });
         $exceptions->renderable(
             app(App\Modules\Common\Application\Handlers\ApiExceptionHandler::class)
         );

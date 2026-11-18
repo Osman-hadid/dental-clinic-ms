@@ -45,6 +45,14 @@ export class AxiosClient {
             : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
       }
 
+      const activeLocale =
+        typeof window === 'undefined'
+          ? undefined
+          : window.location.pathname.match(/^\/(en|dr|ps)(?:\/|$)/)?.[1];
+      if (activeLocale) {
+        config.headers['X-App-Locale'] = activeLocale;
+      }
+
       return config;
     });
   }

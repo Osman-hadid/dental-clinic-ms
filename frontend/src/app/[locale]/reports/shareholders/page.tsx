@@ -2,14 +2,17 @@
 
 import { JSX, useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useDebounce } from 'use-debounce';
 import { Header } from '@/components/header';
 import { LoadingState } from '@/components/shared/loading-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { type CurrencyCode, formatCurrency } from '@/lib/currency-utils';
 import { createDefaultReportRange, fetchReport } from '@/modules/dental-management/presentation/reports/report-client';
+import { ReportPageIntro } from '@/modules/dental-management/presentation/reports/report-page-intro';
 
 type ShareholderPosition = {
   balanceAmount: number;
@@ -87,7 +90,7 @@ const emptyCurrencySections = (): ShareholderReportResponse['summary']['currency
   },
 });
 
-export default function ShareholderReportsPage(): JSX.Element {
+const ShareholderReportsPage = (): JSX.Element => {
   const tSidebar = useTranslations('sidebar');
   const tReports = useTranslations('sidebar.reports');
   const range = createDefaultReportRange(90);
@@ -96,7 +99,7 @@ export default function ShareholderReportsPage(): JSX.Element {
   const [typeFilter, setTypeFilter] = useState<'all' | 'contribution' | 'distribution'>('all');
   const [selectedShareholderId, setSelectedShareholderId] = useState('all');
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
+  const [debouncedSearch] = useDebounce(search, 350);
   const [report, setReport] = useState<ShareholderReportResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const currencySections = report?.summary.currencySections ?? emptyCurrencySections();
@@ -115,14 +118,14 @@ export default function ShareholderReportsPage(): JSX.Element {
     </div>
   );
 
-  const fetchShareholderReport = useCallback(async (pageNumber = page): Promise<void> => {
+  const fetchShareholderReport = useCallback(async (pageNumber = 1): Promise<void> => {
     setIsLoading(true);
     try {
       const data = await fetchReport<ShareholderReportResponse>('/api/v1/dental-management/reports/shareholders', {
         endDate,
         page: pageNumber,
         perPage: 12,
-        search,
+        search: debouncedSearch,
         shareholderId: selectedShareholderId === 'all' ? '' : selectedShareholderId,
         sortBy: 'transactionDate',
         sortDirection: 'desc',
@@ -130,11 +133,10 @@ export default function ShareholderReportsPage(): JSX.Element {
         transactionType: typeFilter,
       });
       setReport(data);
-      setPage(pageNumber);
     } finally {
       setIsLoading(false);
     }
-  }, [endDate, page, search, selectedShareholderId, startDate, typeFilter]);
+  }, [debouncedSearch, endDate, selectedShareholderId, startDate, typeFilter]);
 
   useEffect(() => {
     void fetchShareholderReport(1);
@@ -150,35 +152,36 @@ export default function ShareholderReportsPage(): JSX.Element {
       />
       <div className="flex flex-1 flex-col">
         <div className="@container/main flex flex-1 flex-col gap-2">
-          <div className="flex flex-col gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6">
+          <div className="flex min-w-0 flex-col gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6">
+            <ReportPageIntro title="Shareholder report" description="Review each shareholder's ownership, contributions, distributions, and balance for a selected period." />
             <Card className="rounded-2xl border">
               <CardHeader className="pb-2">
-                <CardTitle>Shareholder Report Filters</CardTitle>
+                <CardTitle>Choose what to review</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-3 md:grid-cols-5">
-                <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
-                <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
-                <select className="h-9 rounded-md border bg-background px-3 text-sm" value={selectedShareholderId} onChange={(event) => setSelectedShareholderId(event.target.value)}>
+                <Label className="grid gap-1.5 text-xs text-muted-foreground">From<Input aria-label="From date" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></Label>
+                <Label className="grid gap-1.5 text-xs text-muted-foreground">To<Input aria-label="To date" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} /></Label>
+                <select aria-label="Shareholder" className="h-9 rounded-md border bg-background px-3 text-sm" value={selectedShareholderId} onChange={(event) => setSelectedShareholderId(event.target.value)}>
                   <option value="all">All shareholders</option>
                   {(report?.positions ?? []).map((row) => (
                     <option key={row.id} value={String(row.id)}>{row.fullName}</option>
                   ))}
                 </select>
-                <select className="h-9 rounded-md border bg-background px-3 text-sm" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as 'all' | 'contribution' | 'distribution')}>
+                <select aria-label="Transaction type" className="h-9 rounded-md border bg-background px-3 text-sm" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as 'all' | 'contribution' | 'distribution')}>
                   <option value="all">All types</option>
                   <option value="contribution">Contribution</option>
                   <option value="distribution">Distribution</option>
                 </select>
-                <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Shareholder or note..." />
-                <div className="md:col-span-5">
-                  <Button type="button" onClick={() => void fetchShareholderReport(1)}>Apply Filters</Button>
+                <Input aria-label="Search shareholders or notes" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Shareholder or note..." />
+                <div className="flex items-center md:col-span-5">
+                  <p className="text-xs text-muted-foreground">Results update automatically as you change filters.</p>
                 </div>
               </CardContent>
             </Card>
 
             <Card className="rounded-2xl border">
               <CardHeader className="pb-2">
-                <CardTitle>Summary</CardTitle>
+                  <CardTitle>At a glance</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-3 xl:grid-cols-[1fr_1fr_1.1fr]">
                 {(['AFN', 'USD'] as CurrencyCode[]).map((currency) => (
@@ -186,19 +189,19 @@ export default function ShareholderReportsPage(): JSX.Element {
                     <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">{currency} Summary</p>
                     <div className="mt-3 grid gap-3">
                       <div>
-                        <p className="text-xs text-muted-foreground">Initial Capital</p>
+                        <p className="text-xs text-muted-foreground">Starting capital</p>
                         <p className="text-lg font-semibold">{formatCurrency(currencySections[currency].initialCapital, currency)}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-muted-foreground">Range Contribution</p>
+                        <p className="text-xs text-muted-foreground">Contributions this period</p>
                         <p className="text-lg font-semibold text-emerald-700">{formatCurrency(currencySections[currency].rangeContribution, currency)}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-muted-foreground">Range Distribution</p>
+                        <p className="text-xs text-muted-foreground">Distributions this period</p>
                         <p className="text-lg font-semibold text-rose-700">{formatCurrency(currencySections[currency].rangeDistribution, currency)}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-muted-foreground">Range Net</p>
+                        <p className="text-xs text-muted-foreground">Net change this period</p>
                         <p className="text-lg font-semibold text-indigo-700">{formatCurrency(currencySections[currency].rangeNet, currency)}</p>
                       </div>
                     </div>
@@ -214,19 +217,19 @@ export default function ShareholderReportsPage(): JSX.Element {
                   <p className="text-lg font-semibold">{report?.summary.activeCount ?? 0}</p>
                 </div>
                 <div className="rounded-lg border bg-muted/20 p-3">
-                  <p className="text-xs text-muted-foreground">AFN Base Initial Capital</p>
+                  <p className="text-xs text-muted-foreground">Starting capital (AFN equivalent)</p>
                   <p className="text-lg font-semibold">{formatCurrency(report?.summary.initialCapital ?? 0, 'AFN')}</p>
                 </div>
                 <div className="rounded-lg border bg-emerald-100/70 p-3 text-emerald-900">
-                  <p className="text-xs">AFN Base Contribution</p>
+                  <p className="text-xs">Contributions (AFN equivalent)</p>
                   <p className="text-lg font-semibold">{formatCurrency(report?.summary.rangeContribution ?? 0, 'AFN')}</p>
                 </div>
                 <div className="rounded-lg border bg-rose-100/70 p-3 text-rose-900">
-                  <p className="text-xs">AFN Base Distribution</p>
+                  <p className="text-xs">Distributions (AFN equivalent)</p>
                   <p className="text-lg font-semibold">{formatCurrency(report?.summary.rangeDistribution ?? 0, 'AFN')}</p>
                 </div>
                 <div className="rounded-lg border bg-indigo-100/70 p-3 text-indigo-900">
-                  <p className="text-xs">AFN Base Net</p>
+                  <p className="text-xs">Net change (AFN equivalent)</p>
                   <p className="text-lg font-semibold">{formatCurrency(report?.summary.rangeNet ?? 0, 'AFN')}</p>
                 </div>
                 </div>
@@ -235,7 +238,7 @@ export default function ShareholderReportsPage(): JSX.Element {
 
             <Card className="rounded-2xl border">
               <CardHeader className="pb-2">
-                <CardTitle>Shareholder Positions</CardTitle>
+                <CardTitle>Ownership and balances</CardTitle>
               </CardHeader>
               <CardContent>
                 {isLoading && report === null ? (
@@ -277,7 +280,7 @@ export default function ShareholderReportsPage(): JSX.Element {
 
             <Card className="rounded-2xl border">
               <CardHeader className="pb-2">
-                <CardTitle>Transaction Ledger ({report?.ledger.meta.total ?? 0})</CardTitle>
+                <CardTitle>Contribution and distribution history ({report?.ledger.meta.total ?? 0})</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
@@ -330,4 +333,6 @@ export default function ShareholderReportsPage(): JSX.Element {
       </div>
     </>
   );
-}
+};
+
+export default ShareholderReportsPage;

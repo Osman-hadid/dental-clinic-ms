@@ -3,6 +3,7 @@
 import { JSX, useCallback, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { Header } from '@/components/header';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useCan } from '@/hooks/useCan';
 import {
   AppointmentsScheduler,
@@ -106,12 +107,6 @@ export default function AppointmentsPage(): JSX.Element {
       <div className="flex flex-1 flex-col">
         <div className="@container/main flex flex-1 flex-col gap-2">
           <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
-            <div className="rounded-2xl border bg-gradient-to-r from-background to-muted/30 p-4">
-              <h2 className="text-base font-semibold">Appointment Planner</h2>
-              <p className="text-xs text-muted-foreground">
-                Use the add button to open a quick, card-style form for booking appointments.
-              </p>
-            </div>
             <AppointmentsScheduler
               appointments={schedulerAppointments}
               canCreate={can(appointmentConfig.permissions.create)}
@@ -121,19 +116,22 @@ export default function AppointmentsPage(): JSX.Element {
               onCreateAppointment={handleCreateFromScheduler}
               patientOptions={patientOptions}
             />
-            <div className="rounded-2xl border bg-card p-4">
-              <h3 className="text-sm font-semibold">All Appointments Table</h3>
-              <p className="text-xs text-muted-foreground">
-                Use the table for full CRUD actions and advanced filters.
-              </p>
-            </div>
-            <EntityList
-              config={appointmentConfig}
-              fetchHook={useAppointmentList}
-              useCreate={useCreateAppointment}
-              useUpdate={useUpdateAppointment}
-              useDelete={useDeleteAppointment}
-            />
+            <Card className="min-w-0 rounded-[1.75rem] border-border/70 bg-card/90 shadow-sm">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg">Appointment records</CardTitle>
+                <CardDescription>Search, review, or update existing bookings.</CardDescription>
+              </CardHeader>
+              <CardContent className="min-w-0">
+                <EntityList
+                  config={appointmentConfig}
+                  fetchHook={useAppointmentList}
+                  useCreate={useCreateAppointment}
+                  useUpdate={useUpdateAppointment}
+                  useDelete={useDeleteAppointment}
+                  hideCreateButton
+                />
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>

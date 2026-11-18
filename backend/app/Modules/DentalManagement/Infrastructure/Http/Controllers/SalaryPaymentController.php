@@ -23,6 +23,7 @@ final class SalaryPaymentController extends BaseApiController
 
     public function index(ListSalaryPaymentsRequest $request): JsonResponse
     {
+        $this->authorize('viewAny', SalaryPayment::class);
         $queryData = $request->validated();
         $filters = $queryData['filters'] ?? [];
 
@@ -57,6 +58,7 @@ final class SalaryPaymentController extends BaseApiController
 
     public function store(StoreSalaryPaymentRequest $request): JsonResponse
     {
+        $this->authorize('create', SalaryPayment::class);
         $payload = $this->toDatabasePayload($request->validated());
 
         $salary = DB::transaction(function () use ($payload): SalaryPayment {
@@ -75,6 +77,7 @@ final class SalaryPaymentController extends BaseApiController
 
     public function show(int $id): JsonResponse
     {
+        $this->authorize('view', SalaryPayment::class);
         $salary = SalaryPayment::query()->with('staff')->findOrFail($id);
 
         return $this->successResponse(
@@ -85,6 +88,7 @@ final class SalaryPaymentController extends BaseApiController
 
     public function update(UpdateSalaryPaymentRequest $request, int $id): JsonResponse
     {
+        $this->authorize('update', SalaryPayment::class);
         $payload = $this->toDatabasePayload($request->validated());
 
         $salary = DB::transaction(function () use ($id, $payload): SalaryPayment {
@@ -104,6 +108,7 @@ final class SalaryPaymentController extends BaseApiController
 
     public function destroy(int $id): JsonResponse
     {
+        $this->authorize('delete', SalaryPayment::class);
         DB::transaction(function () use ($id): void {
             $salary = SalaryPayment::query()->findOrFail($id);
             $salary->delete();
@@ -130,6 +135,7 @@ final class SalaryPaymentController extends BaseApiController
             if ($entry) {
                 $entry->delete();
             }
+
             return;
         }
 
@@ -150,7 +156,7 @@ final class SalaryPaymentController extends BaseApiController
             );
         }
 
-        $entry ??= new SafeTransaction();
+        $entry ??= new SafeTransaction;
         $entry->fill([
             'source_type' => 'salary_payment',
             'source_id' => $salary->id,
@@ -182,10 +188,10 @@ final class SalaryPaymentController extends BaseApiController
             ? round((float) $data['netAmount'], 2)
             : round(max(0, $grossInput + $bonusInput - $deductionInput), 2);
 
-        $gross = $this->currencyService->toUsd($grossInput, $resolvedCurrency['currency'], (float) $resolvedCurrency['exchangeRate']);
-        $bonus = $this->currencyService->toUsd($bonusInput, $resolvedCurrency['currency'], (float) $resolvedCurrency['exchangeRate']);
-        $deduction = $this->currencyService->toUsd($deductionInput, $resolvedCurrency['currency'], (float) $resolvedCurrency['exchangeRate']);
-        $net = $this->currencyService->toUsd($netInput, $resolvedCurrency['currency'], (float) $resolvedCurrency['exchangeRate']);
+        $gross = $this->currencyService->toAfn($grossInput, $resolvedCurrency['currency'], (float) $resolvedCurrency['exchangeRate']);
+        $bonus = $this->currencyService->toAfn($bonusInput, $resolvedCurrency['currency'], (float) $resolvedCurrency['exchangeRate']);
+        $deduction = $this->currencyService->toAfn($deductionInput, $resolvedCurrency['currency'], (float) $resolvedCurrency['exchangeRate']);
+        $net = $this->currencyService->toAfn($netInput, $resolvedCurrency['currency'], (float) $resolvedCurrency['exchangeRate']);
 
         return [
             'staff_id' => (int) ($data['staffId'] ?? 0),
@@ -214,6 +220,7 @@ final class SalaryPaymentController extends BaseApiController
     {
         if ($trashedFilter === 'with') {
             $query->withTrashed();
+
             return;
         }
 

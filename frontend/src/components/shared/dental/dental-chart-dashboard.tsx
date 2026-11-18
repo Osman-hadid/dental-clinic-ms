@@ -1,1869 +1,740 @@
 'use client';
 
-import { JSX, useEffect, useMemo, useState, type CSSProperties } from 'react';
-import Image from 'next/image';
+import { useMemo, useRef, useState, type JSX } from 'react';
+import { useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import {
-  ChartContainer,
-  ChartLegend,
-  ChartLegendContent,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import { formatCurrency as formatMoney } from '@/lib/currency-utils';
+import { getIntlLocale } from '@/modules/common/utils/locale';
 import {
-  DEFAULT_AFN_PER_USD,
-  formatDualFromUsd,
-  formatCurrency as formatMoneyByCurrency,
-} from '@/lib/currency-utils';
-import { cn } from '@/lib/utilities';
-import {
-  Activity,
   ArrowDownLeft,
   ArrowUpRight,
-  Building2,
+  CalendarClock,
   CalendarDays,
-  ChevronLeft,
+  Check,
   ChevronRight,
+  CircleCheck,
   Clock3,
   Search,
-  Stethoscope,
-  TrendingUp,
+  ShieldCheck,
+  TriangleAlert,
   UsersRound,
-  Vault,
+  WalletCards,
+  X,
 } from 'lucide-react';
 import {
   Area,
   AreaChart,
-  Bar,
-  BarChart,
   CartesianGrid,
-  PolarGrid,
-  RadialBar,
-  RadialBarChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
+import { ClinicSpatialHome, type SpatialPanel } from './clinic-spatial-home';
+import styles from './clinic-workspace.module.css';
 
-type EventType = 'appointment' | 'visit';
-type ImplantAvailabilityStatus = 'not_available' | 'in_purchase' | 'available' | 'done';
+export type RevenueRange = '7d' | '30d' | '90d';
 
 type ScheduleEvent = {
   dateKey: string;
   dentistName: string;
   key: string;
-  linkedVisitId?: number | string | null;
+  linkedVisitId: number | string | null;
   note: string;
-  patientId?: number | string | null;
+  patientId: number | string | null;
   patientName: string;
   status: string;
   tag: string;
   timeLabel: string;
   title: string;
-  type: EventType;
-  timestamp?: number;
+  type: 'appointment' | 'visit';
+  timestamp: number;
 };
 
-type StatusMeta = {
-  badge: string;
-  chip: string;
-  row: string;
-};
-
-type CalendarStatusBucket = 'cancelled' | 'completed' | 'in_progress' | 'other' | 'scheduled';
-
-type CalendarStatusTheme = {
-  badge: string;
-  cell: string;
-};
-
-type CalendarCellTheme = {
-  badgeClass: string;
-  badgeStyle?: CSSProperties;
-  cellClass: string;
-  cellStyle?: CSSProperties;
-};
-
-export type DashboardImplantSupplierAvailability = {
-  count: number;
-  paid: number;
-  status: ImplantAvailabilityStatus;
-  total: number;
-  unpaid: number;
-};
-
-export type DashboardImplantSupplierSummary = {
-  implantCount: number;
-  paidRatio: number;
-  totalPaid: number;
-  totalSupplierCost: number;
-  totalUnpaid: number;
-  unpaidCount: number;
-  byAvailability: DashboardImplantSupplierAvailability[];
+export type DashboardOverview = {
+  schedule: {
+    todayKey: string;
+    todayVisits: number;
+    todayAppointments: number;
+    eventsByDate: Record<string, ScheduleEvent[]>;
+    upcomingEvents: ScheduleEvent[];
+  };
+  patients: { total: number; new30d: number; returning: number };
+  performance: { completionRate: number; calendarCoverageDays: number };
+  operations: {
+    diskFreePercent: number;
+    failedBackupCount: number;
+    healthWarningCount: number;
+    lastSuccessfulBackupAt: string | null;
+    status: string;
+  };
+  charts: {
+    revenueRange: RevenueRange;
+    revenueSeries: Array<{ date: string; billed: number; paid: number }>;
+    appointmentMix: { scheduled: number; completed: number; cancelled: number };
+  };
+  safe: {
+    balance: number;
+    currencySections?: Record<
+      'AFN' | 'USD',
+      { balance: number; totalIn: number; totalOut: number }
+    >;
+    totalIn: number;
+    totalOut: number;
+    afnPerUsd: number;
+  };
+  radialSafeSummary: { debtOutstanding: number; supplierUnpaids: number } | null;
 };
 
 type DentalChartDashboardProps = {
+  firstName?: string;
+  hasError?: boolean;
   isLoading?: boolean;
   locale: string;
-  overview:
-    | {
-        schedule: {
-          start: string;
-          end: string;
-          todayKey: string;
-          todayVisits: number;
-          todayAppointments: number;
-          eventsByDate: Record<string, ScheduleEvent[]>;
-          upcomingEvents: ScheduleEvent[];
-        };
-        patients: { total: number; new30d: number; returning: number };
-        performance: { completionRate: number; calendarCoverageDays: number };
-        operations: {
-          criticalDiskWarning: boolean;
-          diskFreePercent: number;
-          failedBackupCount: number;
-          healthWarningCount: number;
-          lastSuccessfulBackupAt: string | null;
-          latestBackupStatus: string;
-          lowDiskWarning: boolean;
-          nextScheduledRunAt: string | null;
-          status: string;
-        };
-        charts: {
-          revenueRange: '7d' | '30d' | '90d';
-          revenueSeries: Array<{ date: string; billed: number; paid: number }>;
-          appointmentMix: { scheduled: number; completed: number; cancelled: number };
-        };
-        safe: {
-          balance: number;
-          currencySections?: Record<'AFN' | 'USD', { balance: number; totalIn: number; totalOut: number }>;
-          totalIn: number;
-          totalOut: number;
-          afnPerUsd: number;
-          topPickups: Array<{ name: string; amount: number; currency: 'AFN' | 'USD' }>;
-          recentTransactions: Array<{
-            id: string;
-            entryType: string;
-            direction: string;
-            amount: number;
-            currency: 'AFN' | 'USD';
-            transactionDate: string;
-            pickedByStaffId: string;
-            pickedByStaffName: string;
-            notes: string;
-          }>;
-        };
-        implantSupplier: DashboardImplantSupplierSummary;
-        radialSafeSummary: {
-          safeBalance: number;
-          debtOutstanding: number;
-          supplierUnpaids: number;
-          ring: { safePercent: number; debtPercent: number; unpaidPercent: number };
-          chartData: Array<{ category: 'inSafe' | 'debts' | 'unpaids'; value: number }>;
-        } | null;
-      }
-    | null;
-  onRevenueRangeChange?: (range: '7d' | '30d' | '90d') => void;
-};
-
-const safeRadialChartConfig = {
-  debts: {
-    color: '#eab308',
-    label: 'Debts',
-  },
-  inSafe: {
-    color: '#16a34a',
-    label: 'Safe',
-  },
-  unpaids: {
-    color: '#dc2626',
-    label: 'Unpaids',
-  },
-} satisfies ChartConfig;
-
-const CALENDAR_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MS_IN_DAY = 24 * 60 * 60 * 1000;
-
-const asText = (value: unknown): string => {
-  if (typeof value === 'number') return String(value).trim();
-  if (typeof value !== 'string') return '';
-  return value.trim();
-};
-
-const parseMoney = (value: unknown): number => {
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : 0;
-  }
-
-  const raw = asText(value);
-  if (!raw) return 0;
-  const parsed = Number(raw.replace(/[^0-9.-]/g, ''));
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const roundCurrency = (value: number): number => Math.round(value * 100) / 100;
-
-const formatCurrency = (value: number): string =>
-  formatMoneyByCurrency(roundCurrency(value), 'AFN');
-const formatMoney = (value: number, currency: 'AFN' | 'USD'): string =>
-  formatMoneyByCurrency(roundCurrency(value), currency);
-
-const toDateKey = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const startOfDay = (date: Date): Date =>
-  new Date(date.getFullYear(), date.getMonth(), date.getDate());
-const startOfMonth = (date: Date): Date => new Date(date.getFullYear(), date.getMonth(), 1);
-
-const parseDateOnly = (value: unknown): Date | null => {
-  const raw = asText(value);
-  if (!raw) return null;
-
-  const datePart = raw.includes('T') ? raw.split('T')[0] : raw;
-  const [yearPart, monthPart, dayPart] = datePart.split('-');
-  const year = Number(yearPart);
-  const month = Number(monthPart);
-  const day = Number(dayPart);
-
-  if (
-    Number.isInteger(year) &&
-    Number.isInteger(month) &&
-    Number.isInteger(day) &&
-    year > 1900 &&
-    month >= 1 &&
-    month <= 12 &&
-    day >= 1 &&
-    day <= 31
-  ) {
-    return new Date(year, month - 1, day);
-  }
-
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return startOfDay(parsed);
-};
-
-const parseTimeParts = (value: unknown): { hour: number; minute: number } | null => {
-  const raw = asText(value);
-  if (!raw) return null;
-
-  const match = raw.match(/^(\d{1,2}):(\d{2})/);
-  if (!match) return null;
-
-  const hour = Number(match[1]);
-  const minute = Number(match[2]);
-  if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
-  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
-
-  return { hour, minute };
-};
-
-const parseDateTime = (dateValue: unknown, timeValue: unknown): Date | null => {
-  const date = parseDateOnly(dateValue);
-  if (!date) return null;
-
-  const time = parseTimeParts(timeValue);
-  if (!time) return date;
-
-  return new Date(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate(),
-    time.hour,
-    time.minute,
-    0,
-    0
-  );
-};
-
-const formatMonth = (date: Date): string =>
-  new Intl.DateTimeFormat('en-US', {
-    month: 'long',
-    year: 'numeric',
-  }).format(date);
-
-const formatDayHeading = (date: Date): string =>
-  new Intl.DateTimeFormat('en-US', {
-    day: 'numeric',
-    month: 'short',
-    weekday: 'long',
-  }).format(date);
-
-const formatClock = (date: Date): string =>
-  new Intl.DateTimeFormat('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date);
-
-const formatDateTimeLabel = (value: string | null | undefined): string => {
-  if (!value) return 'Never';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-
-  return new Intl.DateTimeFormat('en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(parsed);
-};
-
-const buildNameFromRelation = (value: unknown): string => {
-  if (!value || typeof value !== 'object') return '';
-  const relation = value as Record<string, unknown>;
-
-  const firstName = asText(relation.firstName) || asText(relation.first_name);
-  const lastName = asText(relation.lastName) || asText(relation.last_name);
-  const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
-  if (fullName) return fullName;
-
-  return asText(relation.fullName) || asText(relation.full_name) || asText(relation.name) || '';
-};
-
-const extractFirstVisitId = (value: unknown): string | number | null => {
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      if (item && typeof item === 'object' && 'id' in item) {
-        const idValue = (item as Record<string, unknown>).id;
-        if (typeof idValue === 'string' || typeof idValue === 'number') {
-          return idValue;
-        }
-      }
-    }
-    return null;
-  }
-
-  if (value && typeof value === 'object' && 'data' in value) {
-    const dataValue = (value as Record<string, unknown>).data;
-    return extractFirstVisitId(dataValue);
-  }
-
-  if (value && typeof value === 'object' && 'id' in value) {
-    const idValue = (value as Record<string, unknown>).id;
-    if (typeof idValue === 'string' || typeof idValue === 'number') {
-      return idValue;
-    }
-  }
-
-  return null;
+  onRetry?: () => void;
+  onRevenueRangeChange?: (range: RevenueRange) => void;
+  overview: DashboardOverview | null;
+  revenueRange?: RevenueRange;
 };
 
 const normalizeStatus = (status: string): string =>
   status.trim().toLowerCase().replace(/\s+/g, '_');
 
-const formatStatusLabel = (status: string): string =>
-  normalizeStatus(status)
-    .split('_')
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-
-const isCompletedStatus = (status: string): boolean => {
-  const normalized = normalizeStatus(status);
-  return normalized === 'completed' || normalized === 'done';
-};
-
-const CALENDAR_STATUS_THEME: Record<CalendarStatusBucket, CalendarStatusTheme> = {
-  cancelled: { badge: '#e11d48', cell: '#fecdd3' },
-  completed: { badge: '#16a34a', cell: '#bbf7d0' },
-  in_progress: { badge: '#7c3aed', cell: '#ddd6fe' },
-  other: { badge: '#d97706', cell: '#fde68a' },
-  scheduled: { badge: '#2563eb', cell: '#bfdbfe' },
-};
-
-const CALENDAR_BUCKET_ORDER: CalendarStatusBucket[] = [
-  'cancelled',
-  'in_progress',
-  'scheduled',
-  'completed',
-  'other',
-];
-
-const toCalendarStatusBucket = (status: string): CalendarStatusBucket => {
-  const normalized = normalizeStatus(status);
-
-  if (normalized === 'cancelled' || normalized === 'canceled' || normalized === 'rejected')
-    return 'cancelled';
-  if (['checked_in', 'waiting', 'in_chair', 'in_progress', 'ongoing'].includes(normalized)) return 'in_progress';
-  if (normalized === 'scheduled' || normalized === 'confirmed') return 'scheduled';
-  if (normalized === 'completed' || normalized === 'done') return 'completed';
-  return 'other';
-};
-
-const statusTheme = (status: string): StatusMeta => {
-  const normalized = normalizeStatus(status);
-
-  if (normalized === 'completed' || normalized === 'done') {
-    return {
-      badge: 'border-emerald-300 bg-emerald-100 text-emerald-800',
-      chip: 'border-emerald-300 bg-emerald-50 text-emerald-700',
-      row: 'border-emerald-200/70 bg-emerald-50/60',
-    };
-  }
-
-  if (normalized === 'cancelled' || normalized === 'canceled' || normalized === 'rejected') {
-    return {
-      badge: 'border-rose-300 bg-rose-100 text-rose-800',
-      chip: 'border-rose-300 bg-rose-50 text-rose-700',
-      row: 'border-rose-200/70 bg-rose-50/60',
-    };
-  }
-
-  if (normalized === 'scheduled' || normalized === 'confirmed') {
-    return {
-      badge: 'border-blue-300 bg-blue-100 text-blue-800',
-      chip: 'border-blue-300 bg-blue-50 text-blue-700',
-      row: 'border-blue-200/70 bg-blue-50/60',
-    };
-  }
-
-  if (['checked_in', 'waiting', 'in_chair', 'in_progress', 'ongoing'].includes(normalized)) {
-    return {
-      badge: 'border-violet-300 bg-violet-100 text-violet-800',
-      chip: 'border-violet-300 bg-violet-50 text-violet-700',
-      row: 'border-violet-200/70 bg-violet-50/60',
-    };
-  }
-
-  return {
-    badge: 'border-amber-300 bg-amber-100 text-amber-800',
-    chip: 'border-amber-300 bg-amber-50 text-amber-700',
-    row: 'border-amber-200/70 bg-amber-50/60',
-  };
-};
-
-const calendarCellTheme = (events: ScheduleEvent[]): CalendarCellTheme => {
-  if (events.length === 0) {
-    return {
-      badgeClass: 'bg-primary/15 text-primary',
-      cellClass: 'border-transparent bg-transparent',
-    };
-  }
-
-  const uniqueBuckets = CALENDAR_BUCKET_ORDER.filter((bucket, index, array) => {
-    if (!events.some((event) => toCalendarStatusBucket(event.status) === bucket)) return false;
-    return array.indexOf(bucket) === index;
-  });
-
-  if (uniqueBuckets.length === 1) {
-    const bucket = uniqueBuckets[0];
-    const palette = CALENDAR_STATUS_THEME[bucket];
-    return {
-      badgeClass: 'text-white',
-      badgeStyle: { backgroundColor: palette.badge },
-      cellClass: 'text-foreground',
-      cellStyle: { backgroundColor: palette.cell, borderColor: `${palette.badge}66` },
-    };
-  }
-
-  const step = 100 / uniqueBuckets.length;
-  const gradientStops = uniqueBuckets
-    .map((bucket, index) => {
-      const start = (index * step).toFixed(2);
-      const end = ((index + 1) * step).toFixed(2);
-      return `${CALENDAR_STATUS_THEME[bucket].cell} ${start}% ${end}%`;
-    })
-    .join(', ');
-  const badgeStops = uniqueBuckets
-    .map((bucket, index) => {
-      const start = (index * step).toFixed(2);
-      const end = ((index + 1) * step).toFixed(2);
-      return `${CALENDAR_STATUS_THEME[bucket].badge} ${start}% ${end}%`;
-    })
-    .join(', ');
-
-  return {
-    badgeClass: 'text-white',
-    badgeStyle: { backgroundImage: `linear-gradient(135deg, ${badgeStops})` },
-    cellClass: 'text-foreground border-primary/40',
-    cellStyle: { backgroundImage: `linear-gradient(135deg, ${gradientStops})` },
-  };
-};
-
-const toSearchBlob = (event: ScheduleEvent): string => {
-  return `${event.patientName} ${event.dentistName} ${event.tag} ${event.status} ${event.note} ${event.title}`.toLowerCase();
-};
-
-type ToothSectionKey = 'buccal' | 'distal' | 'lingual' | 'mesial' | 'occlusal' | 'root';
-
-type ToothSectionMeta = {
-  description: string;
-  fill: string;
-  label: string;
-  path: string;
-};
-
-const TOOTH_SECTION_META: Record<ToothSectionKey, ToothSectionMeta> = {
-  buccal: {
-    description: 'Outer cheek-facing wall. Check plaque and smoothness.',
-    fill: '#dbe3ec',
-    label: 'Buccal',
-    path: 'M99 93 C111 99 149 99 161 93 C163 124 157 151 147 180 C136 212 127 234 121 252 C107 230 97 210 87 180 C77 151 71 124 73 93 Z',
-  },
-  distal: {
-    description: 'Back side of the tooth next to posterior neighbor contact.',
-    fill: '#cfd8e3',
-    label: 'Distal',
-    path: 'M164 90 C174 111 179 136 180 160 C180 181 177 203 172 225 C163 206 153 184 146 158 C142 140 140 118 140 101 C149 99 157 96 164 90 Z',
-  },
-  lingual: {
-    description: 'Inner tongue-side wall. Review contour and restorations.',
-    fill: '#c8d1dc',
-    label: 'Lingual',
-    path: 'M99 108 C111 114 149 114 161 108 C160 134 155 158 147 181 C138 206 130 228 121 245 C112 228 104 206 95 181 C87 158 82 134 81 108 C87 112 93 114 99 108 Z',
-  },
-  mesial: {
-    description: 'Front side next to anterior neighbor contact area.',
-    fill: '#dae2eb',
-    label: 'Mesial',
-    path: 'M70 90 C63 96 55 105 49 117 C41 133 37 149 37 168 C37 192 43 217 52 242 C61 222 69 203 77 175 C83 154 87 128 89 102 C81 99 74 96 70 90 Z',
-  },
-  occlusal: {
-    description: 'Top biting surface with pits and fissures.',
-    fill: '#eef2f7',
-    label: 'Occlusal',
-    path: 'M77 78 C87 57 101 47 117 44 C129 42 145 45 157 53 C165 58 171 67 174 79 C162 90 148 95 129 96 C108 95 92 90 77 78 Z',
-  },
-  root: {
-    description: 'Root complex and apical area for periodontal review.',
-    fill: '#b6c1cf',
-    label: 'Root',
-    path: 'M88 177 C97 205 108 229 121 251 C134 229 145 205 154 177 C149 205 147 229 147 253 C147 270 138 286 128 301 C118 286 109 270 109 253 C109 229 105 205 88 177 Z',
-  },
-};
-
-const TOOTH_SECTION_ORDER: ToothSectionKey[] = ['occlusal', 'buccal', 'lingual', 'mesial', 'distal', 'root'];
-
-const ToothSurfaceInspector = (): JSX.Element => {
-  const [hoveredSection, setHoveredSection] = useState<ToothSectionKey | null>(null);
-  const activeSection = hoveredSection ? TOOTH_SECTION_META[hoveredSection] : TOOTH_SECTION_META.occlusal;
-
-  return (
-    <div className="rounded-2xl border border-border/50 bg-card p-3 shadow-sm">
-      <div className="relative z-10">
-        <div className="mb-2.5 flex items-center justify-between gap-2">
-          <div>
-            <p className="flex items-center gap-1.5 text-base font-semibold text-foreground">
-              <Stethoscope className="size-4 text-primary" />
-              Tooth Surface Explorer
-            </p>
-            <p className="text-[11px] text-muted-foreground">
-              Hover each section to inspect
-            </p>
-          </div>
-          <span className="rounded-full border border-violet-300 bg-violet-100 px-2 py-1 text-[11px] font-semibold text-violet-800 dark:border-violet-400/20 dark:bg-violet-500/16 dark:text-violet-200">
-            LR6
-          </span>
-        </div>
-
-        <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
-          <div className="rounded-xl border border-violet-200 bg-background/70 p-2.5 dark:border-violet-400/20">
-            <svg
-              viewBox="0 0 220 320"
-              className="mx-auto h-56 w-full max-w-[220px]"
-              onMouseLeave={() => {
-                setHoveredSection(null);
-              }}
-              aria-label="Interactive segmented tooth"
-              role="img"
-            >
-              <defs>
-                <linearGradient id="dashboard-tooth-body" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stopColor="#f8fafc" />
-                  <stop offset="50%" stopColor="#e2e8f0" />
-                  <stop offset="100%" stopColor="#cbd5e1" />
-                </linearGradient>
-              </defs>
-              <path
-                d="M110 24 C146 24 171 52 174 92 C177 129 169 162 158 194 C148 222 140 246 131 268 C126 281 120 292 110 305 C100 292 94 281 89 268 C80 246 72 222 62 194 C51 162 43 129 46 92 C49 52 74 24 110 24 Z"
-                fill="url(#dashboard-tooth-body)"
-                stroke="#94a3b8"
-                strokeWidth="2"
-              />
-              {TOOTH_SECTION_ORDER.map((key) => {
-                const section = TOOTH_SECTION_META[key];
-                const isActive = hoveredSection === key;
-                return (
-                  <path
-                    key={key}
-                    d={section.path}
-                    fill={isActive ? '#8b5cf6' : section.fill}
-                    stroke={isActive ? '#7c3aed' : '#94a3b8'}
-                    strokeWidth={isActive ? 2.2 : 1.5}
-                    style={{ cursor: 'pointer', transition: 'fill 140ms ease, stroke 140ms ease' }}
-                    onMouseEnter={() => {
-                      setHoveredSection(key);
-                    }}
-                    onFocus={() => {
-                      setHoveredSection(key);
-                    }}
-                    tabIndex={0}
-                  />
-                );
-              })}
-            </svg>
-          </div>
-
-          <div className="space-y-1.5">
-            {TOOTH_SECTION_ORDER.map((key) => {
-              const section = TOOTH_SECTION_META[key];
-              const isActive = hoveredSection === key;
-
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onMouseEnter={() => {
-                    setHoveredSection(key);
-                  }}
-                  onFocus={() => {
-                    setHoveredSection(key);
-                  }}
-                  className={cn(
-                    'flex w-full items-center justify-between rounded-lg border px-2.5 py-1.5 text-left text-xs transition',
-                    isActive
-                      ? 'border-violet-400 bg-violet-100 text-violet-900'
-                      : 'border-border bg-background text-muted-foreground hover:border-violet-300 hover:bg-violet-50 dark:hover:border-violet-400/30 dark:hover:bg-violet-500/10'
-                  )}
-                >
-                  <span>{section.label}</span>
-                  <span className="size-2 rounded-full bg-current/60" />
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="mt-2.5 rounded-lg border border-violet-200 bg-background/70 p-2.5 dark:border-violet-400/20">
-          <p className="text-xs font-semibold text-foreground">{activeSection.label}</p>
-          <p className="mt-1 text-[11px] text-muted-foreground">{activeSection.description}</p>
-        </div>
-
-      </div>
-    </div>
+const isOpenEvent = (event: ScheduleEvent): boolean =>
+  !['completed', 'done', 'cancelled', 'canceled', 'rejected'].includes(
+    normalizeStatus(event.status)
   );
+
+const statusTone = (status: string): string => {
+  const value = normalizeStatus(status);
+  if (['completed', 'done'].includes(value)) return styles.statusCompleted;
+  if (['cancelled', 'canceled', 'rejected'].includes(value)) return styles.statusCancelled;
+  if (['waiting', 'checked_in', 'in_chair', 'in_progress', 'ongoing'].includes(value)) {
+    return styles.statusWaiting;
+  }
+  return styles.statusScheduled;
 };
+
+const formatDay = (date: string, locale: string, full = false): string => {
+  const parsed = new Date(date + 'T12:00:00');
+  if (Number.isNaN(parsed.getTime())) return date;
+  return new Intl.DateTimeFormat(
+    getIntlLocale(locale),
+    full ? { day: 'numeric', month: 'long', weekday: 'short' } : { day: 'numeric', month: 'short' }
+  ).format(parsed);
+};
+
+const initials = (name: string): string =>
+  name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((word) => word.charAt(0))
+    .join('')
+    .toUpperCase();
 
 export const DentalChartDashboard = ({
+  firstName,
+  hasError = false,
   isLoading = false,
   locale,
-  overview,
+  onRetry,
   onRevenueRangeChange,
+  overview,
+  revenueRange,
 }: DentalChartDashboardProps): JSX.Element => {
   const router = useRouter();
-  const now = new Date();
-  const today = startOfDay(now);
-
-  const [currentMonth, setCurrentMonth] = useState<Date>(startOfMonth(today));
+  const t = useTranslations('dashboard');
+  const isRtl = locale === 'dr' || locale === 'ps';
   const [searchTerm, setSearchTerm] = useState('');
-  const [revenueTimeRange, setRevenueTimeRange] = useState<'90d' | '30d' | '7d'>(
-    overview?.charts.revenueRange ?? '90d'
-  );
-  const [selectedDate, setSelectedDate] = useState<Date>(today);
-  const [manualSelectedEventKey, setManualSelectedEventKey] = useState<string | null>(null);
-
-  useEffect(() => {
-    setRevenueTimeRange(overview?.charts.revenueRange ?? '90d');
-  }, [overview?.charts.revenueRange]);
-
-  const eventsByDate = overview?.schedule.eventsByDate ?? {};
-  const todayKey = overview?.schedule.todayKey ?? toDateKey(today);
-
-  const selectedDateKey = useMemo(() => toDateKey(selectedDate), [selectedDate]);
-
-  const selectedDateEvents = useMemo(() => {
-    const events = eventsByDate[selectedDateKey] ?? [];
-    return events.slice();
-  }, [eventsByDate, selectedDateKey]);
-
-  const normalizedSearch = searchTerm.trim().toLowerCase();
-
-  const filteredSelectedDateEvents = useMemo(() => {
-    if (!normalizedSearch) return selectedDateEvents;
-    return selectedDateEvents.filter((event) => toSearchBlob(event).includes(normalizedSearch));
-  }, [normalizedSearch, selectedDateEvents]);
-
-  const selectedEvent = useMemo(() => {
-    if (manualSelectedEventKey) {
-      const matched = filteredSelectedDateEvents.find(
-        (event) => event.key === manualSelectedEventKey
-      );
-      if (matched) return matched;
-    }
-    return filteredSelectedDateEvents[0] ?? null;
-  }, [filteredSelectedDateEvents, manualSelectedEventKey]);
-
-  const todayVisits = overview?.schedule.todayVisits ?? 0;
-  const todayAppointments = overview?.schedule.todayAppointments ?? 0;
-  const completionRate = overview?.performance.completionRate ?? 0;
-  const newPatients = overview?.patients.new30d ?? 0;
-  const returningPatients = overview?.patients.returning ?? 0;
-
-  const revenueAreaData = overview?.charts.revenueSeries ?? [];
-  const revenueAreaChartConfig = useMemo(
+  const [activePanel, setActivePanel] = useState<SpatialPanel>('today');
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const panelTriggerRef = useRef<HTMLElement | null>(null);
+  const openPanel = (panel: SpatialPanel): void => {
+    panelTriggerRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setActivePanel(panel);
+    setIsPanelOpen(true);
+  };
+  const allTodayEvents = useMemo(
     () =>
-      ({
-        billed: {
-          color: 'var(--chart-1)',
-          label: 'Billed',
-        },
-        paid: {
-          color: 'var(--chart-2)',
-          label: 'Paid',
-        },
-      }) satisfies ChartConfig,
-    []
+      [...(overview?.schedule.eventsByDate[overview.schedule.todayKey] ?? [])].sort(
+        (left, right) => left.timestamp - right.timestamp
+      ),
+    [overview]
   );
-  const revenueAreaDescription = 'Showing total billed and paid for the selected range';
-  const appointmentMixData = useMemo(
-    () => [
-      { name: 'Scheduled', value: overview?.charts.appointmentMix.scheduled ?? 0 },
-      { name: 'Completed', value: overview?.charts.appointmentMix.completed ?? 0 },
-      { name: 'Cancelled', value: overview?.charts.appointmentMix.cancelled ?? 0 },
-    ],
-    [
-      overview?.charts.appointmentMix.scheduled,
-      overview?.charts.appointmentMix.completed,
-      overview?.charts.appointmentMix.cancelled,
-    ]
-  );
-  const appointmentMixChartConfig = useMemo(
+  const todayEvents = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    return query
+      ? allTodayEvents.filter((event) =>
+          [event.patientName, event.dentistName, event.status, event.tag]
+            .join(' ')
+            .toLowerCase()
+            .includes(query)
+        )
+      : allTodayEvents;
+  }, [allTodayEvents, searchTerm]);
+  const queue = useMemo(() => allTodayEvents.filter(isOpenEvent), [allTodayEvents]);
+  const upcomingEvents = useMemo(
     () =>
-      ({
-        value: {
-          color: 'var(--chart-1)',
-          label: 'Appointments',
-        },
-      }) satisfies ChartConfig,
-    []
+      [...(overview?.schedule.upcomingEvents ?? [])]
+        .filter(isOpenEvent)
+        .sort((left, right) => left.timestamp - right.timestamp)
+        .slice(0, 3),
+    [overview]
   );
-  const safeBalance = overview?.safe.balance ?? 0;
-  const safeTotalIn = overview?.safe.totalIn ?? 0;
-  const safeTotalOut = overview?.safe.totalOut ?? 0;
-  const afnPerUsd = overview?.safe.afnPerUsd ?? DEFAULT_AFN_PER_USD;
-  const emptyImplantAvailability = useMemo<DashboardImplantSupplierAvailability[]>(
-    () => [
-      { count: 0, paid: 0, status: 'not_available', total: 0, unpaid: 0 },
-      { count: 0, paid: 0, status: 'in_purchase', total: 0, unpaid: 0 },
-      { count: 0, paid: 0, status: 'available', total: 0, unpaid: 0 },
-      { count: 0, paid: 0, status: 'done', total: 0, unpaid: 0 },
-    ],
-    []
-  );
-  const implantSupplierData = overview?.implantSupplier ?? {
-    byAvailability: emptyImplantAvailability,
-    implantCount: 0,
-    paidRatio: 0,
-    totalPaid: 0,
-    totalSupplierCost: 0,
-    totalUnpaid: 0,
-    unpaidCount: 0,
+  const num = new Intl.NumberFormat(getIntlLocale(locale));
+  const money = (value: number, currency: 'AFN' | 'USD' = 'AFN'): string =>
+    formatMoney(Math.round(value * 100) / 100, currency);
+  const navigate = (destination: string): void => {
+    router.push('/' + locale + '/dental-management/' + destination);
   };
-  const implantAvailabilityChart = useMemo(() => {
-    const labelByStatus: Record<ImplantAvailabilityStatus, string> = {
-      available: 'Available',
-      done: 'Done',
-      in_purchase: 'In Purchase',
-      not_available: 'Not Available',
-    };
-
-    return implantSupplierData.byAvailability.map((entry) => ({
-      count: entry.count,
-      label: labelByStatus[entry.status],
-      unpaid: entry.unpaid,
-    }));
-  }, [implantSupplierData.byAvailability]);
-  const formatDualCurrency = (usdValue: number): string => formatDualFromUsd(usdValue, afnPerUsd);
-  const topSafePickups = overview?.safe.topPickups ?? [];
-  const recentSafeTransactions = overview?.safe.recentTransactions ?? [];
-  const todayQueueEvents = useMemo(() => {
-    const todayKey = overview?.schedule.todayKey;
-    if (!todayKey) return [] as ScheduleEvent[];
-
-    return (eventsByDate[todayKey] ?? []).filter((event) => event.type === 'appointment');
-  }, [eventsByDate, overview?.schedule.todayKey]);
-
-  const waitingRoomSummary = useMemo(() => {
-    let arrivals = 0;
-    let waiting = 0;
-    let inChair = 0;
-    let closed = 0;
-    let late = 0;
-
-    const activeEvents = [...todayQueueEvents]
-      .filter((event) => !['completed', 'cancelled', 'canceled', 'rejected'].includes(normalizeStatus(event.status)))
-      .sort((left, right) => (left.timestamp ?? 0) - (right.timestamp ?? 0));
-
-    for (const event of todayQueueEvents) {
-      const status = normalizeStatus(event.status);
-
-      if (status === 'scheduled' || status === 'checked_in') arrivals += 1;
-      if (status === 'waiting') waiting += 1;
-      if (status === 'in_chair') inChair += 1;
-      if (['completed', 'cancelled', 'canceled', 'rejected'].includes(status)) {
-        closed += 1;
-      }
-
-      if (
-        (status === 'scheduled' || status === 'checked_in' || status === 'waiting')
-        && typeof event.timestamp === 'number'
-        && event.timestamp < Date.now()
-      ) {
-        late += 1;
-      }
-    }
-
-    return {
-      activeEvents,
-      activeTotal: activeEvents.length,
-      arrivals,
-      closed,
-      inChair,
-      late,
-      waiting,
-    };
-  }, [todayQueueEvents]);
-
-  const waitingRoomSpotlight = waitingRoomSummary.activeEvents.slice(0, 3);
-
-  const upcomingEvents = useMemo(() => {
-    const events = overview?.schedule.upcomingEvents ?? [];
-    if (!normalizedSearch) return events.slice(0, 5);
-    return events.filter((event) => toSearchBlob(event).includes(normalizedSearch)).slice(0, 5);
-  }, [normalizedSearch, overview?.schedule.upcomingEvents]);
-
-  const monthGrid = useMemo(() => {
-    const year = currentMonth.getFullYear();
-    const monthIndex = currentMonth.getMonth();
-    const firstWeekday = new Date(year, monthIndex, 1).getDay();
-    const totalDays = new Date(year, monthIndex + 1, 0).getDate();
-
-    const cells: Array<{ date: Date | null; key: string }> = [];
-    for (let offset = 0; offset < firstWeekday; offset += 1) {
-      cells.push({ date: null, key: `empty-start-${offset}` });
-    }
-
-    for (let day = 1; day <= totalDays; day += 1) {
-      const date = new Date(year, monthIndex, day);
-      cells.push({ date, key: toDateKey(date) });
-    }
-
-    while (cells.length % 7 !== 0) {
-      cells.push({ date: null, key: `empty-end-${cells.length}` });
-    }
-
-    return cells;
-  }, [currentMonth]);
-
-  const goToPreviousMonth = (): void => {
-    setCurrentMonth((previous) => new Date(previous.getFullYear(), previous.getMonth() - 1, 1));
-  };
-
-  const goToNextMonth = (): void => {
-    setCurrentMonth((previous) => new Date(previous.getFullYear(), previous.getMonth() + 1, 1));
-  };
-
-  const selectedEventStatus = statusTheme(selectedEvent?.status ?? 'scheduled');
-  const debtOutstanding = overview?.radialSafeSummary?.debtOutstanding ?? 0;
-  const supplierUnpaids = overview?.radialSafeSummary?.supplierUnpaids ?? 0;
-  const ringBreakdown =
-    overview?.radialSafeSummary?.ring ?? {
-      safePercent: 0,
-      debtPercent: 0,
-      unpaidPercent: 0,
-    };
-  const safeRadialChartData =
-    overview?.radialSafeSummary?.chartData?.map((entry) => ({
-      ...entry,
-      fill:
-        entry.category === 'inSafe'
-          ? 'var(--color-inSafe)'
-          : entry.category === 'debts'
-            ? 'var(--color-debts)'
-            : 'var(--color-unpaids)',
-    })) ?? [];
-  const hasSafeRadialChartData = safeRadialChartData.length > 0;
-
-  const openTreatmentChartFromSelection = (): void => {
-    if (!selectedEvent) return;
-
-    if (isCompletedStatus(selectedEvent.status)) {
-      if (selectedEvent.patientId !== null && selectedEvent.patientId !== undefined) {
-        const encodedPatientId = encodeURIComponent(String(selectedEvent.patientId));
-        router.push(
-          `/${locale}/dental-management/patients/patient-profile?patientId=${encodedPatientId}`
-        );
-        return;
-      }
-
-      router.push(`/${locale}/dental-management/patients`);
+  const openEvent = (event: ScheduleEvent): void => {
+    if (event.linkedVisitId !== null) {
+      navigate('visits/chart?visitId=' + encodeURIComponent(String(event.linkedVisitId)));
       return;
     }
-
-    if (selectedEvent.linkedVisitId !== null && selectedEvent.linkedVisitId !== undefined) {
-      const encodedVisitId = encodeURIComponent(String(selectedEvent.linkedVisitId));
-      router.push(`/${locale}/dental-management/visits/chart?visitId=${encodedVisitId}`);
-      return;
-    }
-
-    router.push(`/${locale}/dental-management/visits`);
+    navigate(event.type === 'appointment' ? 'appointments' : 'visits');
   };
+  const statusLabel = (status: string): string => {
+    const key = 'statuses.' + normalizeStatus(status);
+    return t.has(key)
+      ? t(key)
+      : status
+          .split(/[_\s]+/)
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(' ');
+  };
+
+  const spatialHome = (
+    <ClinicSpatialHome
+      firstName={firstName}
+      hasError={hasError}
+      isLoading={isLoading}
+      locale={locale}
+      onNavigate={navigate}
+      onOpenPanel={openPanel}
+      onRetry={onRetry}
+      overview={overview}
+    />
+  );
+  if (!overview) return spatialHome;
+
+  const revenue = overview.charts.revenueSeries;
+  const billed = revenue.reduce((total, item) => total + Number(item.billed || 0), 0);
+  const paid = revenue.reduce((total, item) => total + Number(item.paid || 0), 0);
+  const pending = Math.max(0, billed - paid);
+  const activeRange = revenueRange ?? overview.charts.revenueRange;
+  const days = Number(overview.charts.revenueRange.replace('d', ''));
+  const mix = overview.charts.appointmentMix;
+  const appointmentTotal = mix.scheduled + mix.completed + mix.cancelled;
+  const scheduledAngle = appointmentTotal ? (mix.scheduled / appointmentTotal) * 360 : 0;
+  const completedAngle = appointmentTotal
+    ? ((mix.scheduled + mix.completed) / appointmentTotal) * 360
+    : 0;
+  const hasWarnings =
+    overview.operations.healthWarningCount > 0 ||
+    overview.operations.failedBackupCount > 0 ||
+    ['warning', 'critical', 'degraded'].includes(overview.operations.status.toLowerCase());
+  const lastBackup = overview.operations.lastSuccessfulBackupAt;
+  const parsedBackup = lastBackup ? new Date(lastBackup) : null;
+  const backupLabel =
+    parsedBackup && !Number.isNaN(parsedBackup.getTime())
+      ? t('lastBackup', {
+          date: new Intl.DateTimeFormat(getIntlLocale(locale), { dateStyle: 'medium' }).format(
+            parsedBackup
+          ),
+        })
+      : t('noBackup');
+  const safe = overview.safe.currencySections?.AFN ?? overview.safe;
+  const usd = overview.safe.currencySections?.USD;
 
   return (
-    <div className="space-y-5">
-      <Card className="overflow-hidden rounded-3xl border border-border/80 bg-card pt-0 shadow-sm">
-        <CardContent>
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="relative w-full md:max-w-xl">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={searchTerm}
-                onChange={(event) => {
-                  setSearchTerm(event.target.value);
-                }}
-                placeholder="Find patients or appointments"
-                className="h-11 rounded-xl border-input bg-background pl-10"
-              />
-            </div>
+    <>
+      {spatialHome}
+      <Sheet open={isPanelOpen} onOpenChange={setIsPanelOpen}>
+        <SheetContent
+          className={styles.detailSheet}
+          dir={isRtl ? 'rtl' : 'ltr'}
+          side={isRtl ? 'left' : 'right'}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            panelTriggerRef.current?.focus();
+          }}
+        >
+          <SheetHeader className={styles.detailHeader}>
             <div>
-              <div className="flex items-center justify-center">
-                <Image
-                  src="/logo2.png"
-                  alt="Clinic logo"
-                  width={160}
-                  height={160}
-                  sizes="160px"
-                  quality={100}
-                  className="h-40 w-40 object-contain"
-                />
-              </div>
+              <p className={styles.detailEyebrow}>SOURIRE / {t('spatial.atlas')}</p>
+              <SheetTitle className={styles.detailTitle}>
+                {t(activePanel === 'finances' ? 'spatial.finances' : 'spatial.dailyBrief')}
+              </SheetTitle>
+              <SheetDescription>
+                {t(
+                  activePanel === 'finances'
+                    ? 'spatial.financesDescription'
+                    : 'spatial.briefingDescription'
+                )}
+              </SheetDescription>
             </div>
-          </div>
-
-          <div className="grid gap-4 xl:grid-cols-[1.8fr_1fr]">
-            <div className="space-y-4">
-              <section className="grid gap-4 rounded-3xl border border-border/50 bg-card p-5 lg:grid-cols-[1.25fr_0.95fr]">
-                <div className="space-y-5">
-                  <div>
-                    <p className="text-xs font-medium text-primary/70 uppercase tracking-wider">Dashboard Overview</p>
-                    <h3 className="mt-2 text-3xl font-bold tracking-tight text-foreground">
-                      Today&apos;s Visits
-                    </h3>
-                    <div className="mt-3 flex items-baseline gap-2">
-                      <span className="text-6xl font-bold tracking-tight text-primary">{todayVisits}</span>
-                      <span className="text-sm font-medium text-muted-foreground">patients scheduled</span>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <div className="group rounded-xl border border-blue-200/60 bg-blue-50/70 p-4 transition-all hover:shadow-md dark:border-blue-400/20 dark:bg-blue-500/12">
-                      <div className="relative">
-                        <div className="flex items-center gap-2">
-                          <UsersRound className="size-4 text-blue-600 dark:text-blue-300" />
-                          <p className="text-xs font-semibold text-blue-700 dark:text-blue-200">New Patients</p>
-                        </div>
-                        <p className="mt-2 text-3xl font-bold text-blue-900 dark:text-blue-50">{newPatients}</p>
-                        <p className="mt-1 text-[10px] text-blue-600/80 dark:text-blue-200/80">Last 30 days</p>
-                      </div>
-                    </div>
-                    <div className="group rounded-xl border border-violet-200/60 bg-violet-50/70 p-4 transition-all hover:shadow-md dark:border-violet-400/20 dark:bg-violet-500/12">
-                      <div className="relative">
-                        <div className="flex items-center gap-2">
-                          <Activity className="size-4 text-violet-600 dark:text-violet-300" />
-                          <p className="text-xs font-semibold text-violet-700 dark:text-violet-200">Returning</p>
-                        </div>
-                        <p className="mt-2 text-3xl font-bold text-violet-900 dark:text-violet-50">{returningPatients}</p>
-                        <p className="mt-1 text-[10px] text-violet-600/80 dark:text-violet-200/80">Last 30 days</p>
-                      </div>
-                    </div>
-                    <div className="group rounded-xl border border-emerald-200/60 bg-emerald-50/70 p-4 transition-all hover:shadow-md dark:border-emerald-400/20 dark:bg-emerald-500/12">
-                      <div className="relative">
-                        <div className="flex items-center gap-2">
-                          <CalendarDays className="size-4 text-emerald-600 dark:text-emerald-300" />
-                          <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-200">Appointments</p>
-                        </div>
-                        <p className="mt-2 text-3xl font-bold text-emerald-900 dark:text-emerald-50">{todayAppointments}</p>
-                        <p className="mt-1 text-[10px] text-emerald-600/80 dark:text-emerald-200/80">Today</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => {
-                        router.push(`/${locale}/dental-management/appointments`);
-                      }}
-                      className="bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
-                    >
-                      <CalendarDays className="size-4" />
-                      New Appointment
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        router.push(`/${locale}/dental-management/visits`);
-                      }}
-                      className="shadow-sm"
-                    >
-                      <Stethoscope className="size-4" />
-                      Register Visit
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        router.push(`/${locale}/dental-management/patients`);
-                      }}
-                      className="shadow-sm"
-                    >
-                      <UsersRound className="size-4" />
-                      Patients
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
-                  <div className="flex items-center justify-between">
+            <SheetClose
+              className={styles.detailClose}
+              aria-label={t('spatial.close')}
+              title={t('spatial.close')}
+            >
+              <X size={18} aria-hidden="true" />
+            </SheetClose>
+          </SheetHeader>
+          <div className={styles.workspace + ' ' + styles.detailWorkspace}>
+            {activePanel === 'today' ? (
+              <>
+                <section className={styles.metrics} aria-label={t('eyebrow')}>
+                  <MetricCard
+                    icon={CalendarClock}
+                    label={t('todayAppointments')}
+                    value={num.format(overview.schedule.todayAppointments)}
+                    detail={t('registeredVisits', {
+                      count: num.format(overview.schedule.todayVisits),
+                    })}
+                    tone="teal"
+                  />
+                  <MetricCard
+                    icon={Clock3}
+                    label={t('openItems')}
+                    value={num.format(queue.length)}
+                    detail={t('openItemsDescription')}
+                    tone="amber"
+                  />
+                  <MetricCard
+                    icon={CircleCheck}
+                    label={t('completion')}
+                    value={num.format(overview.performance.completionRate) + '%'}
+                    detail={t('periodDays', { days: num.format(days) })}
+                    tone="violet"
+                  />
+                  <MetricCard
+                    icon={UsersRound}
+                    label={t('newPatients')}
+                    value={num.format(overview.patients.new30d)}
+                    detail={t('newPatientsDescription')}
+                    tone="sky"
+                  />
+                </section>
+                <section className={styles.panel} aria-labelledby="today-schedule-title">
+                  <div className={styles.panelHeading}>
                     <div>
-                      <p className="text-xs font-semibold text-primary">Waiting Room</p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {waitingRoomSummary.activeTotal} active · {waitingRoomSummary.late} need attention
-                      </p>
+                      <h2 id="today-schedule-title">
+                        {t('schedule')}
+                        <span className={styles.countPill}>
+                          {num.format(allTodayEvents.length)}
+                        </span>
+                      </h2>
+                      <p>{t('scheduleDescription')}</p>
                     </div>
-                    <Button
+                    <button
                       type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-8 rounded-lg border-border/50 bg-background text-foreground hover:bg-accent/40"
-                      onClick={() => {
-                        router.push(`/${locale}/dental-management/queue`);
-                      }}
+                      className={styles.textButton}
+                      onClick={() => navigate('queue')}
                     >
-                      View Queue
-                      <ChevronRight className="size-4" />
-                    </Button>
+                      {t('openWaitingRoom')}
+                      <ChevronRight size={15} aria-hidden="true" />
+                    </button>
                   </div>
-
-                  <div className="mt-4 grid grid-cols-4 gap-2">
-                    <div className="rounded-lg border border-amber-200/50 bg-amber-50/60 p-2.5 text-center dark:border-amber-400/20 dark:bg-amber-500/10">
-                      <p className="text-lg font-semibold text-amber-900 dark:text-amber-50">{waitingRoomSummary.arrivals}</p>
-                      <p className="text-[10px] uppercase tracking-wide text-amber-700 dark:text-amber-200">Arrivals</p>
-                    </div>
-                    <div className="rounded-lg border border-sky-200/50 bg-sky-50/60 p-2.5 text-center dark:border-sky-400/20 dark:bg-sky-500/10">
-                      <p className="text-lg font-semibold text-sky-900 dark:text-sky-50">{waitingRoomSummary.waiting}</p>
-                      <p className="text-[10px] uppercase tracking-wide text-sky-700 dark:text-sky-200">Waiting</p>
-                    </div>
-                    <div className="rounded-lg border border-violet-200/50 bg-violet-50/60 p-2.5 text-center dark:border-violet-400/20 dark:bg-violet-500/10">
-                      <p className="text-lg font-semibold text-violet-900 dark:text-violet-50">{waitingRoomSummary.inChair}</p>
-                      <p className="text-[10px] uppercase tracking-wide text-violet-700 dark:text-violet-200">In Chair</p>
-                    </div>
-                    <div className="rounded-lg border border-emerald-200/50 bg-emerald-50/60 p-2.5 text-center dark:border-emerald-400/20 dark:bg-emerald-500/10">
-                      <p className="text-lg font-semibold text-emerald-900 dark:text-emerald-50">{waitingRoomSummary.closed}</p>
-                      <p className="text-[10px] uppercase tracking-wide text-emerald-700 dark:text-emerald-200">Closed</p>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 flex items-center justify-between rounded-lg border border-border/50 bg-background/70 px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <div className="size-2 rounded-full bg-amber-500" />
-                      <span className="text-xs text-muted-foreground">Needs attention: <span className="font-semibold text-amber-700 dark:text-amber-200">{waitingRoomSummary.late}</span></span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="size-2 rounded-full bg-sky-500" />
-                      <span className="text-xs text-muted-foreground">Active flow: <span className="font-semibold text-sky-700 dark:text-sky-200">{waitingRoomSummary.activeTotal}</span></span>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              <section className="grid gap-3 lg:grid-cols-[1fr_1fr]">
-                <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
-                  <div className="mb-4 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <UsersRound className="size-4 text-primary" />
-                      <h4 className="font-semibold text-foreground">Patient List</h4>
-                    </div>
-                    <span className="rounded-full border border-border/50 bg-muted/50 px-2.5 py-1 text-[10px] font-medium text-muted-foreground">
-                      {formatDayHeading(selectedDate)}
+                  <div className={styles.scheduleToolbar}>
+                    <span className={styles.todayPill}>
+                      <span />
+                      {t('today')} · {formatDay(overview.schedule.todayKey, locale)}
                     </span>
+                    <div className={styles.search}>
+                      <Search size={15} aria-hidden="true" />
+                      <Input
+                        aria-label={t('searchPatients')}
+                        value={searchTerm}
+                        onChange={(event) => setSearchTerm(event.target.value)}
+                        placeholder={t('searchPatients')}
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    {isLoading ? (
-                      <div className="flex items-center justify-center rounded-xl border border-dashed border-border/50 p-6 text-sm text-muted-foreground">
-                        <div className="flex items-center gap-2">
-                          <div className="size-4 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-                          Loading schedule...
+                  <div className={styles.scheduleList}>
+                    {todayEvents.slice(0, 5).map((event) => (
+                      <button
+                        type="button"
+                        key={event.key}
+                        onClick={() => openEvent(event)}
+                        className={styles.scheduleRow}
+                      >
+                        <span className={styles.eventTime}>{event.timeLabel || '—'}</span>
+                        <span className={styles.patientAvatar}>
+                          {initials(event.patientName) || (
+                            <UsersRound size={16} aria-hidden="true" />
+                          )}
+                        </span>
+                        <span className={styles.eventInfo}>
+                          <strong>{event.patientName || event.title || t('unnamedPatient')}</strong>
+                          <small>{event.dentistName || event.tag || t('clinicAppointment')}</small>
+                        </span>
+                        <span className={styles.statusPill + ' ' + statusTone(event.status)}>
+                          <span />
+                          {statusLabel(event.status)}
+                        </span>
+                        <ChevronRight size={16} className={styles.eventArrow} aria-hidden="true" />
+                      </button>
+                    ))}
+                    {todayEvents.length === 0 ? (
+                      <EmptyState
+                        icon={CalendarClock}
+                        title={t(searchTerm ? 'noMatches' : 'noSchedule')}
+                        description={t(
+                          searchTerm ? 'noMatchesDescription' : 'noScheduleDescription'
+                        )}
+                      />
+                    ) : null}
+                  </div>
+                  <div className={styles.panelFooter}>
+                    <span>
+                      {t('totalPatients', { count: num.format(overview.patients.total) })}
+                    </span>
+                    <button
+                      type="button"
+                      className={styles.textButton}
+                      onClick={() => navigate('appointments')}
+                    >
+                      {t('fullSchedule')}
+                      <ArrowUpRight size={15} aria-hidden="true" />
+                    </button>
+                  </div>
+                </section>
+                <section className={styles.panel} aria-labelledby="appointment-activity-title">
+                  <div className={styles.panelHeading}>
+                    <div>
+                      <h2 id="appointment-activity-title">{t('activity')}</h2>
+                      <p>{t('periodDays', { days: num.format(days) })}</p>
+                    </div>
+                  </div>
+                  <div className={styles.activityBody}>
+                    <div
+                      className={styles.activityRing}
+                      style={{
+                        background: appointmentTotal
+                          ? 'conic-gradient(var(--home-scheduled) 0deg ' +
+                            scheduledAngle +
+                            'deg, var(--primary) ' +
+                            scheduledAngle +
+                            'deg ' +
+                            completedAngle +
+                            'deg, var(--home-cancelled) ' +
+                            completedAngle +
+                            'deg 360deg)'
+                          : 'var(--muted)',
+                      }}
+                      role="img"
+                      aria-label={num.format(appointmentTotal) + ' ' + t('appointments')}
+                    >
+                      <div>
+                        <strong>{num.format(appointmentTotal)}</strong>
+                        <span>{t('appointments')}</span>
+                      </div>
+                    </div>
+                    <div className={styles.activityLegend}>
+                      {[
+                        {
+                          color: 'var(--home-scheduled)',
+                          label: t('scheduled'),
+                          value: mix.scheduled,
+                        },
+                        { color: 'var(--primary)', label: t('completed'), value: mix.completed },
+                        {
+                          color: 'var(--home-cancelled)',
+                          label: t('cancelled'),
+                          value: mix.cancelled,
+                        },
+                      ].map(({ color, label, value }) => (
+                        <div key={label}>
+                          <i style={{ background: color }} />
+                          <span>{label}</span>
+                          <strong>{num.format(value)}</strong>
                         </div>
-                      </div>
-                    ) : filteredSelectedDateEvents.length === 0 ? (
-                      <div className="rounded-xl border border-dashed border-border/50 p-6 text-center text-sm text-muted-foreground">
-                        No visits or appointments for this date.
-                      </div>
+                      ))}
+                    </div>
+                  </div>
+                </section>
+                <section className={styles.panel} aria-labelledby="upcoming-title">
+                  <div className={styles.panelHeading}>
+                    <div>
+                      <h2 id="upcoming-title">{t('comingUp')}</h2>
+                      <p>{t('comingUpDescription')}</p>
+                    </div>
+                    <CalendarDays size={18} className={styles.panelIcon} aria-hidden="true" />
+                  </div>
+                  <div className={styles.upcomingList}>
+                    {upcomingEvents.map((event) => (
+                      <button
+                        type="button"
+                        key={event.key}
+                        onClick={() => openEvent(event)}
+                        className={styles.upcomingEvent}
+                      >
+                        <span className={styles.upcomingIcon}>
+                          <CalendarClock size={18} aria-hidden="true" />
+                        </span>
+                        <span className={styles.eventInfo}>
+                          <strong>{event.patientName || event.title || t('unnamedPatient')}</strong>
+                          <small>
+                            {formatDay(event.dateKey, locale)} ·{' '}
+                            {event.timeLabel || t('timeNotSet')}
+                          </small>
+                        </span>
+                        <ChevronRight size={15} className={styles.eventArrow} aria-hidden="true" />
+                      </button>
+                    ))}
+                    {upcomingEvents.length === 0 ? (
+                      <EmptyState
+                        icon={CalendarDays}
+                        title={t('noUpcoming')}
+                        description={t('noUpcomingDescription')}
+                      />
+                    ) : null}
+                  </div>
+                </section>
+                <div
+                  className={styles.systemStrip + (hasWarnings ? ' ' + styles.systemWarning : '')}
+                >
+                  <span className={styles.systemIcon}>
+                    {hasWarnings ? (
+                      <TriangleAlert size={19} aria-hidden="true" />
                     ) : (
-                      filteredSelectedDateEvents.map((event) => {
-                        const isActive = selectedEvent?.key === event.key;
-                        const theme = statusTheme(event.status);
-                        return (
-                          <button
-                            key={event.key}
-                            type="button"
-                            onClick={() => {
-                              setManualSelectedEventKey(event.key);
+                      <ShieldCheck size={19} aria-hidden="true" />
+                    )}
+                  </span>
+                  <div>
+                    <strong>{t(hasWarnings ? 'systemAttention' : 'systemHealthy')}</strong>
+                    <p>
+                      {hasWarnings
+                        ? t('systemWarnings', {
+                            backups: num.format(overview.operations.failedBackupCount),
+                            warnings: num.format(overview.operations.healthWarningCount),
+                          })
+                        : backupLabel}
+                    </p>
+                  </div>
+                  {!hasWarnings ? <Check size={16} aria-hidden="true" /> : null}
+                </div>
+              </>
+            ) : (
+              <>
+                <section
+                  className={styles.panel + ' ' + styles.revenuePanel}
+                  aria-labelledby="revenue-title"
+                  aria-busy={isLoading}
+                >
+                  <div className={styles.panelHeading}>
+                    <div>
+                      <h2 id="revenue-title">{t('revenue')}</h2>
+                      <p>{t('revenueDescription')}</p>
+                    </div>
+                    <div className={styles.rangeControl} aria-label={t('revenue')}>
+                      {(['7d', '30d', '90d'] as RevenueRange[]).map((range) => (
+                        <button
+                          type="button"
+                          key={range}
+                          onClick={() => onRevenueRangeChange?.(range)}
+                          aria-pressed={activeRange === range}
+                          disabled={isLoading}
+                          data-active={activeRange === range}
+                        >
+                          {t('revenueDays', { days: num.format(Number(range.replace('d', ''))) })}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className={styles.revenueTotals}>
+                    <div>
+                      <span>
+                        <i className={styles.billedDot} />
+                        {t('billed')}
+                      </span>
+                      <strong>{money(billed)}</strong>
+                    </div>
+                    <div>
+                      <span>
+                        <i className={styles.collectedDot} />
+                        {t('collected')}
+                      </span>
+                      <strong className={styles.collectedAmount}>{money(paid)}</strong>
+                    </div>
+                    <div>
+                      <span>{t('uncollected')}</span>
+                      <strong>{money(pending)}</strong>
+                    </div>
+                  </div>
+                  <div className={styles.chart}>
+                    {revenue.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart
+                          data={revenue}
+                          margin={{ bottom: 0, left: 0, right: 8, top: 12 }}
+                        >
+                          <defs>
+                            <linearGradient id="homeCollectedRevenue" x1="0" x2="0" y1="0" y2="1">
+                              <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.2} />
+                              <stop offset="100%" stopColor="var(--primary)" stopOpacity={0.01} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid
+                            vertical={false}
+                            strokeDasharray="3 5"
+                            stroke="var(--border)"
+                          />
+                          <XAxis
+                            dataKey="date"
+                            tickFormatter={(value) => formatDay(String(value), locale)}
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }}
+                            minTickGap={35}
+                            dy={8}
+                          />
+                          <YAxis
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }}
+                            tickFormatter={(value) =>
+                              new Intl.NumberFormat(getIntlLocale(locale), {
+                                notation: 'compact',
+                              }).format(Number(value))
+                            }
+                            width={45}
+                          />
+                          <Tooltip
+                            formatter={(value) => money(Number(value))}
+                            labelFormatter={(value) => formatDay(String(value), locale)}
+                            contentStyle={{
+                              background: 'var(--card)',
+                              borderColor: 'var(--border)',
+                              borderRadius: 12,
+                              color: 'var(--foreground)',
+                              fontSize: 12,
                             }}
-                            className={cn(
-                              'group relative flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-left transition-all',
-                              theme.row,
-                              isActive
-                                ? 'ring-2 ring-primary/50 shadow-sm'
-                                : 'hover:border-primary/30 hover:bg-accent/30 hover:shadow-sm'
-                            )}
-                          >
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold text-foreground truncate">{event.patientName}</p>
-                              <p className="mt-0.5 text-xs text-muted-foreground truncate">
-                                {event.title} · {event.tag}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <span
-                                className={cn(
-                                  'rounded-lg border px-2 py-1 text-[10px] font-semibold capitalize',
-                                  theme.chip
-                                )}
-                              >
-                                {event.status}
-                              </span>
-                              <span className="rounded-lg border border-border/50 bg-background/80 px-2 py-1 text-[11px] font-medium text-foreground shadow-xs">
-                                {event.timeLabel}
-                              </span>
-                            </div>
-                          </button>
-                        );
-                      })
+                            labelStyle={{ color: 'var(--muted-foreground)' }}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="billed"
+                            name={t('billed')}
+                            stroke="var(--muted-foreground)"
+                            strokeWidth={1.5}
+                            strokeDasharray="5 5"
+                            fill="transparent"
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="paid"
+                            name={t('collected')}
+                            stroke="var(--primary)"
+                            strokeWidth={2.5}
+                            fill="url(#homeCollectedRevenue)"
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <EmptyState
+                        icon={WalletCards}
+                        title={t('noRevenue')}
+                        description={t('noRevenueDescription')}
+                      />
                     )}
                   </div>
-                </div>
-
-                <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
-                  <div className="mb-4 flex items-center gap-2">
-                    <Stethoscope className="size-4 text-primary" />
-                    <h4 className="font-semibold text-foreground">Consultation</h4>
+                </section>
+                <section className={styles.safePanel} aria-labelledby="clinic-safe-title">
+                  <div className={styles.safeHeading}>
+                    <span>
+                      <WalletCards size={18} aria-hidden="true" />
+                      {t('safe')}
+                    </span>
+                    <span className={styles.safeCurrency}>AFN</span>
                   </div>
-
-                  {!selectedEvent ? (
-                    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/50 p-8 text-center">
-                      <Stethoscope className="size-8 text-muted-foreground/30 mb-3" />
-                      <p className="text-sm text-muted-foreground">Select an appointment to see details.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3 text-sm">
-                      <button
-                        type="button"
-                        onClick={openTreatmentChartFromSelection}
-                        className={cn(
-                          'group w-full overflow-hidden rounded-xl border p-4 text-left transition-all hover:shadow-md',
-                          selectedEventStatus.row
-                        )}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex-1">
-                            <p className="text-base font-semibold text-foreground">{selectedEvent.patientName}</p>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {selectedEvent.title} · {selectedEvent.tag}
-                            </p>
-                          </div>
-                          <ArrowUpRight className="size-4 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-                        </div>
-                      </button>
-                      <div className="grid gap-2">
-                        <button
-                          type="button"
-                          onClick={openTreatmentChartFromSelection}
-                          className="group flex w-full items-center justify-between gap-3 rounded-lg border border-border/50 px-3 py-2.5 text-left transition-all hover:border-primary/30 hover:bg-accent/30"
-                        >
-                          <span className="text-muted-foreground">Dentist</span>
-                          <span className="font-medium text-foreground">{selectedEvent.dentistName}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={openTreatmentChartFromSelection}
-                          className="group flex w-full items-center justify-between gap-3 rounded-lg border border-border/50 px-3 py-2.5 text-left transition-all hover:border-primary/30 hover:bg-accent/30"
-                        >
-                          <span className="text-muted-foreground">Time</span>
-                          <span className="font-medium text-foreground">{selectedEvent.timeLabel}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={openTreatmentChartFromSelection}
-                          className="group flex w-full items-center justify-between gap-3 rounded-lg border border-border/50 px-3 py-2.5 text-left transition-all hover:border-primary/30 hover:bg-accent/30"
-                        >
-                          <span className="text-muted-foreground">Status</span>
-                          <span
-                            className={cn(
-                              'rounded-lg border px-2.5 py-1 text-xs font-medium capitalize',
-                              selectedEventStatus.badge
-                            )}
-                          >
-                            {selectedEvent.status}
-                          </span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={openTreatmentChartFromSelection}
-                          className="group w-full rounded-lg border border-border/50 px-3 py-2.5 text-left transition-all hover:border-primary/30 hover:bg-accent/30"
-                        >
-                          <p className="mb-1 text-muted-foreground">Notes</p>
-                          <p className="text-foreground line-clamp-2">
-                            {selectedEvent.note || 'No notes available for this record.'}
-                          </p>
-                        </button>
-                        <Button
-                          type="button"
-                          onClick={openTreatmentChartFromSelection}
-                          className="mt-2 w-full bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
-                        >
-                          {isCompletedStatus(selectedEvent.status)
-                            ? 'Open Patient Profile'
-                            : 'Open Treatment Chart'}
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </section>
-            </div>
-
-            <aside className="space-y-4">
-              <section className="rounded-2xl border border-border/50 bg-card p-5 shadow-sm">
-                <div className="mb-4 flex items-center gap-2">
-                  <Vault className="size-5 text-emerald-600" />
-                  <h4 className="text-lg font-semibold text-foreground">Financial Overview</h4>
-                </div>
-                <CardContent className="flex-1 pb-0">
-                  {hasSafeRadialChartData ? (
-                    <ChartContainer
-                      config={safeRadialChartConfig}
-                      className="mx-auto aspect-square max-h-[280px]"
-                    >
-                      <RadialBarChart
-                        data={safeRadialChartData}
-                        innerRadius={40}
-                        outerRadius={100}
-                      >
-                        <ChartTooltip
-                          cursor={false}
-                          content={<ChartTooltipContent hideLabel nameKey="category" />}
-                        />
-                        <PolarGrid gridType="circle" />
-                        <RadialBar dataKey="value" />
-                      </RadialBarChart>
-                    </ChartContainer>
-                  ) : (
-                    <div className="flex h-[280px] flex-col items-center justify-center rounded-xl border border-dashed border-border/50 text-center">
-                      <Vault className="size-10 text-muted-foreground/30 mb-3" />
-                      <p className="text-sm text-muted-foreground">No financial data yet.</p>
-                    </div>
-                  )}
-                </CardContent>
-                <div className="mt-5 space-y-3 text-sm">
-                  <div className="flex items-center justify-between rounded-lg border border-emerald-200/50 bg-emerald-50/40 px-4 py-3 dark:border-emerald-400/20 dark:bg-emerald-500/10">
-                    <span className="text-muted-foreground">Safe share</span>
-                    <span className="text-lg font-semibold text-emerald-900 dark:text-emerald-50">{Math.round(ringBreakdown.safePercent)}%</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-3 text-center">
-                    <div className="rounded-lg border border-emerald-200/50 bg-emerald-50/30 p-3 dark:border-emerald-400/20 dark:bg-emerald-500/10">
-                      <p className="text-xs text-muted-foreground">Safe</p>
-                      <p className="text-base font-semibold text-emerald-900 dark:text-emerald-50">{formatCurrency(safeBalance)}</p>
-                    </div>
-                    <div className="rounded-lg border border-amber-200/50 bg-amber-50/30 p-3 dark:border-amber-400/20 dark:bg-amber-500/10">
-                      <p className="text-xs text-muted-foreground">Debts</p>
-                      <p className="text-base font-semibold text-amber-900 dark:text-amber-50">{formatCurrency(debtOutstanding)}</p>
-                    </div>
-                    <div className="rounded-lg border border-rose-200/50 bg-rose-50/30 p-3 dark:border-rose-400/20 dark:bg-rose-500/10">
-                      <p className="text-xs text-muted-foreground">Unpaids</p>
-                      <p className="text-base font-semibold text-rose-900 dark:text-rose-50">{formatCurrency(supplierUnpaids)}</p>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              <section className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
-                <div className="mb-4 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <CalendarDays className="size-4 text-primary" />
+                  <p id="clinic-safe-title" className={styles.safeLabel}>
+                    {t('availableBalance')}
+                  </p>
+                  <p className={styles.safeBalance}>{money(safe.balance)}</p>
+                  {usd ? (
+                    <p className={styles.usdBalance}>
+                      USD <strong>{money(usd.balance, 'USD')}</strong>
+                    </p>
+                  ) : null}
+                  <div className={styles.safeMovements}>
                     <div>
-                      <p className="text-sm font-semibold text-foreground">Schedule</p>
-                      <p className="text-xs text-muted-foreground">{formatMonth(currentMonth)}</p>
+                      <span>
+                        <ArrowDownLeft size={13} aria-hidden="true" />
+                        {t('moneyIn')}
+                      </span>
+                      <strong>{money(safe.totalIn)}</strong>
+                    </div>
+                    <div>
+                      <span>
+                        <ArrowUpRight size={13} aria-hidden="true" />
+                        {t('moneyOut')}
+                      </span>
+                      <strong>{money(safe.totalOut)}</strong>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-8 rounded-lg hover:bg-accent"
-                      onClick={goToPreviousMonth}
-                    >
-                      <ChevronLeft className="size-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-8 rounded-lg hover:bg-accent"
-                      onClick={goToNextMonth}
-                    >
-                      <ChevronRight className="size-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[10px] font-medium text-muted-foreground">
-                  {CALENDAR_WEEKDAYS.map((weekday) => (
-                    <div key={weekday}>{weekday}</div>
-                  ))}
-                </div>
-                <div className="grid grid-cols-7 gap-1">
-                  {monthGrid.map((cell) => {
-                    if (!cell.date) {
-                      return <div key={cell.key} className="h-9 rounded-lg bg-transparent" />;
-                    }
-
-                    const cellKey = toDateKey(cell.date);
-                    const dateEvents = eventsByDate[cellKey] ?? [];
-                    const eventCount = dateEvents.length;
-                    const cellTheme = calendarCellTheme(dateEvents);
-                    const isToday = cellKey === todayKey;
-                    const isSelected = cellKey === selectedDateKey;
-
-                    return (
-                      <button
-                        key={cell.key}
-                        type="button"
-                        onClick={() => {
-                          setSelectedDate(cell.date as Date);
-                        }}
-                        className={cn(
-                          'relative h-9 rounded-lg border text-sm font-medium transition-all',
-                          isSelected
-                            ? 'border-primary bg-primary text-primary-foreground shadow-sm'
-                            : eventCount > 0
-                              ? `${cellTheme.cellClass} hover:brightness-95 hover:shadow-sm`
-                              : 'border-transparent hover:border-primary/30 hover:bg-accent/30',
-                          isToday && !isSelected ? 'ring-2 ring-primary/30' : ''
-                        )}
-                        style={!isSelected && eventCount > 0 ? cellTheme.cellStyle : undefined}
-                      >
-                        {cell.date.getDate()}
-                        {eventCount > 0 ? (
-                          <span
-                            className={cn(
-                              'absolute right-0.5 top-0.5 inline-flex min-w-4 justify-center rounded-full px-1 text-[9px] leading-3 font-bold',
-                              isSelected
-                                ? 'bg-primary-foreground/90 text-primary'
-                                : cellTheme.badgeClass
-                            )}
-                            style={!isSelected ? cellTheme.badgeStyle : undefined}
-                          >
-                            {eventCount}
-                          </span>
-                        ) : null}
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-
-              <section className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
-                <div className="mb-4 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Clock3 className="size-4 text-primary" />
-                    <p className="font-semibold text-foreground">Upcoming</p>
-                  </div>
-                  <span className="rounded-full border border-border/50 bg-muted/50 px-2.5 py-1 text-[10px] font-medium text-muted-foreground">
-                    {upcomingEvents.length}
-                  </span>
-                </div>
-
-                <div className="space-y-2">
-                  {upcomingEvents.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/50 p-6 text-center">
-                      <Clock3 className="size-8 text-muted-foreground/30 mb-2" />
-                      <p className="text-sm text-muted-foreground">No upcoming events.</p>
-                    </div>
-                  ) : (
-                    upcomingEvents.map((event) => {
-                      const theme = statusTheme(event.status);
-
-                      return (
-                        <div key={event.key} className={cn('group rounded-xl border p-3 transition-all hover:shadow-sm', theme.row)}>
-                          <div className="mb-2 flex items-start justify-between gap-2">
-                            <div className="flex-1">
-                              <p className="text-sm font-semibold text-foreground">{event.patientName}</p>
-                              <p className="mt-0.5 text-xs text-muted-foreground">
-                                {event.title} · {event.tag}
-                              </p>
-                            </div>
-                            <span
-                              className={cn(
-                                'shrink-0 rounded-lg border px-2 py-1 text-[10px] font-semibold capitalize',
-                                theme.chip
-                              )}
-                            >
-                              {event.status}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <CalendarDays className="size-3" />
-                            {formatDayHeading(parseDateOnly(event.dateKey) ?? new Date(event.dateKey))}
-                            <span className="text-muted-foreground/50">·</span>
-                            {event.timeLabel}
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </section>
-            </aside>
+                </section>
+              </>
+            )}
           </div>
-        </CardContent>
-      </Card>
-
-      <section className="space-y-2">
-        <div className="px-1">
-          <p className="text-sm font-semibold text-foreground">Finance & Cashflow</p>
-          <p className="text-xs text-muted-foreground">
-            Safe transactions and supplier liabilities
-          </p>
-        </div>
-        <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-          <Card className="rounded-2xl border border-border/50 bg-card p-5 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="rounded-xl border border-emerald-200/50 bg-emerald-100/60 p-2">
-                  <Vault className="size-5 text-emerald-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-foreground">Safe Overview</p>
-                  <p className="text-xs text-muted-foreground">AFN safe balance and movement</p>
-                </div>
-              </div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-emerald-200/60 bg-emerald-50/70 p-4 dark:border-emerald-400/20 dark:bg-emerald-500/12">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-base font-semibold text-emerald-700 dark:text-emerald-200">AFN</span>
-                  <span className="text-xs text-emerald-600/80 dark:text-emerald-200/70">Afghan Afghani</span>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Balance</p>
-                    <p className="text-base font-bold text-emerald-900 dark:text-emerald-50">{formatCurrency(safeBalance)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">In</p>
-                    <p className="text-base font-bold text-emerald-900 dark:text-emerald-50">{formatCurrency(safeTotalIn)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Out</p>
-                    <p className="text-base font-bold text-emerald-900 dark:text-emerald-50">{formatCurrency(safeTotalOut)}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-xl border border-blue-200/60 bg-blue-50/70 p-4 dark:border-blue-400/20 dark:bg-blue-500/12">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-base font-semibold text-blue-700 dark:text-blue-200">USD</span>
-                  <span className="text-xs text-blue-600/80 dark:text-blue-200/70">US Dollar</span>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Balance</p>
-                    <p className="text-base font-bold text-blue-900 dark:text-blue-50">{formatMoney(overview?.safe.currencySections?.USD?.balance ?? 0, 'USD')}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">In</p>
-                    <p className="text-base font-bold text-blue-900 dark:text-blue-50">{formatMoney(overview?.safe.currencySections?.USD?.totalIn ?? 0, 'USD')}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Out</p>
-                    <p className="text-base font-bold text-blue-900 dark:text-blue-50">{formatMoney(overview?.safe.currencySections?.USD?.totalOut ?? 0, 'USD')}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-border/50 bg-background/70 p-3">
-                <p className="mb-2 text-xs font-medium text-foreground">Top Pickups</p>
-                {topSafePickups.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No pickups yet</p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {topSafePickups.slice(0, 3).map((row) => (
-                      <div
-                        key={`safe-pickup-${row.currency}-${row.name}`}
-                        className="flex items-center justify-between text-xs"
-                      >
-                        <span className="text-muted-foreground">{row.name}</span>
-                        <span className="font-semibold text-foreground">{formatMoney(row.amount, row.currency)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="rounded-xl border border-border/50 bg-background/70 p-3">
-                <p className="mb-2 text-xs font-medium text-foreground">Supplier Status</p>
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Paid</span>
-                    <span className="font-semibold text-emerald-700 dark:text-emerald-200">{formatCurrency(implantSupplierData.totalPaid)}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Unpaid</span>
-                    <span className="font-semibold text-orange-700 dark:text-orange-200">{formatCurrency(implantSupplierData.totalUnpaid)}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="rounded-2xl border border-border/50 bg-card p-5 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="rounded-xl border border-slate-200/50 bg-slate-100/60 p-2">
-                  <Activity className="size-5 text-slate-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-foreground">Recent Activity</p>
-                  <p className="text-xs text-muted-foreground">{recentSafeTransactions.length} transactions</p>
-                </div>
-              </div>
-            </div>
-            <div className="space-y-2">
-              {recentSafeTransactions.length === 0 ? (
-                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/50 p-6 text-center">
-                  <Vault className="size-8 text-muted-foreground/30 mb-2" />
-                  <p className="text-sm text-muted-foreground">No transactions yet</p>
-                </div>
-              ) : (
-                recentSafeTransactions.slice(0, 5).map((entry) => (
-                  <div key={entry.id} className="group flex items-center gap-3 rounded-xl border border-border/50 bg-background/70 p-3 transition-all hover:border-primary/30 hover:bg-accent/30 hover:shadow-sm">
-                    <div
-                      className={cn(
-                        'flex size-8 shrink-0 items-center justify-center rounded-full border',
-                        normalizeStatus(entry.direction) === 'in'
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
-                          : 'border-orange-200 bg-orange-50 text-orange-600'
-                      )}
-                    >
-                      {normalizeStatus(entry.direction) === 'in' ? (
-                        <ArrowDownLeft className="size-4" />
-                      ) : (
-                        <ArrowUpRight className="size-4" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-foreground capitalize">
-                        {entry.entryType.replaceAll('_', ' ')}
-                      </p>
-                      <p className="mt-0.5 text-[10px] text-muted-foreground">
-                        {entry.pickedByStaffName || '-'} · {entry.transactionDate || '-'}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-xs font-semibold text-foreground">{formatMoney(entry.amount, entry.currency)}</p>
-                      <p className="text-[10px] text-muted-foreground">{entry.currency}</p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </Card>
-        </div>
-      </section>
-
-      <section className="space-y-2">
-        <div className="px-1">
-          <p className="text-sm font-semibold text-foreground">Performance Snapshot</p>
-          <p className="text-xs text-muted-foreground">Quick operational health indicators</p>
-        </div>
-        <div className="grid gap-4">
-          <Card className="rounded-2xl border border-border/50 bg-card pt-0 shadow-sm">
-            <CardHeader className="flex items-center gap-2 space-y-0 border-b py-5 sm:flex-row">
-              <div className="grid flex-1 gap-1">
-                <CardTitle className="text-foreground">Revenue Overview</CardTitle>
-                <CardDescription>{revenueAreaDescription}</CardDescription>
-              </div>
-              <Select
-                value={revenueTimeRange}
-                onValueChange={(value) => {
-                  if (value === '7d' || value === '30d' || value === '90d') {
-                    setRevenueTimeRange(value);
-                    onRevenueRangeChange?.(value);
-                  }
-                }}
-              >
-                <SelectTrigger
-                  className="hidden w-[160px] rounded-lg sm:ml-auto sm:flex"
-                  aria-label="Select revenue range"
-                >
-                  <SelectValue placeholder="Last 3 months" />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl">
-                  <SelectItem value="90d" className="rounded-lg">
-                    Last 3 months
-                  </SelectItem>
-                  <SelectItem value="30d" className="rounded-lg">
-                    Last 30 days
-                  </SelectItem>
-                  <SelectItem value="7d" className="rounded-lg">
-                    Last 7 days
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </CardHeader>
-            <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
-              {revenueAreaData.length === 0 ? (
-                <div className="grid h-[250px] place-items-center rounded-xl border border-dashed text-sm text-muted-foreground">
-                  No chart data available yet.
-                </div>
-              ) : (
-                <ChartContainer
-                  config={revenueAreaChartConfig}
-                  className="aspect-auto h-[250px] w-full"
-                >
-                  <AreaChart data={revenueAreaData}>
-                    <defs>
-                      <linearGradient id="fillBilled" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="var(--color-billed)" stopOpacity={0.8} />
-                        <stop offset="95%" stopColor="var(--color-billed)" stopOpacity={0.1} />
-                      </linearGradient>
-                      <linearGradient id="fillPaid" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="var(--color-paid)" stopOpacity={0.8} />
-                        <stop offset="95%" stopColor="var(--color-paid)" stopOpacity={0.1} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid vertical={false} />
-                    <XAxis
-                      dataKey="date"
-                      tickLine={false}
-                      axisLine={false}
-                      tickMargin={8}
-                      minTickGap={32}
-                      tickFormatter={(value) => {
-                        const date = new Date(value);
-                        return date.toLocaleDateString('en-US', {
-                          day: 'numeric',
-                          month: 'short',
-                        });
-                      }}
-                    />
-                    <ChartTooltip
-                      cursor={false}
-                      content={
-                        <ChartTooltipContent
-                          indicator="dot"
-                          labelFormatter={(value) => {
-                            return new Date(String(value)).toLocaleDateString('en-US', {
-                              day: 'numeric',
-                              month: 'short',
-                            });
-                          }}
-                        />
-                      }
-                    />
-                    <Area
-                      dataKey="paid"
-                      type="natural"
-                      fill="url(#fillPaid)"
-                      stroke="var(--color-paid)"
-                      stackId="a"
-                    />
-                    <Area
-                      dataKey="billed"
-                      type="natural"
-                      fill="url(#fillBilled)"
-                      stroke="var(--color-billed)"
-                      stackId="a"
-                    />
-                    <ChartLegend content={<ChartLegendContent />} />
-                  </AreaChart>
-                </ChartContainer>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-
-      <section className="space-y-2">
-        <div className="px-1">
-          <p className="text-sm font-semibold">Analytics</p>
-          <p className="text-xs text-muted-foreground">
-            Appointments, revenue, and supplier trends
-          </p>
-        </div>
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Card className="rounded-2xl border border-border/80 bg-card">
-            <CardContent className="p-4">
-              <div className="mb-3">
-                <p className="text-sm font-semibold">Appointment Mix</p>
-                <p className="text-xs text-muted-foreground">Current appointment distribution</p>
-              </div>
-              <ChartContainer config={appointmentMixChartConfig} className="h-52 w-full">
-                <BarChart data={appointmentMixData}>
-                  <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
-                    tickLine={false}
-                  />
-                  <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} width={60} />
-                  <ChartTooltip
-                    cursor={{ fill: 'rgba(148, 163, 184, 0.10)' }}
-                    content={<ChartTooltipContent />}
-                  />
-                  <Bar dataKey="value" fill="var(--color-value)" radius={[10, 10, 0, 0]} />
-                </BarChart>
-              </ChartContainer>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl border border-border/80 bg-card">
-            <CardContent className="p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold">Third-Company Liability</p>
-                  <p className="text-xs text-muted-foreground">Implant supplier paid vs unpaid</p>
-                </div>
-                <Building2 className="size-5 text-blue-700" />
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <div className="rounded-xl border border-blue-200/60 bg-blue-50/50 p-3 dark:border-blue-400/20 dark:bg-blue-500/10">
-                  <p className="text-xs text-blue-900 dark:text-blue-100">Total Supplier Cost</p>
-                  <p className="text-sm font-semibold text-blue-900 dark:text-blue-50">{formatCurrency(implantSupplierData.totalSupplierCost)}</p>
-                </div>
-                <div className="rounded-xl border border-emerald-200/60 bg-emerald-50/50 p-3 dark:border-emerald-400/20 dark:bg-emerald-500/10">
-                  <p className="text-xs text-emerald-900 dark:text-emerald-100">Paid to Supplier</p>
-                  <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-50">{formatCurrency(implantSupplierData.totalPaid)}</p>
-                </div>
-                <div className="rounded-xl border border-orange-200/60 bg-orange-50/50 p-3 dark:border-orange-400/20 dark:bg-orange-500/10">
-                  <p className="text-xs text-orange-900 dark:text-orange-100">Unpaid to Supplier</p>
-                  <p className="text-sm font-semibold text-orange-900 dark:text-orange-50">{formatCurrency(implantSupplierData.totalUnpaid)}</p>
-                </div>
-                <div className="rounded-xl border border-border/50 bg-background/70 p-3">
-                  <p className="text-xs text-muted-foreground">Unpaid Teeth</p>
-                  <p className="text-sm font-semibold text-foreground">
-                    {implantSupplierData.unpaidCount} / {implantSupplierData.implantCount}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Paid ratio: {implantSupplierData.paidRatio}%
-                  </p>
-                </div>
-              </div>
-              <div className="mt-3 h-36">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={implantAvailabilityChart}>
-                    <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
-                    <XAxis
-                      dataKey="label"
-                      tick={{ fill: '#64748b', fontSize: 10 }}
-                      tickLine={false}
-                    />
-                    <YAxis tick={{ fill: '#64748b', fontSize: 10 }} tickLine={false} width={70} />
-                    <Tooltip formatter={(value) => formatCurrency(Number(value ?? 0))} />
-                    <Bar dataKey="unpaid" fill="#f97316" radius={[8, 8, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-
-      <section className="space-y-2">
-        <div className="px-1">
-          <p className="text-sm font-semibold">Performance Metrics</p>
-          <p className="text-xs text-muted-foreground">Quick operational health indicators</p>
-        </div>
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card className="rounded-2xl border">
-            <CardContent className="p-4">
-              <div className="mb-2 flex items-center gap-2">
-                <Activity className="size-4 text-primary" />
-                <p className="text-sm font-semibold">Visit Performance</p>
-              </div>
-              <p className="text-3xl font-semibold">{completionRate}%</p>
-              <p className="text-xs text-muted-foreground">Completed appointments ratio</p>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl border">
-            <CardContent className="p-4">
-              <div className="mb-2 flex items-center gap-2">
-                <CalendarDays className="size-4 text-primary" />
-                <p className="text-sm font-semibold">Calendar Coverage</p>
-              </div>
-              <p className="text-3xl font-semibold">
-                {overview?.performance.calendarCoverageDays ?? Object.keys(eventsByDate).length}
-              </p>
-              <p className="text-xs text-muted-foreground">Days with any scheduled record</p>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl border">
-            <CardContent className="p-4">
-              <div className="mb-2 flex items-center gap-2">
-                <UsersRound className="size-4 text-primary" />
-                <p className="text-sm font-semibold">Patient Pool</p>
-              </div>
-              <p className="text-3xl font-semibold">{overview?.patients.total ?? 0}</p>
-              <p className="text-xs text-muted-foreground">Registered patients in current feed</p>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl border">
-            <CardContent className="p-4">
-              <div className="mb-2 flex items-center gap-2">
-                <Building2 className="size-4 text-primary" />
-                <p className="text-sm font-semibold">Supplier Unpaid</p>
-              </div>
-              <p className="text-3xl font-semibold">
-                {formatCurrency(implantSupplierData.totalUnpaid)}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {implantSupplierData.unpaidCount} implant teeth still unpaid
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-    </div>
+        </SheetContent>
+      </Sheet>
+    </>
   );
 };
+
+const MetricCard = ({
+  detail,
+  icon: Icon,
+  label,
+  tone,
+  value,
+}: {
+  detail: string;
+  icon: typeof CalendarClock;
+  label: string;
+  tone: 'teal' | 'amber' | 'violet' | 'sky';
+  value: string;
+}): JSX.Element => (
+  <div className={styles.metricCard} data-tone={tone}>
+    <div className={styles.metricHeading}>
+      <span>{label}</span>
+      <span className={styles.metricIcon}>
+        <Icon size={17} aria-hidden="true" />
+      </span>
+    </div>
+    <strong className={styles.metricValue}>{value}</strong>
+    <p className={styles.metricDetail}>{detail}</p>
+  </div>
+);
+
+const EmptyState = ({
+  description,
+  icon: Icon,
+  title,
+}: {
+  description: string;
+  icon: typeof CalendarClock;
+  title: string;
+}): JSX.Element => (
+  <div className={styles.emptyState}>
+    <span className={styles.emptyIcon}>
+      <Icon size={21} aria-hidden="true" />
+    </span>
+    <strong>{title}</strong>
+    <p>{description}</p>
+  </div>
+);

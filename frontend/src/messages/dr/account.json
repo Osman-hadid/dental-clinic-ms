@@ -1,0 +1,41 @@
+{
+  "title": "حساب من",
+  "description": "معلومات نمایه و دسترسی شما برای فضای کاری کلینیک سورییر.",
+  "backToDashboard": "بازگشت به داشبورد",
+  "signedIn": "به سورییر وارد شده‌اید",
+  "profileOverview": "نمای کلی حساب",
+  "personalDetails": "مشخصات شخصی",
+  "personalDetailsDescription": "معلومات نمایه‌ای که به حساب شما پیوند است.",
+  "fullName": "نام کامل",
+  "emailAddress": "نشانی ایمیل",
+  "accountId": "شناسه حساب",
+  "accountStatus": "وضعیت نشست",
+  "active": "نشست فعال",
+  "workspaceAccess": "دسترسی فضای کاری",
+  "workspaceAccessDescription": "نقش‌ها و اجازه‌های دسترسی اختصاص‌یافته به این حساب.",
+  "roles": "نقش‌های اختصاص‌یافته",
+  "permissionLevel": "سطح دسترسی",
+  "permissions": "اجازه‌های دسترسی",
+  "permissionCount": "{count} اجازه اختصاص یافته",
+  "noRoles": "هیچ نقشی اختصاص نیافته",
+  "noPermissions": "هیچ اجازه‌ای برای این حساب اختصاص نیافته است.",
+  "roleFallback": "عضو فضای کاری",
+  "levels": {
+    "create": "ایجاد",
+    "review": "بررسی",
+    "approval": "تأیید"
+  },
+  "preferences": "تنظیمات حساب",
+  "preferencesDescription": "نحوه استفاده حساب خود از سورییر را انتخاب کنید.",
+  "language": "زبان برنامه",
+  "languageDescription": "زبان مورد استفاده در فضای کاری خود را انتخاب کنید.",
+  "languageOptions": {
+    "en": "انگلیسی",
+    "dr": "دری",
+    "ps": "پښتو"
+  },
+  "languageSaving": "زبان در حال تغییر است…",
+  "languageUpdated": "تنظیم زبان به‌روز شد.",
+  "languageFailed": "به‌روز کردن زبان انجام نشد.",
+  "accountUnavailable": "معلومات حساب شما در دسترس نیست."
+}

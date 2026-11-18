@@ -1,4 +1,7 @@
 {
+  "sidebar": "څنګیز غورنۍ",
+  "mobileSidebarDescription": "د موبایل څنګیزه غورنۍ ښيي.",
+  "toggleSidebar": "څنګیزه غورنۍ پرانیزئ یا وتړئ",
   "selectLocale": "ژبه وټاکئ",
   "searchForACommand": "د قوماندې د اجرا لپاره لټون وکړئ...",
   "commandPalette": "د قوماندو لېست",

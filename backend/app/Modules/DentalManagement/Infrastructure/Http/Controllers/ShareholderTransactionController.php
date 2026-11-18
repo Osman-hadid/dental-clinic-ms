@@ -212,7 +212,7 @@ final class ShareholderTransactionController extends BaseApiController
         );
 
         $amountInput = round((float) ($data['amount'] ?? 0), 2);
-        $amount = $this->currencyService->toUsd(
+        $amount = $this->currencyService->toAfn(
             amountInput: $amountInput,
             currency: $resolvedCurrency['currency'],
             exchangeRate: (float) $resolvedCurrency['exchangeRate'],

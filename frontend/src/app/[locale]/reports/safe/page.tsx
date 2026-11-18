@@ -3,16 +3,18 @@
 import { FormEvent, JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
+import { useDebounce } from 'use-debounce';
 import { Header } from '@/components/header';
 import { LoadingState } from '@/components/shared/loading-state';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { DEFAULT_AFN_PER_USD, type CurrencyCode, formatCurrency, getExchangeRate, parseMoney } from '@/lib/currency-utils';
 import { AxiosClient } from '@/modules/common/infrastructure/api/axios-client';
 import { useStaffList } from '@/modules/dental-management/presentation/hooks';
 import { createDefaultReportRange, fetchReport, toInputDate } from '@/modules/dental-management/presentation/reports/report-client';
+import { ReportPageIntro } from '@/modules/dental-management/presentation/reports/report-page-intro';
 import { HandCoins, Trash2, Vault } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -142,7 +144,7 @@ const emptyCurrencySections = (): SafeCurrencySection => ({
   },
 });
 
-export default function SafePage(): JSX.Element {
+const SafePage = (): JSX.Element => {
   const tSidebar = useTranslations('sidebar');
   const tReports = useTranslations('sidebar.reports');
   const searchParams = useSearchParams();
@@ -158,6 +160,7 @@ export default function SafePage(): JSX.Element {
   const [focus, setFocus] = useState<'balance' | 'in' | 'out' | null>(null);
   const [entryType, setEntryType] = useState('all');
   const [search, setSearch] = useState('');
+  const [debouncedSearch] = useDebounce(search, 350);
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -183,7 +186,7 @@ export default function SafePage(): JSX.Element {
       });
   }, []);
 
-  const fetchData = useCallback(async (pageNumber: number): Promise<void> => {
+  const fetchData = useCallback(async (pageNumber = 1): Promise<void> => {
     setIsLoading(true);
     try {
       const data = await fetchReport<SafeReportResponse>('/api/v1/dental-management/reports/safe', {
@@ -192,7 +195,7 @@ export default function SafePage(): JSX.Element {
         entryType,
         page: pageNumber,
         perPage: 12,
-        search,
+        search: debouncedSearch,
         sortBy: 'transactionDate',
         sortDirection: 'desc',
         startDate,
@@ -202,7 +205,7 @@ export default function SafePage(): JSX.Element {
     } finally {
       setIsLoading(false);
     }
-  }, [direction, endDate, entryType, search, startDate]);
+  }, [debouncedSearch, direction, endDate, entryType, startDate]);
 
   useEffect(() => {
     void fetchData(1);
@@ -298,13 +301,15 @@ export default function SafePage(): JSX.Element {
       />
       <div className="flex flex-1 flex-col">
         <div className="@container/main flex flex-1 flex-col gap-2">
-          <div className="flex flex-col gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6">
+          <div className="flex min-w-0 flex-col gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6">
+            <ReportPageIntro title="Safe and cash activity" description="See how money moves in and out of the clinic safe, check current balances, and review the full transaction history." />
             <Card className="rounded-3xl border border-border/50 bg-card">
               <CardHeader>
                 <CardTitle className="inline-flex items-center gap-2">
                   <Vault className="size-5 text-emerald-700" />
-                  Safe Ledger
+                  Record a safe transaction
                 </CardTitle>
+                <CardDescription>Use “Money in” for deposits and income, or “Money out” for withdrawals and expenses.</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
                 {workflowAccess && !workflowAccess.capabilities.canManageSafeLedger ? (
@@ -325,10 +330,10 @@ export default function SafePage(): JSX.Element {
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-1.5">
-                      <Label>Direction</Label>
+                      <Label>Money movement</Label>
                       <select className="h-9 rounded-md border bg-background px-3 text-sm" value={form.direction} onChange={(event) => setForm((prev) => ({ ...prev, direction: event.target.value as 'in' | 'out' }))}>
-                        <option value="in">In</option>
-                        <option value="out">Out</option>
+                        <option value="in">Money in</option>
+                        <option value="out">Money out</option>
                       </select>
                     </div>
                     <div className="grid gap-1.5">
@@ -377,7 +382,7 @@ export default function SafePage(): JSX.Element {
                     </div>
                   </div>
                   <div className="rounded-xl border border-dashed bg-background/70 p-3 text-xs text-muted-foreground dark:border-border/60">
-                    This safe entry affects only the selected currency section.
+                    AFN and USD balances are tracked separately. For USD entries, the rate records the AFN equivalent.
                   </div>
                   <div className="grid gap-1.5">
                     <Label>Picked by staff (optional)</Label>
@@ -414,15 +419,15 @@ export default function SafePage(): JSX.Element {
                             <p className="text-xl font-semibold">{formatCurrency(currencySections[currency].balance, currency)}</p>
                           </div>
                           <div className="rounded-xl border bg-muted/20 p-3">
-                            <p className="text-xs text-muted-foreground">Range Net</p>
+                            <p className="text-xs text-muted-foreground">Net change in this period</p>
                             <p className="text-xl font-semibold">{formatCurrency(currencySections[currency].rangeNet, currency)}</p>
                           </div>
                           <div className="rounded-xl border bg-muted/20 p-3">
-                            <p className="text-xs text-muted-foreground">Range In</p>
+                            <p className="text-xs text-muted-foreground">Money in during this period</p>
                             <p className="text-xl font-semibold">{formatCurrency(currencySections[currency].totalIn, currency)}</p>
                           </div>
                           <div className="rounded-xl border bg-muted/20 p-3">
-                            <p className="text-xs text-muted-foreground">Range Out</p>
+                            <p className="text-xs text-muted-foreground">Money out during this period</p>
                             <p className="text-xl font-semibold">{formatCurrency(currencySections[currency].totalOut, currency)}</p>
                           </div>
                         </div>
@@ -456,7 +461,7 @@ export default function SafePage(): JSX.Element {
                       <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
                     </div>
                     <div className="grid gap-1.5">
-                      <Label>Direction</Label>
+                      <Label>Money movement</Label>
                       <select className="h-9 rounded-md border bg-background px-3 text-sm" value={direction} onChange={(event) => setDirection(event.target.value)}>
                         <option value="all">All directions</option>
                         <option value="in">In</option>
@@ -464,15 +469,23 @@ export default function SafePage(): JSX.Element {
                       </select>
                     </div>
                     <div className="grid gap-1.5">
-                      <Label>Entry Type</Label>
-                      <Input value={entryType} onChange={(event) => setEntryType(event.target.value)} placeholder="deposit, salary..." />
+                      <Label>Purpose</Label>
+                      <select className="h-9 rounded-md border bg-background px-3 text-sm" value={entryType} onChange={(event) => setEntryType(event.target.value)}>
+                        <option value="">All purposes</option>
+                        <option value="deposit">Deposit</option>
+                        <option value="withdrawal">Withdrawal</option>
+                        <option value="adjustment">Adjustment</option>
+                        <option value="income">Income</option>
+                        <option value="expense">Expense</option>
+                        <option value="salary">Salary</option>
+                      </select>
                     </div>
                     <div className="grid gap-1.5 md:col-span-3">
                       <Label>Search</Label>
                       <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Notes or staff..." />
                     </div>
                     <div className="flex items-end">
-                      <Button type="button" onClick={() => void fetchData(1)}>Apply Filters</Button>
+                      <p className="text-xs text-muted-foreground">Results update automatically. Text search waits until you pause typing.</p>
                     </div>
                   </div>
                 </div>
@@ -493,7 +506,7 @@ export default function SafePage(): JSX.Element {
                         <thead className="bg-muted/30 text-left text-muted-foreground">
                           <tr>
                             <th className="px-3 py-2">Date</th>
-                            <th className="px-3 py-2">Direction</th>
+                            <th className="px-3 py-2">Money movement</th>
                             <th className="px-3 py-2">Type</th>
                             <th className="px-3 py-2">Amount</th>
                             <th className="px-3 py-2">Picked By</th>
@@ -550,4 +563,6 @@ export default function SafePage(): JSX.Element {
       </div>
     </>
   );
-}
+};
+
+export default SafePage;

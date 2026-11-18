@@ -12,7 +12,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/sonner';
 import { routing } from '@/i18n/routing';
 import { AuthInitializer } from '@/modules/auth/presentation/components/auth-initializer';
-import { getDirection } from '@/modules/common/utils/locale';
+import { getDirection, getLanguageTag } from '@/modules/common/utils/locale';
 
 // Fonts
 const geistSans = localFont({
@@ -53,7 +53,7 @@ export default async function RootLayout({
   const direction = getDirection(locale);
 
   return (
-    <html lang={locale} dir={direction} suppressHydrationWarning>
+    <html lang={getLanguageTag(locale)} dir={direction} suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased custom-cursor`}
         dir={direction}
