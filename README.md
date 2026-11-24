@@ -1,93 +1,180 @@
-# mis-laravel-next-generator
+# Sourire Dental Clinic Management System
 
+Sourire is a dental clinic management system for handling patients, appointments, clinical records, treatments, invoices, payments, staff, inventory, reports, user accounts, roles, and permissions from one workspace.
 
+**Live application:** [dental-clinic-ms-production.up.railway.app](https://dental-clinic-ms-production.up.railway.app)
 
-## Getting started
+## Contents
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+- [Features](#features)
+- [Architecture and technology](#architecture-and-technology)
+- [Repository layout](#repository-layout)
+- [Requirements](#requirements)
+- [Local setup](#local-setup)
+- [Database and seed data](#database-and-seed-data)
+- [Development commands](#development-commands)
+- [Production deployment](#production-deployment)
+- [Security notes](#security-notes)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+## Features
 
-## Add your files
+- Patient, staff, appointment, visit, treatment, tooth, invoice, and payment management.
+- Clinic profile, inventory, backups, and operational reporting.
+- User, role, permission, and module administration.
+- English, Dari, and Pashto locales with right-to-left support where appropriate.
+- Session-based authentication backed by Laravel Sanctum and Fortify.
+- Optional AI integrations for supported workflows; these require separately configured provider credentials.
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
+## Architecture and technology
 
+The application is split into two main parts:
+
+- **Frontend:** Next.js 15, React 19, TypeScript, Tailwind CSS, and `next-intl`. Next.js exports static files for production.
+- **Backend:** Laravel 12 on PHP 8.2+, with PostgreSQL, Sanctum, Fortify, and Spatie permissions/activity logging.
+
+In production, the generated frontend files are served by Laravel from `backend/public`, while Laravel provides the API under `/api`. The Railway service uses the Dockerfile in `backend/` and connects to PostgreSQL.
+
+## Repository layout
+
+```text
+.
+├── backend/       Laravel application, API, migrations, seeders, and Dockerfile
+├── frontend/      Next.js application and static-export scripts
+├── datasets/      Project datasets and supporting files
+└── third_party/   Third-party projects and model resources
 ```
-cd existing_repo
-git remote add origin http://gitlab.aop.gov.af/dghousi/mis-laravel-next-generator.git
-git branch -M main
-git push -uf origin main
+
+## Requirements
+
+- PHP 8.2 or newer with the extensions required by Laravel, including PDO PostgreSQL and ZIP.
+- Composer 2.
+- Node.js 20 or newer and npm.
+- PostgreSQL for a local database.
+
+## Local setup
+
+Run commands from the repository root unless a command says otherwise.
+
+1. Install the root and frontend JavaScript dependencies:
+
+   ```bash
+   npm install
+   cd frontend
+   npm install
+   cd ..
+   ```
+
+2. Install PHP dependencies and create the backend environment file:
+
+   ```bash
+   cd backend
+   composer install
+   cp .env.example .env
+   ```
+
+   On Windows PowerShell, use `Copy-Item .env.example .env` instead of `cp` if needed.
+
+3. Edit `backend/.env` and configure the local database connection (`DB_CONNECTION`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, and `DB_PASSWORD`). Set `APP_URL` to `http://localhost:8000` and `FRONTEND_URL` to `http://localhost:3000` for local development.
+
+4. Configure the two user-seeder passwords in `backend/.env` before seeding:
+
+   ```dotenv
+   SOURIRE_ADMIN_PASSWORD=use-a-strong-local-password
+   SOURIRE_SUPERADMIN_PASSWORD=use-another-strong-local-password
+   SOURIRE_SEED_DEMO_DATA=false
+   ```
+
+   Keep these values private and use unique passwords. Do not commit `.env` files or real credentials.
+
+5. Generate the application key, run migrations and seed the base roles/users, then install Laravel's frontend dependencies:
+
+   ```bash
+   php artisan key:generate
+   php artisan migrate --seed
+   npm install
+   cd ..
+   ```
+
+   The migration and seeding commands above run inside `backend/`.
+
+6. Start Laravel and Next.js together from the repository root:
+
+   ```bash
+   npm run dev
+   ```
+
+   The Laravel API is available at `http://localhost:8000`; the Next.js development UI is available at `http://localhost:3000`.
+
+## Database and seed data
+
+`DatabaseSeeder` creates the system modules, permissions, roles, role-permission assignments, and the configured Super Admin and Admin accounts. User passwords are read from `SOURIRE_SUPERADMIN_PASSWORD` and `SOURIRE_ADMIN_PASSWORD` when a user is first created. Set these values before running the seeder.
+
+Demo data is disabled by default. To seed demo records in a disposable local or test database only, explicitly set:
+
+```dotenv
+SOURIRE_SEED_DEMO_DATA=true
+SOURIRE_ENABLE_DEMO_DATA=true
+SOURIRE_DEMO_USER_PASSWORD=use-a-strong-demo-password
 ```
 
-## Integrate with your tools
+Then run `php artisan db:seed` from `backend/`. Do not enable demo data in production. To apply schema changes without seeding, run `php artisan migrate`.
 
-- [ ] [Set up project integrations](http://gitlab.aop.gov.af/dghousi/mis-laravel-next-generator/-/settings/integrations)
+## Development commands
 
-## Collaborate with your team
+| Purpose | Command | Directory |
+| --- | --- | --- |
+| Run Laravel and Next.js together | `npm run dev` | Repository root |
+| Start Laravel only | `php artisan serve` | `backend/` |
+| Start Next.js only | `npm run dev` | `frontend/` |
+| Build the frontend | `npm run build` | `frontend/` |
+| Build and sync static files into Laravel | `npm run build:laravel` | `frontend/` |
+| Run frontend lint | `npm run lint` | `frontend/` |
+| Run backend tests | `php artisan test` | `backend/` |
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+The static sync command replaces generated files in `backend/public` while preserving Laravel's `.htaccess`, `index.php`, and `storage` entries. Review the resulting changes before committing a frontend release.
 
-## Test and Deploy
+## Production deployment
 
-Use the built-in continuous integration in GitLab.
+The production application is deployed to Railway. The backend service builds from the `backend/` directory with its Dockerfile, and the PostgreSQL service supplies the database.
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+Before deploying frontend changes, build and sync the static export:
 
-***
+```bash
+cd frontend
+npm install
+npm run build:laravel
+```
 
-# Editing this README
+Commit the updated files in `backend/public` along with the frontend source changes, then push to the connected GitHub branch. Railway applies database migrations with:
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+```bash
+php artisan migrate --force
+```
 
-## Suggestions for a good README
+Configure production secrets and environment values in Railway Variables. At minimum, configure the database connection, `APP_KEY`, `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL`, and the administrator passwords used by the user seeders. Never put production secrets in source control. Run the user seeders intentionally as a one-time operation after setting their passwords; routine deployments should run migrations only.
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+## Security notes
 
-## Name
-Choose a self-explaining name for your project.
+- Never commit `.env`, API keys, database credentials, or real account passwords.
+- Use strong, unique passwords for administrator and demo accounts.
+- Keep `APP_DEBUG=false` in production.
+- Keep demo seeding disabled in production.
+- Report security concerns through a private channel to the repository maintainers rather than posting credentials or exploit details publicly.
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+## Troubleshooting
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+- **Database connection errors:** Check PostgreSQL is running and verify the `DB_*` values in `backend/.env`.
+- **Login CSRF or session errors:** Confirm `APP_URL`, `FRONTEND_URL`, `SESSION_DRIVER`, cookie settings, and the Sanctum stateful domains match the browser origin. For HTTPS production, enable secure cookies and configure the allowed origins in Railway Variables.
+- **Frontend changes do not appear in production:** Run `npm run build:laravel` from `frontend/`, commit the generated `backend/public` changes, and wait for the Railway deployment to complete.
+- **Seeder cannot create an administrator:** Set the matching administrator password environment variable before running `php artisan db:seed`.
 
 ## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+Use a focused branch for each change, keep secrets and generated local configuration out of commits, and include a clear summary of behavior changes. Run the relevant frontend lint/build or backend tests before opening a pull request.
 
 ## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+No project-level license is currently specified. Check with the maintainers before redistributing or reusing this project.
